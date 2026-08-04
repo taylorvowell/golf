@@ -4,10 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current State
 
-**Greenfield — no code exists yet.** The repo contains only [instructions/](instructions/): a
-complete 9-document spec for **SwingSage**, an upload-based AI golf swing analysis app.
-There are no commits on `main`, no `package.json`, and no scaffold. The next task is
-Phase 0 of [instructions/08-ROADMAP.md](instructions/08-ROADMAP.md).
+**SwingSage** is an upload-based AI golf swing analysis app. **Read
+[docs/STATUS.md](docs/STATUS.md) first** — it is the current handoff state, and this file's
+"Current state" section further down carries the measured numbers.
+
+In short: the analyzer pipeline runs end to end (normalize → pose → Stage 3 → events → club →
+face → metrics → `analysis.json` → Next.js player) on both fixtures. Not built yet: scoring
+engine, AI provider, simulator ingestion, upload/job orchestration, SQLite, any test suite.
+Phases 0–1 of [08-ROADMAP.md](instructions/08-ROADMAP.md) are only partly done — there is no
+upload flow or job row; `burnin.py` is run by hand.
 
 `instructions/` is the source of truth. Before writing code for a phase, read that phase's
 referenced spec doc(s). The docs are dense and cross-referenced — read the specific doc,
@@ -63,10 +68,34 @@ analyzer's only real output is **`analysis.json` per swing** — the single cont
 backend and player. Full schema in doc 02. Key properties to preserve:
 
 - All coordinates **normalized 0–1** (x right, y down) so the client scales to any canvas.
-- Keypoint array order is fixed by `keypoint_names`; derived joints (`neck`, `mid_hip`,
-  `spine_mid`, `head_center`, `grip_center`) are **appended after** the model's native 33.
+- Keypoint array order is fixed by `keypoint_names`: native 33 → derived 7 (`neck`,
+  `mid_hip`, `spine_mid`, `head_center`, `grip_center`, `left_hand`, `right_hand`) →
+  measured 8 (knuckles, small toes, `chin`, `nose_bridge`, jaw) = **48**. Append only,
+  never reorder — the measured block sits after the derived one precisely so published
+  indices 0–39 keep their meaning (D25). Only a wholebody model fills the measured block;
+  other paths zero it and dependent metrics report `null`.
 - `interp: true` marks smoothed/interpolated values — the UI renders these dashed at 60%.
 - It must be renderable with no client-side computation beyond coordinate scaling.
+- **Keypoints are anatomical (`left_wrist`); metrics are lead/trail (`lead_knee_flex`).**
+  Lead = the side closest to the **target**, set by handedness — never "the side facing the
+  camera", which inverts for a left-handed golfer. `metrics.sides` carries the resolved
+  mapping. [docs/GLOSSARY.md](docs/GLOSSARY.md) is the single vocabulary for the UI,
+  scorecard and coach narrative; `metrics.glossary` maps standard golf terms onto existing
+  fields (D29).
+- **Eight events, ten checkpoints, one detection.** `events` stays the GolfDB contract;
+  `checkpoints` is the same swing as the ten P-system positions a coach names, adding P6
+  (shaft parallel coming down) and P9 (trail arm parallel through). `metrics.angle_fields`
+  is the one angle catalogue — the burn-in table and the player's table both render from it,
+  so adding an angle in `metrics.py` adds a row in both, and `geom` on each entry is what
+  lets the player draw that angle over the video on click. **Angle conventions differ by
+  shape**: `_flex` is 0° = straight, `_hinge` is the interior angle, from-vertical angles are
+  signed and the sign flips with camera side, stack angles are 90° = stacked. Every 2D joint
+  angle is projection-sensitive — read the elbows with `lead|trail_arm_in_plane` (D31).
+  GLOSSARY §6–7.
+- **Keypoint confidence in `analysis.json` is truncated, not rounded** (D33). Every consumer
+  re-applies the same `MIN_CONF` gate, so a value rounding *up* onto the threshold makes the
+  client include a point the analyzer dropped, and the two then describe different geometry.
+  This applies to any threshold a client reads back, not just this one.
 
 Because analysis is a stored artifact, "re-analyze" can re-run improved models over historic
 swings, and the AI disk cache (hash of promptId + variables + image bytes) makes re-runs free.
@@ -113,15 +142,24 @@ docs/              DECISIONS.md (log every spec deviation here)
 
 Installed and smoke-tested end-to-end (ffmpeg → OpenCV decode → PoseLandmarker VIDEO mode):
 
+Versions differ between the two dev machines and **both work** — pin nothing on these
+numbers. See DECISIONS D21 for the drift and the one metric it may have moved.
+
 | Tool | Version | Notes |
 |---|---|---|
-| ffmpeg / ffprobe | 8.1.2 (`Gyan.FFmpeg` via winget) | Use `-fps_mode cfr` — `-vsync` is deprecated |
-| Python | 3.14.6 | venv at `services/analyzer/.venv` |
+| ffmpeg / ffprobe | 8.1.2 or **9.0** (`Gyan.FFmpeg` via winget) | Use `-fps_mode cfr` — `-vsync` is deprecated. 9.0 accepts it too |
+| Python | 3.14.6 or **3.13.7** | venv at `services/analyzer/.venv` |
 | mediapipe | **1.0.0** | Legacy `mp.solutions.pose` is **gone** — see `docs/DECISIONS.md` D1 |
 | opencv-python | 5.0.0 | |
 | numpy | 2.5.1 | |
-| Node / pnpm | 22.20.0 / 11.9.0 | nothing scaffolded yet |
-| Claude Code CLI | 2.1.202 | for `ClaudeCodeProvider` later |
+| torch | 2.13.0+**cu126** | Only for the club detector. `pip install torch` gives a CPU build — use the cu126 index and assert `torch.cuda.is_available()` (D21b) |
+| ultralytics | 8.4.115 | club-head detector training/inference |
+| Node / pnpm | 22.20.0 / 10.23.0 or 11.9.0 | pnpm workspace rooted at the repo root |
+| Claude Code CLI | 2.1.202+ | for `ClaudeCodeProvider` later |
+
+**GPU is optional but changes the plan.** One machine has a GTX 1080 (8 GB, CUDA 12.6); the
+40-epoch club-detector run is ~197 s/epoch there (**~2h10m**, not the ~20 min STATUS.md
+estimated) against ~25 h on CPU. Pascal needs `amp=False` — see D21b.
 
 Pose model bundle is vendored at `services/analyzer/models/pose_landmarker_heavy.task`
 (30.6 MB, not in git — re-download from the MediaPipe model URL if missing).
@@ -132,11 +170,30 @@ Run the analyzer's Python via the venv interpreter directly:
 **Read `docs/DECISIONS.md` before writing pose code** — doc 03's API no longer exists as
 written, and the Tasks API has a monotonic-timestamp constraint that shapes the design.
 
+### How to read DECISIONS.md
+
+It is an **append-only log of experiments, not a description of the current system.** 45
+entries, and they do not all still hold. Every entry carries a `Status:` line —
+`ACTIVE` / `SUPERSEDED by Dxx` / `NEGATIVE RESULT — do not retry` / `HISTORICAL` / `OPEN`.
+**Check it before acting on an entry**; roughly a quarter are no longer current.
+
+Entries are never deleted or renumbered — 18 are cited by number from source comments, so
+renumbering would break those silently. Environment and version facts belong in the toolchain
+table above, not in the log (D2 is retained only so its number isn't orphaned).
+
+Two live traps:
+- **D26 invalidated every confidence number recorded before it.** "100% coverage @ 1.00" was a
+  clamp on SimCC peak magnitudes, not the model's opinion. Pre- and post-rescale confidence
+  figures are not comparable — this affects D4, D9, D15a and STATUS.md's tables.
+- **D20 is the standing blocker.** There is still no club-head position-error metric, so any
+  club change tuned on smoothness is unfalsifiable. That includes D23's `detector_gain`.
+
 ## Commands
 
-All from `services/analyzer/`, using the venv interpreter (`.venv\Scripts\python.exe`).
-Nothing is scaffolded in `apps/web` yet — the browser player below is a plain static page
-served by the analyzer, standing in for Phase 1.
+Analyzer commands run from `services/analyzer/` with the venv interpreter
+(`.venv\Scripts\python.exe`); the web app runs from the repo root. `apps/web` **is**
+scaffolded and is the real player — `scripts/serve.py` + `web/player.html` are the superseded
+stopgap.
 
 ```
 # analyzer (Python) — from services/analyzer, using .venv\Scripts\python.exe
@@ -146,18 +203,62 @@ python scripts/burnin.py <video>          analyse a clip -> out/<stem>/
       --no-wholebody                      drop to Halpe26; loses real hands (D15a)
       --analysis-short-side 720           keep 720; higher is pure cost (D5)
       --no-stage3 / --no-club             skip a stage, for A/B
+      --club-detector runs/clubhead/weights/best.pt    Stage 4b learned head detector (D23)
+      --club-detector-device cpu          if a training run owns the GPU
+      --club-detector-gain 0.8            evidence weight; A/B against no detector
+
+# club-head detector (Stage 4b) — needs ROBOFLOW_API_KEY in services/analyzer/.env
+python scripts/fetch_club_dataset.py      -> datasets/Golf-Swing-9/ (562 MB, gitignored)
+python scripts/train_club.py              yolo11s @ 640, 40 epochs -> runs/clubhead/
+                                          ~197 s/epoch on a GTX 1080 (D21b)
 
 python scripts/checkclub.py out/<stem>    club drawn over the real frame at each event
 python scripts/clubdebug.py out/<stem>    motion mask | candidates | chosen shaft
+python scripts/kpdebug.py <video>         RTMW's 133 sub-indices drawn + asserted on a
+      --frame N                           real frame; run before trusting any new mapping
 python scripts/qa.py out/<stem> --motion  grip-height trace; reads swing structure
 python scripts/qa.py out/<stem> --frames 30 86 114
+python scripts/checkangles.py out/<stem>  every angle the player DRAWS vs the value it
+      --field lead_knee_flex              LABELS it with, on every frame. Run after any
+                                          change to metrics._angle_geometry or to the
+                                          player's point resolution (D33)
 
-# web app (Next.js) — from apps/web
-pnpm dev                                  http://localhost:3000 (also binds LAN)
+# web app (Next.js) — from the REPO ROOT, not apps/web
+pnpm i                                    installs every workspace package
+pnpm dev                                  http://127.0.0.1:3000 (also binds LAN)
 ```
 
 `apps/web` is the real UI (doc 02's stack). `scripts/serve.py` + `web/player.html` are the
 superseded stopgap. The web app reads `out/` directly via `SWINGSAGE_MEDIA_ROOT`.
+
+**The visual spec is `instructions/template_sample.html`** (D35). Its `<style>` block lives
+unaltered in `app/globals.css`, and the `tailwind.config` colours it declared inline are the
+`@theme` block there — Tailwind v4 reads theme tokens from CSS, not from a JS config. The
+sample's card shapes are named components in `components/ui/kiosk.tsx`; use those rather than
+inventing a new panel. Layout:
+
+```
+SwingWorkspace   workspace bar + three folder tabs; owns the playhead and the drawn angles
+├ SwingStage     video + overlay canvas + the transport burned into the frame
+│ └ OverlayMenu  overlay selection, as a dropdown over the video (lib/overlays.ts drives it)
+└ views/         OverviewView (golfer) · CoachView (narrative) · AdvancedView (everything else)
+lib/usePlayer.ts frame sync + transport, doc 02's contract — nothing here is negotiable
+```
+
+**Overview and Coach run on `lib/mockScoring.ts` — placeholder scores, not measurements**, so
+the scored layout can be designed before doc 05 Part C exists (D35, third pass). It is
+deterministic per swing, marked `DEMO` on screen, and gated by one exported constant
+(`SCORING_IS_MOCK`) that a real scorecard turns off. **Real measurements never pass through
+it**, and the Advanced tab is measurements only — every number there is read straight from
+`analysis.json`. Do not widen the mock's reach; the face-angle rule in particular still stands.
+
+**Editing `swingsage/` does not change a stored `analysis.json`** — the player keeps drawing
+the old artifact until something re-runs the analyzer, which is the usual reason a pipeline
+change "doesn't show up". The swing page has a **Re-analyze** button for exactly this: it
+re-runs `burnin.py` over the clip recorded in `video.source.path`, polls
+`GET /api/swings/:id/reanalyze` for stage/progress, and reloads when done (~90s). Job state
+is in-memory in the Next process until the SQLite job table lands; the protocol is doc 02's
+(D30).
 
 Two dev-environment gotchas, both already handled in config but worth knowing:
 `next.config.ts` enumerates this machine's LAN IPs into `allowedDevOrigins` — without it
@@ -168,8 +269,9 @@ hydrates. And on this machine use `127.0.0.1`, not `localhost` (resolves to `::1
 consumed), `analysis.json`, `overlay.mp4` (skeleton burned into pixels), `contact.jpg`.
 
 Pipeline stages live in `swingsage/`: `video` (Stage 0) → `pose`/`pose_rtm` (Stage 2) →
-`postprocess` (Stage 3) → `events` (Stage 5) → `club` (Stage 4). Stage 4 runs after events
-because the trace is segmented by them.
+`postprocess` (Stage 3) → `events` (Stage 5) → `club` (Stage 4) → `checkpoints` (Stage 5b) →
+`metrics` (Stage 6). Stage 4 runs after events because the trace is segmented by them, and
+5b runs after Stage 4 because three of the ten checkpoints are shaft-defined (D31).
 
 **Always run `clubdebug.py` before trusting anything club-related.** Doc 04 §7 calls it
 non-negotiable and it has earned that twice already — coverage numbers looked healthy while
@@ -185,11 +287,17 @@ wholebody 133 → Stage 3 → events → club → face → metrics → `analysis
 
 | | swing1 | swing2 |
 |---|---|---|
-| Pose (all key joints) | 94–100% | 98–100% |
-| `grip_center` | 100% @ 1.00 | 100% @ 1.00 |
+| `grip_center` | 94.2% @ 0.73 | 90.9% @ 0.71 |
+| `nose_bridge` (head anchor) | 100% @ 1.00 | 96.8% @ 0.79 |
+| `head_center` (ear midpoint) | 23.7% @ 0.46 | 68.6% @ 0.57 |
 | Club coverage | 100/100/100% | 100/100/100% |
 | Club correct at events (by eye) | 5 of 6 (toe-up flipped) | 5 of 6 (finish uncertain) |
-| Tempo | 3.38:1 | 1.93:1 |
+| Tempo | 3.38:1 | 1.55:1 |
+
+**These are not comparable to numbers recorded before 2026-08-04.** Confidence used to be
+clamped to 1.00 for every RTMW keypoint, so the old "94–100% @ 1.00" measured the clamp, not
+the model (D26). Values are lower now and mean something. Regenerate any stored
+`analysis.json` rather than comparing against it.
 
 **Coverage percentages have overstated club quality three separate times.** Always run
 `scripts/checkclub.py` and look at the club drawn over the real frame before believing them.

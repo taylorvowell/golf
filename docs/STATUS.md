@@ -19,10 +19,11 @@ player with skeleton, events, club overlay and metrics.** Two real fixture swing
 | 2 — pose (MediaPipe localiser → RTMW wholebody 133) | **Done**, excellent |
 | 3 — post-processing (gating, priors, smoothing) | **Done** |
 | 5 — swing events (8 GolfDB events) | **Done**, verified ±2 frames |
-| 6 — metrics (doc 05 Part B) | **Done**, provisional thresholds |
+| 5b — checkpoints (10 P-system positions) | **Done**; P6 falls back to a proxy on swing1 (D31) |
+| 6 — metrics (doc 05 Part B) | **Done**, provisional thresholds; full angle catalogue + per-checkpoint deltas |
 | 4 — club tracking | **Weak** — see §3 |
 | 4b — club face | Partial, honest about limits |
-| Web app (Next.js) | Player done; **no upload, no DB, no queue** |
+| Web app (Next.js) | Player rebuilt on `instructions/template_sample.html` — three tabs, overlays on the video (D35); **no upload, no DB, no queue** |
 | 8 — coach scoring | Not started |
 | 6 — simulator ingestion | Not started |
 | 7 — AI provider | Not started |
@@ -89,27 +90,46 @@ clubhead extent **0.013 × 0.024** of the image.
 
 **Training:** `services/analyzer/scripts/train_club.py`, `yolo11s` @ 640px, 40 epochs.
 
-**Blocker: compute.** ~38 min/epoch on CPU ⇒ ~25 hours. Options:
-1. **GPU** — same run is ~20 minutes. Strongly preferred; check for CUDA on the new machine.
-2. `yolo11n` @ 640, 20 epochs on CPU ≈ 3–4 hours (overnight). Keep 640px — the club head is
-   a small object and dropping resolution hurts exactly what we are detecting.
-3. 15 epochs on a ~1,500-image subset ≈ 2 hours, enough to tell whether the approach works.
+**Compute blocker resolved.** Machine 2 has a GTX 1080 (8 GB, CUDA 12.6). Measured **197 s/
+epoch**, so the full 40-epoch run is **~2h10m** — the "~20 minutes" estimate here was
+optimistic by ~6×, though a GPU is still 7.5× better than CPU's ~25 h. Pascal requires
+`amp=False`, and torch must come from the cu126 index or `pip` silently installs a CPU build.
+See DECISIONS **D21b**. The `yolo11n` / subset fallbacks below are no longer needed.
 
-**Not yet written:** the inference script that runs the trained weights over a clip and emits
-head positions into `analysis.json`. That is the next piece of code.
+**Dataset verified independently** (D22b): `clubhead` median extent 0.0137 × 0.0243, 0 of
+8,506 instances above 10% of frame. v9 on disk is train 4,399 / valid 269 / test 909. Note the
+export is segmentation *polygons* even when the `yolov11` detection format is requested;
+Ultralytics converts them to boxes for a detection task (0 corrupt across 4,399).
 
-**Roboflow API key** is deliberately not committed. Supply it as `ROBOFLOW_API_KEY` from the
-account that owns it; datasets re-download in minutes.
+**Two other Roboflow candidates were evaluated and rejected** (D22) — including one whose
+advertised "mAP 86.09" is box-only, with every keypoint metric exactly 0.000. Don't re-survey
+without reading D22 first.
+
+**Inference is now written** (D23): `swingsage/club_detect.py`, wired via
+`burnin.py --club-detector <weights>`. It contributes evidence into the existing angular
+profile rather than replacing the tracker (doc 04 §2 forbids detector-only), so
+`detector=None` is byte-identical to the classical path. `analysis.json` now carries
+`club.detector` with the weights' SHA-256, closing the versioning gap in §7.
+
+**Roboflow API key** is deliberately not committed. Supply it as `ROBOFLOW_API_KEY` in the
+environment or in `services/analyzer/.env` (gitignored); `scripts/fetch_club_dataset.py` reads
+either. Datasets re-download in minutes.
 
 ---
 
 ## 5. Next steps, in order
 
-1. **Finish the club detector.** Train (GPU if at all possible), write inference, wire into
-   `club.py` behind a flag so the classical path remains as fallback (doc 04 §2: never
-   detector-only). Record the club model version in `analysis.json` alongside `pose.model`.
-2. **Build the ground-truth metric** (doc 04 §7). Without it, every further change is
-   unfalsifiable. This is arguably step 0.
+1. ~~**Finish the club detector.**~~ Trained, wired and A/B'd (D23, **D23a**). Weights at
+   `runs/clubhead/weights/best.pt`. On swing2 it **fixed the finish** — the classical tracker
+   draws the club up-left there while the real shaft goes down-right, verified with
+   `checkclub.py` — and halved off-plane deviation. Left behind `--club-detector`, **not
+   default**: one clip, one visual pass. Promoting it needs step 2 and step 3.
+2. **Build the ground-truth metric** (doc 04 §7) — hand-label the club head every 5th frame on
+   5 clips, measure position error in px. **This is the top blocker, and D23a made the case
+   undeniable:** the detector's follow-through got *less smooth* at exactly the segment where it
+   became *visibly more correct*, so head-path acceleration actively preferred the wrong answer.
+   Any tuning against smoothness from here risks undoing a real fix. Off-plane deviation is the
+   better interim proxy (it is anchored to the hand-fitted plane, D18b) but it is still a proxy.
 3. **More fixtures.** Everything is tuned on two clips; doc 03 §7 wants ≥15. The phase-based
    detector split especially may be overfit. A face-on and a left-handed clip would test the
    handedness mirroring that has never been exercised.
@@ -156,10 +176,27 @@ for everything above.
   section wants a client-side fetch into typed arrays instead.
 - `services/analyzer/web/player.html` + `scripts/serve.py` are the superseded stopgap player;
   the Next.js app replaced them. Safe to delete once you are confident.
-- No tests at all. Doc 03 §7 wants golden snapshots on 3 fixtures.
-- No club-model versioning in `analysis.json`.
+- No tests at all. Doc 03 §7 wants golden snapshots on 3 fixtures. **This has now cost us
+  something concrete:** swing2's tempo reads 1.76:1 on machine 2 against the 1.93:1 recorded
+  here. The likely cause is the uncommitted pose work below rather than the environment, but
+  with no snapshot there is no way to confirm it (D21a).
+- **There is uncommitted work in the tree on top of `879a908`, and it is not documented
+  anywhere but here.** `skeleton.py` (+79, new `MEASURED` keypoints incl. `middle_mcp`),
+  `pose_rtm.py` (+70), `postprocess.py` (+37), `pose.py` (+16), `SwingPlayer.tsx`, a new
+  untracked `scripts/kpdebug.py`, the fixture renamed to `swing1.mp4` (same bytes), and the
+  pnpm workspace moved from `apps/web/` to the repo root. Commit or describe it before the
+  numbers in this file can be trusted again — several of them were measured before it existed.
+- ~~No club-model versioning in `analysis.json`.~~ Closed by D23 — `club.detector` records the
+  weights' SHA-256, size, imgsz, conf and class map.
 - Metric thresholds are provisional (`provisional_thresholds: true`) and must move to a
-  versioned `scoring_config.json` before any scoring ships.
+  versioned `scoring_config.json` before any scoring ships. The angle catalogue
+  (`metrics.angle_fields`, D31) is deliberately band-free for the same reason — the reference
+  bands in GLOSSARY §7 are coaching convention and are read by no code.
+- **Joint angles are 2D projections and some of them are visibly wrong at the top.** swing2's
+  trail elbow reads 172° of flex at P3 and its lead hip hinge reads 179.8° at P4, both because
+  the limb points near the camera axis. `lead|trail_arm_in_plane` measures how bad it is for
+  the arms (0.35 at that P3 against 0.86 at address); the hip hinge has no equivalent guard
+  yet. A second view would fix this properly and nothing else will (doc 03 §5).
 - Two dev-environment gotchas, both already handled but worth knowing: `next.config.ts`
   enumerates LAN IPs into `allowedDevOrigins` (without it a phone gets HTML that never
   hydrates), and on Windows use `127.0.0.1` rather than `localhost` (which resolves to `::1`).

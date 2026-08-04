@@ -11,10 +11,21 @@ export const SIDE_COLOR: Record<string, string> = {
   M: "#22D3EE", // spine / derived midline
 };
 
+/**
+ * Club-head trace colours, one per segment.
+ *
+ * **Deliberate deviation from doc 04 §5 / the UI brief's "locked" palette**, which specified
+ * red backswing and blue downswing. Red-back / blue-down is a golf-instruction convention, so
+ * a coach reading this trace will not get the pairing they expect — that cost is real and was
+ * accepted knowingly. See docs/DECISIONS.md D34.
+ *
+ * Follow-through carries its alpha in the colour rather than being drawn at a lower opacity,
+ * so it stays translucent regardless of how the renderer sets globalAlpha.
+ */
 export const TRACE_COLOR = {
-  backswing: "#E5484D",
-  downswing: "#3B82F6",
-  followthrough: "rgba(59,130,246,.35)",
+  backswing: "#2E9BFF",
+  downswing: "#B44BFF",
+  followthrough: "rgba(255,255,255,.55)",
 } as const;
 
 export const BONES: [string, string, string][] = [
@@ -41,12 +52,47 @@ export const BONES: [string, string, string][] = [
   ["left_heel", "left_foot_index", "L"],
   ["right_ankle", "right_heel", "R"],
   ["right_heel", "right_foot_index", "R"],
+  // Outer foot edge, closing the sole triangle. A foot drawn as a single heel-to-toe line
+  // cannot show heel lift or roll; these are the segments that make both visible.
+  ["left_heel", "left_small_toe", "L"],
+  ["left_small_toe", "left_foot_index", "L"],
+  ["right_heel", "right_small_toe", "R"],
+  ["right_small_toe", "right_foot_index", "R"],
+  // Knuckle line (pinky knuckle -> index knuckle). Its rotation is forearm roll.
+  ["left_pinky", "left_index", "L"],
+  ["right_pinky", "right_index", "R"],
+  // Face profile, so head orientation is legible beside the head_center dot.
+  ["chin", "nose_bridge", "M"],
 ];
 
-/** Face detail and the hand landmarks add clutter without coaching value (doc 03 §2). */
-export const HIDE_JOINT = /^(nose|.*_eye.*|mouth_.*|.*_pinky|.*_index|.*_thumb)$/;
+/**
+ * Face detail adds clutter without coaching value (doc 03 §2). The hand landmarks are
+ * hidden as *joints* but their connecting bone is drawn above — on the wholebody path
+ * these are real measured knuckles, and the line reads as roll where three dots read as
+ * noise. Points absent from an analysis are skipped by the renderer anyway, so this stays
+ * correct for MediaPipe-only runs.
+ */
+export const HIDE_JOINT = /^(nose|.*_eye.*|mouth_.*|.*_pinky|.*_index|.*_thumb|jaw_.*)$/;
 
 export const EV_SHORT: Record<string, string> = {
   address: "ADR", toe_up: "TOE", mid_backswing: "MID-B", top: "TOP",
   mid_downswing: "MID-D", impact: "IMP", mid_follow_through: "MID-F", finish: "FIN",
+};
+
+/**
+ * What a coach calls each span between two events, keyed by the analyzer's `phases[].name`.
+ *
+ * The phase bar labels itself with the short code of the event a segment *ends* at — so the
+ * span from address to toe-up reads "TOE", which the UI brief lists as a real confusion (§8.6).
+ * These are the names for the hover tooltip: the thing between address and toe-up is the
+ * takeaway, not "toe up". Vocabulary matches docs/GLOSSARY.md.
+ */
+export const PHASE_LABEL: Record<string, string> = {
+  "address->toe_up": "Takeaway",
+  "toe_up->mid_backswing": "Backswing",
+  "mid_backswing->top": "To the top",
+  "top->mid_downswing": "Transition",
+  "mid_downswing->impact": "Delivery",
+  "impact->mid_follow_through": "Release",
+  "mid_follow_through->finish": "Follow through",
 };

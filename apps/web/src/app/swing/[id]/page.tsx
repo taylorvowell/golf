@@ -1,27 +1,28 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import SwingPlayer from "@/components/SwingPlayer";
-import { getAnalysis } from "@/lib/swings";
+import SwingWorkspace from "@/components/SwingWorkspace";
+import { CURRENT_SCHEMA, getAnalysis, listSwings, missingCapabilities } from "@/lib/swings";
 
 export const dynamic = "force-dynamic";
 
 export default async function SwingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const analysis = await getAnalysis(id);
+  const [analysis, swings] = await Promise.all([getAnalysis(id), listSwings()]);
   if (!analysis) notFound();
 
-  const v = analysis.video;
+  // The log is newest-first, so the next entry is the older swing — which is what "previous"
+  // means to a golfer reviewing a session.
+  const i = swings.findIndex((s) => s.id === id);
+  const olderId = i >= 0 && i + 1 < swings.length ? swings[i + 1].id : null;
+  const newerId = i > 0 ? swings[i - 1].id : null;
+
   return (
-    <main className="mx-auto max-w-6xl p-4 sm:p-6">
-      <header className="mb-4 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-        <Link href="/" className="text-sm text-blue-400 hover:underline">← log</Link>
-        <h1 className="text-lg font-semibold">{id}</h1>
-        <span className="text-xs text-neutral-500">
-          {v.width}×{v.height} · {v.fps.toFixed(2)}fps · {v.frame_count} frames ·{" "}
-          {v.source.is_vfr ? "VFR→CFR" : "CFR"} · {v.view.toUpperCase()} · {v.handedness}-handed
-        </span>
-      </header>
-      <SwingPlayer id={id} analysis={analysis} />
-    </main>
+    <SwingWorkspace
+      id={id}
+      analysis={analysis}
+      prevId={olderId}
+      nextId={newerId}
+      missing={missingCapabilities(analysis)}
+      currentSchema={CURRENT_SCHEMA}
+    />
   );
 }

@@ -15,19 +15,105 @@ Outputs into DIR (default: out/<video stem>/):
 from __future__ import annotations
 
 import argparse
+import atexit
 import copy as copy0
 import json
+import os
 import sys
 import time
+from dataclasses import replace
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from swingsage import (club, events, face, metrics, pose, pose_rtm,  # noqa: E402
-                       postprocess, render, video)
-from swingsage.skeleton import KEYPOINT_NAMES  # noqa: E402
+from swingsage import (checkpoints, club, club_detect, events, face,  # noqa: E402
+                       metrics, pose, pose_rtm, postprocess, render, video)
+from swingsage.skeleton import (DERIVED_NAMES, KEYPOINT_NAMES,  # noqa: E402
+                                MEASURED, N_NATIVE)
 
-SCHEMA_VERSION = 1
+# Bump whenever a field is ADDED to analysis.json, not only on breaking changes.
+#
+# The artifact is the contract (doc 02) and the player renders it and nothing else, so editing
+# the analyzer never changes a stored analysis. That is fine — but a reader has to be able to
+# tell an old artifact from a new one, and this was left at 1 through several field additions.
+# The result was silent degradation: the player hid controls whose data was simply absent, which
+# is indistinguishable from a broken UI. Version it, and staleness becomes diagnosable.
+#
+#   1  original pose/club/events/metrics contract
+#   2  + club.detector (provenance and raw boxes), + club.variants (alternative solutions)
+#   3  + checkpoints (P1-P10), + metrics.checkpoints/angle_fields (the angle catalogue and
+#      its per-angle drawing geometry). Also the point at which keypoint confidence began
+#      being TRUNCATED rather than rounded — a v2 artifact can disagree with its own overlay
+#      by ~2 deg where a confidence rounded up onto the MIN_CONF gate (D33).
+#   4  + club.frames[].from_model (did the detector or the solver place this head) and the
+#      trace-only variants. from_model exists so the trace can be rebuilt from the artifact
+#      alone, without re-running pose and club solving to iterate on it.
+#   5  + playback_window: the span of the clip worth playing (approach, swing, held finish),
+#      so the player can drop the dead footage at both ends. NOT swing_window, which is the
+#      Stage 3 motion-burst gate and is far too tight to play.
+SCHEMA_VERSION = 5
+
+# What each version added, so the player can say what re-analysing would actually get you
+# rather than just reporting a number mismatch.
+SCHEMA_FEATURES = {
+    2: "raw club-detector output and alternative club solutions",
+    3: "the ten swing checkpoints and selectable angle overlays",
+    4: "trace-only club variants and per-frame from_model provenance",
+    5: "an auto-trimmed playback window, so the player drops the dead footage at both ends",
+}
+
+
+class OutputLock:
+    """Refuse to run if another analysis already owns this output directory.
+
+    Two concurrent runs over one directory corrupt it: they overwrite the same videos while
+    the other is reading them, and the loser writes a partial artifact. That happened — four
+    orphaned processes raced over two swings and destroyed both analyses. A stale lock from a
+    killed process is detected and cleared rather than blocking forever, since the common case
+    for a leftover lock is exactly that.
+    """
+
+    def __init__(self, out: Path):
+        self.path = out / ".analysis.lock"
+
+    def __enter__(self):
+        if self.path.exists():
+            try:
+                pid = int(self.path.read_text().split()[0])
+            except (ValueError, IndexError, OSError):
+                pid = None
+            if pid is not None and _alive(pid):
+                raise SystemExit(
+                    f"another analysis is already running for {self.path.parent.name} "
+                    f"(pid {pid}). Wait for it, or kill it first — two runs over one output "
+                    f"directory corrupt each other.")
+            print(f"           ! clearing stale lock from dead pid {pid}")
+        self.path.write_text(f"{os.getpid()} {time.time():.0f}\n", encoding="utf-8")
+        return self
+
+    def __exit__(self, *exc):
+        try:
+            self.path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        return False
+
+
+def _alive(pid: int) -> bool:
+    """Is this pid running? Windows has no signal-0 trick, so ask the OS directly."""
+    if os.name == "nt":
+        import subprocess
+        try:
+            r = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/NH"],
+                               capture_output=True, text=True, timeout=10)
+            return str(pid) in r.stdout
+        except Exception:
+            return False
+    try:
+        os.kill(pid, 0)
+    except (OSError, ProcessLookupError):
+        return False
+    return True
 
 
 def main() -> int:
@@ -48,6 +134,55 @@ def main() -> int:
                     help="landmark model; rtmpose is markedly better on occluded limbs")
     ap.add_argument("--rtm-mode", choices=["performance", "balanced"], default="performance")
     ap.add_argument("--no-club", action="store_true", help="skip Stage 4 club tracking")
+    ap.add_argument("--club-detector", default=None, metavar="WEIGHTS",
+                    help="fine-tuned YOLO club-head weights (e.g. runs/clubhead/weights/"
+                         "best.pt). Adds learned evidence to the existing tracker; omit for "
+                         "the classical-only path. A/B the two to judge it.")
+    ap.add_argument("--club-detector-device", default=None,
+                    help="'cpu' or a CUDA index. Default auto; pass cpu if a training run "
+                         "is using the GPU.")
+    ap.add_argument("--club-detector-gain", type=float, default=None,
+                    help="override ClubConfig.detector_gain (evidence weight, 0-1 scale)")
+    ap.add_argument("--club-detector-stick-gain", type=float, default=None,
+                    help="override ClubConfig.detector_stick_gain. `stick` is the model's "
+                         "strong class (mAP50 0.976 vs clubhead 0.686, D23a)")
+    ap.add_argument("--club-detector-inject",
+                    choices=["none", "heads", "sticks", "both"], default="heads",
+                    help="which detector classes feed the solver. 'none' still runs the "
+                         "detector and still publishes its raw boxes for the player's raw "
+                         "overlay — it just does not let them affect the solve. Use 'none' to "
+                         "see the model unmodified by anything else.")
+    ap.add_argument("--club-detector-radius", action="store_true",
+                    help="let detections assert the head DISTANCE as well as its angle. Off by "
+                         "default: it bypasses D17 radius smoothing and measurably increased "
+                         "club-length jitter (address-hold stdev 18.8px -> 29.4px)")
+    ap.add_argument("--club-detector-conf", type=float, default=0.15,
+                    help="detector confidence floor. Low on purpose — the solver decides, and "
+                         "a high floor recreates the candidate starvation of D14")
+    ap.add_argument("--club-rigid", action="store_true",
+                    help="rebuild the club from a rigid model: hands + one smoothed angle at a "
+                         "fixed length (club.rigidify). Fixes the frame-to-frame length jitter "
+                         "that `_build_club` produces by re-deriving length every frame")
+    ap.add_argument("--club-head-from-model", action="store_true",
+                    help="take the head straight from the detector where it is confident, "
+                         "instead of only nudging the solver. With injection alone the solved "
+                         "head still sat a median 60px from the model's. Combine with "
+                         "--club-rigid to smooth AFTER measuring (D32)")
+    ap.add_argument("--club-model-min-conf", type=float, default=None,
+                    help="min detection confidence for --club-head-from-model (default 0.35)")
+    ap.add_argument("--club-model-smooth", action="store_true",
+                    help="smooth the measured head path in polar coords about the hands, KEEPING "
+                         "the measured radius (unlike --club-rigid, which imposes the calibrated "
+                         "club length)")
+    ap.add_argument("--club-model-traj-gate", action="store_true",
+                    help="before smoothing, reject isolated head jumps by trajectory continuity "
+                         "(Hampel on the shaft angle). For the backswing, where the club passes "
+                         "behind the golfer and the detector can misfire for a frame or two")
+    ap.add_argument("--club-variants", action="store_true", default=True,
+                    help="also solve the club the other ways and store them all in "
+                         "analysis.json, so the player can switch between them without a "
+                         "re-run. Needs --club-detector. On by default.")
+    ap.add_argument("--no-club-variants", dest="club_variants", action="store_false")
     ap.add_argument("--wholebody", action="store_true", default=True,
                     help="RTMW 133-kpt model; gives real knuckles so grip_center is the "
                          "hands rather than the wrist bone")
@@ -60,6 +195,12 @@ def main() -> int:
         return 1
     out = Path(args.out).resolve() if args.out else Path("out") / src.stem
     out.mkdir(parents=True, exist_ok=True)
+
+    # Claim the output directory for the duration. Registered with atexit rather than wrapped
+    # in `with` to keep this a small change; a hard kill skips atexit, which is exactly the
+    # case OutputLock's stale-pid detection handles.
+    lock = OutputLock(out).__enter__()
+    atexit.register(lock.__exit__)
 
     t_all = time.time()
 
@@ -129,10 +270,15 @@ def main() -> int:
             window = tuple(_pre["swing_window"])
         except Exception:
             window = None
-        for fr in series.frames:                      # undo provisional derived joints
-            del fr["kp"][len(pose.NATIVE_NAMES):]
+        # Undo the provisional derived joints, which sit *between* the native block and the
+        # measured extras. Truncating the tail instead would silently discard every
+        # wholebody point (chin, small toes, middle knuckles) before Stage 3 ever saw them.
+        for fr in series.frames:
+            del fr["kp"][N_NATIVE:N_NATIVE + len(DERIVED_NAMES)]
         t = time.time()
-        series, rep = postprocess.postprocess(series, window=window)
+        series, rep = postprocess.postprocess(
+            series, window=window,
+            trust_hands=(args.pose_model == "rtmpose" and args.wholebody))
         print(f"stage3     side-swaps {rep.swaps}, bone rejects {rep.bone_rejects}, "
               f"grip rejects {rep.grip_rejects}, outliers {rep.outlier_rejects}, "
               f"promoted {rep.promoted}, interpolated {rep.interpolated} "
@@ -154,14 +300,51 @@ def main() -> int:
               f"(backswing {ev['tempo']['backswing_ms']}ms / "
               f"downswing {ev['tempo']['downswing_ms']}ms)  "
               f"window {ev['swing_window'][0]}-{ev['swing_window'][1]}  ({time.time()-t:.1f}s)")
+    _pw = ev["playback_window"]
+    print(f"           playback {_pw[0]}-{_pw[1]}  "
+          f"({(_pw[1] - _pw[0] + 1) / norm.fps:.2f}s of {len(series.frames) / norm.fps:.2f}s)")
     for n_ in ev["notes"]:
         print(f"           ! {n_}")
 
     # --- Stage 4: club tracking (doc 04) --------------------------------------------
     cl = None
+    det = None
+    club_variants: dict = {}
     if not args.no_club:
+        cfg_club = replace(club.ClubConfig(),
+                           use_rigid=args.club_rigid,
+                           detector_inject=args.club_detector_inject,
+                           detector_radius=args.club_detector_radius,
+                           detector_head_primary=args.club_head_from_model,
+                           detector_smooth=args.club_model_smooth,
+                           detector_traj_gate=args.club_model_traj_gate)
+        if args.club_model_min_conf is not None:
+            cfg_club = replace(cfg_club,
+                               detector_primary_min_conf=args.club_model_min_conf)
+        if args.club_detector:
+            if args.club_detector_gain is not None:
+                cfg_club = replace(cfg_club, detector_gain=args.club_detector_gain)
+            if args.club_detector_stick_gain is not None:
+                cfg_club = replace(cfg_club,
+                                   detector_stick_gain=args.club_detector_stick_gain)
+            t = time.time()
+            d = club_detect.ClubDetector(args.club_detector,
+                                         conf=args.club_detector_conf,
+                                         device=args.club_detector_device)
+            det = d.run(anal.path, n_frames=len(series.frames), progress=prog)
+            m = det.model
+            n_stick = sum(1 for fr in det.per_frame
+                          for x in fr if x.cls == club_detect.STICK)
+            print(f"\r  detector   heads {m['head_detections']} on "
+                  f"{m['frames_with_head']}/{m['frames']} frames · sticks {n_stick}  "
+                  f"inject={args.club_detector_inject}  {m['weights']}@{m['sha256']}  "
+                  f"({time.time() - t:.1f}s)")
+            for n_ in det.notes:
+                print(f"           ! {n_}")
+
         t = time.time()
-        cl = club.track(anal.path, series.frames, ev, args.handedness, progress=prog)
+        cl = club.track(anal.path, series.frames, ev, args.handedness, cfg=cfg_club,
+                        progress=prog, detector=det)
         cov = cl.coverage
         print(f"\r  club       coverage back {cov.get('backswing', 0) * 100:.0f}% / "
               f"down {cov.get('downswing', 0) * 100:.0f}% / "
@@ -169,6 +352,116 @@ def main() -> int:
               f"club_len {cl.club_len:.3f}  ({time.time() - t:.1f}s)")
         for n_ in cl.notes:
             print(f"           ! {n_}")
+
+        # --- Stage 4c: alternative club solutions, in the SAME artifact ----------------
+        # The club can be solved several ways and there is no ground-truth metric yet to pick
+        # a winner (D20), so the honest thing is to ship the alternatives and let a human
+        # compare them on real pixels. Storing them together means one video and one page
+        # rather than a directory per experiment — the player switches between them, so the
+        # comparison is a click instead of a re-run.
+        #
+        # Only the render-relevant fields are kept per variant; `club` above remains the
+        # single input to metrics, face and event refinement, so nothing downstream forks.
+        if det is not None and args.club_variants:
+            VARIANTS = [
+                ("classical", "Classical only (no detector)",
+                 dict(detector_inject="none", detector_head_primary=False, use_rigid=False)),
+                ("evidence", "Detector as evidence (D23)",
+                 dict(detector_inject="both", detector_head_primary=False, use_rigid=False)),
+                ("model", "Model head, unsmoothed",
+                 dict(detector_inject="both", detector_head_primary=True, use_rigid=False)),
+                # Keeps the MEASURED radius and only de-noises it, unlike model_rigid which
+                # imposes the calibrated club length. The calibration looks ~1.5x too long
+                # (D32), so trusting the measurement over it is the point.
+                ("model_smooth", "Model head + smoothed",
+                 dict(detector_inject="both", detector_head_primary=True, use_rigid=False,
+                      detector_smooth=True)),
+                # Trajectory continuity INSTEAD of a confidence threshold. Note the low
+                # min_conf: with the default 0.35 this variant was byte-identical to
+                # model_smooth, because the threshold had already discarded the jumpy frames
+                # (conf 0.29-0.33) and the gate had nothing left to reject — 0 outliers.
+                #
+                # So admit almost everything the model says and let the Hampel gate decide.
+                # That is the better question anyway: "is this position consistent with the
+                # path?" survives a miscalibrated confidence, where a threshold does not, and
+                # it keeps the frames where the model was right but unsure — which the
+                # backswing is full of (mean conf falls 0.77 -> 0.59 there).
+                ("model_traj", "Model head + trajectory gate (low conf admitted)",
+                 dict(detector_inject="both", detector_head_primary=True, use_rigid=False,
+                      detector_smooth=True, detector_traj_gate=True,
+                      detector_primary_min_conf=0.15)),
+                ("model_rigid", "Model head + rigid length",
+                 dict(detector_inject="both", detector_head_primary=True, use_rigid=True)),
+            ]
+            # Trace-only variants share one solve. They differ purely in how the polyline is
+            # rebuilt from an identical set of head positions, so re-solving the club for each
+            # would burn ~20s a piece to produce the same frames. Derived from `model` below.
+            TRACE_MODES = [
+                ("model_trace_measured", "Model head + trace: detector frames only", "measured"),
+                ("model_trace_moving", "Model head + trace: moving average", "moving"),
+                ("model_trace_savgol", "Model head + trace: Savitzky-Golay", "savgol"),
+                # Reject, don't average. A bad detection pulls a smoother off the real club for
+                # frames either side; a consensus fit identifies it and drops it instead, so the
+                # drawn path passes THROUGH measured heads rather than near their mean. Worst
+                # case for smoothing is the bottom of the swing, where the club is fastest.
+                ("model_trace_robust", "Model head + trace: reject outliers, no smoothing",
+                 "robust"),
+            ]
+            model_solve = None
+
+            for key, label, over in VARIANTS:
+                t = time.time()
+                v = club.track(anal.path, series.frames, ev, args.handedness,
+                               cfg=replace(cfg_club, **over), detector=det)
+                if key == "model":
+                    model_solve = v
+                club_variants[key] = {
+                    "label": label,
+                    "coverage": v.coverage,
+                    "club_len": round(v.club_len, 5),
+                    "butt_len": round(v.butt_len, 5),
+                    "notes": v.notes,
+                    "frames": [{"f": c.f,
+                                "shaft": ([[round(x, 5) for x in p] for p in c.shaft]
+                                          if c.shaft else None),
+                                "head": [round(x, 5) for x in c.head] if c.head else None,
+                                "butt": [round(x, 5) for x in c.butt] if c.butt else None,
+                                "conf": round(c.conf, 3),
+                                "interp": c.interp,
+                                "from_model": c.from_model}
+                               for c in v.frames],
+                    "trace": v.trace,
+                }
+                vc = v.coverage
+                print(f"\r  variant    {key:<20} back {vc.get('backswing', 0)*100:3.0f}% / "
+                      f"down {vc.get('downswing', 0)*100:3.0f}% / "
+                      f"through {vc.get('followthrough', 0)*100:3.0f}%  ({time.time()-t:.1f}s)")
+
+            # --- trace-only variants, from the model solve ------------------------------
+            # The per-frame head is already right; it is the polyline joining the points that
+            # is jagged, because `_build_trace` includes frames the detector declined and those
+            # carry the solver's head instead. These rebuild the line and touch nothing else.
+            if model_solve is not None:
+                for key, label, mode in TRACE_MODES:
+                    t = time.time()
+                    v = copy0.deepcopy(model_solve)
+                    club.smooth_trace(v, ev, len(series.frames),
+                                      replace(cfg_club, trace_smooth=mode))
+                    pts = {k: len(p) for k, p in v.trace.items()}
+                    club_variants[key] = {
+                        "label": label,
+                        # Coverage and frames are identical to `model` by construction — only
+                        # `trace` differs. Stated rather than implied so the numbers make sense.
+                        "coverage": v.coverage,
+                        "club_len": round(v.club_len, 5),
+                        "butt_len": round(v.butt_len, 5),
+                        "notes": v.notes,
+                        "frames": club_variants["model"]["frames"],
+                        "trace": v.trace,
+                    }
+                    print(f"\r  variant    {key:<20} trace pts back {pts.get('backswing', 0)} / "
+                          f"down {pts.get('downswing', 0)} / "
+                          f"through {pts.get('followthrough', 0)}  ({time.time()-t:.1f}s)")
         # Doc 02 quality gate: below 50% across the swing the trace is disabled rather
         # than shown as a fabricated path.
         if cov.get("swing", 0) < 0.5:
@@ -193,18 +486,70 @@ def main() -> int:
                       f"{('rel ' + str(c.get('head_to_shaft_deg')) + 'deg') if 'head_to_shaft_deg' in c else ''}"
                       f"  conf {c['conf']}")
 
+    # --- Stage 5b: the ten coaching checkpoints (P1-P10) ----------------------------
+    # After club refinement, because P2/P6/P8 are shaft-defined and only resolve properly
+    # once the shaft exists. Falls back to pose proxies with --no-club, at lower confidence.
+    cps = checkpoints.build(ev, sg, series.frames, args.handedness, club=cl,
+                            n_frames=len(series.frames))
+    print("checkpoints " + "  ".join(
+        f"{i['p']}={i['frame']}" for i in cps["items"]))
+    for n_ in cps["notes"]:
+        print(f"           ! {n_}")
+
     # --- Stage 6: metrics (doc 05 Part B) -------------------------------------------
     # After Stage 4: wrist hinge is lead-forearm vs club shaft, so it needs club data.
     t = time.time()
     club_frames = [{"f": c.f, "head": c.head, "conf": c.conf} for c in cl.frames] if cl else None
     mt = metrics.compute(series.frames, ev, args.view, args.handedness,
                          aspect=norm.width / norm.height, fps=norm.fps,
-                         club_frames=club_frames)
+                         club_frames=club_frames, checkpoints=cps)
     s = mt["summary"]
     print(f"metrics    spine@addr {s['spine_at_address']}deg  lead-arm@top {s['lead_arm_at_top']}deg"
           f"  hinge@top {s['lead_wrist_hinge_at_top']}deg  stance {s['stance_width_ratio']}")
-    print(f"           max head sway {s['max_head_sway']} bh  "
-          f"max hip sway {s['max_hip_sway']} bh  ({time.time() - t:.1f}s)")
+    print(f"           max head sway {s['max_head_sway']} bh (nose-bridge {s['max_face_sway']})"
+          f"  max hip sway {s['max_hip_sway']} bh  head turn {s['max_head_turn']}")
+    print(f"           turn@top shoulder {s['shoulder_turn_at_top']}deg "
+          f"hip {s['hip_turn_at_top']}deg  x-factor {s['xfactor_rotation_at_top']}deg"
+          f"  spine-curve@addr {s['spine_curvature_at_address']}")
+    print(f"           heel lift trail {s['max_trail_heel_lift']} lead "
+          f"{s['max_lead_heel_lift']} bh  lead forearm roll@impact "
+          f"{s['lead_forearm_roll_at_impact']}deg  ({time.time() - t:.1f}s)")
+    bd = mt["glossary"].get("ball_direction")
+    print(f"           ball direction {('+' if bd['sign'] > 0 else '-') + 'x' if bd else 'n/a'}"
+          f"  (hands {bd['offset_bh']:+.3f} bh off the hip line, conf {bd['conf']})"
+          if bd else "           ball direction n/a — stack angles stay unsigned")
+
+    # --- the angle table, one column per checkpoint ---------------------------------
+    # The single most useful thing to eyeball after a run: every angle across the whole
+    # swing, so a number that jumps between adjacent positions is visible immediately.
+    if mt["checkpoints"]:
+        cols = mt["checkpoints"]
+        print("\n" + " " * 31 + "".join(f"{c['p']:>8}" for c in cols))
+        print(f"{'angle':<28}{'@f':>3}" + "".join(f"{c['frame']:>8}" for c in cols))
+        for spec in mt["angle_fields"]:
+            vals = [c["values"].get(spec["field"]) for c in cols]
+            if all(v is None for v in vals):
+                continue
+            tag = {"both": "", "dtl": "D", "face_on": "F"}[spec["view"]]
+            # A setup-only angle is printed at P1 and blanked everywhere else, because the
+            # value elsewhere is real geometry under a name that does not apply there.
+            if spec["when"] == "setup":
+                vals = [v if c["id"] == "address" else None for v, c in zip(vals, cols)]
+                tag += "s"
+            row = f"{spec['label'][:28]:<28}{tag:>3}"
+            for v in vals:
+                row += f"{'-':>8}" if v is None else f"{v:>8.1f}"
+            print(row)
+        # Printed directly under the angles because they are how you read them: an arm
+        # pointing at the lens foreshortens and its elbow angle collapses toward "folded".
+        # Near 1.0 the arm is in the image plane and its angle means what it says.
+        for role in ("lead", "trail"):
+            vals = [c["values"].get(f"{role}_arm_in_plane") for c in cols]
+            print(f"{role + ' arm in plane (0-1)':<28}{'':>3}"
+                  + "".join(f"{'-':>8}" if v is None else f"{v:>8.2f}" for v in vals))
+        print(f"{'checkpoint confidence':<28}{'':>3}" + "".join(f"{c['conf']:>8.2f}" for c in cols))
+        print("  D = down-the-line only, F = face-on only, s = setup only; omitted rows are "
+              "fields no frame could measure")
 
     # --- analysis.json (pose portion of the doc 02 contract) ------------------------
     doc = {
@@ -225,7 +570,16 @@ def main() -> int:
             "keypoint_names": KEYPOINT_NAMES,
             "frames": [
                 {"f": fr["f"],
-                 "kp": [[round(x, 5), round(y, 5), round(c, 4)] for x, y, c in fr["kp"]],
+                 # Confidence is TRUNCATED, not rounded to nearest. Every consumer re-applies
+                 # the same MIN_CONF gate the analyzer used, so a confidence that rounds *up*
+                 # onto the threshold makes the client include a point the analyzer treated as
+                 # missing — and the two then describe different geometry. Measured: swing2
+                 # frame 102 stored left_foot_index at exactly 0.35, which put a foot into the
+                 # player's stack-angle reference that the metric itself had dropped, moving
+                 # the drawn angle ~2 deg off its own label (scripts/checkangles.py).
+                 # Truncating can only ever move a value away from the gate, never onto it.
+                 "kp": [[round(x, 5), round(y, 5), int(c * 10000) / 10000]
+                        for x, y, c in fr["kp"]],
                  # st: 0 missing, 1 provisional/unverified, 2 confirmed, 3 interpolated
                  "st": fr.get("st"),
                  "interp": bool(fr.get("interp", False))}
@@ -233,14 +587,54 @@ def main() -> int:
             ],
         },
         "events": ev["events"],
+        # The ten coaching positions (P1-P10). The eight events above stay the GolfDB
+        # contract; this is the same swing indexed the way a coach talks about it, with two
+        # positions GolfDB does not label (P6 shaft-parallel down, P9 trail-arm-parallel
+        # through). Angles at each live in metrics.checkpoints.
+        "checkpoints": cps["items"],
         "phases": ev["phases"],
         "swing_window": ev["swing_window"],
+        # The part of the clip worth playing: one second of approach, the swing, and one
+        # second of the held finish. Everything outside it is the golfer settling in and
+        # then walking off. Anchored on the Address event at the front and on the golfer
+        # actually coming to REST at the back — the Finish event fires when motion decays,
+        # which is a few tenths before the finish position is reached and held.
+        "playback_window": ev["playback_window"],
+        # The quasi-static hold that ends at the address event. Setup measurements are
+        # medians over this span rather than samples of its last frame (D28).
+        "address_span": ev.get("address_span"),
         "tempo": ev["tempo"],
         "club": ({
             "club_len": round(cl.club_len, 5),
             "coverage": cl.coverage,
             "trace_enabled": cl.coverage.get("swing", 0) >= 0.5,
             "notes": cl.notes,
+            # Which club model produced this, so a stored report stays traceable when the
+            # tracker changes underneath it — the same reason pose records its model, and
+            # the gap STATUS.md §7 lists as known debt. null = classical path only.
+            #
+            # `boxes` is the model's RAW output and nothing else: every detection it returned,
+            # unfiltered, unweighted, unsmoothed, with no geometric rejection and no dependence
+            # on grip_center, club_px, the solver or the swing plane. It exists so the model can
+            # be judged on its own — the rest of this block is the pipeline's opinion, this is
+            # the model's. Normalised against the ANALYSIS video (what the detector saw), which
+            # shares its aspect ratio with the player video, so the usual x*W / y*H applies.
+            "detector": ({
+                **det.model,
+                "inject": args.club_detector_inject,
+                "classes": {club_detect.CLUBHEAD: "clubhead", club_detect.STICK: "stick"},
+                "boxes": [
+                    {"f": i,
+                     "d": [{"c": x.cls,
+                            "xy": [round(x.xy[0] / anal.width, 5),
+                                   round(x.xy[1] / anal.height, 5)],
+                            "wh": [round(x.wh[0] / anal.width, 5),
+                                   round(x.wh[1] / anal.height, 5)],
+                            "p": round(x.conf, 3)}
+                           for x in fr]}
+                    for i, fr in enumerate(det.per_frame) if fr
+                ],
+            } if det else None),
             "butt_len": round(cl.butt_len, 5),
             "frames": [{"f": c.f,
                         "shaft": ([[round(v, 5) for v in p] for p in c.shaft]
@@ -249,9 +643,20 @@ def main() -> int:
                         "butt": [round(v, 5) for v in c.butt] if c.butt else None,
                         "conf": round(c.conf, 3),
                         "shaft_angle_deg": round(c.angle, 1) if c.angle is not None else None,
-                        "blurred": c.blurred, "interp": c.interp}
+                        "blurred": c.blurred, "interp": c.interp,
+                        # Whether this head came from the detector or the solver. Stored so the
+                        # trace can be rebuilt from the artifact alone — joining a model head to
+                        # a solver head is what makes the polyline zigzag, and iterating on that
+                        # should not need a 4-minute re-run of pose and club solving.
+                        "from_model": c.from_model}
                        for c in cl.frames],
             "trace": cl.trace,
+            # Alternative solutions over the same frames and the same detections, for
+            # side-by-side comparison in the player. There is no ground-truth metric yet to
+            # choose between them (D20), so shipping all of them and letting a human look is
+            # more honest than picking one silently. Render-only: metrics, face and event
+            # refinement all read the primary block above.
+            "variants": club_variants or None,
         } if cl else None),
         "face": ({
             # Head orientation only. Impact face angle is intentionally absent — doc 04 §6.
@@ -273,7 +678,14 @@ def main() -> int:
                     "promoted": rep.promoted, "interpolated": rep.interpolated,
                     "notes": rep.notes} if rep else None),
     }
-    (out / "analysis.json").write_text(json.dumps(doc), encoding="utf-8")
+    # Write atomically. A re-run overwrites this file in place while the web app may be
+    # reading it, and a partial read is not a partial artifact — `getAnalysis` parses the whole
+    # file, so a truncated read throws, returns null, and the player 404s on a swing that
+    # exists. os.replace is atomic on the same filesystem, so a reader sees either the old
+    # artifact or the new one and never a half-written one.
+    tmp = out / "analysis.json.tmp"
+    tmp.write_text(json.dumps(doc), encoding="utf-8")
+    os.replace(tmp, out / "analysis.json")
 
     # --- Gate 1 renders -------------------------------------------------------------
     t = time.time()
@@ -290,6 +702,12 @@ def main() -> int:
            "right_elbow", "left_wrist", "right_wrist", "grip_center", "mid_hip",
            "left_knee", "right_knee", "left_ankle", "right_ankle",
            "left_foot_index", "right_foot_index"]
+    # The wholebody-only points. Listed separately because they are absent on the MediaPipe
+    # and Halpe26 paths, where printing them as 0% would read as a regression rather than
+    # as "this model does not produce them".
+    if args.pose_model == "rtmpose" and args.wholebody:
+        key += ["left_index", "right_index", "left_middle_mcp", "right_middle_mcp",
+                "left_small_toe", "right_small_toe", "chin", "nose_bridge"]
     if before:
         rtm = args.pose_model == "rtmpose"
         hdr = f"{'joint':<18}{'final':>9}{'raw':>9}"

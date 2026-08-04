@@ -1,26 +1,1369 @@
 @import "tailwindcss";
 
+/* ---------------------------------------------------------------------------
+   SwingSage visual system — ported verbatim from instructions/template_sample.html.
+
+   The sample is a static Tailwind-v3-CDN mock. Two things had to move for it to
+   run here, and nothing else changed:
+
+     * its `tailwind.config.theme.extend.colors/boxShadow` block became the
+       `@theme` below, because Tailwind v4 takes theme tokens from CSS, not JS;
+     * its `<style>` block is reproduced below it, unlayered and unchanged.
+
+   Unlayered CSS outranks Tailwind's `@layer utilities`, which is the same
+   precedence the sample had (its <style> tag came after the CDN script). So a
+   rule here still beats a utility on the same element, exactly as in the mock.
+
+   Every component class below is a slot in the design, not a one-off: the cards
+   are named for what will eventually fill them (metric rows, findings, tips,
+   indicators), so a future scoring engine or coach report drops into existing
+   styling rather than inventing its own. See components/ui/kiosk.tsx.
+--------------------------------------------------------------------------- */
+
+@theme {
+  --color-ink: #f5f7f2;
+  --color-canvas: #080a0d;
+  --color-panel: #11141a;
+  --color-raised: #171b22;
+  --color-line: #292e37;
+  --color-acid: #5ed0ff;
+  --color-violet: #8b7bff;
+  --color-cyan: #22d3ee;
+  --color-warm: #b788ff;
+
+  --shadow-kiosk: 0 30px 100px rgba(0, 0, 0, .36);
+  --shadow-acid: 0 0 0 1px rgba(94, 208, 255, .18), 0 18px 60px rgba(94, 208, 255, .18);
+
+  /* The sample names Inter first and never loads it — matching that exactly means
+     inheriting the same fallback (Segoe UI on Windows) rather than adding a
+     webfont the mock did not have. */
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --bg: #080a0d;
+  --panel: #11141a;
+  --raised: #171b22;
+  --line: #292e37;
+  --text: #f5f7f2;
+  --muted: #8d949f;
+  --acid: #5ed0ff;
+  --violet: #8b7bff;
+  --cyan: #22d3ee;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+* {
+  box-sizing: border-box;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  background: var(--bg);
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  min-height: 100vh;
+  color: var(--text);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background:
+    radial-gradient(circle at 82% -8%, rgba(124, 104, 255, .22), transparent 31%),
+    radial-gradient(circle at 14% 12%, rgba(94, 208, 255, .12), transparent 27%),
+    linear-gradient(180deg, #090b14 0%, #06070f 100%);
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: .22;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, .018) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, .018) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: linear-gradient(to bottom, #000 0%, transparent 82%);
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.glass {
+  background: rgba(12, 15, 19, .82);
+  backdrop-filter: blur(22px) saturate(130%);
+}
+
+.kiosk-panel {
+  border: 1px solid rgba(255, 255, 255, .08);
+  background: linear-gradient(145deg, rgba(21, 25, 32, .96), rgba(12, 15, 20, .94));
+  box-shadow: 0 28px 90px rgba(0, 0, 0, .32);
+}
+
+/* The sample paints its corner bloom with a 420px pseudo-element hung outside the panel, which
+   forces `overflow: hidden` to contain it — and that clip also ate the gauge's `drop-shadow`
+   glow wherever it reached the panel edge. Same bloom as a background layer instead: nothing
+   overflows, so nothing needs clipping, and the glow renders in full. */
+.hero-panel {
+  position: relative;
+  isolation: isolate;
+  background-image:
+    radial-gradient(260px 260px at calc(100% + 40px) -60px, rgba(94, 208, 255, .20), transparent 62%),
+    linear-gradient(145deg, rgba(21, 25, 32, .96), rgba(12, 15, 20, .94));
+}
+
+.gradient-text {
+  background: linear-gradient(110deg, #fff 4%, #e7eadf 55%, #9ba39a 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.score-glow {
+  filter: drop-shadow(0 0 18px rgba(94, 208, 255, .30));
+}
+
+/* Unselected cards sit lighter than the sample's `rgba(255,255,255,.035)` and lift on hover:
+   the rail is the main way into a moment of the swing and it read as a row of read-only tiles.
+   The colours live here rather than as utilities on the element because this file is unlayered
+   and would win over them anyway — two sources of truth for one background is worse than one. */
+.indicator-card {
+  position: relative;
+  isolation: isolate;
+  flex: 0 0 194px;
+  scroll-snap-align: start;
+  min-height: 224px;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, .12);
+  background: rgba(255, 255, 255, .06);
+  transition: transform .18s ease, border-color .18s ease, background .18s ease, box-shadow .18s ease;
+}
+
+.indicator-card:hover {
+  transform: translateY(-3px);
+  border-color: rgba(94, 208, 255, .40);
+  background: rgba(255, 255, 255, .095);
+}
+
+.indicator-card:focus-visible {
+  outline: none;
+  border-color: rgba(94, 208, 255, .7);
+}
+
+.indicator-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 1px transparent;
+  transition: box-shadow .2s ease;
+}
+
+/* Selected pulls further away from the rest than the sample's version did, and its glow is
+   tightened from `0 18px 45px` to `0 8px 22px`. The blur radius is not cosmetic here: the rail
+   is an `overflow-x: auto` scroller, and CSS forces the other axis to be non-visible when one
+   axis scrolls — so the shadow can never escape that box and has to fit inside its padding.
+   12px above, 28px below and 20px each side once the -2px lift is counted, which is exactly
+   what `.indicator-viewport` reserves. Change the blur and that padding has to change too. */
+.indicator-card.active,
+.indicator-card.active:hover {
+  border-color: rgba(94, 208, 255, .85);
+  background: linear-gradient(145deg, rgba(94, 208, 255, .22), rgba(139, 123, 255, .16) 58%, rgba(255, 255, 255, .06));
+  box-shadow: 0 8px 20px rgba(94, 208, 255, .32), 0 0 0 2px rgba(139, 123, 255, .18);
+  transform: translateY(-2px);
+}
+
+.indicator-card.active::after {
+  box-shadow: inset 0 0 0 1px rgba(94, 208, 255, .24);
+}
+
+.active-caret {
+  position: absolute;
+  left: 50%;
+  top: -11px;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-bottom: 12px solid #5ed0ff;
+  opacity: 0;
+  transition: opacity .2s ease;
+  filter: drop-shadow(0 4px 10px rgba(94, 208, 255, .24));
+}
+
+.indicator-card.active .active-caret {
+  opacity: 1;
+}
+
+.indicator-score-ring {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  width: 138px;
+  height: 138px;
+  margin: 0 auto;
+  border-radius: 999px;
+  background: conic-gradient(var(--ring-color, var(--acid)) 0 var(--ring-value, 82%), rgba(255, 255, 255, .075) var(--ring-value, 82%) 100%);
+}
+
+.indicator-score-ring::after {
+  content: '';
+  position: absolute;
+  inset: 10px;
+  border-radius: inherit;
+  background: #11151b;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .055);
+}
+
+.indicator-card.active .indicator-score-ring {
+  box-shadow: 0 0 0 5px rgba(94, 208, 255, .10), 0 0 30px rgba(94, 208, 255, .22);
+}
+
+.indicator-icon-large {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  width: 66px;
+  height: 66px;
+  place-items: center;
+  color: #d8dde3;
+  background: transparent;
+  box-shadow: none;
+  transition: color .2s ease, transform .2s ease;
+}
+
+.indicator-icon-large svg {
+  width: 56px;
+  height: 56px;
+}
+
+.indicator-card.active .indicator-icon-large {
+  color: var(--acid);
+  transform: scale(1.03);
+}
+
+.indicator-delta {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  z-index: 3;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .02em;
+}
+
+/* Pulled out to the panel's border on both sides so the cards line up with every other row in
+   the panel, while the scroller keeps the room the selected card's glow needs to land in.
+   20px matches the panel's smallest padding step (`p-5`), so the bleed never crosses the edge. */
+.indicator-rail-wrap {
+  position: relative;
+  margin-inline: -20px;
+}
+
+.indicator-rail-wrap::after {
+  content: '';
+  position: absolute;
+  top: 20px;
+  right: 0;
+  width: 88px;
+  bottom: 28px;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(10, 12, 18, 0) 0%, rgba(10, 12, 18, .82) 62%, rgba(10, 12, 18, 1) 100%);
+  border-radius: 0 24px 24px 0;
+}
+
+.indicator-viewport {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x proximity;
+  /* Snap to the PADDING edge, not the border edge. Without this a snap lands each card flush
+     against the scroller's border box, which is 20px outside the panel's content edge — so the
+     rail looks correctly inset until the first scroll and hard against the panel afterwards. */
+  scroll-padding-inline: 20px;
+  /* Padding, not decoration: the selected card's lift, its caret and its glow all live outside
+     the card's own box, and a scroller clips them on both axes (see `.indicator-card.active`).
+     Equal left and right, so the first and last cards sit at the same inset — which is what
+     the wrap's negative margin then cancels against the panel's padding. */
+  padding: 20px 20px 28px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(94, 208, 255, .28) transparent;
+}
+
+.indicator-viewport::-webkit-scrollbar {
+  height: 7px;
+}
+
+.indicator-viewport::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.indicator-viewport::-webkit-scrollbar-thumb {
+  background: rgba(94, 208, 255, .26);
+  border-radius: 999px;
+}
+
+.finding-box {
+  border-radius: 22px;
+  padding: 16px 18px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 64px;
+}
+
+.finding-box.negative {
+  background: linear-gradient(145deg, rgba(239, 68, 68, .14), rgba(127, 29, 29, .10));
+  border-color: rgba(239, 68, 68, .28);
+  box-shadow: 0 14px 32px rgba(239, 68, 68, .08);
+}
+
+.finding-box.positive {
+  background: linear-gradient(145deg, rgba(34, 197, 94, .16), rgba(21, 128, 61, .10));
+  border-color: rgba(34, 197, 94, .28);
+  box-shadow: 0 14px 32px rgba(34, 197, 94, .08);
+}
+
+.finding-icon {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  place-items: center;
+  border-radius: 16px;
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.finding-box.negative .finding-icon {
+  background: rgba(239, 68, 68, .14);
+  color: #fda4af;
+}
+
+.finding-box.positive .finding-icon {
+  background: rgba(34, 197, 94, .14);
+  color: #86efac;
+}
+
+/* The sample burns the whole transport into the bottom of the picture behind a heavy scrim —
+   about 200px of a portrait frame spent on chrome. Only the moment name stays over the video
+   now; the scrub and the buttons sit below it. This is the scrim for the name alone, so it is
+   short and stops well before it covers anything worth looking at. */
+.kiosk-transport {
+  background: linear-gradient(180deg, rgba(4, 7, 8, 0) 0%, rgba(4, 7, 8, .55) 55%, rgba(4, 7, 8, .82) 100%);
+}
+
+/* The transport, out of the frame. Same controls, same classes, no picture underneath. */
+.stage-transport {
+  position: relative;
+  z-index: 40;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, .07);
+  background: rgba(12, 15, 20, .55);
+  /* Top padding clears the grab knob, which stands 10px proud of the strip when hovered.
+     `z-index` so the phase tooltip paints over the video frame above it. */
+  padding: 18px 14px 14px;
+}
+
+.segmented-scrub {
+  position: relative;
+  height: 50px;
+  /* The strip handles its own drag, so the browser must not claim the gesture for scrolling. */
+  touch-action: none;
+}
+
+/* The whole strip is the drag target, so it advertises that — and `:active` covers the drag
+   itself without any React state, because the button stays held for the whole gesture. */
+.segmented-scrub {
+  cursor: grab;
+}
+
+.segmented-scrub:active {
+  cursor: grabbing;
+}
+
+.scrub-segments {
+  position: absolute;
+  inset: 8px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+}
+
+.scrub-segment {
+  position: relative;
+  height: 30px;
+  min-width: 18px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .105);
+  /* Not `pointer`: the segment is part of the drag surface as much as it is a click target,
+     and two different cursors across one strip reads as two different controls. */
+  cursor: inherit;
+  transition: background .18s ease, box-shadow .18s ease;
+}
+
+.scrub-segment:hover {
+  background: rgba(255, 255, 255, .19);
+}
+
+.scrub-segment.active:hover {
+  background: linear-gradient(135deg, rgba(112, 93, 255, 1), rgba(110, 216, 255, .95));
+}
+
+/* Name of the phase, above the strip. A styled tooltip rather than `title`, which is slow to
+   appear, unstyleable, and would fire a second time on top of this one. */
+.scrub-segment::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 13px);
+  left: 50%;
+  z-index: 20;
+  transform: translateX(-50%) translateY(4px);
+  padding: 7px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, .12);
+  background: rgba(10, 13, 18, .96);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .6);
+  backdrop-filter: blur(8px);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: #eef3ff;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .14s ease, transform .14s ease;
+}
+
+/* The caret keeps pointing at the segment's centre even when the bubble is edge-aligned. */
+.scrub-segment::before {
+  content: '';
+  position: absolute;
+  bottom: calc(100% + 7px);
+  left: 50%;
+  z-index: 21;
+  width: 0;
+  height: 0;
+  transform: translateX(-50%) translateY(4px);
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-top: 6px solid rgba(10, 13, 18, .96);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .14s ease, transform .14s ease;
+}
+
+.scrub-segment:hover::after,
+.scrub-segment:hover::before {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* The end segments would push their bubble off the panel if it stayed centred. */
+.scrub-segment:first-child::after {
+  left: 0;
+  transform: translateX(0) translateY(4px);
+}
+
+.scrub-segment:first-child:hover::after {
+  transform: translateX(0) translateY(0);
+}
+
+.scrub-segment:last-child::after {
+  left: auto;
+  right: 0;
+  transform: translateX(0) translateY(4px);
+}
+
+.scrub-segment:last-child:hover::after {
+  transform: translateX(0) translateY(0);
+}
+
+.scrub-segment.active {
+  background: linear-gradient(135deg, rgba(102, 83, 255, .92), rgba(94, 208, 255, .85));
+  box-shadow: inset 0 0 0 1px rgba(250, 204, 21, .16);
+}
+
+/* The playhead. The sample draws a 2px line with a 12px dot, which reads as a *marker* — the
+   one thing it must not read as, since dragging it is the primary interaction on this screen.
+   It is a thumb-sized knob with grip lines instead, and it grows while the strip is hovered or
+   held. No transition on the line itself: it tracks the playhead every frame, and easing there
+   would show up as the overlay lagging the video. */
+.scrub-cursor {
+  position: absolute;
+  top: 0;
+  bottom: 2px;
+  width: 3px;
+  z-index: 4;
+  border-radius: 999px;
+  background: #fff;
+  transform: translateX(-50%);
+  pointer-events: none;
+  box-shadow: 0 0 12px rgba(255, 255, 255, .55);
+}
+
+.scrub-cursor::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  background: #fff;
+  transform: translateX(-50%);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, .55), 0 0 0 4px rgba(94, 208, 255, .18);
+  transition: width .15s ease, height .15s ease, top .15s ease, box-shadow .15s ease;
+}
+
+/* Three grip bars. The knob stays centred on y=3 whether it is 22px or 26px, so these never
+   have to move with it. */
+.scrub-cursor::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: -2px;
+  width: 9px;
+  height: 9px;
+  transform: translateX(-50%);
+  background:
+    linear-gradient(#141922, #141922) center 0 / 9px 1.5px no-repeat,
+    linear-gradient(#141922, #141922) center 3.75px / 9px 1.5px no-repeat,
+    linear-gradient(#141922, #141922) center 7.5px / 9px 1.5px no-repeat;
+  opacity: .8;
+  pointer-events: none;
+}
+
+.segmented-scrub:hover .scrub-cursor::before,
+.segmented-scrub:active .scrub-cursor::before {
+  top: -10px;
+  width: 26px;
+  height: 26px;
+  box-shadow: 0 3px 14px rgba(0, 0, 0, .6), 0 0 0 6px rgba(94, 208, 255, .26);
+}
+
+/* The sample's segments are decorative (`aria-hidden`) and this invisible range input, sitting
+   on top of them, is the only control. Here the segments are the real phase buttons — click
+   one to loop it — so the input stops intercepting pointers and the strip handles dragging
+   itself. It stays in the DOM, focusable, because arrow-key scrubbing is the accessible path
+   to a control that is otherwise pure pointer work. */
+.scrub-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 48px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.scrub-input:focus-visible + .scrub-focus-ring,
+.scrub-input:focus + .scrub-focus-ring {
+  box-shadow: 0 0 0 2px rgba(94, 208, 255, .55);
+}
+
+.scrub-focus-ring {
+  position: absolute;
+  inset: 6px 0 0;
+  border-radius: 12px;
+  pointer-events: none;
+}
+
+.transport-circle {
+  display: grid;
+  height: 72px;
+  width: 72px;
+  flex: 0 0 72px;
+  place-items: center;
+  border-radius: 999px;
+}
+
+/* Loop and the frame steps, matched to the speed toggles' 52px so the row reads as one band
+   of controls with a single oversized play button rather than three different heights. */
+.transport-circle-sm {
+  display: grid;
+  height: 52px;
+  width: 52px;
+  flex: 0 0 52px;
+  place-items: center;
+  border-radius: 999px;
+}
+
+.speed-selector {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  grid-template-columns: repeat(4, minmax(58px, 1fr));
+  gap: 4px;
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 999px;
+  padding: 5px;
+  background: rgba(0, 0, 0, .22);
+}
+
+.speed-button {
+  min-height: 52px;
+  border-radius: 999px;
+  color: #9ca3af;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.speed-button.active {
+  color: #080a0d;
+  background: #fff;
+}
+
+.workspace-bar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 22px;
+  border-bottom: 1px solid var(--line);
+}
+
+.workspace-primary {
+  display: flex;
+  min-width: 0;
+  align-items: flex-end;
+  gap: 22px;
+}
+
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 0 0 12px 2px;
+  flex: 0 0 auto;
+}
+
+.brand-mark {
+  position: relative;
+  display: grid;
+  height: 46px;
+  width: 46px;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 15px;
+  color: #080a0d;
+  background: var(--acid);
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: -.08em;
+}
+
+.brand-mark::after {
+  content: '';
+  position: absolute;
+  width: 32px;
+  height: 2px;
+  background: #080a0d;
+  transform: rotate(-42deg);
+  opacity: .72;
+}
+
+.folder-tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* The tabs moved out of the page-wide bar and now sit on top of the right-hand column only, so
+   the left column starts at the video. The swing actions share the row.
+
+   `margin-bottom: -1px` plus the z-index are what make the tabs *connected*: the bar's rule and
+   the panel's own top border land on the same pixel, and the active tab — no bottom border,
+   near enough the panel's background — paints over it. Without that overlap there is a visible
+   seam and the folder metaphor falls apart. */
+.panel-bar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  position: relative;
+  z-index: 1;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: -1px;
+}
+
+.panel-bar .folder-tabs {
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.panel-bar .folder-tab {
+  min-width: 0;
+  min-height: 56px;
+  padding: 0 18px;
+  gap: 10px;
+}
+
+.panel-bar .folder-tab > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.panel-bar .folder-icon {
+  height: 32px;
+  width: 32px;
+  flex: 0 0 32px;
+  font-size: 15px;
+}
+
+.panel-bar .workspace-actions {
+  flex: 0 0 auto;
+  padding-bottom: 9px;
+}
+
+/* Below the wide breakpoint the column cannot hold three tabs and four labelled actions. The
+   actions lose their labels rather than the tabs losing theirs — a tab is a place you are, an
+   action is a thing you already recognise by its icon. */
+@media (max-width: 1535px) {
+  .panel-bar .workspace-action > span {
+    display: none;
+  }
+
+  .panel-bar .workspace-action {
+    width: 52px;
+    padding: 0;
+  }
+}
+
+.folder-tab {
+  position: relative;
+  min-height: 64px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-bottom: 0;
+  border-radius: 15px 15px 0 0;
+  background: rgba(255, 255, 255, .035);
+  color: #a5aebe;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .02);
+  transition: background .2s ease, border-color .2s ease, color .2s ease, transform .2s ease;
+  cursor: pointer;
+}
+
+.folder-tab:hover {
+  transform: translateY(-1px);
+  color: #eef3ff;
+  background: rgba(255, 255, 255, .05);
+}
+
+.folder-tab::after {
+  content: '';
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: -1px;
+  height: 4px;
+  border-radius: 999px 999px 0 0;
+  background: transparent;
+}
+
+.folder-tab.active {
+  border-color: rgba(94, 208, 255, .32);
+  background: linear-gradient(180deg, rgba(22, 25, 38, .98), rgba(13, 16, 24, .98));
+  color: #fff;
+  box-shadow: 0 12px 32px rgba(94, 208, 255, .10);
+}
+
+.folder-tab.active::after {
+  background: var(--acid);
+}
+
+.folder-tab.active .folder-icon {
+  color: var(--acid);
+  background: rgba(94, 208, 255, .12);
+}
+
+.workspace-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding-bottom: 8px;
+  flex: 0 0 auto;
+}
+
+.workspace-action {
+  display: flex;
+  height: 52px;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border-radius: 14px;
+  padding: 0 18px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.workspace-action-icon {
+  width: 52px;
+  padding: 0;
+}
+
+#summaryPanel {
+  min-height: calc(100vh - 96px);
+}
+
+/* The sample fixes this at `height: min(91vh, 930px)` on a hardcoded 9:16 box. Height-first
+   sizing always leaves the frame narrower than its column on some aspect ratio, which reads as
+   stray side padding next to a full-width transport. Width-first instead: the frame is exactly
+   its column, and `aspect-ratio` (set inline from the active view box, since "Fit to golfer"
+   changes it per swing) gives the height. The column widths are what bound the video now. */
+.video-frame {
+  height: auto !important;
+  width: 100%;
+}
+
+.view-panel[hidden] {
+  display: none !important;
+}
+
+/* The corner the first tab lands on. Rounded, it leaves a notch between the tab and the panel
+   and the two read as separate objects rather than one folder. */
+.view-panel {
+  border-top-left-radius: 0;
+}
+
+.coach-priority.active {
+  border-color: rgba(94, 208, 255, .54);
+  background: linear-gradient(145deg, rgba(94, 208, 255, .13), rgba(139, 123, 255, .10) 60%, rgba(255, 255, 255, .035));
+}
+
+.stage-button.active {
+  border-color: rgba(94, 208, 255, .58);
+  color: #090b0d;
+  background: var(--acid);
+  box-shadow: 0 16px 42px rgba(94, 208, 255, .20);
+}
+
+.stage-button.active .stage-muted {
+  color: rgba(8, 10, 13, .62);
+}
+
+.stage-button.active .stage-score {
+  background: rgba(8, 10, 13, .12);
+  color: #080a0d;
+}
+
+.range {
+  appearance: none;
+  height: 7px;
+  border-radius: 999px;
+  outline: 0;
+  background: linear-gradient(90deg, #8b7bff 0 56%, rgba(255, 255, 255, .14) 56% 100%);
+}
+
+.range::-webkit-slider-thumb {
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #080a0d;
+  border: 5px solid var(--acid);
+  box-shadow: 0 0 0 5px rgba(94, 208, 255, .13), 0 0 28px rgba(94, 208, 255, .32);
+  cursor: pointer;
+}
+
+/* The sample fills this with a lit-room gradient because its "video" is a drawing that needs a
+   backdrop. A real clip does not: the gradient only added a lighter slab around the picture and
+   pulled the eye off it. The surface is now just the box that holds the frame at the TOP of the
+   column rather than floating it in the middle. Kept as a class because the swing-log cards
+   still use it behind their thumbnails, where a backdrop genuinely helps. */
+.video-surface {
+  background:
+    radial-gradient(circle at 50% 18%, rgba(139, 123, 255, .15), transparent 30%),
+    linear-gradient(180deg, #292d35 0%, #171a20 53%, #0d1015 100%);
+}
+
+.video-stage {
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.video-controls {
+  background: linear-gradient(180deg, transparent, rgba(5, 7, 9, .82) 24%, rgba(5, 7, 9, .97) 100%);
+}
+
+.metric-row.active {
+  border-color: rgba(139, 123, 255, .48);
+  background: linear-gradient(135deg, rgba(139, 123, 255, .12), rgba(255, 255, 255, .035));
+}
+
+.metric-bar::after {
+  content: '';
+  display: block;
+  width: var(--value);
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #8b7bff, #49a8ff);
+}
+
+.drawer-open #drawer {
+  transform: translateX(0);
+}
+
+.drawer-open #drawerBackdrop {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.scrollbar::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.scrollbar::-webkit-scrollbar-thumb {
+  background: #343a44;
+  border-radius: 999px;
+}
+
+@media (max-width: 1023px) {
+  .kiosk-header-copy {
+    display: none;
+  }
+}
+
+@media (max-width: 1100px) {
+  .workspace-bar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .workspace-primary {
+    align-items: flex-end;
+  }
+
+  .folder-tabs {
+    overflow-x: auto;
+  }
+
+  .folder-tab {
+    min-width: 158px;
+  }
+
+  .workspace-actions {
+    justify-content: flex-end;
+    padding: 10px 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .workspace-primary {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .brand-lockup {
+    padding: 0 0 12px;
+  }
+
+  .folder-tab {
+    min-width: 150px;
+  }
+}
+
+@media (max-width: 767px) {
+  .hero-title {
+    font-size: 2.1rem !important;
+  }
+
+  #summaryPanel {
+    min-height: 0;
+  }
+
+  .workspace-actions {
+    overflow-x: auto;
+    justify-content: flex-start;
+  }
+
+  .workspace-action {
+    flex: 0 0 auto;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Mobile: the video stays, the card rides over it.
+
+   Below the two-column breakpoint the stage is sticky and the panel scrolls up across it, the
+   way a feed post's caption rides over its media. It costs nothing at runtime — sticky is
+   compositor work, there is no scroll listener — which is the whole reason for doing it in CSS
+   rather than with an observer.
+
+   The frame goes full-bleed width, capped so the frame *and* the transport still fit one
+   screen; without the cap a 9:16 clip on a phone is taller than the viewport and the transport
+   would sit permanently below the fold. `dvh` so the browser's collapsing chrome is accounted
+   for, with a `vh` fallback for anything that lacks it.
+--------------------------------------------------------------------------- */
+@media (max-width: 1279px) {
+  /* Block, not grid. A sticky grid item is confined to its own grid area, and in a
+     single-column grid that area is exactly the item's own height — so it would have nowhere
+     to travel and `position: sticky` would silently do nothing. As a block child of
+     `#summaryPanel` it sticks across the whole panel, which is what makes the sheet slide. */
+  #summaryPanel {
+    display: block;
+  }
+
+  .video-shell {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    /* Clears the sheet's -22px pull, so at rest the rounded edge sits just below the
+       transport rather than clipping the speed buttons. */
+    padding-bottom: 30px;
+  }
+
+  .video-frame {
+    border-radius: 20px;
+  }
+
+  /* Opaque enough to hide the video behind it, and shaped so the overlap reads as a sheet
+     being pulled up rather than as a rendering accident. */
+  .workspace-panels {
+    position: relative;
+    z-index: 2;
+    margin-top: -22px;
+    border-radius: 26px 26px 0 0;
+    background: linear-gradient(180deg, #0b0e14 0%, rgba(11, 14, 20, .97) 60px, rgba(11, 14, 20, .92) 100%);
+    box-shadow: 0 -20px 50px rgba(0, 0, 0, .55);
+    padding-top: 14px;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Entrance motion.
+
+   Opacity and transform only, so every frame is compositor work — no layout, no paint, no
+   JavaScript, no observer. Stagger is a CSS variable on the element, which means a list of
+   twelve cards costs one rule and twelve inline `--i` values rather than twelve timers.
+
+   `animation-fill-mode: backwards`, deliberately, not `both`: `both` would pin the final
+   keyframe as an override forever, and `transform: none` from a finished entrance beats
+   `.indicator-card.active`'s lift and every hover transform on the page. `backwards` holds the
+   *first* frame before the animation starts and then gets out of the way entirely.
+
+   The whole block is inside `prefers-reduced-motion: no-preference`, so a reduced-motion
+   visitor gets no animation rather than a faster one.
+--------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: no-preference) {
+  .rise {
+    animation: ss-rise .5s cubic-bezier(.16, 1, .3, 1) backwards;
+    animation-delay: calc(var(--i, 0) * 55ms);
+  }
+
+  .fade {
+    animation: ss-fade .45s ease-out backwards;
+    animation-delay: calc(var(--i, 0) * 45ms);
+  }
+
+  @keyframes ss-rise {
+    from {
+      opacity: 0;
+      transform: translateY(14px);
+    }
+  }
+
+  @keyframes ss-fade {
+    from {
+      opacity: 0;
+    }
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Progress trend — score across swings, not frames within one.
+
+   The line is SVG stretched with `preserveAspectRatio: none` (the sample's own trick, which is
+   why its dots read as ovals); the dots are HTML positioned in percentages on top, so they stay
+   round, take a hover, and need no coordinate maths in JS.
+--------------------------------------------------------------------------- */
+.trend {
+  position: relative;
+  height: 74px;
+}
+
+.trend-dot {
+  position: absolute;
+  width: 11px;
+  height: 11px;
+  margin: -5.5px 0 0 -5.5px;
+  border-radius: 999px;
+  border: 3px solid #9b6cff;
+  background: #080a0d;
+  cursor: pointer;
+  transition: transform .15s ease, border-color .15s ease;
+}
+
+.trend-dot:hover,
+.trend-dot:focus-visible {
+  transform: scale(1.45);
+  border-color: #5ed0ff;
+  outline: none;
+}
+
+.trend-dot.current {
+  width: 15px;
+  height: 15px;
+  margin: -7.5px 0 0 -7.5px;
+  border-color: #5ed0ff;
+  box-shadow: 0 0 0 4px rgba(94, 208, 255, .14);
+}
+
+.trend-tip {
+  position: absolute;
+  z-index: 5;
+  transform: translate(-50%, -100%);
+  margin-top: -14px;
+  white-space: nowrap;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, .12);
+  background: rgba(10, 13, 18, .95);
+  padding: 6px 10px;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, .55);
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+}
+
+.trend-label {
+  position: absolute;
+  left: 0;
+  top: -2px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: #5e6672;
+  pointer-events: none;
+}
+
+/* ---------------------------------------------------------------------------
+   Additions. Everything above is the sample; everything below is a slot the
+   sample did not have, drawn in the sample's own vocabulary so the two are
+   indistinguishable. Each one is a card shape a future feature fills — the
+   sample's `finding-box`/`metric-row`/`coach-priority` are the same idea.
+--------------------------------------------------------------------------- */
+
+/* The overlay dropdown, hung off the layers icon in the video's top bar. Uses
+   `.glass` so it reads as chrome floating over the picture rather than a panel
+   competing with it. */
+.overlay-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 10px);
+  z-index: 60;
+  width: 322px;
+  max-height: min(70vh, 620px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, .10);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, .55), 0 0 0 1px rgba(94, 208, 255, .06);
+  padding: 14px;
+}
+
+.overlay-menu-head {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: #6b7280;
+  margin: 12px 2px 6px;
+}
+
+.overlay-menu-head:first-child {
+  margin-top: 2px;
+}
+
+/* A toggle row. Deliberately a full-width hit target: these are used one-handed
+   on a phone held sideways while looking at the video, not aimed at with a mouse. */
+.overlay-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 11px;
+  border-radius: 14px;
+  border: 1px solid transparent;
+  padding: 9px 11px;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+  color: #a5aebe;
+  transition: background .16s ease, border-color .16s ease, color .16s ease;
+  cursor: pointer;
+}
+
+.overlay-toggle:hover {
+  background: rgba(255, 255, 255, .045);
+  color: #eef3ff;
+}
+
+.overlay-toggle.on {
+  border-color: rgba(94, 208, 255, .34);
+  background: rgba(94, 208, 255, .10);
+  color: #eaf7ff;
+}
+
+.overlay-toggle:disabled {
+  opacity: .38;
+  cursor: not-allowed;
+}
+
+.overlay-check {
+  display: grid;
+  height: 20px;
+  width: 20px;
+  flex: 0 0 20px;
+  place-items: center;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, .18);
+  background: rgba(0, 0, 0, .3);
+  color: transparent;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.overlay-toggle.on .overlay-check {
+  border-color: var(--acid);
+  background: var(--acid);
+  color: #080a0d;
+}
+
+/* Card shapes for content the sample mocked with fake numbers. Same radii,
+   borders and fills, so real data and a placeholder sit at the same weight. */
+.tip-card {
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, .07);
+  background: rgba(255, 255, 255, .035);
+  padding: 20px;
+}
+
+.tip-card.accent {
+  border-color: rgba(139, 123, 255, .22);
+  background: rgba(139, 123, 255, .06);
+}
+
+.tip-card.acid {
+  border-color: rgba(94, 208, 255, .20);
+  background: rgba(94, 208, 255, .065);
+}
+
+.stat-tile {
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, .07);
+  background: rgba(255, 255, 255, .035);
+  padding: 12px 16px;
+  text-align: center;
+}
+
+/* One label/value line — the shape every diagnostics panel is made of. */
+.data-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  font-size: 12px;
+  border-top: 1px solid rgba(255, 255, 255, .045);
+}
+
+.data-row:first-of-type {
+  border-top: 0;
+}
+
+.qbar {
+  position: relative;
+  height: 5px;
+  flex: 1;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .07);
+}
+
+.qbar > i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  display: block;
+  border-radius: 999px;
+}
+
+/* "This exists in the design but the pipeline behind it is not built." Marked
+   rather than filled with a plausible number — a fabricated score is the one
+   thing this product must never render (docs/UI-DESIGN-BRIEF.md §6). */
+.not-built {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 999px;
+  border: 1px dashed rgba(255, 255, 255, .18);
+  background: rgba(255, 255, 255, .03);
+  padding: 4px 10px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: #767f8c;
+  white-space: nowrap;
+}
+
+.angle-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, .10);
+  background: rgba(0, 0, 0, .42);
+  padding: 6px 11px;
+  font-size: 11px;
+  font-weight: 600;
+  backdrop-filter: blur(10px);
+  cursor: pointer;
+}
+
+.angle-chip:hover {
+  border-color: rgba(255, 255, 255, .28);
+}
+
+/* Checkpoint angle table. Kept as a table — ten positions read left-to-right —
+   but given the panel's own line colours instead of the old neutral-800 grid. */
+.angle-table {
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+  min-width: 100%;
+  font-size: 12px;
+}
+
+.angle-table tbody tr {
+  border-top: 1px solid rgba(255, 255, 255, .05);
+}
+
+.angle-table tbody tr:hover {
+  background: rgba(255, 255, 255, .022);
+}
+
+.angle-table .stick {
+  position: sticky;
+  left: 0;
+  z-index: 10;
+  background: #12151b;
 }

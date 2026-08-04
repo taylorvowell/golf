@@ -25,6 +25,7 @@ NATIVE_NAMES = [
     "left_heel", "right_heel",
     "left_foot_index", "right_foot_index",
 ]
+N_NATIVE = len(NATIVE_NAMES)
 
 # --- Derived joints, appended after the native 33 (doc 03 §2) ---
 # (name, parent_a, parent_b, allow_single). Each is the midpoint of two keypoints, with
@@ -51,12 +52,49 @@ DERIVED = [
     ("right_hand",  "right_wrist",   "right_wrist",    True),
 ]
 
-KEYPOINT_NAMES = NATIVE_NAMES + [d[0] for d in DERIVED]
+# --- Measured points, appended after the derived block (D25) --------------------------
+# Direct model outputs with no MediaPipe-era native slot. Unlike DERIVED these are not
+# computed from other keypoints, and unlike NATIVE they only exist when a wholebody model
+# ran — the Halpe26 path leaves them missing, which every consumer already handles.
+#
+# They are appended *after* the derived joints rather than slotted next to the native 33,
+# because doc 02 fixes the array order and indices 0-39 are already published. Append only.
+MEASURED = [
+    # Third-metacarpal knuckle. Wrist flexion/extension is defined along this bone, so it
+    # is the hand's real axis; the four-MCP centroid used before blends roll into the
+    # flexion reading (see metrics.wrist_deviation).
+    "left_middle_mcp", "right_middle_mcp",
+    # Outer foot edge. heel + big toe give the foot's long axis only; the small toe closes
+    # the triangle, which is what makes width (and therefore roll) measurable.
+    "left_small_toe", "right_small_toe",
+    # Head anchors. `head_center` is an ear midpoint that silently redefines itself to a
+    # single ear when one drops out (see DERIVED below) — these are single observed points
+    # that cannot do that. In a down-the-line view all three sit on the visible profile
+    # silhouette, which is the best case for this camera angle.
+    "chin", "nose_bridge",
+    # Jaw contour endpoints, near the ears. Only used to separate head *rotation* from head
+    # *translation*: a golfer who merely turns to follow the club currently reads as sway.
+    # Named jaw_left/jaw_right, not left_jaw/right_jaw, to stay out of the left_/right_
+    # limb-swap pairing in postprocess — these are face sides, not body sides.
+    "jaw_left", "jaw_right",
+]
+
+# Points Stage 3 tracks and smooths: the native block plus the measured extras. Derived
+# joints are excluded by design — doc 03 §3.6 requires them recomputed *after* smoothing.
+TRACKED_NAMES = NATIVE_NAMES + MEASURED
+N_TRACKED = len(TRACKED_NAMES)
+
+KEYPOINT_NAMES = NATIVE_NAMES + [d[0] for d in DERIVED] + MEASURED
 DERIVED_NAMES = [d[0] for d in DERIVED]
 IDX = {name: i for i, name in enumerate(KEYPOINT_NAMES)}
 
 # Hand landmarks 17-22 are unreliable while gripping a club (doc 03 §2) — the club
 # pipeline owns that region. Excluded from rendering and from sanity checks.
+#
+# That verdict is about MediaPipe, which infers these from the body model and cannot see a
+# closed fist. A wholebody model measures the hand directly and fills the same three slots
+# with real index/pinky/thumb MCP joints, so Stage 3 takes `trust_hands` and skips this
+# blanket rejection on that path (D25).
 UNRELIABLE = {"left_pinky", "right_pinky", "left_index", "right_index",
               "left_thumb", "right_thumb"}
 
@@ -87,23 +125,50 @@ BONES = [
     ("left_heel", "left_foot_index", SIDE_LEFT),
     ("right_ankle", "right_heel", SIDE_RIGHT),
     ("right_heel", "right_foot_index", SIDE_RIGHT),
+    # Outer foot edge, closing the sole triangle. Drawn so heel lift and roll are visible
+    # in the burn-in — a foot rendered as a single line cannot show either.
+    ("left_heel", "left_small_toe", SIDE_LEFT),
+    ("left_small_toe", "left_foot_index", SIDE_LEFT),
+    ("right_heel", "right_small_toe", SIDE_RIGHT),
+    ("right_small_toe", "right_foot_index", SIDE_RIGHT),
+    # Knuckle line. Its orientation is forearm roll (supination/pronation), so seeing it
+    # rotate through the swing is the check that the measurement is real.
+    ("left_pinky", "left_index", SIDE_LEFT),
+    ("right_pinky", "right_index", SIDE_RIGHT),
+    # Face profile. Two points, drawn only so head orientation is legible next to the
+    # head_center dot; nothing downstream renders off it.
+    ("chin", "nose_bridge", SIDE_MID),
 ]
 
 # Joints worth drawing. Eyes/mouth add clutter without coaching value; head_center stands in.
+# The jaw endpoints are measurement inputs for head turn, not skeleton — same treatment.
 RENDER_JOINTS = [n for n in KEYPOINT_NAMES if n not in UNRELIABLE and not (
     n.endswith("_eye") or "_eye_" in n or n.startswith("mouth_") or n == "nose"
+    or n.startswith("jaw_")
 )]
 
 
 def add_derived(kp, st=None, grip=None, hands=None):
-    """Append derived joints to one frame's keypoint list.
+    """Insert derived joints into one frame's keypoint list.
 
-    kp: list of [x, y, conf] for the 33 native landmarks (mutated in place, then returned).
+    kp: list of [x, y, conf] for the tracked landmarks — the 33 native ones, optionally
+        followed by the measured extras (mutated in place, then returned).
     st: optional parallel status list, extended in step so provenance survives.
+
+    The published order is native -> derived -> measured (doc 02 fixes indices 0-39), but
+    Stage 3 hands back native -> measured because those are the points it smooths. So the
+    measured tail is lifted off, the derived block appended, and the tail put back.
 
     A missing parent yields a missing derived joint rather than a midpoint of garbage,
     except where `allow_single` permits falling back to the surviving parent.
     """
+    measured = kp[N_NATIVE:]
+    del kp[N_NATIVE:]
+    m_st = None
+    if st is not None:
+        m_st = st[N_NATIVE:]
+        del st[N_NATIVE:]
+
     for name, a, b, allow_single in DERIVED:
         pa, pb = kp[IDX[a]], kp[IDX[b]]
         live = [p for p in (pa, pb) if p[2] > 0.0]
@@ -182,4 +247,12 @@ def add_derived(kp, st=None, grip=None, hands=None):
             kp.append([0.0, 0.0, 0.0])
         if st is not None:
             st.append(2 if kp[-1][2] >= 0.5 else (1 if kp[-1][2] > 0.0 else 0))
+
+    # Restore the measured tail, padded when an estimator supplied none (the Halpe26 and
+    # MediaPipe paths), so every frame's array is the same width as KEYPOINT_NAMES.
+    measured += [[0.0, 0.0, 0.0]] * (len(MEASURED) - len(measured))
+    kp.extend(measured)
+    if st is not None:
+        m_st += [0] * (len(MEASURED) - len(m_st))
+        st.extend(m_st)
     return kp

@@ -23,11 +23,13 @@ import numpy as np
 from scipy.interpolate import CubicSpline
 from scipy.signal import savgol_filter
 
-from .skeleton import NATIVE_NAMES, UNRELIABLE
+from .skeleton import TRACKED_NAMES, UNRELIABLE
 
 MISSING, PROVISIONAL, OK, INTERP = 0, 1, 2, 3
-N = len(NATIVE_NAMES)
-NAME_IDX = {n: i for i, n in enumerate(NATIVE_NAMES)}
+# Stage 3 runs over the native block *and* the measured extras (D25). Derived joints are
+# deliberately absent — doc 03 §3.6 recomputes those from smoothed parents afterwards.
+N = len(TRACKED_NAMES)
+NAME_IDX = {n: i for i, n in enumerate(TRACKED_NAMES)}
 
 # Bones checked for length plausibility. Arms are included but only ever flagged for being
 # too long (see D7) — the same rule applies to every bone, so nothing needs excluding.
@@ -43,10 +45,15 @@ CHECK_BONES = [
 
 # Max plausible per-frame acceleration, as a fraction of golfer height. Wrists and elbows
 # genuinely whip through the downswing; hips, head and ankles do not.
+# Matched by substring in insertion order, so a more specific key must come first.
+# "nose_bridge" is covered by "nose"; the rest of the measured extras need their own.
 ACCEL_LIMIT = {
     "wrist": 0.150, "elbow": 0.110, "shoulder": 0.050, "hip": 0.040,
     "knee": 0.055, "ankle": 0.040, "heel": 0.045, "foot": 0.050,
     "ear": 0.035, "eye": 0.035, "nose": 0.035, "mouth": 0.035,
+    "mcp": 0.150,      # rides the wrist, so it whips through the downswing just as hard
+    "toe": 0.050,      # matches "foot" — the same rigid segment
+    "chin": 0.035, "jaw": 0.035,   # head, which does not accelerate like a limb
 }
 DEFAULT_ACCEL = 0.060
 
@@ -113,20 +120,26 @@ def body_height(xy, status):
 
 # ---------------------------------------------------------------- stages
 
-def gate(conf, cfg):
-    """D6: nothing is discarded on confidence alone; sub-threshold points are PROVISIONAL."""
+def gate(conf, cfg, trust_hands=False):
+    """D6: nothing is discarded on confidence alone; sub-threshold points are PROVISIONAL.
+
+    `trust_hands` keeps the index/pinky/thumb slots. They are rejected outright for
+    MediaPipe, which infers them from a body model that cannot see a closed fist, but a
+    wholebody model measures those knuckles directly and they carry the grip's roll (D25).
+    """
     status = np.full(conf.shape, MISSING, np.int8)
     status[conf > 0.0] = PROVISIONAL
     status[conf >= cfg.conf_ok] = OK
-    for name in UNRELIABLE:                       # hand landmarks, unusable on a grip
-        status[:, NAME_IDX[name]] = MISSING
+    if not trust_hands:
+        for name in UNRELIABLE:                   # hand landmarks, unusable on a grip
+            status[:, NAME_IDX[name]] = MISSING
     return status
 
 
 def fix_side_swaps(xy, conf, status, cfg, rep):
     """Doc 03 §3.2 — brief left/right inversions are a known detector glitch, not motion."""
     pairs = [(NAME_IDX[n], NAME_IDX["right_" + n[5:]])
-             for n in NATIVE_NAMES if n.startswith("left_")
+             for n in TRACKED_NAMES if n.startswith("left_")
              and "right_" + n[5:] in NAME_IDX]
     for a, b in [(NAME_IDX["left_shoulder"], NAME_IDX["right_shoulder"]),
                  (NAME_IDX["left_hip"], NAME_IDX["right_hip"])]:
@@ -220,7 +233,7 @@ def promote_consistent(xy, conf, status, bh, rep, radius=4):
     points bracketed by OK frames within `radius` are eligible, so isolated guesses in a long
     dropout stay unverified.
     """
-    for j, name in enumerate(NATIVE_NAMES):
+    for j, name in enumerate(TRACKED_NAMES):
         ok_idx = np.flatnonzero(status[:, j] == OK)
         if len(ok_idx) < 4:
             continue
@@ -248,7 +261,7 @@ def reject_outliers(xy, status, bh, rep):
     legitimate in a golf swing, but a joint that teleports away and back in one frame is not.
     """
     n = xy.shape[0]
-    for j, name in enumerate(NATIVE_NAMES):
+    for j, name in enumerate(TRACKED_NAMES):
         lim = _accel_limit(name) * bh
         valid = status[:, j] >= PROVISIONAL
         for f in range(1, n - 1):
@@ -340,12 +353,12 @@ def smooth(xy, status, fps, cfg):
 
 # ---------------------------------------------------------------- entry point
 
-def postprocess(series, cfg: PostConfig | None = None, window=None):
+def postprocess(series, cfg: PostConfig | None = None, window=None, trust_hands=False):
     cfg = cfg or PostConfig()
     rep = PostReport()
     xy, conf = _arrays(series)
 
-    status = gate(conf, cfg)
+    status = gate(conf, cfg, trust_hands)
     rep.provisional = int((status == PROVISIONAL).sum())
 
     bh = body_height(xy, status)

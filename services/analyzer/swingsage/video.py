@@ -96,6 +96,10 @@ def normalize(src: str | Path, dst: str | Path, short_side: int, fps: int = 60) 
     ffmpeg applies the display matrix during decode, so the scale filter sees the upright
     frame; we then strip the rotation metadata so nothing double-applies it downstream.
     `-fps_mode cfr` replaces the deprecated `-vsync cfr` (ffmpeg 8.x) — see DECISIONS.md D3.
+
+    The GOP is forced to 10 frames. libx264's default 250 put two keyframes in a whole
+    6s clip, which made every browser seek decode up to 250 frames of 1080p and froze the
+    picture during a scrub. 10 caps that at 9 frames for ~2x the bytes (D24).
     """
     dst = Path(dst)
     dst.parent.mkdir(parents=True, exist_ok=True)
@@ -109,6 +113,7 @@ def normalize(src: str | Path, dst: str | Path, short_side: int, fps: int = 60) 
         [FFMPEG, "-y", "-loglevel", "error", "-i", str(src),
          "-vf", vf, "-fps_mode", "cfr", "-r", str(fps),
          "-c:v", "libx264", "-preset", "medium", "-crf", "18",
+         "-g", "10", "-keyint_min", "10", "-sc_threshold", "0",
          "-pix_fmt", "yuv420p", "-movflags", "+faststart",
          "-metadata:s:v", "rotate=0", "-an", str(dst)],
         check=True, capture_output=True, text=True,

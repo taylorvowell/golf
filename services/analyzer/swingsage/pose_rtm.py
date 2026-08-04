@@ -21,9 +21,7 @@ import cv2
 import numpy as np
 
 from .pose import RawPoseSeries
-from .skeleton import NATIVE_NAMES
-
-N_NATIVE = len(NATIVE_NAMES)
+from .skeleton import N_NATIVE, N_TRACKED, TRACKED_NAMES
 
 # rtmlib caches these under ~/.cache/rtmlib. 384x288 is the large-input variant — we are
 # offline, and input size is where top-down models buy their accuracy back (contrast
@@ -67,7 +65,43 @@ WHOLEBODY_TO_NATIVE = {
     9: "left_wrist", 10: "right_wrist", 11: "left_hip", 12: "right_hip",
     13: "left_knee", 14: "right_knee", 15: "left_ankle", 16: "right_ankle",
     17: "left_foot_index", 19: "left_heel", 20: "right_foot_index", 22: "right_heel",
+    # BlazePose calls slots 17-22 the pinky/index/thumb *knuckles*, which is exactly what
+    # these are — so the wholebody hand fills them in place rather than needing new names.
+    # They sat empty on this path because MediaPipe could not see a closed fist (D25).
+    96: "left_index", 108: "left_pinky", 93: "left_thumb",
+    117: "right_index", 129: "right_pinky", 114: "right_thumb",
 }
+
+# Sub-block offsets, verified against real pixels by scripts/kpdebug.py — the 133-point
+# array documents its block boundaries but not its internal order, and that ordering is an
+# assumption until something draws it on a frame.
+FACE0 = 23                      # 68-point iBUG face: contour 0-16, bridge 27-30
+WHOLEBODY_TO_MEASURED = {
+    FACE0 + 8: "chin", FACE0 + 27: "nose_bridge",
+    FACE0 + 0: "jaw_left", FACE0 + 16: "jaw_right",
+    18: "left_small_toe", 21: "right_small_toe",
+    100: "left_middle_mcp", 121: "right_middle_mcp",
+}
+
+# --- confidence scale (D26) -----------------------------------------------------------
+# RTMW returns SimCC peak magnitudes, not probabilities: across both fixtures the points
+# this pipeline consumes run p01 2.87, median 5.04, p99 7.84, with ~100% of them above 1.0
+# on a typical frame. Clamping that to [0,1] — which is what this code used to do, on the
+# assumption the scores were Halpe26-like — mapped essentially every keypoint to exactly
+# 1.00. That is where "100% coverage @ 1.00" came from: the clamp, not the model. It also
+# left the UI with nothing to dim and Stage 3 unable to reject anything on confidence.
+#
+# This is a monotone rescale of a sharpness score, NOT a calibrated probability, and it is
+# only meaningful relative to other points from the same model. Endpoints are solved from
+# the measured distribution (scripts/kpdebug.py prints it) so the occluded tail lands under
+# the gates the rest of the pipeline already uses:
+#
+#     p01 -> 0.30   under the club pipeline's usable gate      (1% of points)
+#     p10 -> 0.50   under Stage 3's OK gate, enters PROVISIONAL (10%)
+#     p50 -> 0.76   comfortably trusted
+#
+# Halpe26 is natively ~0-1 and is left alone.
+WHOLEBODY_CONF_LO, WHOLEBODY_CONF_HI = 1.45, 6.17
 
 # MCP joints (the knuckles) of index/middle/ring/pinky on each hand. Their centroid is
 # where the shaft actually sits in the palm. Hand layout is the standard 21-point one:
@@ -112,28 +146,30 @@ def bboxes_from_series(series: RawPoseSeries, pad=0.22, min_conf=0.3):
     return [b if b is not None else first for b in boxes]
 
 
-def _hand_grip(pts, sc, w, h, min_conf=0.25):
+def _hand_grip(pts, sc, w, h, conf_of, min_conf=0.25):
     """Grip point from the knuckles of both hands, in normalized coords.
 
     Averages the index/middle/ring/pinky MCP joints — the club rests across those, so their
     centroid is the true grip. Falls back to a single hand when only one resolves, which is
     still far better than the wrist midpoint.
+
+    `min_conf` gates on the *rescaled* confidence, so it means the same thing here as
+    everywhere else downstream (D26) — against raw SimCC scores it admitted everything.
     """
     hand_pts, confs, per_side = [], [], {}
     for side, base in HAND_BASE.items():
-        got = [(pts[base + o], sc[base + o]) for o in MCP_OFFSETS
-               if base + o < len(pts) and sc[base + o] >= min_conf]
+        got = [(pts[base + o], conf_of(sc[base + o])) for o in MCP_OFFSETS
+               if base + o < len(pts) and conf_of(sc[base + o]) >= min_conf]
         if len(got) >= 2:
             m = np.mean([g[0] for g in got], axis=0)
             c = float(np.mean([g[1] for g in got]))
             hand_pts.append(m)
             confs.append(c)
-            per_side[side] = [float(m[0]) / w, float(m[1]) / h, min(max(c, 0.0), 1.0)]
+            per_side[side] = [float(m[0]) / w, float(m[1]) / h, c]
     if not hand_pts:
         return None, {}
     c = np.mean(hand_pts, axis=0)
-    return ([float(c[0]) / w, float(c[1]) / h,
-             float(min(max(np.mean(confs), 0.0), 1.0))], per_side)
+    return ([float(c[0]) / w, float(c[1]) / h, float(np.mean(confs))], per_side)
 
 
 def estimate(video_path, boxes, mode: str = "performance", progress=None,
@@ -156,7 +192,14 @@ def estimate(video_path, boxes, mode: str = "performance", progress=None,
     kind = "rtmw-wholebody133" if wholebody else "rtmpose-halpe26"
     series = RawPoseSeries(model=f"{kind}-{mode}-{input_size[0]}x{input_size[1]}",
                            width=w, height=h, fps=fps)
-    slot = {name: i for i, name in enumerate(NATIVE_NAMES)}
+    slot = {name: i for i, name in enumerate(TRACKED_NAMES)}
+
+    def conf_of(raw):
+        """Model score -> [0,1]. See WHOLEBODY_CONF_LO/HI (D26)."""
+        if not wholebody:
+            return float(min(max(raw, 0.0), 1.0))
+        span = WHOLEBODY_CONF_HI - WHOLEBODY_CONF_LO
+        return float(min(max((raw - WHOLEBODY_CONF_LO) / span, 0.0), 1.0))
 
     f = 0
     try:
@@ -164,7 +207,7 @@ def estimate(video_path, boxes, mode: str = "performance", progress=None,
             ok, img = cap.read()
             if not ok:
                 break
-            kp = [[0.0, 0.0, 0.0] for _ in range(N_NATIVE)]
+            kp = [[0.0, 0.0, 0.0] for _ in range(N_TRACKED)]
             try:
                 kps, scores = model(img, bboxes=[boxes[f]])
             except Exception:
@@ -175,12 +218,14 @@ def estimate(video_path, boxes, mode: str = "performance", progress=None,
                 pts, sc = np.asarray(kps[0], float), np.asarray(scores[0], float)
                 for hi, name in mapping.items():
                     if hi < len(pts):
-                        # RTMPose scores can exceed 1.0; clamp so confidence stays comparable
-                        # to MediaPipe's and to the thresholds Stage 3 is tuned against.
-                        c = float(min(max(sc[hi], 0.0), 1.0))
-                        kp[slot[name]] = [float(pts[hi][0]) / w, float(pts[hi][1]) / h, c]
+                        kp[slot[name]] = [float(pts[hi][0]) / w, float(pts[hi][1]) / h,
+                                          conf_of(sc[hi])]
                 if wholebody:
-                    grip, hands = _hand_grip(pts, sc, w, h)
+                    for hi, name in WHOLEBODY_TO_MEASURED.items():
+                        if hi < len(pts):
+                            kp[slot[name]] = [float(pts[hi][0]) / w, float(pts[hi][1]) / h,
+                                              conf_of(sc[hi])]
+                    grip, hands = _hand_grip(pts, sc, w, h, conf_of)
                 series.detected.append(True)
             else:
                 series.detected.append(False)

@@ -21,7 +21,9 @@ from dataclasses import dataclass, field, replace
 
 import cv2
 import numpy as np
+from scipy.signal import savgol_filter
 
+from . import club_detect
 from .skeleton import IDX
 
 
@@ -66,6 +68,86 @@ class ClubConfig:
     # and would matter more with a noisier detector. See DECISIONS D20.
     use_path_curve: bool = False
     curve_degree: int = 3
+    # Learned head detector (Stage 4b, swingsage/club_detect.py). Evidence only — it is added
+    # to the same angular profile the two hand-built detectors write, never used on its own
+    # (doc 04 §2). With no weights supplied every value below is inert.
+    #
+    # `detector_gain` is on the same 0-1 scale as motion support, so 1.0 makes a
+    # full-confidence detection worth about as much as a fully-supported motion ray. Starting
+    # deliberately below that: until doc 04 §7's position-error metric exists there is no
+    # falsifiable basis for trusting it *more* than the measurements already there (D20).
+    detector_gain: float = 0.8
+    detector_spread_bins: float = 1.5   # angular uncertainty of a box centre, in bins (~6 deg)
+    # `stick` is the model's strong class — mAP50 0.976 against clubhead's 0.686 (D23a) — and
+    # the solver's state IS shaft angle (D17), so a shaft box is direct evidence about the
+    # quantity being solved. Weighted above the head accordingly.
+    detector_stick_gain: float = 1.2
+    detector_stick_spread_bins: float = 2.0
+    # Which detector classes feed the solver: "none" | "heads" | "sticks" | "both".
+    # "none" still runs the detector and still stores its raw boxes in analysis.json — it just
+    # does not let them touch the solve. That is the honest baseline for judging the model.
+    detector_inject: str = "heads"
+    # Assert the detected distance into `reach`. OFF: an earlier version wrote each frame's raw
+    # radius straight in, bypassing D17's radius smoothing, and the drawn club length at the
+    # address hold — where the club is not moving — went from stdev 18.8px to 29.4px.
+    detector_radius: bool = False
+    # Rebuild every frame's club from hands + one smoothed angle at a fixed length
+    # (`rigidify`). The function was written, documented and never called — `_build_club` ran
+    # instead and re-derived length per frame, which is the length jitter. OFF by default only
+    # so the two can be A/B'd; see DECISIONS D32.
+    use_rigid: bool = False
+    # Take the head straight from the model where it is confident, instead of only nudging the
+    # solver's profile. Measured justification: with injection alone the solved head still sat a
+    # median 60px from the model's head and only 30% of frames landed within 20px — evidence
+    # weighting cannot outvote the motion profile, shaft lines, plane prior and angle-travel
+    # cost combined, while the model's raw boxes are visibly on the club head (D32).
+    #
+    # This sets raw_angle/length per frame; `use_rigid` then smooths them and holds the length
+    # rigid. That ordering is the point — trace first, smooth second.
+    #
+    # Frames with no confident detection fall back to the solver's answer, so this is never
+    # detector-only and stays within doc 04 §2.
+    detector_head_primary: bool = False
+    detector_primary_min_conf: float = 0.35
+    # Smooth the measured head path in polar coordinates about the hands, keeping the measured
+    # radius rather than imposing the calibrated club length the way `rigidify` does. See
+    # `smooth_detector_path`.
+    detector_smooth: bool = False
+    detector_smooth_win: int = 5
+    # Reject isolated head jumps by trajectory continuity before smoothing (Hampel on the shaft
+    # angle). Aimed at the backswing, where the club passes behind the golfer and the detector
+    # can misfire for a frame or two — the head jumps a long way and comes straight back, which
+    # a local-median test catches and a smoother alone would only average in.
+    detector_traj_gate: bool = False
+    # Floor on the Hampel tolerance. MAD goes to zero where the club is nearly stationary, so
+    # without a floor every small wobble reads as an outlier.
+    detector_traj_tol_deg: float = 6.0
+    # Trace-only cleanup: "none" | "measured" | "moving" | "savgol". Applies to the polylines
+    # the renderer draws and NOTHING else — per-frame head positions are untouched, because the
+    # per-frame detection is already good and only the line joining the points is jagged.
+    trace_smooth: str = "none"
+    trace_win: int = 7
+    # The downswing is deliberately NOT smoothed. It is the best-measured segment — the club is
+    # large, bright and moving against open background, and its raw head placement is the most
+    # accurate of the three. It is also the shortest (25 points against the backswing's 43 on
+    # swing2), so a fixed window covers 28% of it versus 16% of the backswing: the segment that
+    # needs smoothing least was getting the most, and an order-2 fit over a tightly curving arc
+    # flattens curvature that is real. Phase-dependent windows for the same reason D17 needed
+    # phase-dependent gap tolerance and D19 needed a phase-dependent detector.
+    trace_win_downswing: int = 0
+    trace_min_conf: float = 0.30
+    # Stop the follow-through at the club's high point, before it goes over the shoulder. Past
+    # that the head is behind the golfer and heavily occluded, so the tail of the trace is both
+    # the least reliable part of the path and the part that says least about the swing — it
+    # loops back across everything already drawn and reads as scribble.
+    trace_clip_followthrough: bool = True
+    # Consensus tolerance for the "robust" mode, in multiples of the median residual. Lower is
+    # stricter. Relative rather than absolute because the club moves ~4px/frame in the takeaway
+    # and ~90px through impact — no pixel threshold is right for both.
+    trace_robust_tol: float = 2.5
+    # Radius, in normalised units, within which the drawn path counts as passing through a
+    # detection. ~0.008 is about 6px on a 720-wide analysis frame.
+    trace_fidelity_tol: float = 0.008
     curve_tol: float = 0.18        # residual from the curve counted as an outlier
     curve_conf_floor: float = 0.45  # below this, take the curve instead of the measurement
     transition_frames: int = 5     # frames each side of Top excluded from the fit
@@ -86,6 +168,10 @@ class ClubFrame:
     grip_px: object = None         # hands in pixel space, for direction resolution
     blurred: bool = False
     interp: bool = False
+    # True where the head came from the learned detector rather than the solver. The trace has
+    # to know: it is a polyline over frames, and joining a model-measured head to a
+    # solver-derived one produces a lurch between two different estimators, not a club path.
+    from_model: bool = False
 
 
 @dataclass
@@ -928,9 +1014,15 @@ def calibrate(gray_frames, pose_frames, addr_f, body_h, cfg):
 
 
 def track(video_path, pose_frames, ev, handedness="right", cfg: ClubConfig | None = None,
-          progress=None) -> ClubResult:
+          progress=None, detector=None) -> ClubResult:
+    """`detector` is an optional pre-computed club_detect.DetectorResult over this same video.
+
+    It contributes evidence into the per-frame angular profile and nothing else, so passing
+    None reproduces the classical path exactly (doc 04 §2 — never detector-only).
+    """
     cfg = cfg or ClubConfig()
     res = ClubResult()
+    det_frames = 0
 
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
@@ -1036,12 +1128,43 @@ def track(video_path, pose_frames, ev, handedness="right", cfg: ClubConfig | Non
         else:
             cf.profile = angular_profile(motion, gp, club_px, cfg,
                                          n_bins=N_BINS, gap_frac=0.09)
+        # Stage 4b: fold in the learned detector as a further evidence source. Deliberately
+        # phase-independent, unlike the D19 motion/lines split — a learned detector has no
+        # reason to fail specifically in the downswing the way ray-marching does, and asserting
+        # a phase preference before the position-error metric exists would be exactly the
+        # unfalsifiable tuning D20 warns against.
+        #
+        # `detector_inject="none"` skips this entirely while the detector still runs and still
+        # publishes its raw boxes, so the model can be judged without the solver in the way.
+        if detector is not None and cf.profile is not None and cfg.detector_inject != "none":
+            got = 0
+            if cfg.detector_inject in ("sticks", "both"):
+                cf.profile, n_ = club_detect.inject_sticks(
+                    cf.profile, detector.sticks(f), gp, club_px, cfg, N_BINS)
+                got += n_
+            if cfg.detector_inject in ("heads", "both"):
+                cf.profile, n_ = club_detect.inject_heads(
+                    cf.profile, detector.heads(f), gp, club_px, cfg, N_BINS)
+                got += n_
+            det_frames += 1 if got else 0
+
         cf.grip_px = gp
         out.append(cf)
         if progress and (f % 30 == 0 or f == n - 1):
             progress(f + 1, n)
 
     res.frames = out
+    if detector is not None:
+        if cfg.detector_inject == "none":
+            res.notes.append("club detector ran but did NOT feed the solver "
+                             "(detector_inject=none); raw boxes published for inspection only")
+        else:
+            res.notes.append(
+                f"club detector [{cfg.detector_inject}] contributed on {det_frames}/{n} frames "
+                f"(head gain {cfg.detector_gain}, stick gain {cfg.detector_stick_gain}, "
+                f"radius {'on' if cfg.detector_radius else 'off'}, "
+                f"{detector.model.get('sha256', '?')})")
+        res.notes.extend(detector.notes)
 
     # Butt offset: how far the grip end sits beyond the hands. Measured once at address
     # from the calibrated shaft, then held constant like the club length.
@@ -1095,6 +1218,39 @@ def track(video_path, pose_frames, ev, handedness="right", cfg: ClubConfig | Non
                 chosen[f] = refit[f]
     res.width, res.height = w, h
     _build_club(res, chosen, pose_frames, club_px, butt_px, w, h, cfg)
+    # Measure first: let the model's confident detections replace the solved head, BEFORE any
+    # smoothing runs, so what gets smoothed is a measurement rather than a compromise.
+    if detector is not None and cfg.detector_head_primary:
+        took, saw, took_frames = apply_detector_heads(res, detector, pose_frames, club_px,
+                                                      butt_px, w, h, cfg)
+        res.notes.append(
+            f"head taken from the model on {took}/{n} frames "
+            f"(confident detections on {saw}; min conf {cfg.detector_primary_min_conf})")
+        # Then de-noise what was measured. Order matters and is the same principle as
+        # `use_rigid`: measure first, smooth second (D32). `measured=took_frames` is what stops
+        # the smoother averaging the model's answer together with the solver's on the frames
+        # the model declined — the source of the visible jumps.
+        if cfg.detector_smooth or cfg.detector_traj_gate:
+            rej = smooth_detector_path(res, pose_frames, club_px, butt_px, w, h, cfg,
+                                       gate=cfg.detector_traj_gate, measured=took_frames)
+            res.notes.append(
+                f"head path smoothed over the {len(took_frames)} model frames "
+                f"(window {cfg.detector_smooth_win}), {n - len(took_frames)} interpolated"
+                + (f"; {rej} trajectory outlier{'' if rej == 1 else 's'} rejected"
+                   if cfg.detector_traj_gate else ""))
+    if cfg.use_rigid:
+        # Rebuild from a rigid model: hands + one smoothed angle at a smoothed length.
+        # `_build_club` re-derives length per frame and clamps only the upper bound, so the
+        # drawn club changes length frame to frame even at the address hold where the club is
+        # physically stationary (measured stdev 18.8px). rigidify() was written for exactly
+        # this and was never called. See DECISIONS D32.
+        before = [c.length for c in res.frames if c.length is not None]
+        rigidify(res, pose_frames, club_px, butt_px, w, h, cfg)
+        after = [c.length for c in res.frames if c.length is not None]
+        if before and after:
+            res.notes.append(
+                f"rigid club model applied; length spread "
+                f"{max(before) - min(before):.0f}px -> {max(after) - min(after):.0f}px")
     if cfg.use_path_curve:
         refine_path_curve(res, ev, club_px, cfg)
         # Shaft endpoints follow whatever the curve moved.
@@ -1113,7 +1269,30 @@ def track(video_path, pose_frames, ev, handedness="right", cfg: ClubConfig | Non
             cf.shaft = [cf.butt, cf.head]
             cf.angle = float(np.degrees(np.arctan2(-d[1], d[0])))
             cf.length = L
-    _build_trace(res, ev, n)
+    _build_trace(res, ev, n, cfg)
+    # Trace-only cleanup, after coverage has been computed from the untouched path so the
+    # quality gate still reports what was measured rather than what was drawn.
+    if cfg.trace_smooth != "none":
+        dropped, rejected, fid = smooth_trace(res, ev, n, cfg)
+        tot = sum(dropped.values())
+        res.notes.append(
+            f"trace rebuilt [{cfg.trace_smooth}] from detector frames only; "
+            f"{tot} non-model/low-conf points excluded "
+            f"(back {dropped.get('backswing', 0)}, down {dropped.get('downswing', 0)}, "
+            f"through {dropped.get('followthrough', 0)})")
+        if rejected:
+            res.notes.append(
+                f"trace consensus rejected {sum(rejected.values())} skewing detections "
+                f"(back {rejected.get('backswing', 0)}, down {rejected.get('downswing', 0)}, "
+                f"through {rejected.get('followthrough', 0)})")
+        # The falsifiable number: does the drawn line actually go through the measured heads?
+        # Smoothness cannot answer that, which is the whole D20 lesson.
+        hits = sum(h for h, _ in fid.values())
+        tots = sum(t for _, t in fid.values())
+        per = "  ".join(f"{k[:4]} {h}/{t}" for k, (h, t) in fid.items())
+        res.notes.append(
+            f"trace fidelity: passes within {cfg.trace_fidelity_tol:.3f} of "
+            f"{hits}/{tots} measured heads ({100 * hits / max(tots, 1):.0f}%)  [{per}]")
     return res
 
 
@@ -1256,6 +1435,178 @@ def _build_club(res: ClubResult, chosen, pose_frames, club_px, butt_px, w, h, cf
         cf.interp = not ok[f]
         cf.conf = 0.2 if not ok[f] else float(np.clip(0.45 + 0.55 * L / club_px, 0.2, 0.98))
         cf.blurred = bool(L < club_px * 0.6)
+
+
+def apply_detector_heads(res: ClubResult, detector, pose_frames, club_px, butt_px, w, h, cfg):
+    """Overwrite the head with the model's own detection wherever it is confident.
+
+    The solver is very good at *continuity* and poor at agreeing with a detector that is
+    visibly right: injecting detections as profile evidence left the solved head a median 60px
+    away with only 30% of frames within 20px (D32). Where the model has a confident box on the
+    club head, that box is a better answer than a cost minimum, so take it.
+
+    What this deliberately does NOT do is smooth or interpolate. It writes `raw_angle` and
+    `length` — the two quantities `rigidify` consumes — so the sequence is *measure, then
+    smooth*, rather than smoothing a measurement that was already a compromise. Frames without
+    a confident detection keep whatever the solver produced.
+
+    Returns (n_taken, n_frames_with_a_detection, frames_taken) — the caller needs the set,
+    because a frame this skipped still holds the *solver's* answer, which is a different
+    quantity. Mixing the two sources on adjacent frames is what produces the visible jumps:
+    model, model, solver-somewhere-else, model. A downstream smoother must treat the skipped
+    frames as gaps to interpolate across, not as measurements to average in.
+    """
+    taken = seen = 0
+    took_frames: set[int] = set()
+    for cf in res.frames:
+        dets = [d for d in detector.heads(cf.f) if d.conf >= cfg.detector_primary_min_conf]
+        if not dets:
+            continue
+        seen += 1
+        grip = _kp(pose_frames, cf.f, "grip_center", 0.15)
+        if grip is None:
+            continue
+        gp = np.array([grip[0] * w, grip[1] * h])
+        best = max(dets, key=lambda d: d.conf)
+        v = np.array(best.xy, float) - gp
+        L = float(np.hypot(v[0], v[1]))
+        # The club is rigid and held at the hands. Keep the geometric guard — a box somewhere
+        # implausible is not this golfer's club head — but note it rejects only ~4% here, so it
+        # is a safety net rather than the thing shaping the output.
+        if not (club_px * cfg.min_len <= L <= club_px * cfg.max_len):
+            continue
+        d = v / L
+        cf.raw_angle = float(np.degrees(np.arctan2(-d[1], d[0])))
+        cf.length = L
+        cf.head = [float(best.xy[0]) / w, float(best.xy[1]) / h]
+        butt = gp - d * butt_px
+        cf.butt = [float(butt[0]) / w, float(butt[1]) / h]
+        cf.shaft = [cf.butt, cf.head]
+        cf.angle = cf.raw_angle
+        cf.interp = False
+        # The model's own confidence, not a length-derived proxy. It is what the UI should dim
+        # on, and unlike the classical score it is not high merely because the shaft was long.
+        cf.conf = float(np.clip(best.conf, 0.0, 0.99))
+        cf.blurred = False
+        cf.from_model = True
+        taken += 1
+        took_frames.add(cf.f)
+    return taken, seen, took_frames
+
+
+def smooth_detector_path(res: ClubResult, pose_frames, club_px, butt_px, w, h, cfg,
+                         gate=False, measured=None):
+    """Smooth the head path in polar coordinates about the hands, optionally de-spiking first.
+
+    `rigidify` is the other smoother, and it does a different job: it *imposes* a rigid club,
+    holding length at the calibrated value and treating any frame without its own measurement
+    as interpolated — which is why its coverage reads low and honest. That is the right model
+    when the angle is all you trust. But the detector gives a genuinely good head position, and
+    forcing it onto a calibrated length throws that away — especially since the calibration
+    looks ~1.5x too long (D32).
+
+    So this keeps the measured radius and only removes noise from it. Polar about the hands
+    rather than raw x/y because the head rides an arc: smoothing x and y independently cuts the
+    corner at the top, where the path reverses sharply.
+
+    `gate=True` first rejects isolated outliers with a **Hampel filter** on the angle series.
+    A fixed degree tolerance cannot work here — the shaft legitimately sweeps ~40 deg/frame
+    through the downswing and barely moves during the takeaway — so the test is against the
+    local median with a tolerance scaled by the local MAD. That adapts: tight where the club is
+    slow, loose where it is genuinely fast. This is aimed at exactly the failure the backswing
+    produces, where the club is behind the golfer, the detector misfires for a frame or two, and
+    the head jumps a long way and comes straight back.
+    """
+    n = len(res.frames)
+    ang = np.full(n, np.nan)
+    rad = np.full(n, np.nan)
+    grips = [None] * n
+    for f, cf in enumerate(res.frames):
+        grip = _kp(pose_frames, f, "grip_center", 0.15)
+        if grip is None:
+            continue
+        grips[f] = np.array([grip[0] * w, grip[1] * h])
+        # Only frames the detector actually answered count as measurements. A frame it skipped
+        # still holds the solver's head, which is a different estimate entirely — averaging the
+        # two sources together is what makes the path lurch between them.
+        if cf.head is None or (measured is not None and f not in measured):
+            continue
+        gp = grips[f]
+        v = np.array([cf.head[0] * w, cf.head[1] * h]) - gp
+        r = float(np.hypot(v[0], v[1]))
+        if r < 1e-6:
+            continue
+        ang[f] = np.arctan2(v[1], v[0])
+        rad[f] = r
+
+    ok = ~np.isnan(ang)
+    if ok.sum() < 6:
+        res.notes.append("too few head measurements to smooth")
+        return 0
+
+    idx = np.arange(n)
+    unwrapped = np.full(n, np.nan)
+    unwrapped[ok] = np.unwrap(ang[ok])
+
+    rejected = 0
+    if gate:
+        # Hampel over the unwrapped angle. Half-window 3 frames: long enough to have a median
+        # worth comparing against, short enough that a real direction change is not treated as
+        # an outlier.
+        K = 3
+        keep = ok.copy()
+        fs = idx[ok]
+        for f in fs:
+            lo, hi = f - K, f + K
+            nb = [g for g in fs if lo <= g <= hi and g != f]
+            if len(nb) < 3:
+                continue
+            vals = unwrapped[nb]
+            med = float(np.median(vals))
+            mad = float(np.median(np.abs(vals - med)))
+            # MAD collapses to 0 where the club is stationary, which would reject every tiny
+            # wobble. Floor it at a fraction of a bin so the gate stays a spike detector.
+            tol = max(cfg.detector_traj_tol_deg * np.pi / 180.0, 3.0 * 1.4826 * mad)
+            if abs(float(unwrapped[f]) - med) > tol:
+                keep[f] = False
+                rejected += 1
+        if rejected:
+            # Re-unwrap from the surviving points only: an outlier left in the sequence biases
+            # the unwrap of everything after it.
+            unwrapped[:] = np.nan
+            unwrapped[keep] = np.unwrap(ang[keep])
+            rad[~keep] = np.nan
+            ok = keep
+
+    a_fill = np.interp(idx, idx[ok], unwrapped[ok])
+    r_fill = np.interp(idx, idx[ok], rad[ok])
+    a_sm = _smooth1d(a_fill, cfg.detector_smooth_win)
+    # Radius is the noisier of the two — a box centre wobbling a couple of pixels moves it
+    # directly — so it gets the longer window. It is NOT clamped to club_px: the measurement is
+    # trusted over the calibration here, which is the whole point of this variant.
+    r_sm = _smooth1d(r_fill, max(cfg.detector_smooth_win + 4, 7))
+
+    for f, cf in enumerate(res.frames):
+        gp = grips[f]
+        if gp is None:
+            gp = _kp(pose_frames, f, "grip_center", 0.15)
+            if gp is None:
+                continue
+            gp = np.array([gp[0] * w, gp[1] * h])
+        d = np.array([np.cos(a_sm[f]), np.sin(a_sm[f])])
+        head = gp + d * r_sm[f]
+        butt = gp - d * butt_px
+        cf.head = [float(head[0]) / w, float(head[1]) / h]
+        cf.butt = [float(butt[0]) / w, float(butt[1]) / h]
+        cf.shaft = [cf.butt, cf.head]
+        cf.length = float(r_sm[f])
+        cf.angle = float(np.degrees(np.arctan2(-d[1], d[0])))
+        if not ok[f]:
+            # Reconstructed from neighbours rather than measured — say so, and cap the
+            # confidence so the UI dashes it (doc 02's interp styling).
+            cf.interp = True
+            cf.conf = min(cf.conf, 0.35)
+    return rejected
 
 
 def rigidify(res: ClubResult, pose_frames, club_px, butt_px, w, h, cfg):
@@ -1435,6 +1786,195 @@ def refine_path_curve(res: ClubResult, ev, club_px, cfg):
                 cf.head = [float(smoothed[f, 0]), float(smoothed[f, 1])]
 
 
+def robust_inliers(pts, confs, degree=3, tol_mult=2.5, iters=5):
+    """Which detections lie on a smooth low-order path, and which are skewing it.
+
+    The problem this solves: smoothing *averages in* a bad detection instead of discarding it, so
+    one wrong point drags the drawn path off the real club for several frames either side. That is
+    worst exactly where it matters most — at the bottom of the swing, where the club is fastest
+    and a few pixels of pull is visible.
+
+    So reject rather than average. This is RANSAC's idea run as IRLS: fit a cubic in normalised
+    time to x and y, measure each point's residual, keep the consensus and refit without the rest.
+    Degree 3 because a club-head path within one segment is a straight line, a smooth curve, or a
+    curve with at most one direction change — never jagged (the same constraint D20b tested).
+
+    Two details that matter:
+      * The tolerance is **scaled by the median residual**, not fixed. Fixed pixels cannot work
+        across segments where the club moves 4px between frames in the takeaway and 90px through
+        impact.
+      * Detector confidence seeds the weights, so a point the model itself was unsure about has
+        to agree with its neighbours to survive, while a confident one is given the benefit of
+        the doubt. Confidence alone was not enough (D32 showed a 0.35 threshold silently
+        discarding good frames) but as a prior on a consensus fit it is exactly right.
+
+    Returns a boolean mask over `pts`.
+    """
+    n = len(pts)
+    if n < degree + 3:
+        return np.ones(n, bool)
+    t = np.linspace(0.0, 1.0, n)
+    P = np.asarray(pts, float)
+    wts = np.clip(np.asarray(confs, float), 0.05, 1.0)
+    keep = np.ones(n, bool)
+    for _ in range(iters):
+        deg = min(degree, int(keep.sum()) - 1)
+        if deg < 1:
+            break
+        resid2 = np.zeros(n)
+        for ax in (0, 1):
+            c = np.polyfit(t[keep], P[keep, ax], deg, w=wts[keep])
+            resid2 += (np.polyval(c, t) - P[:, ax]) ** 2
+        resid = np.sqrt(resid2)
+        scale = float(np.median(resid[keep]))
+        if scale <= 0:
+            break
+        new = resid <= tol_mult * 1.4826 * scale
+        # Never reject so much that the fit is unconstrained — that is how a robust method
+        # collapses onto a handful of points and calls the rest outliers.
+        if int(new.sum()) < degree + 2 or bool((new == keep).all()):
+            break
+        keep = new
+    return keep
+
+
+def trace_fidelity(drawn, measured, tol):
+    """How many real detections does the drawn path actually pass through?
+
+    The metric this whole exercise was missing. Smoothness says nothing about whether the line
+    follows the club — a path can be beautifully smooth and nowhere near the detections, which is
+    the D20 complaint in miniature. This asks the falsifiable question instead: of the heads the
+    model measured, how many does the rendered polyline pass within `tol` of?
+
+    Point-to-segment, not point-to-vertex: after filtering, the polyline's vertices are sparse, so
+    measuring to vertices alone would report a miss for a point the line passes straight through.
+    """
+    if not drawn or not measured:
+        return 0, len(measured)
+    D = np.asarray(drawn, float)
+    hit = 0
+    for p in measured:
+        q = np.asarray(p, float)
+        if len(D) == 1:
+            d = float(np.hypot(*(q - D[0])))
+        else:
+            a, b = D[:-1], D[1:]
+            ab = b - a
+            L2 = (ab ** 2).sum(1)
+            L2[L2 == 0] = 1e-12
+            s = np.clip(((q - a) * ab).sum(1) / L2, 0.0, 1.0)
+            proj = a + s[:, None] * ab
+            d = float(np.min(np.hypot(*(q - proj).T)))
+        if d <= tol:
+            hit += 1
+    return hit, len(measured)
+
+
+def clip_at_apex(pts):
+    """Cut a follow-through polyline at the club's highest point on screen.
+
+    "Where it starts to turn at the top" has a clean definition: the head sweeps up after impact,
+    reaches an apex, then travels back over the shoulder. The apex is the minimum y (image y
+    grows downward), so everything past that index is the club coming down behind the golfer.
+
+    Dropping it is not only cosmetic. Past the apex the head is occluded by the body, which is
+    where detection is weakest — on both fixtures the follow-through has the worst coverage of
+    any segment — and the path loops back across everything already drawn, so it obscures the
+    part of the trace that carries the information.
+
+    Left alone if the apex is at either extreme: that means no turn was captured, and guessing
+    would truncate a legitimate path.
+    """
+    if len(pts) < 4:
+        return pts
+    ys = [p[1] for p in pts]
+    i = int(np.argmin(ys))
+    if i < 2 or i >= len(pts) - 1:
+        return pts
+    return pts[:i + 1]
+
+
+def smooth_trace(res: ClubResult, ev, n, cfg):
+    """Rebuild the trace polylines only. Per-frame head positions are NOT touched.
+
+    The trace and the per-frame club are different products with different failure modes, and
+    conflating them is why this looked unfixable. `_build_trace` appends every frame that has a
+    head, with no confidence gate and no check on where it came from — so once the detector
+    supplies most heads, the minority of frames it declined contribute the *solver's* answer and
+    the polyline lurches between two estimators. The frame-by-frame overlay stays correct
+    throughout, because each individual head is fine; only the line joining them is wrong.
+
+    So this fixes the line and leaves the heads alone. `cfg.trace_smooth` picks the tactic:
+
+      "measured"  drop frames the detector did not answer. No smoothing at all — the honest
+                  baseline, and it isolates how much of the jaggedness was source-mixing rather
+                  than noise.
+      "moving"    + a box filter. Cheap, and it shortens the path through tight curvature.
+      "savgol"    + Savitzky-Golay, which fits a local polynomial instead of averaging, so it
+                  preserves the curvature at Top where a box filter cuts the corner. Same
+                  reason doc 03 §3.5 chose it for the pose series.
+
+    Smoothing is per segment. The path reverses sharply at Top, so one pass across the whole
+    swing would round off the corner that defines the transition.
+    """
+    mode = cfg.trace_smooth
+    if mode == "none":
+        return {}
+    e = ev["events"]
+    spans = {
+        "backswing": (e["address"]["frame"], e["top"]["frame"]),
+        "downswing": (e["top"]["frame"], e["impact"]["frame"]),
+        "followthrough": (e["impact"]["frame"], min(n - 1, e["finish"]["frame"])),
+    }
+    dropped, rejected, fidelity = {}, {}, {}
+    for key, (a, b) in spans.items():
+        pts, confs, skipped = [], [], 0
+        for f in range(max(0, a), min(n, b + 1)):
+            fr = res.frames[f]
+            if not fr.head or any(np.isnan(fr.head)):
+                continue
+            # Only points the detector actually produced. A solver-derived head is a different
+            # estimate of the same thing; joining the two is what makes the trace zigzag.
+            if not fr.from_model or fr.conf < cfg.trace_min_conf:
+                skipped += 1
+                continue
+            pts.append([fr.head[0], fr.head[1]])
+            confs.append(fr.conf)
+        dropped[key] = skipped
+        raw_pts = [list(p) for p in pts]
+
+        # "robust": reject the detections that skew a fit, then draw the survivors UNSMOOTHED, so
+        # the path passes through real measurements instead of near an average of them.
+        if mode == "robust" and len(pts) >= 6:
+            keep = robust_inliers(pts, confs, tol_mult=cfg.trace_robust_tol)
+            kept = [p for p, k in zip(pts, keep) if k]
+            rejected[key] = len(pts) - len(kept)
+            if len(kept) >= 2:
+                pts = kept
+
+        # Per-segment window; 0 means leave this segment's measurements alone.
+        want = cfg.trace_win_downswing if key == "downswing" else cfg.trace_win
+        if want and len(pts) >= 5 and mode in ("moving", "savgol"):
+            arr = np.array(pts, float)
+            win = min(want, len(pts) if len(pts) % 2 else len(pts) - 1)
+            if win >= 5:
+                for ax in (0, 1):
+                    if mode == "moving":
+                        arr[:, ax] = _smooth1d(arr[:, ax], win)
+                    else:
+                        arr[:, ax] = savgol_filter(arr[:, ax], win, 2)
+            pts = arr.tolist()
+        # Clip AFTER smoothing: the apex of the smoothed path is the one that gets drawn, and
+        # clipping first would let the smoother pull points back past the cut.
+        if key == "followthrough" and cfg.trace_clip_followthrough:
+            pts = clip_at_apex(pts)
+        res.trace[key] = [[round(float(x), 5), round(float(y), 5)] for x, y in pts]
+        # Measured against the points that were available BEFORE any rejection or smoothing, so
+        # a mode cannot score well by simply discarding what it fails to fit.
+        fidelity[key] = trace_fidelity(res.trace[key], raw_pts, cfg.trace_fidelity_tol)
+    return dropped, rejected, fidelity
+
+
 def refine_events(res: ClubResult, ev):
     """Doc 05 A.5/A.8 — replace the pose proxies for Toe-Up and Mid-Follow-Through.
 
@@ -1484,8 +2024,9 @@ def _wrap180(a):
     return (a + 90.0) % 180.0 - 90.0
 
 
-def _build_trace(res: ClubResult, ev, n):
+def _build_trace(res: ClubResult, ev, n, cfg: ClubConfig | None = None):
     """Segment the head path into the three polylines the renderer draws (doc 04 §5)."""
+    cfg = cfg or ClubConfig()
     e = ev["events"]
     spans = {
         "backswing": (e["address"]["frame"], e["top"]["frame"]),
@@ -1506,7 +2047,10 @@ def _build_trace(res: ClubResult, ev, n):
                 pts.append([round(fr.head[0], 5), round(fr.head[1], 5)])
                 if fr.conf >= 0.30 and not fr.interp:
                     got += 1
-        res.trace[key] = pts
+        # Coverage is computed from the full span above; only the drawn polyline is clipped, so
+        # the quality gate still reports every frame that was measured.
+        res.trace[key] = (clip_at_apex(pts)
+                          if key == "followthrough" and cfg.trace_clip_followthrough else pts)
         measured[key] = round(got / tot, 3) if tot else 0.0
     res.coverage = measured
     swing = [k for k in ("backswing", "downswing") ]

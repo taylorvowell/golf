@@ -10,13 +10,16 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#0b0d10",
+  themeColor: "#080a0d",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  // No background or font classes here: both come from globals.css, which carries the
+  // sample's layered radial/linear gradient and its grid overlay. A Tailwind bg utility on
+  // <body> would flatten that to one colour.
   return (
-    <html lang="en">
-      <body className="bg-[#0b0d10] text-neutral-100 antialiased">{children}</body>
+    <html lang="en" className="dark">
+      <body className="antialiased">{children}</body>
     </html>
   );
 }

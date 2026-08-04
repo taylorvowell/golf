@@ -20,7 +20,8 @@ import numpy as np
 from mediapipe.tasks.python import BaseOptions
 from mediapipe.tasks.python import vision
 
-from .skeleton import NATIVE_NAMES, KEYPOINT_NAMES, add_derived
+from .skeleton import (NATIVE_NAMES, KEYPOINT_NAMES, TRACKED_NAMES, N_TRACKED,
+                       add_derived)
 
 MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "pose_landmarker_heavy.task"
 N_NATIVE = len(NATIVE_NAMES)
@@ -54,7 +55,7 @@ def _make_options(running_mode, model_path=None):
 
 
 def _empty_kp():
-    return [[0.0, 0.0, 0.0] for _ in range(N_NATIVE)]
+    return [[0.0, 0.0, 0.0] for _ in range(N_TRACKED)]
 
 
 def _landmarks_to_kp(landmarks):
@@ -71,6 +72,9 @@ def _landmarks_to_kp(landmarks):
         scores = [s for s in (vis, pres) if s is not None]
         conf = float(min(scores)) if scores else 1.0
         kp.append([float(lm.x), float(lm.y), conf])
+    # Pad the measured-extras block: BlazePose has no face-contour, small-toe or middle-MCP
+    # landmark, so those stay missing on this path and every array keeps one width.
+    kp += [[0.0, 0.0, 0.0]] * (N_TRACKED - len(kp))
     return kp
 
 
@@ -214,7 +218,7 @@ def remap_to_full(series: RawPoseSeries, applied_bbox) -> RawPoseSeries:
 def finalize(series: RawPoseSeries) -> RawPoseSeries:
     """Append derived joints — doc 03 §3.6 requires this *after* smoothing."""
     for fr in series.frames:
-        if len(fr["kp"]) == N_NATIVE:
+        if len(fr["kp"]) == N_TRACKED:
             add_derived(fr["kp"], fr.get("st"), fr.get("grip"), fr.get("hands"))
     return series
 
@@ -226,7 +230,11 @@ def quality(series: RawPoseSeries) -> dict:
     if n:
         arr = np.array([fr["kp"] for fr in series.frames], dtype=np.float32)  # (n, J, 3)
         conf = arr[:, :, 2]
-        for j, name in enumerate(KEYPOINT_NAMES[:arr.shape[1]]):
+        # Pre-finalize the array is in TRACKED order (native + measured); after finalize the
+        # derived block sits between them. Label by width so a pre-finalize call can't
+        # silently report measured points under derived joints' names.
+        names = KEYPOINT_NAMES if arr.shape[1] == len(KEYPOINT_NAMES) else TRACKED_NAMES
+        for j, name in enumerate(names[:arr.shape[1]]):
             visible = conf[:, j] >= 0.5
             per_joint[name] = {
                 "coverage": round(float(visible.mean()), 4),
