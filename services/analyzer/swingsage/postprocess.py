@@ -1,0 +1,383 @@
+"""Stage 3 — pose post-processing (doc 03 §3). "This is where quality is won."
+
+Runs in the documented order: confidence handling, anatomical sanity, side-swap repair,
+temporal outlier rejection, gap interpolation, smoothing. Three deliberate refinements to
+the spec, each measured on the fixtures and recorded in docs/DECISIONS.md:
+
+  D6  Low confidence means *unverified*, not *wrong*. Doc 03 §3.1 sends visibility < 0.3
+      straight to missing; on fixture swing2 that discards a correctly-placed grip. Instead
+      low-confidence joints enter as PROVISIONAL and are demoted only when a positive check
+      fails, so evidence removes a joint rather than a threshold.
+  D7  Bone-length sanity is upper-bound only. A 2D bone can look arbitrarily short through
+      foreshortening (routine for arms in DTL) but can never look longer than it is, so a
+      symmetric +/-35% band flags legitimate geometry. We flag only over-long bones.
+  D8  One-Euro is applied forward and backward and averaged. The filter is causal and lags;
+      the whole point of choosing it over a moving average was to not corrupt the fast
+      downswing, and offline we can cancel its phase lag outright.
+"""
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+
+import numpy as np
+from scipy.interpolate import CubicSpline
+from scipy.signal import savgol_filter
+
+from .skeleton import NATIVE_NAMES, UNRELIABLE
+
+MISSING, PROVISIONAL, OK, INTERP = 0, 1, 2, 3
+N = len(NATIVE_NAMES)
+NAME_IDX = {n: i for i, n in enumerate(NATIVE_NAMES)}
+
+# Bones checked for length plausibility. Arms are included but only ever flagged for being
+# too long (see D7) — the same rule applies to every bone, so nothing needs excluding.
+CHECK_BONES = [
+    ("left_shoulder", "right_shoulder"), ("left_hip", "right_hip"),
+    ("left_shoulder", "left_hip"), ("right_shoulder", "right_hip"),
+    ("left_shoulder", "left_elbow"), ("left_elbow", "left_wrist"),
+    ("right_shoulder", "right_elbow"), ("right_elbow", "right_wrist"),
+    ("left_hip", "left_knee"), ("left_knee", "left_ankle"),
+    ("right_hip", "right_knee"), ("right_knee", "right_ankle"),
+    ("left_ankle", "left_heel"), ("right_ankle", "right_heel"),
+]
+
+# Max plausible per-frame acceleration, as a fraction of golfer height. Wrists and elbows
+# genuinely whip through the downswing; hips, head and ankles do not.
+ACCEL_LIMIT = {
+    "wrist": 0.150, "elbow": 0.110, "shoulder": 0.050, "hip": 0.040,
+    "knee": 0.055, "ankle": 0.040, "heel": 0.045, "foot": 0.050,
+    "ear": 0.035, "eye": 0.035, "nose": 0.035, "mouth": 0.035,
+}
+DEFAULT_ACCEL = 0.060
+
+
+@dataclass
+class PostConfig:
+    conf_ok: float = 0.5
+    bone_tol: float = 0.30        # allowed overshoot above a bone's p95 observed length
+    swap_max_run: int = 5
+    max_gap: int = 8              # doc 03 §3.4 — ~130ms at 60fps
+    grip_max_sep: float = 0.20    # wrist separation ceiling, fraction of golfer height
+    min_cutoff: float = 1.0
+    beta: float = 0.3
+    savgol: bool = True
+    savgol_window: int = 7
+    savgol_order: int = 2
+
+
+@dataclass
+class PostReport:
+    body_height: float = 0.0
+    provisional: int = 0
+    promoted: int = 0
+    bone_rejects: int = 0
+    grip_rejects: int = 0
+    outlier_rejects: int = 0
+    swaps: int = 0
+    interpolated: int = 0
+    still_missing: int = 0
+    notes: list = field(default_factory=list)
+
+
+# ---------------------------------------------------------------- helpers
+
+def _arrays(series):
+    xy = np.array([[[p[0], p[1]] for p in fr["kp"][:N]] for fr in series.frames], float)
+    conf = np.array([[p[2] for p in fr["kp"][:N]] for fr in series.frames], float)
+    return xy, conf
+
+
+def _accel_limit(name):
+    for key, v in ACCEL_LIMIT.items():
+        if key in name:
+            return v
+    return DEFAULT_ACCEL
+
+
+def body_height(xy, status):
+    """Median head-to-ankle distance — the scale every threshold is expressed against.
+
+    Normalizing by the golfer's own pixel height (doc 03 §5) makes thresholds independent
+    of camera distance, which matters because our two fixtures differ by 40% in subject size.
+    """
+    ears = [NAME_IDX["left_ear"], NAME_IDX["right_ear"]]
+    ank = [NAME_IDX["left_ankle"], NAME_IDX["right_ankle"]]
+    hs = []
+    for f in range(xy.shape[0]):
+        head = [xy[f, i, 1] for i in ears if status[f, i] >= PROVISIONAL]
+        feet = [xy[f, i, 1] for i in ank if status[f, i] >= PROVISIONAL]
+        if head and feet:
+            hs.append(max(feet) - min(head))
+    return float(np.median(hs)) if hs else 1.0
+
+
+# ---------------------------------------------------------------- stages
+
+def gate(conf, cfg):
+    """D6: nothing is discarded on confidence alone; sub-threshold points are PROVISIONAL."""
+    status = np.full(conf.shape, MISSING, np.int8)
+    status[conf > 0.0] = PROVISIONAL
+    status[conf >= cfg.conf_ok] = OK
+    for name in UNRELIABLE:                       # hand landmarks, unusable on a grip
+        status[:, NAME_IDX[name]] = MISSING
+    return status
+
+
+def fix_side_swaps(xy, conf, status, cfg, rep):
+    """Doc 03 §3.2 — brief left/right inversions are a known detector glitch, not motion."""
+    pairs = [(NAME_IDX[n], NAME_IDX["right_" + n[5:]])
+             for n in NATIVE_NAMES if n.startswith("left_")
+             and "right_" + n[5:] in NAME_IDX]
+    for a, b in [(NAME_IDX["left_shoulder"], NAME_IDX["right_shoulder"]),
+                 (NAME_IDX["left_hip"], NAME_IDX["right_hip"])]:
+        ok = (status[:, a] >= PROVISIONAL) & (status[:, b] >= PROVISIONAL)
+        if ok.sum() < 10:
+            continue
+        sign = np.sign(xy[:, a, 0] - xy[:, b, 0])
+        majority = np.sign(np.median(sign[ok])) or 1.0
+
+        f = 0
+        while f < len(sign):
+            if ok[f] and sign[f] == -majority:
+                g = f
+                while g < len(sign) and ok[g] and sign[g] == -majority:
+                    g += 1
+                if (g - f) <= cfg.swap_max_run:       # brief flip => glitch, swap it back
+                    for i, j in pairs:
+                        xy[f:g, [i, j]] = xy[f:g, [j, i]]
+                        conf[f:g, [i, j]] = conf[f:g, [j, i]]
+                        status[f:g, [i, j]] = status[f:g, [j, i]]
+                    rep.swaps += g - f
+                f = g
+            else:
+                f += 1
+    return xy
+
+
+def check_bones(xy, status, conf, cfg, rep):
+    """D7 — flag only implausibly LONG bones; shortness is foreshortening, not error."""
+    for a_name, b_name in CHECK_BONES:
+        a, b = NAME_IDX[a_name], NAME_IDX[b_name]
+        both = (status[:, a] >= PROVISIONAL) & (status[:, b] >= PROVISIONAL)
+        if both.sum() < 10:
+            continue
+        d = np.linalg.norm(xy[:, a] - xy[:, b], axis=1)
+        limit = np.percentile(d[both], 95) * (1.0 + cfg.bone_tol)
+        bad = both & (d > limit)
+        for f in np.flatnonzero(bad):
+            # Drop whichever endpoint the model trusts less.
+            j = a if conf[f, a] < conf[f, b] else b
+            if status[f, j] != MISSING:
+                status[f, j] = MISSING
+                rep.bone_rejects += 1
+
+
+def grip_prior(xy, conf, status, bh, cfg, rep, window=None):
+    """Golf-specific prior (D4b): both hands are on the club, so the wrists travel together.
+
+    Measured on the fixtures, confident wrists sit 0.03-0.13 of body height apart. A pair
+    further apart than `grip_max_sep` means one is wrong — drop the less-confident one and
+    let grip_center derive from the survivor, rather than averaging a good wrist with a bad
+    one and poisoning the club-search anchor (doc 04 Layer B).
+    """
+    lw, rw = NAME_IDX["left_wrist"], NAME_IDX["right_wrist"]
+    limit = cfg.grip_max_sep * bh
+    both = (status[:, lw] >= PROVISIONAL) & (status[:, rw] >= PROVISIONAL)
+
+    # The prior only holds while the golfer is actually gripping the club. Before address
+    # and after the finish they may be standing with one hand off it, and separated wrists
+    # there are correct — rejecting them would discard good data for no benefit.
+    if window is not None:
+        inside = np.zeros(len(status), bool)
+        inside[max(0, window[0]):min(len(status), window[1] + 1)] = True
+        both &= inside
+
+    sep = np.linalg.norm(xy[:, lw] - xy[:, rw], axis=1)
+    for f in np.flatnonzero(both & (sep > limit)):
+        j = lw if conf[f, lw] < conf[f, rw] else rw
+        status[f, j] = MISSING
+        rep.grip_rejects += 1
+
+    # A provisional wrist that agrees with a confident partner is corroborated, so promote
+    # it — this is the check that rescues correctly-placed but low-confidence grips (D6).
+    # Confidence is raised alongside status: the third element of a keypoint is *our*
+    # post-validation confidence, not the model's raw opinion, because that is what the UI
+    # renders and what later stages act on. Leaving conf untouched here silently discards
+    # the corroboration.
+    agree = both & (sep <= limit)
+    for j, other in ((lw, rw), (rw, lw)):
+        promote = agree & (status[:, j] == PROVISIONAL) & (status[:, other] == OK)
+        status[promote, j] = OK
+        conf[promote, j] = np.maximum(conf[promote, j], 0.60)
+        rep.promoted += int(promote.sum())
+
+
+def promote_consistent(xy, conf, status, bh, rep, radius=4):
+    """D6, general case: a provisional point that lands where confident neighbours predict.
+
+    This is positive evidence, not merely absence of rejection — a spurious detection has no
+    reason to fall on the trajectory interpolated between two confirmed observations. Only
+    points bracketed by OK frames within `radius` are eligible, so isolated guesses in a long
+    dropout stay unverified.
+    """
+    for j, name in enumerate(NATIVE_NAMES):
+        ok_idx = np.flatnonzero(status[:, j] == OK)
+        if len(ok_idx) < 4:
+            continue
+        lim = _accel_limit(name) * bh
+        for f in np.flatnonzero(status[:, j] == PROVISIONAL):
+            before = ok_idx[ok_idx < f]
+            after = ok_idx[ok_idx > f]
+            if not len(before) or not len(after):
+                continue
+            a, b = before[-1], after[0]
+            if (f - a) > radius or (b - f) > radius:
+                continue
+            t = (f - a) / float(b - a)
+            pred = xy[a, j] * (1 - t) + xy[b, j] * t
+            if np.linalg.norm(xy[f, j] - pred) <= lim:
+                status[f, j] = OK
+                conf[f, j] = max(conf[f, j], 0.55)
+                rep.promoted += 1
+
+
+def reject_outliers(xy, status, bh, rep):
+    """Doc 03 §3.3 — a point that cannot be reached from its neighbours is a detection error.
+
+    Uses the second difference (acceleration) rather than raw velocity: fast joints are
+    legitimate in a golf swing, but a joint that teleports away and back in one frame is not.
+    """
+    n = xy.shape[0]
+    for j, name in enumerate(NATIVE_NAMES):
+        lim = _accel_limit(name) * bh
+        valid = status[:, j] >= PROVISIONAL
+        for f in range(1, n - 1):
+            if not (valid[f] and valid[f - 1] and valid[f + 1]):
+                continue
+            mid = (xy[f - 1, j] + xy[f + 1, j]) / 2.0
+            if np.linalg.norm(xy[f, j] - mid) > lim:
+                status[f, j] = MISSING
+                rep.outlier_rejects += 1
+
+
+def interpolate_gaps(xy, status, cfg, rep):
+    """Doc 03 §3.4 — cubic-spline fill for gaps <= max_gap; longer gaps stay honestly missing."""
+    n = xy.shape[0]
+    for j in range(N):
+        valid = status[:, j] >= PROVISIONAL
+        if valid.sum() < 4:
+            continue
+        idx = np.flatnonzero(valid)
+        f = 0
+        while f < n:
+            if valid[f]:
+                f += 1
+                continue
+            g = f
+            while g < n and not valid[g]:
+                g += 1
+            before = idx[idx < f]
+            after = idx[idx >= g]
+            if (g - f) <= cfg.max_gap and len(before) >= 2 and len(after) >= 2:
+                # Fit locally: a global spline through the whole clip would ring.
+                sup = np.concatenate([before[-4:], after[:4]])
+                for ax in (0, 1):
+                    cs = CubicSpline(sup, xy[sup, j, ax])
+                    xy[f:g, j, ax] = cs(np.arange(f, g))
+                status[f:g, j] = INTERP
+                rep.interpolated += g - f
+            f = g
+
+
+def one_euro(x, fps, min_cutoff, beta):
+    """One-Euro filter over a 1-D signal (Casiez et al.)."""
+    out = np.empty_like(x)
+    dx_hat = 0.0
+    x_hat = x[0]
+    out[0] = x_hat
+    te = 1.0 / fps
+    for i in range(1, len(x)):
+        dx = (x[i] - x_hat) / te
+        a_d = 1.0 / (1.0 + (fps / (2 * np.pi * 1.0)))
+        dx_hat = a_d * dx + (1 - a_d) * dx_hat
+        cutoff = min_cutoff + beta * abs(dx_hat)
+        a = 1.0 / (1.0 + (fps / (2 * np.pi * cutoff)))
+        x_hat = a * x[i] + (1 - a) * x_hat
+        out[i] = x_hat
+    return out
+
+
+def smooth(xy, status, fps, cfg):
+    """D8 — zero-phase One-Euro (forward+backward averaged), then optional Savitzky-Golay."""
+    for j in range(N):
+        present = status[:, j] >= PROVISIONAL
+        if present.sum() < 5:
+            continue
+        runs = []
+        f = 0
+        while f < len(present):
+            if present[f]:
+                g = f
+                while g < len(present) and present[g]:
+                    g += 1
+                runs.append((f, g))
+                f = g
+            else:
+                f += 1
+        for a, b in runs:
+            if b - a < 5:
+                continue
+            for ax in (0, 1):
+                seg = xy[a:b, j, ax]
+                fwd = one_euro(seg, fps, cfg.min_cutoff, cfg.beta)
+                bwd = one_euro(seg[::-1], fps, cfg.min_cutoff, cfg.beta)[::-1]
+                sm = (fwd + bwd) / 2.0
+                if cfg.savgol and (b - a) >= cfg.savgol_window:
+                    w = cfg.savgol_window | 1
+                    sm = savgol_filter(sm, w, cfg.savgol_order)
+                xy[a:b, j, ax] = sm
+
+
+# ---------------------------------------------------------------- entry point
+
+def postprocess(series, cfg: PostConfig | None = None, window=None):
+    cfg = cfg or PostConfig()
+    rep = PostReport()
+    xy, conf = _arrays(series)
+
+    status = gate(conf, cfg)
+    rep.provisional = int((status == PROVISIONAL).sum())
+
+    bh = body_height(xy, status)
+    rep.body_height = bh
+    if bh <= 0.01:
+        rep.notes.append("could not establish golfer height; thresholds unreliable")
+        bh = 1.0
+
+    fix_side_swaps(xy, conf, status, cfg, rep)
+    check_bones(xy, status, conf, cfg, rep)
+    grip_prior(xy, conf, status, bh, cfg, rep, window)
+    reject_outliers(xy, status, bh, rep)
+    promote_consistent(xy, conf, status, bh, rep)   # after rejection: never promote a reject
+    interpolate_gaps(xy, status, cfg, rep)
+    smooth(xy, status, series.fps or 60.0, cfg)
+
+    rep.still_missing = int((status == MISSING).sum())
+
+    # Write back. Interpolated points carry a modest confidence so existing renderers dash
+    # them; `st` preserves the exact provenance for the UI and for later stages.
+    for f, fr in enumerate(series.frames):
+        kp = []
+        for j in range(N):
+            st = status[f, j]
+            if st == MISSING:
+                kp.append([0.0, 0.0, 0.0])
+            elif st == INTERP:
+                kp.append([float(xy[f, j, 0]), float(xy[f, j, 1]), 0.45])
+            else:
+                kp.append([float(xy[f, j, 0]), float(xy[f, j, 1]), float(conf[f, j])])
+        fr["kp"] = kp
+        fr["st"] = [int(s) for s in status[f]]
+        fr["interp"] = bool((status[f] == INTERP).any())
+
+    return series, rep
