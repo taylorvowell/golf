@@ -1,0 +1,115 @@
+{
+  "items": [
+    {
+      "basis": "events.address",
+      "conf": 0.6,
+      "definition": "Setup. Static angles here are the median of the whole address hold, not one frame.",
+      "event": "address",
+      "frame": 150,
+      "id": "address",
+      "label": "Address",
+      "p": "P1",
+      "phase": "setup"
+    },
+    {
+      "basis": "events.toe_up",
+      "conf": 0.7,
+      "definition": "Club shaft parallel to the ground in the takeaway.",
+      "event": "toe_up",
+      "frame": 165,
+      "id": "backswing_bottom",
+      "label": "Backswing \u2014 bottom",
+      "p": "P2",
+      "phase": "backswing"
+    },
+    {
+      "basis": "events.mid_backswing",
+      "conf": 0.94,
+      "definition": "Lead arm parallel to the ground in the backswing.",
+      "event": "mid_backswing",
+      "frame": 183,
+      "id": "backswing_middle",
+      "label": "Backswing \u2014 middle",
+      "p": "P3",
+      "phase": "backswing"
+    },
+    {
+      "basis": "events.top",
+      "conf": 0.35,
+      "definition": "Top of the backswing: highest grip before the change of direction.",
+      "event": "top",
+      "frame": 198,
+      "id": "backswing_top",
+      "label": "Backswing \u2014 top",
+      "p": "P4",
+      "phase": "backswing"
+    },
+    {
+      "basis": "events.mid_downswing",
+      "conf": 0.95,
+      "definition": "Lead arm parallel to the ground on the way down.",
+      "event": "mid_downswing",
+      "frame": 212,
+      "id": "downswing_top",
+      "label": "Downswing \u2014 top",
+      "p": "P5",
+      "phase": "downswing"
+    },
+    {
+      "basis": "proxy: grip descends past trail-hip height",
+      "conf": 0.5,
+      "definition": "Club shaft parallel to the ground on the way down \u2014 the delivery position.",
+      "event": null,
+      "frame": 219,
+      "id": "downswing_middle",
+      "label": "Downswing \u2014 middle",
+      "p": "P6",
+      "phase": "downswing"
+    },
+    {
+      "basis": "events.impact",
+      "conf": 0.98,
+      "definition": "Impact.",
+      "event": "impact",
+      "frame": 221,
+      "id": "impact",
+      "label": "Impact",
+      "p": "P7",
+      "phase": "impact"
+    },
+    {
+      "basis": "events.mid_follow_through",
+      "conf": 0.7,
+      "definition": "Club shaft parallel to the ground after impact.",
+      "event": "mid_follow_through",
+      "frame": 224,
+      "id": "follow_through_middle",
+      "label": "Follow-through \u2014 middle",
+      "p": "P8",
+      "phase": "follow_through"
+    },
+    {
+      "basis": "trail arm 2 deg off horizontal",
+      "conf": 0.9,
+      "definition": "Trail arm parallel to the ground in the follow-through \u2014 the mirror of P3.",
+      "event": null,
+      "frame": 234,
+      "id": "follow_through_top",
+      "label": "Follow-through \u2014 top",
+      "p": "P9",
+      "phase": "follow_through"
+    },
+    {
+      "basis": "events.finish",
+      "conf": 0.75,
+      "definition": "Finish: motion has decayed and the hands are high.",
+      "event": "finish",
+      "frame": 243,
+      "id": "finish",
+      "label": "Finish",
+      "p": "P10",
+      "phase": "finish"
+    }
+  ],
+  "notes": []
+}

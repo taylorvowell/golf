@@ -1,0 +1,100 @@
+{
+  "address_span": [
+    0,
+    41
+  ],
+  "events": {
+    "address": {
+      "conf": 0.9,
+      "frame": 41
+    },
+    "finish": {
+      "conf": 0.75,
+      "frame": 148
+    },
+    "impact": {
+      "conf": 0.9,
+      "frame": 115
+    },
+    "mid_backswing": {
+      "conf": 0.95,
+      "frame": 67
+    },
+    "mid_downswing": {
+      "conf": 0.95,
+      "frame": 102
+    },
+    "mid_follow_through": {
+      "conf": 0.7,
+      "frame": 119
+    },
+    "toe_up": {
+      "conf": 0.7,
+      "frame": 50
+    },
+    "top": {
+      "conf": 0.35,
+      "frame": 86
+    }
+  },
+  "notes": [
+    "tempo implausible (downswing 483ms outside 150-400ms) \u2014 check address/top/impact",
+    "tempo implausible (ratio 1.55:1 outside 1.8-4.2:1) \u2014 check address/top/impact"
+  ],
+  "phases": [
+    {
+      "from": 41,
+      "name": "address->toe_up",
+      "to": 50
+    },
+    {
+      "from": 50,
+      "name": "toe_up->mid_backswing",
+      "to": 67
+    },
+    {
+      "from": 67,
+      "name": "mid_backswing->top",
+      "to": 86
+    },
+    {
+      "from": 86,
+      "name": "top->mid_downswing",
+      "to": 102
+    },
+    {
+      "from": 102,
+      "name": "mid_downswing->impact",
+      "to": 115
+    },
+    {
+      "from": 115,
+      "name": "impact->mid_follow_through",
+      "to": 119
+    },
+    {
+      "from": 119,
+      "name": "mid_follow_through->finish",
+      "to": 148
+    }
+  ],
+  "playback_window": [
+    0,
+    227
+  ],
+  "swing_window": [
+    85,
+    155
+  ],
+  "tempo": {
+    "backswing_frames": 45,
+    "backswing_ms": 750,
+    "downswing_frames": 29,
+    "downswing_ms": 483,
+    "implausible": [
+      "downswing 483ms outside 150-400ms",
+      "ratio 1.55:1 outside 1.8-4.2:1"
+    ],
+    "ratio": 1.55
+  }
+}

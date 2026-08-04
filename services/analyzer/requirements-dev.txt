@@ -1,0 +1,7 @@
+# Test-only dependencies. The runtime deps (mediapipe, opencv-python, numpy, torch,
+# ultralytics, rtmlib, onnxruntime) are not pinned anywhere yet — see the toolchain table in
+# CLAUDE.md, and note that the two dev machines run different versions of several of them
+# deliberately. Reproducing a venv from scratch is still a manual job.
+#
+#   .venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+pytest>=9.0

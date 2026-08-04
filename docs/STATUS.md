@@ -3,8 +3,9 @@
 **Last updated:** 2026-08-04
 
 Read this first, then [CLAUDE.md](../CLAUDE.md) for commands and architecture, then
-[DECISIONS.md](DECISIONS.md) for *why* things are the way they are (20 entries, several of
-them negative results that will save you repeating the work).
+[DECISIONS.md](DECISIONS.md) for *why* things are the way they are (37 entries, every one
+status-marked; several are negative results that will save you repeating the work, and roughly
+a quarter no longer hold — check the `Status:` line before acting on any of them).
 
 ---
 
@@ -18,25 +19,39 @@ player with skeleton, events, club overlay and metrics.** Two real fixture swing
 | 0 — normalize (ffmpeg, VFR→CFR, rotation) | **Done**, robust |
 | 2 — pose (MediaPipe localiser → RTMW wholebody 133) | **Done**, excellent |
 | 3 — post-processing (gating, priors, smoothing) | **Done** |
-| 5 — swing events (8 GolfDB events) | **Done**, verified ±2 frames |
+| 5 — swing events (8 GolfDB events) | **Done**, snapshot-pinned. **Not** validated against hand labels — see the warning below |
 | 5b — checkpoints (10 P-system positions) | **Done**; P6 falls back to a proxy on swing1 (D31) |
 | 6 — metrics (doc 05 Part B) | **Done**, provisional thresholds; full angle catalogue + per-checkpoint deltas |
 | 4 — club tracking | **Weak** — see §3 |
 | 4b — club face | Partial, honest about limits |
 | Web app (Next.js) | Player rebuilt on `instructions/template_sample.html` — three tabs, overlays on the video (D35); **no upload, no DB, no queue** |
-| 8 — coach scoring | Not started |
+| 8 — coach scoring | Not started (the UI's numbers come from `lib/mockScoring.ts`) |
 | 6 — simulator ingestion | Not started |
 | 7 — AI provider | Not started |
+| Tests | Golden snapshots + contract invariants over frozen pose/club data — `python -m pytest tests` |
 
 ### Measured quality (both fixtures)
 
 | | swing1 (oblique, adult) | swing2 (DTL, junior) |
 |---|---|---|
 | Pose, all key joints | 94–100% | 98–100% |
-| `grip_center` | 100% @ 1.00 conf | 100% @ 1.00 conf |
-| Events vs hand-labelled | Top ±2, Impact ±1 | plausible |
-| Tempo | 3.38:1 | 1.93:1 |
+| `grip_center` | 94.2% @ 0.73 | 90.9% @ 0.71 |
+| Tempo | 2.09:1 (800/383ms) | 1.55:1 (750/483ms), flagged by D37 |
+| Impact vs club-head low point | ±2 frames | exact |
+| Club detector contribution | 114/396 frames (29%) | 298/341 (87%) |
 | Club head path accel p95 (back / down) | 30.8 / 54.2 px | 16.9 / 65.4 px |
+
+> **Event accuracy is unverified, and this table used to claim otherwise.** It previously read
+> "verified ±2 frames". On 2026-08-04 Address was found to be 48 frames early on swing1,
+> reporting a 1600ms backswing against a real 800ms — it had been picking the *longest*
+> quasi-static hold instead of the last one (D36, D37). Nothing caught it; it surfaced because
+> the tempo ratio happened to look wrong. There are still **no hand-labelled event frames** for
+> either clip, so doc 08 Phase 3's ±3-frame criterion remains unmet. `tests/fixtures.json` has
+> the slots; filling them is a human watching the video, and the suite skips until then rather
+> than passing vacuously.
+>
+> Confidence figures above are post-D26. Anything recorded as "100% @ 1.00" measured a clamp on
+> SimCC peak magnitudes, not the model's opinion, and is not comparable.
 
 ---
 
@@ -45,7 +60,9 @@ player with skeleton, events, club overlay and metrics.** Two real fixture swing
 - **Pose is solved.** RTMW wholebody 133 gives every joint at 94–100%, including the
   far-side limbs MediaPipe lost entirely (left_elbow 10% → 99%). Hands come from real
   knuckles, so `grip_center` is a measured point rather than an inferred one.
-- **Events are reliable** and validated against hand reading. Tempo falls out correctly.
+- **Events are snapshot-pinned** and internally consistent — ordering is enforced, Impact agrees
+  with the club-head low point on both clips, and tempo is now a self-check that flags its own
+  implausibility (D37). They are *not* validated against hand reading; see the warning above.
 - **The web player works** — frame-accurate scrubbing, phase bar with click-to-loop, overlay
   stack, live frame-sync drift meter.
 - **The verification harness is the most valuable asset here.** `checkclub.py`, `sweep.py`,

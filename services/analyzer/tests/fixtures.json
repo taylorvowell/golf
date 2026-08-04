@@ -1,0 +1,35 @@
+{
+  "_readme": [
+    "Fixture manifest. Adding a clip: run burnin.py over it, then",
+    "  python scripts/make_test_data.py <stem>",
+    "and add an entry here. The golden tests pick it up automatically.",
+    "",
+    "`hand_labeled` is event truth read off the video BY A HUMAN, frame by frame. It is the",
+    "only thing that can satisfy doc 08 Phase 3's acceptance criterion (8 events within +-3",
+    "frames on >=80% of fixtures) — a golden snapshot proves the detector has not CHANGED,",
+    "never that it is RIGHT. Entries left null are skipped with a message rather than passing",
+    "vacuously. Do not fill these in from the detector's own output; that would make the",
+    "criterion self-satisfying.",
+    "",
+    "doc 08 Phase 0 wants >=10 fixtures spanning both views, both handedness, sim + range.",
+    "There are 2. Every acceptance percentage below N=10 is anecdote."
+  ],
+  "fixtures": [
+    {
+      "stem": "swing1",
+      "source": "instructions/swing/swing1.mp4",
+      "view": "dtl",
+      "handedness": "right",
+      "notes": "oblique/adult. Detector is weak here — contributes on 114/396 frames (29%). Address sits behind two decoy still-holds, which is what caught the D37 tempo bug.",
+      "hand_labeled": null
+    },
+    {
+      "stem": "swing2",
+      "source": "instructions/swing/swing2.mp4",
+      "view": "dtl",
+      "handedness": "right",
+      "notes": "DTL/junior. Detector strong — 298/341 frames (87%). Tempo legitimately reads 1.55:1; its Impact frame is independently confirmed by the club-head low point, so the D37 flag here is expected and is NOT a defect.",
+      "hand_labeled": null
+    }
+  ]
+}

@@ -9,10 +9,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 "Current state" section further down carries the measured numbers.
 
 In short: the analyzer pipeline runs end to end (normalize → pose → Stage 3 → events → club →
-face → metrics → `analysis.json` → Next.js player) on both fixtures. Not built yet: scoring
-engine, AI provider, simulator ingestion, upload/job orchestration, SQLite, any test suite.
-Phases 0–1 of [08-ROADMAP.md](instructions/08-ROADMAP.md) are only partly done — there is no
-upload flow or job row; `burnin.py` is run by hand.
+face → metrics → `analysis.json` → Next.js player) on both fixtures, with a golden-snapshot and
+invariant suite over the deterministic stages. Not built yet: scoring engine, AI provider,
+simulator ingestion, upload/job orchestration, SQLite. Phases 0–1 of
+[08-ROADMAP.md](instructions/08-ROADMAP.md) are only partly done — there is no upload flow or
+job row; `burnin.py` is run by hand. **There are 2 fixtures where doc 08 Phase 0 wants ≥10, and
+no hand-labelled event truth at all, so every acceptance percentage in the roadmap is currently
+unverifiable.**
 
 `instructions/` is the source of truth. Before writing code for a phase, read that phase's
 referenced spec doc(s). The docs are dense and cross-referenced — read the specific doc,
@@ -277,8 +280,31 @@ Pipeline stages live in `swingsage/`: `video` (Stage 0) → `pose`/`pose_rtm` (S
 non-negotiable and it has earned that twice already — coverage numbers looked healthy while
 the trace was visibly wrong.
 
-No test suite yet. Golden snapshot tests over `fixtures/` are the Phase 2 deliverable
-(doc 03 §7).
+```
+# tests — from services/analyzer, using .venv\Scripts\python.exe
+python -m pytest tests                    28 tests, ~0.5s, no video/GPU/out/ needed
+python -m pytest tests --update-golden     rewrite snapshots, then FAIL the run on purpose
+python scripts/make_test_data.py --all     re-freeze test input from out/<stem>/analysis.json
+```
+
+**The suite replays the deterministic stages over *frozen* pose and club output** committed in
+`tests/data/*.input.json.gz` (~130 KB per clip). So it is hermetic and fast, and a change to
+pose inference — a TensorRT/FP16 port, a new model — shows up as a golden diff on every
+downstream number rather than hiding inside one. Regenerate the frozen input deliberately when
+pose genuinely changes; that is the point at which you decide whether the new numbers are better.
+
+Three kinds of check, and the distinction matters:
+
+- **Golden snapshots** (`test_stages.py`) prove nothing has *changed*. They cannot prove anything
+  is *right* — a snapshot taken while Address was 48 frames early would have locked that in.
+- **Contract invariants** (`test_invariants.py`) need no golden file, so they keep working as
+  fixtures are added: 48 keypoints in append-only order (D25), normalized coordinates,
+  5-decimal truncated confidence (D33), strict event ordering, `playback_window` containing the
+  swing (D36), tempo self-consistency.
+- **Hand labels** (`test_hand_labeled.py`) are the only thing that proves correctness, and they
+  are **unfilled** — `tests/fixtures.json:hand_labeled` is null for both clips, so doc 08
+  Phase 3's ±3-frame criterion is unmet and those tests skip rather than pass vacuously. The
+  fixture-count check xfails at 2 of the 10 clips doc 08 Phase 0 wants.
 
 ## Current state (2026-08-04)
 
@@ -292,7 +318,7 @@ wholebody 133 → Stage 3 → events → club → face → metrics → `analysis
 | `head_center` (ear midpoint) | 23.7% @ 0.46 | 68.6% @ 0.57 |
 | Club coverage | 100/100/100% | 100/100/100% |
 | Club correct at events (by eye) | 5 of 6 (toe-up flipped) | 5 of 6 (finish uncertain) |
-| Tempo | 3.38:1 | 1.55:1 |
+| Tempo | 2.09:1 | 1.55:1 (flagged, D37) |
 
 **These are not comparable to numbers recorded before 2026-08-04.** Confidence used to be
 clamped to 1.00 for every RTMW keypoint, so the old "94–100% @ 1.00" measured the clamp, not
@@ -303,7 +329,7 @@ the model (D26). Values are lower now and mean something. Regenerate any stored
 `scripts/checkclub.py` and look at the club drawn over the real frame before believing them.
 
 Not built yet: scoring engine (doc 05 C), AI provider (doc 07), simulator ingestion (doc 06),
-upload flow and job orchestration, SQLite, any test suite.
+upload flow and job orchestration, SQLite.
 
 ## Verification strategy (why the harness is shaped this way)
 
