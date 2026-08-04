@@ -44,6 +44,37 @@ POSE_MODELS = {
 # Halpe26 index -> our native slot name. Unlisted slots (eye_inner/outer, mouth, the hand
 # landmarks) have no Halpe equivalent and stay missing — all of them are already excluded
 # from rendering and scoring, so nothing downstream regresses.
+# RTMW / COCO-Wholebody: 133 keypoints — body 0-16, feet 17-22, face 23-90,
+# left hand 91-111, right hand 112-132. The hands are the reason to pay for this model:
+# grip_center derived from wrists is the wrist *bone*, but the club is held across the base
+# of the fingers, so the knuckles give the real grip.
+WHOLEBODY_MODELS = {
+    "performance": (
+        "https://download.openmmlab.com/mmpose/v1/projects/rtmw/onnx_sdk/"
+        "rtmw-dw-x-l_simcc-cocktail14_270e-384x288_20231122.zip",
+        (288, 384),
+    ),
+    "balanced": (
+        "https://download.openmmlab.com/mmpose/v1/projects/rtmw/onnx_sdk/"
+        "rtmw-dw-x-l_simcc-cocktail14_270e-256x192_20231122.zip",
+        (192, 256),
+    ),
+}
+
+WHOLEBODY_TO_NATIVE = {
+    0: "nose", 1: "left_eye", 2: "right_eye", 3: "left_ear", 4: "right_ear",
+    5: "left_shoulder", 6: "right_shoulder", 7: "left_elbow", 8: "right_elbow",
+    9: "left_wrist", 10: "right_wrist", 11: "left_hip", 12: "right_hip",
+    13: "left_knee", 14: "right_knee", 15: "left_ankle", 16: "right_ankle",
+    17: "left_foot_index", 19: "left_heel", 20: "right_foot_index", 22: "right_heel",
+}
+
+# MCP joints (the knuckles) of index/middle/ring/pinky on each hand. Their centroid is
+# where the shaft actually sits in the palm. Hand layout is the standard 21-point one:
+# 0 wrist, then thumb/index/middle/ring/pinky in fours.
+HAND_BASE = {"left": 91, "right": 112}
+MCP_OFFSETS = (5, 9, 13, 17)
+
 HALPE26_TO_NATIVE = {
     0: "nose", 1: "left_eye", 2: "right_eye", 3: "left_ear", 4: "right_ear",
     5: "left_shoulder", 6: "right_shoulder", 7: "left_elbow", 8: "right_elbow",
@@ -81,10 +112,36 @@ def bboxes_from_series(series: RawPoseSeries, pad=0.22, min_conf=0.3):
     return [b if b is not None else first for b in boxes]
 
 
-def estimate(video_path, boxes, mode: str = "performance", progress=None) -> RawPoseSeries:
+def _hand_grip(pts, sc, w, h, min_conf=0.25):
+    """Grip point from the knuckles of both hands, in normalized coords.
+
+    Averages the index/middle/ring/pinky MCP joints — the club rests across those, so their
+    centroid is the true grip. Falls back to a single hand when only one resolves, which is
+    still far better than the wrist midpoint.
+    """
+    hand_pts, confs, per_side = [], [], {}
+    for side, base in HAND_BASE.items():
+        got = [(pts[base + o], sc[base + o]) for o in MCP_OFFSETS
+               if base + o < len(pts) and sc[base + o] >= min_conf]
+        if len(got) >= 2:
+            m = np.mean([g[0] for g in got], axis=0)
+            c = float(np.mean([g[1] for g in got]))
+            hand_pts.append(m)
+            confs.append(c)
+            per_side[side] = [float(m[0]) / w, float(m[1]) / h, min(max(c, 0.0), 1.0)]
+    if not hand_pts:
+        return None, {}
+    c = np.mean(hand_pts, axis=0)
+    return ([float(c[0]) / w, float(c[1]) / h,
+             float(min(max(np.mean(confs), 0.0), 1.0))], per_side)
+
+
+def estimate(video_path, boxes, mode: str = "performance", progress=None,
+             wholebody: bool = False) -> RawPoseSeries:
     from rtmlib import RTMPose
 
-    url, input_size = POSE_MODELS[mode]
+    url, input_size = (WHOLEBODY_MODELS if wholebody else POSE_MODELS)[mode]
+    mapping = WHOLEBODY_TO_NATIVE if wholebody else HALPE26_TO_NATIVE
     model = RTMPose(url, model_input_size=input_size,
                     backend="onnxruntime", device="cpu")
 
@@ -96,7 +153,8 @@ def estimate(video_path, boxes, mode: str = "performance", progress=None) -> Raw
     h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     total = len(boxes)
 
-    series = RawPoseSeries(model=f"rtmpose-halpe26-{mode}-{input_size[0]}x{input_size[1]}",
+    kind = "rtmw-wholebody133" if wholebody else "rtmpose-halpe26"
+    series = RawPoseSeries(model=f"{kind}-{mode}-{input_size[0]}x{input_size[1]}",
                            width=w, height=h, fps=fps)
     slot = {name: i for i, name in enumerate(NATIVE_NAMES)}
 
@@ -112,19 +170,26 @@ def estimate(video_path, boxes, mode: str = "performance", progress=None) -> Raw
             except Exception:
                 kps, scores = [], []
 
+            grip, hands = None, {}
             if len(kps):
                 pts, sc = np.asarray(kps[0], float), np.asarray(scores[0], float)
-                for hi, name in HALPE26_TO_NATIVE.items():
+                for hi, name in mapping.items():
                     if hi < len(pts):
                         # RTMPose scores can exceed 1.0; clamp so confidence stays comparable
                         # to MediaPipe's and to the thresholds Stage 3 is tuned against.
                         c = float(min(max(sc[hi], 0.0), 1.0))
                         kp[slot[name]] = [float(pts[hi][0]) / w, float(pts[hi][1]) / h, c]
+                if wholebody:
+                    grip, hands = _hand_grip(pts, sc, w, h)
                 series.detected.append(True)
             else:
                 series.detected.append(False)
 
-            series.frames.append({"f": f, "kp": kp})
+            # Per-hand knuckle centroids are kept separately, not just their average: the two
+            # hands sit adjacent along the grip, so the vector between them points along the
+            # shaft. That is a high-confidence, per-frame direction prior for club tracking —
+            # measured from the body rather than inferred from a motion mask.
+            series.frames.append({"f": f, "kp": kp, "grip": grip, "hands": hands})
             series.world.append(None)
             f += 1
             if progress and (f % 30 == 0 or f == total):

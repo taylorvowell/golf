@@ -139,24 +139,63 @@ Nothing is scaffolded in `apps/web` yet — the browser player below is a plain 
 served by the analyzer, standing in for Phase 1.
 
 ```
+# analyzer (Python) — from services/analyzer, using .venv\Scripts\python.exe
 python scripts/burnin.py <video>          analyse a clip -> out/<stem>/
-      --out DIR                           output dir (default out/<video stem>)
       --view dtl|face_on  --handedness right|left
-      --analysis-short-side 720           keep 720; higher is pure cost (DECISIONS D5)
-      --roi                               experimental, known-WORSE (DECISIONS D5)
-      --no-retry                          skip IMAGE-mode re-detection of dropout spans
+      --pose-model rtmpose|mediapipe      default rtmpose (DECISIONS D10)
+      --no-wholebody                      drop to Halpe26; loses real hands (D15a)
+      --analysis-short-side 720           keep 720; higher is pure cost (D5)
+      --no-stage3 / --no-club             skip a stage, for A/B
 
-python scripts/qa.py out/<stem> --motion            grip-height trace; reads swing structure
-python scripts/qa.py out/<stem> --frames 30 86 114  full-res annotated frames + sheet
+python scripts/checkclub.py out/<stem>    club drawn over the real frame at each event
+python scripts/clubdebug.py out/<stem>    motion mask | candidates | chosen shaft
+python scripts/qa.py out/<stem> --motion  grip-height trace; reads swing structure
+python scripts/qa.py out/<stem> --frames 30 86 114
 
-python scripts/serve.py [--port 8000]     browser player at /web/player.html?swing=<stem>
+# web app (Next.js) — from apps/web
+pnpm dev                                  http://localhost:3000 (also binds LAN)
 ```
+
+`apps/web` is the real UI (doc 02's stack). `scripts/serve.py` + `web/player.html` are the
+superseded stopgap. The web app reads `out/` directly via `SWINGSAGE_MEDIA_ROOT`.
+
+Two dev-environment gotchas, both already handled in config but worth knowing:
+`next.config.ts` enumerates this machine's LAN IPs into `allowedDevOrigins` — without it
+Next 16 serves the HTML but blocks `/_next/*` cross-origin, so a phone gets a page that never
+hydrates. And on this machine use `127.0.0.1`, not `localhost` (resolves to `::1` first).
 
 `burnin.py` writes `normalized.mp4` (1080 CFR, player source), `analysis.mp4` (720, what CV
 consumed), `analysis.json`, `overlay.mp4` (skeleton burned into pixels), `contact.jpg`.
 
+Pipeline stages live in `swingsage/`: `video` (Stage 0) → `pose`/`pose_rtm` (Stage 2) →
+`postprocess` (Stage 3) → `events` (Stage 5) → `club` (Stage 4). Stage 4 runs after events
+because the trace is segmented by them.
+
+**Always run `clubdebug.py` before trusting anything club-related.** Doc 04 §7 calls it
+non-negotiable and it has earned that twice already — coverage numbers looked healthy while
+the trace was visibly wrong.
+
 No test suite yet. Golden snapshot tests over `fixtures/` are the Phase 2 deliverable
 (doc 03 §7).
+
+## Current state (2026-08-04)
+
+Pipeline runs end to end on both fixtures: normalize → MediaPipe (localiser) → RTMW
+wholebody 133 → Stage 3 → events → club → face → metrics → `analysis.json` → Next.js player.
+
+| | swing1 | swing2 |
+|---|---|---|
+| Pose (all key joints) | 94–100% | 98–100% |
+| `grip_center` | 100% @ 1.00 | 100% @ 1.00 |
+| Club coverage | 100/100/100% | 100/100/100% |
+| Club correct at events (by eye) | 5 of 6 (toe-up flipped) | 5 of 6 (finish uncertain) |
+| Tempo | 3.38:1 | 1.93:1 |
+
+**Coverage percentages have overstated club quality three separate times.** Always run
+`scripts/checkclub.py` and look at the club drawn over the real frame before believing them.
+
+Not built yet: scoring engine (doc 05 C), AI provider (doc 07), simulator ingestion (doc 06),
+upload flow and job orchestration, SQLite, any test suite.
 
 ## Verification strategy (why the harness is shaped this way)
 

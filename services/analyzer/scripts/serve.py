@@ -81,9 +81,25 @@ def write_index():
     return swings
 
 
+def lan_ip():
+    """Best-guess LAN address. Uses a UDP connect, which picks the outbound interface
+    without sending anything — more reliable than hostname lookup on multi-adapter boxes."""
+    import socket
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 80))
+        return s.getsockname()[0]
+    except OSError:
+        return "127.0.0.1"
+    finally:
+        s.close()
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=8000)
+    ap.add_argument("--host", default="0.0.0.0",
+                    help="0.0.0.0 serves the LAN (phone/tablet); 127.0.0.1 is local-only")
     args = ap.parse_args()
 
     swings = write_index()
@@ -92,10 +108,13 @@ def main():
         return 1
 
     socketserver.TCPServer.allow_reuse_address = True
-    with socketserver.ThreadingTCPServer(("127.0.0.1", args.port), RangeHandler) as httpd:
+    with socketserver.ThreadingTCPServer((args.host, args.port), RangeHandler) as httpd:
         print(f"swings: {', '.join(swings)}")
-        print(f"\n  http://localhost:{args.port}/web/player.html?swing={swings[0]}\n")
-        print("ctrl-c to stop")
+        print(f"\n  local  http://localhost:{args.port}/web/player.html?swing={swings[0]}")
+        if args.host == "0.0.0.0":
+            print(f"  lan    http://{lan_ip()}:{args.port}/web/player.html?swing={swings[0]}")
+            print("\n  (LAN mode: anyone on this network can reach these files)")
+        print("\nctrl-c to stop")
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:

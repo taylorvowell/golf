@@ -215,7 +215,7 @@ def finalize(series: RawPoseSeries) -> RawPoseSeries:
     """Append derived joints — doc 03 §3.6 requires this *after* smoothing."""
     for fr in series.frames:
         if len(fr["kp"]) == N_NATIVE:
-            add_derived(fr["kp"], fr.get("st"))
+            add_derived(fr["kp"], fr.get("st"), fr.get("grip"), fr.get("hands"))
     return series
 
 

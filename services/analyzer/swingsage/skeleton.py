@@ -43,6 +43,12 @@ DERIVED = [
     ("spine_mid",   "neck",          "mid_hip",        False),  # uses earlier derived points
     ("head_center", "left_ear",      "right_ear",      True),
     ("grip_center", "left_wrist",    "right_wrist",    True),
+    # Per-hand knuckle centroids, populated from a wholebody model. Kept separate from
+    # grip_center because wrist hinge is a per-side quantity: measuring it against the shared
+    # grip gives ~177 deg (no hinge) at the top, which is anatomically impossible. The
+    # wrist->own-knuckles vector is the hand's real axis.
+    ("left_hand",   "left_wrist",    "left_wrist",     True),
+    ("right_hand",  "right_wrist",   "right_wrist",    True),
 ]
 
 KEYPOINT_NAMES = NATIVE_NAMES + [d[0] for d in DERIVED]
@@ -67,6 +73,10 @@ BONES = [
     ("left_elbow", "left_wrist", SIDE_LEFT),
     ("right_shoulder", "right_elbow", SIDE_RIGHT),
     ("right_elbow", "right_wrist", SIDE_RIGHT),
+    # The hands: wrist bone out to where the hands actually hold the club. Without these the
+    # skeleton stops at the wrist and the club appears detached from the body.
+    ("left_wrist", "grip_center", SIDE_LEFT),
+    ("right_wrist", "grip_center", SIDE_RIGHT),
     ("mid_hip", "left_hip", SIDE_LEFT),
     ("mid_hip", "right_hip", SIDE_RIGHT),
     ("left_hip", "left_knee", SIDE_LEFT),
@@ -85,7 +95,7 @@ RENDER_JOINTS = [n for n in KEYPOINT_NAMES if n not in UNRELIABLE and not (
 )]
 
 
-def add_derived(kp, st=None):
+def add_derived(kp, st=None, grip=None, hands=None):
     """Append derived joints to one frame's keypoint list.
 
     kp: list of [x, y, conf] for the 33 native landmarks (mutated in place, then returned).
@@ -97,6 +107,59 @@ def add_derived(kp, st=None):
     for name, a, b, allow_single in DERIVED:
         pa, pb = kp[IDX[a]], kp[IDX[b]]
         live = [p for p in (pa, pb) if p[2] > 0.0]
+        if name in ("left_hand", "right_hand"):
+            side = name.split("_")[0]
+            hp = (hands or {}).get(side)
+            if hp and hp[2] > 0.0:
+                kp.append([float(hp[0]), float(hp[1]), float(hp[2])])
+            else:
+                kp.append([0.0, 0.0, 0.0])
+            if st is not None:
+                st.append(2 if kp[-1][2] >= 0.5 else (1 if kp[-1][2] > 0.0 else 0))
+            continue
+
+        if name == "grip_center":
+            # Measured knuckles beat any estimate: a wholebody model gives the MCP joints the
+            # club actually rests across, so use them directly when available.
+            if grip is not None and grip[2] > 0.0:
+                kp.append([float(grip[0]), float(grip[1]), float(grip[2])])
+                if st is not None:
+                    st.append(2 if grip[2] >= 0.5 else 1)
+                continue
+            # The wrists are the wrist *bone*; the hands hold the club roughly a hand-length
+            # beyond that, along the forearm. Using the raw wrist midpoint starts the club
+            # short and inside the real grip, and the error grows through the follow-through
+            # as the wrists roll. Project outward from the wrist along elbow->wrist.
+            #
+            # Hand length is ~0.5x forearm in adult proportion and the club sits mid-hand,
+            # so ~0.33x forearm places the grip between the hands. Proportional to the
+            # golfer's own limb, so it holds for a junior or an adult at any camera distance.
+            pts, offs = [], []
+            for side in ("left", "right"):
+                wr, el = kp[IDX[f"{side}_wrist"]], kp[IDX[f"{side}_elbow"]]
+                if wr[2] <= 0.0:
+                    continue
+                pts.append(wr)
+                if el[2] > 0.0:
+                    vx, vy = wr[0] - el[0], wr[1] - el[1]
+                    n = (vx * vx + vy * vy) ** 0.5
+                    offs.append((vx / n * n * 0.33, vy / n * n * 0.33) if n > 1e-9 else (0.0, 0.0))
+            if pts:
+                x = sum(p[0] for p in pts) / len(pts)
+                y = sum(p[1] for p in pts) / len(pts)
+                if offs:
+                    x += sum(o[0] for o in offs) / len(offs)
+                    y += sum(o[1] for o in offs) / len(offs)
+                c = max(p[2] for p in pts) if len(pts) == 2 and min(p[2] for p in pts) >= 0.5 \
+                    else min(0.6, max(p[2] for p in pts)) if len(pts) == 1 \
+                    else min(p[2] for p in pts)
+                kp.append([x, y, c])
+            else:
+                kp.append([0.0, 0.0, 0.0])
+            if st is not None:
+                st.append(2 if kp[-1][2] >= 0.5 else (1 if kp[-1][2] > 0.0 else 0))
+            continue
+
         if len(live) == 2 and name == "grip_center":
             # Both hands share one grip, so the wrists are two observations of the same
             # point rather than two ends of a segment. Averaging in a weak wrist drags the

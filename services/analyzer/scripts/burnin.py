@@ -23,7 +23,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from swingsage import club, events, pose, pose_rtm, postprocess, render, video  # noqa: E402
+from swingsage import (club, events, face, metrics, pose, pose_rtm,  # noqa: E402
+                       postprocess, render, video)
 from swingsage.skeleton import KEYPOINT_NAMES  # noqa: E402
 
 SCHEMA_VERSION = 1
@@ -47,6 +48,10 @@ def main() -> int:
                     help="landmark model; rtmpose is markedly better on occluded limbs")
     ap.add_argument("--rtm-mode", choices=["performance", "balanced"], default="performance")
     ap.add_argument("--no-club", action="store_true", help="skip Stage 4 club tracking")
+    ap.add_argument("--wholebody", action="store_true", default=True,
+                    help="RTMW 133-kpt model; gives real knuckles so grip_center is the "
+                         "hands rather than the wrist bone")
+    ap.add_argument("--no-wholebody", dest="wholebody", action="store_false")
     args = ap.parse_args()
 
     src = Path(args.video).resolve()
@@ -98,7 +103,8 @@ def main() -> int:
     if args.pose_model == "rtmpose":
         boxes = pose_rtm.bboxes_from_series(mp_series)
         t = time.time()
-        series = pose_rtm.estimate(anal.path, boxes, mode=args.rtm_mode, progress=prog)
+        series = pose_rtm.estimate(anal.path, boxes, mode=args.rtm_mode, progress=prog,
+                                   wholebody=args.wholebody)
         dt = max(time.time() - t, 1e-6)
         print(f"\r  rtmpose            {len(series.frames)} frames in {dt:.1f}s "
               f"({len(series.frames) / dt:.1f} fps)")
@@ -169,6 +175,37 @@ def main() -> int:
             print(f"           ! trace disabled — swing coverage "
                   f"{cov.get('swing', 0) * 100:.0f}% < 50%")
 
+        # Doc 05 promised Phase 4 would refine the two shaft-defined events once club
+        # data existed. It does now, so take it.
+        for msg in club.refine_events(cl, ev):
+            print(f"           refined {msg}")
+
+        # --- club head orientation through the swing (doc 04 §6 tier 2) --------------
+        t = time.time()
+        fc = face.analyse(anal.path, cl.frames, cl.club_len or 0.25, ev)
+        got = sum(1 for x in fc.frames if x.to_shaft_deg is not None)
+        print(f"  face       head orientation on {got}/{len(fc.frames)} frames "
+              f"({time.time() - t:.1f}s)")
+        for k in ("address", "toe_up", "top"):
+            c = fc.checkpoints.get(k)
+            if c:
+                print(f"           {k:<8} {c['class']:<20} "
+                      f"{('rel ' + str(c.get('head_to_shaft_deg')) + 'deg') if 'head_to_shaft_deg' in c else ''}"
+                      f"  conf {c['conf']}")
+
+    # --- Stage 6: metrics (doc 05 Part B) -------------------------------------------
+    # After Stage 4: wrist hinge is lead-forearm vs club shaft, so it needs club data.
+    t = time.time()
+    club_frames = [{"f": c.f, "head": c.head, "conf": c.conf} for c in cl.frames] if cl else None
+    mt = metrics.compute(series.frames, ev, args.view, args.handedness,
+                         aspect=norm.width / norm.height, fps=norm.fps,
+                         club_frames=club_frames)
+    s = mt["summary"]
+    print(f"metrics    spine@addr {s['spine_at_address']}deg  lead-arm@top {s['lead_arm_at_top']}deg"
+          f"  hinge@top {s['lead_wrist_hinge_at_top']}deg  stance {s['stance_width_ratio']}")
+    print(f"           max head sway {s['max_head_sway']} bh  "
+          f"max hip sway {s['max_hip_sway']} bh  ({time.time() - t:.1f}s)")
+
     # --- analysis.json (pose portion of the doc 02 contract) ------------------------
     doc = {
         "schema_version": SCHEMA_VERSION,
@@ -204,16 +241,29 @@ def main() -> int:
             "coverage": cl.coverage,
             "trace_enabled": cl.coverage.get("swing", 0) >= 0.5,
             "notes": cl.notes,
+            "butt_len": round(cl.butt_len, 5),
             "frames": [{"f": c.f,
                         "shaft": ([[round(v, 5) for v in p] for p in c.shaft]
                                   if c.shaft else None),
                         "head": [round(v, 5) for v in c.head] if c.head else None,
+                        "butt": [round(v, 5) for v in c.butt] if c.butt else None,
                         "conf": round(c.conf, 3),
                         "shaft_angle_deg": round(c.angle, 1) if c.angle is not None else None,
                         "blurred": c.blurred, "interp": c.interp}
                        for c in cl.frames],
             "trace": cl.trace,
         } if cl else None),
+        "face": ({
+            # Head orientation only. Impact face angle is intentionally absent — doc 04 §6.
+            "checkpoints": fc.checkpoints,
+            "frames": [{"f": x.f, "head_axis_deg": x.head_axis_deg,
+                        "to_shaft_deg": x.to_shaft_deg, "conf": x.conf}
+                       for x in fc.frames],
+            "capability_note": ("Head orientation relative to the shaft, measured at frames "
+                                "where the head has a resolvable silhouette. Face angle at "
+                                "impact requires launch monitor data."),
+        } if cl and fc else None),
+        "metrics": mt,
         "quality": q,
         "quality_raw": before,
         "quality_mediapipe": quality_mp if args.pose_model == "rtmpose" else None,
