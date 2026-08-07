@@ -30,7 +30,8 @@ const EMPTY: SilhouetteData = {
  * and the caller decides how to present that (the overlay group hides itself); this hook just
  * reports empty.
  */
-export function useSilhouette(swingId: string, enabled: boolean): SilhouetteData {
+export function useSilhouette(swingId: string, enabled: boolean,
+                              kind: "silhouette" | "isolation" = "silhouette"): SilhouetteData {
   const [raw, setRaw] = useState<Silhouette | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,11 +51,12 @@ export function useSilhouette(swingId: string, enabled: boolean): SilhouetteData
 
   useEffect(() => {
     if (!enabled || fetched.current === swingId) return;
+    // kind is fixed per hook instance, so the fetched-marker stays swing-keyed
     fetched.current = swingId;
     const ac = new AbortController();
     setLoading(true);
     setError(null);
-    fetch(`/api/swings/${swingId}/silhouette`, { signal: ac.signal })
+    fetch(`/api/swings/${swingId}/${kind}`, { signal: ac.signal })
       .then((r) => {
         if (r.status === 404) return null;          // simply not analysed with Stage 2b
         if (!r.ok) throw new Error(`silhouette: ${r.status}`);
@@ -70,7 +72,7 @@ export function useSilhouette(swingId: string, enabled: boolean): SilhouetteData
       })
       .finally(() => setLoading(false));
     return () => ac.abort();
-  }, [swingId, enabled]);
+  }, [swingId, enabled, kind]);
 
   const byFrame = useMemo(() => {
     const m = new Map<number, [number, number][][]>();

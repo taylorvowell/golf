@@ -481,6 +481,15 @@ export async function getSilhouette(id: string): Promise<Silhouette | null> {
   }
 }
 
+/** Golfer+club rings (scripts/isolate.py) — silhouette.json's shape, so one reader. */
+export async function getIsolation(id: string): Promise<Silhouette | null> {
+  try {
+    return JSON.parse(await fs.readFile(swingFile(id, "isolation.json"), "utf8"));
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Whether the silhouette artifact exists, without reading a megabyte to find out.
  *

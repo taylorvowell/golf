@@ -12,7 +12,7 @@
 export type ToggleKey =
   | "skeleton"
   | "club" | "trace" | "grow" | "rawDet" | "crop"
-  | "isolate" | "outline" | "butt";
+  | "isolate" | "isolateClub" | "outline" | "butt";
 
 export type Toggles = Record<ToggleKey, boolean>;
 
@@ -28,7 +28,7 @@ export type Toggles = Record<ToggleKey, boolean>;
 export const DEFAULT_TOGGLES: Toggles = {
   skeleton: true,
   club: false, trace: true, grow: true, rawDet: false, crop: false,
-  isolate: false, outline: false, butt: false,
+  isolate: false, isolateClub: false, outline: false, butt: false,
 };
 
 /**
@@ -74,6 +74,10 @@ export const OVERLAY_GROUPS: OverlayGroup[] = [
       {
         key: "isolate", label: "Isolate the golfer",
         hint: "knocks the background back to the outline",
+      },
+      {
+        key: "isolateClub", label: "Isolate golfer + club",
+        hint: "body silhouette plus everything moving with it — needs scripts/isolate.py once",
       },
       { key: "outline", label: "Draw the outline" },
     ],

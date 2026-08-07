@@ -172,6 +172,9 @@ export default function SwingStage({
    */
   const hasSil = !!analysis.posture;
   const silhouette = useSilhouette(id, hasSil && (toggles.isolate || toggles.outline));
+  /** Golfer+club rings (scripts/isolate.py) — fetched only when its toggle goes on; a
+   * 404 simply draws nothing, and the menu hint says how to generate it. */
+  const isolation = useSilhouette(id, toggles.isolateClub, "isolation");
   const buttLine = analysis.posture?.butt_line ?? null;
 
   /**
@@ -452,28 +455,33 @@ export default function SwingStage({
      * back as scrim too. No second path, no clip, no compositing mode.
      */
     const rings = (t.isolate || t.outline) ? silhouette.byFrame.get(frame) : undefined;
-    if (rings?.length) {
-      const body = new Path2D();
-      for (const ring of rings) {
-        body.moveTo(ring[0][0] * w, ring[0][1] * h);
-        for (let i = 1; i < ring.length; i++) body.lineTo(ring[i][0] * w, ring[i][1] * h);
-        body.closePath();
+    // Golfer+club rings replace the body-only scrim when their toggle is on — the union
+    // artifact shares silhouette.json's exact shape, so the same fill path renders both.
+    const isoRings = t.isolateClub ? isolation.byFrame.get(frame) : undefined;
+    const ringsToPath = (rr: [number, number][][]) => {
+      const p = new Path2D();
+      for (const ring of rr) {
+        p.moveTo(ring[0][0] * w, ring[0][1] * h);
+        for (let i = 1; i < ring.length; i++) p.lineTo(ring[i][0] * w, ring[i][1] * h);
+        p.closePath();
       }
-      if (t.isolate) {
-        const scrim = new Path2D();
-        // The whole frame at this zoom, not the visible crop — a rect stopping at the crop
-        // window would leave the picture un-dimmed anywhere the window is later widened.
-        scrim.rect(0, 0, w, h);
-        scrim.addPath(body);
-        ctx.fillStyle = "rgba(8,10,14,.86)";
-        ctx.fill(scrim, "evenodd");
-      }
-      if (t.outline) {
-        ctx.strokeStyle = "rgba(226,232,240,.9)";
-        ctx.lineWidth = Math.max(1.5, w / 520);
-        ctx.lineJoin = "round";
-        ctx.stroke(body);
-      }
+      return p;
+    };
+    const scrimRings = isoRings?.length ? isoRings : (t.isolate ? rings : undefined);
+    if (scrimRings?.length) {
+      const scrim = new Path2D();
+      // The whole frame at this zoom, not the visible crop — a rect stopping at the crop
+      // window would leave the picture un-dimmed anywhere the window is later widened.
+      scrim.rect(0, 0, w, h);
+      scrim.addPath(ringsToPath(scrimRings));
+      ctx.fillStyle = "rgba(8,10,14,.86)";
+      ctx.fill(scrim, "evenodd");
+    }
+    if (t.outline && rings?.length) {
+      ctx.strokeStyle = "rgba(226,232,240,.9)";
+      ctx.lineWidth = Math.max(1.5, w / 520);
+      ctx.lineJoin = "round";
+      ctx.stroke(ringsToPath(rings));
     }
 
     const drawSkel = (kp: number[][]) => {
@@ -742,7 +750,7 @@ export default function SwingStage({
     }
   }, [analysis, frame, idx, spans, t, rawBoxes, club, angles, angleFields, view,
       canvasRef, stageRef, targetOverlay, marks, markers.editing, handle, tracePath,
-      experimentPieces, silhouette.byFrame, buttLine]);
+      experimentPieces, silhouette.byFrame, isolation.byFrame, buttLine]);
 
   /**
    * Screen point -> normalized frame coordinate, inverting exactly the transform `draw` applies.
