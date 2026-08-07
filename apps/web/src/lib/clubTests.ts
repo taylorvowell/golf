@@ -36,6 +36,7 @@ export const TRACKING_TEST_IDS = [
   "t28_red_llm",
   "t29_red_llm_ball",
   "t30_legacy_model_ma",
+  "t31_potential",
 ] as const;
 
 export type TrackingTestId = (typeof TRACKING_TEST_IDS)[number];
@@ -71,6 +72,7 @@ export const TEST_LABELS: Record<TrackingTestId, string> = {
   t28_red_llm: "Red Box Only + LLM",
   t29_red_llm_ball: "Red Box Only + LLM + Ball",
   t30_legacy_model_ma: "Legacy Model Head + Moving Avg (SG)",
+  t31_potential: "Potential",
 };
 
 // Tests with a registered implementation in the analyzer TODAY. Rows outside this set
@@ -106,6 +108,7 @@ export const IMPLEMENTED_TESTS = [
   "t28_red_llm",
   "t29_red_llm_ball",
   "t30_legacy_model_ma",
+  "t31_potential",
 ] as const;
 
 export const VARIANT_IDS = [

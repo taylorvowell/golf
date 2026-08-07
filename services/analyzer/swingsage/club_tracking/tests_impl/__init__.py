@@ -7,4 +7,4 @@ from . import (t1_candidate_graph, t2_temporal_heatmap, t3_point_tracking,  # no
                t16_ridge_trace, t17_llm_gap_fill, t18_shaft_line,
                t19_legacy_isolation_gate, t20_raw_head_trace, t21_red_ball, t22_red_dedup, t23_red_connected,
                t24_momentum, t25_gated_red_legacy_ball, t26_gated_dedup, t27_red_legacy, t28_red_llm,
-               t29_red_llm_ball, t30_legacy_model_ma)
+               t29_red_llm_ball, t30_legacy_model_ma, t31_potential)
