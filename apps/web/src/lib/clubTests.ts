@@ -21,6 +21,9 @@ export const TRACKING_TEST_IDS = [
   "t13_motion_composite",
   "t14_silhouette_subtract",
   "t15_envelope_graph",
+  "t16_ridge_trace",
+  "t17_llm_gap_fill",
+  "t18_shaft_line",
 ] as const;
 
 export type TrackingTestId = (typeof TRACKING_TEST_IDS)[number];
@@ -41,6 +44,9 @@ export const TEST_LABELS: Record<TrackingTestId, string> = {
   t13_motion_composite: "Motion Composite / Long-Exposure Envelope",
   t14_silhouette_subtract: "Silhouette-Subtracted Motion",
   t15_envelope_graph: "Envelope-Constrained Candidate Graph",
+  t16_ridge_trace: "Motion Ridge Centerline",
+  t17_llm_gap_fill: "Confidence-Triaged LLM Gap Fill",
+  t18_shaft_line: "Shaft-Line Far End",
 };
 
 // Tests with a registered implementation in the analyzer TODAY. Rows outside this set
@@ -61,6 +67,9 @@ export const IMPLEMENTED_TESTS = [
   "t13_motion_composite",
   "t14_silhouette_subtract",
   "t15_envelope_graph",
+  "t16_ridge_trace",
+  "t17_llm_gap_fill",
+  "t18_shaft_line",
 ] as const;
 
 export const VARIANT_IDS = [

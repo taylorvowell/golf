@@ -27,6 +27,10 @@ TEST_IDS: dict[str, str] = {
     "t13_motion_composite": "Motion Composite / Long-Exposure Envelope",
     "t14_silhouette_subtract": "Silhouette-Subtracted Motion",
     "t15_envelope_graph": "Envelope-Constrained Candidate Graph",
+    # Third wave — user brainstorm continued
+    "t16_ridge_trace": "Motion Ridge Centerline",
+    "t17_llm_gap_fill": "Confidence-Triaged LLM Gap Fill",
+    "t18_shaft_line": "Shaft-Line Far End",
 }
 
 TESTS: dict[str, type] = {}
