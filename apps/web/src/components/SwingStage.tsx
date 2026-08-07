@@ -13,6 +13,7 @@ import { buildTracePath, cutAt, DEFAULT_SMOOTHING, type SmoothingKey,
          type TracePiece } from "@/lib/traceSmoothing";
 import { PHASE_COLORS, type ExperimentTracePoint, type TrackingTestId,
          type VariantId } from "@/lib/clubTests";
+import { defaultClubVar } from "@/lib/clubVariants";
 import OverlayMenu from "./OverlayMenu";
 import HeadMarkerBar, { type HeadPoint } from "./HeadMarkerBar";
 import type { SwingStages } from "@/lib/useSwingStages";
@@ -30,7 +31,7 @@ export default function SwingStage({
   id, analysis, player, angles, moment, targetOverlay,
   toggles, setToggles, variant = "primary",
   autoStart = true, onReady, topLeft, topRight, onEditingChange, stages, phases, reanalyze,
-  experiment, smoothing: smoothingProp, onSmoothing,
+  experiment, smoothing: smoothingProp, onSmoothing, clubVar: clubVarProp,
 }: {
   id: string;
   analysis: Analysis;
@@ -85,13 +86,16 @@ export default function SwingStage({
    * plan §2.2's phase colors — no client smoothing, no follow-through samples. */
   experiment?: { test: TrackingTestId; variant: VariantId } | null;
   /** Optional controlled legacy-trace smoothing. The workspace passes these for the
-   * PRIMARY stage so the Debug Menu can drive the same selection the Overlay menu shows;
-   * the comparison pane omits them and keeps its own per-stage choice (D46). */
+   * PRIMARY stage so the Debug Menu can drive the selection; the comparison pane omits
+   * them and keeps its own per-stage choice (D46). */
   smoothing?: SmoothingKey;
   onSmoothing?: (k: SmoothingKey) => void;
+  /** Optional controlled legacy club solution — Debug Menu drives it for the primary
+   * stage; the comparison pane falls back to `defaultClubVar`. */
+  clubVar?: string;
 }) {
   const { videoRef, canvasRef, stageRef, frame, playing,
-          seek, seekFile, toggle, playRange, onSeeked, win, nFrames } = player;
+          seek, seekFile, toggle, onSeeked, win, nFrames } = player;
   const [w0, w1] = win;
 
   const t = toggles;
@@ -138,27 +142,8 @@ export default function SwingStage({
   // the same bar doc 02 sets before showing a trace at all. Otherwise leave the default where it
   // was; which solve reads best on a detector-starved clip is not something we can currently
   // answer, and picking one would be the unfalsifiable guess D20 warns about.
-  const [clubVar, setClubVar] = useState(() => {
-    const v = analysis.club?.variants;
-    const e = analysis.events;
-    const measuredFrac = (key: string) => {
-      const tf = v?.[key]?.trace_frames;
-      if (!tf || !e) return 0;
-      const span = Math.max(1, e.impact.frame - e.address.frame + 1);
-      return ((tf.backswing?.length ?? 0) + (tf.downswing?.length ?? 0)) / span;
-    };
-    if (v?.model_traj_measured && measuredFrac("model_traj_measured") >= 0.5) {
-      return "model_traj_measured";
-    }
-    return v?.model_trace_savgol ? "model_trace_savgol" : "primary";
-  });
-  const clubOptions = useMemo(() => {
-    const v = analysis.club?.variants;
-    const opts: { key: string; label: string; cov?: Record<string, number> }[] =
-      [{ key: "primary", label: "As analysed (primary)", cov: analysis.club?.coverage }];
-    if (v) for (const [k, d] of Object.entries(v)) opts.push({ key: k, label: d.label, cov: d.coverage });
-    return opts;
-  }, [analysis]);
+  const [localClubVar] = useState(() => defaultClubVar(analysis));
+  const clubVar = clubVarProp ?? localClubVar;
 
   const club = useMemo(() => {
     const c = analysis.club;
@@ -195,9 +180,9 @@ export default function SwingStage({
    * flattering method cannot hide how far it moved the line. Per-stage like `clubVar`, so the
    * comparison pane can be set differently while you decide which reads best.
    */
-  const [localSmoothing, setLocalSmoothing] = useState<SmoothingKey>(DEFAULT_SMOOTHING);
+  const [localSmoothing] = useState<SmoothingKey>(DEFAULT_SMOOTHING);
   const smoothing = smoothingProp ?? localSmoothing;
-  const setSmoothing = onSmoothing ?? setLocalSmoothing;
+  void onSmoothing; // controlled setter kept in the prop contract; Debug Menu drives it
 
   /**
    * The three traced spans, from the corrected phase boundaries rather than from
@@ -424,21 +409,6 @@ export default function SwingStage({
   }, [club, marks, nFrames, w0, w1, eventAt, markers.dirty, markers.removedFrames,
       stages?.byFrame]);
 
-
-  /**
-   * Switch club solution and immediately show the difference.
-   *
-   * Selecting a solution on its own is nearly invisible if the club overlay happens to be
-   * off — the canvas looks identical and the control reads as broken. This turns the club and
-   * trace on, loops the swing and starts playback: comparing solutions is the entire point,
-   * and a still frame is the worst way to see the difference.
-   */
-  const playVariant = useCallback((key: string) => {
-    setClubVar(key);
-    setToggles((cur) => ({ ...cur, club: true, trace: true }));
-    const e = analysis.events;
-    playRange(e ? e.address.frame : w0, e ? e.finish.frame : w1);
-  }, [analysis, w0, w1, playRange, setToggles]);
 
   // ---------- drawing ----------
   const draw = useCallback(() => {
@@ -993,7 +963,6 @@ export default function SwingStage({
             {!isCompare && (
               <OverlayMenu
                 analysis={analysis} t={t} setT={setT}
-                smoothing={smoothing} onPickSmoothing={setSmoothing}
                 cropAvailable={!autoView.identity}
                 cropInfo={autoView.identity ? null : { cw: autoView.cw, ch: autoView.ch }}
                 hasDetector={!!rawBoxes}
@@ -1002,7 +971,6 @@ export default function SwingStage({
                 // is derived from the defaults, so it cannot miss a key that some older stored
                 // state is carrying.
                 onClearAll={() => setToggles(CLEARED_TOGGLES)}
-                clubOptions={clubOptions} clubVar={clubVar} onPickClub={playVariant}
               />
             )}
             {/* Correction tools, beside full-bleed. Primary stage only, for the same reason

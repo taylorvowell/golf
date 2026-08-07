@@ -18,6 +18,9 @@ export const TRACKING_TEST_IDS = [
   "t10_physics_conic",
   "t11_temporal_densification",
   "t12_av_impact",
+  "t13_motion_composite",
+  "t14_silhouette_subtract",
+  "t15_envelope_graph",
 ] as const;
 
 export type TrackingTestId = (typeof TRACKING_TEST_IDS)[number];
@@ -35,6 +38,9 @@ export const TEST_LABELS: Record<TrackingTestId, string> = {
   t10_physics_conic: "Physics-Constrained Conic / Factor-Graph",
   t11_temporal_densification: "Synthetic Temporal Densification",
   t12_av_impact: "Audio-Visual Impact Anchor",
+  t13_motion_composite: "Motion Composite / Long-Exposure Envelope",
+  t14_silhouette_subtract: "Silhouette-Subtracted Motion",
+  t15_envelope_graph: "Envelope-Constrained Candidate Graph",
 };
 
 // Tests with a registered implementation in the analyzer TODAY. Rows outside this set
@@ -52,10 +58,13 @@ export const IMPLEMENTED_TESTS = [
   "t10_physics_conic",
   "t11_temporal_densification",
   "t12_av_impact",
+  "t13_motion_composite",
+  "t14_silhouette_subtract",
+  "t15_envelope_graph",
 ] as const;
 
 export const VARIANT_IDS = [
-  "default", "a", "b", "c", "d", "e", "f", "g", "h", "i",
+  "default", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l",
 ] as const;
 
 export type VariantId = (typeof VARIANT_IDS)[number];
@@ -71,6 +80,9 @@ export const VARIANT_LABELS: Record<VariantId, string> = {
   g: "Centripetal Catmull-Rom",
   h: "Penalized P-spline",
   i: "SG + Catmull-Rom",
+  j: "Robust LOWESS",
+  k: "Fourier low-pass",
+  l: "Total-variation",
 };
 
 // Plan §2.2: backswing blue, downswing green. Keyed by the artifact's color_role so the

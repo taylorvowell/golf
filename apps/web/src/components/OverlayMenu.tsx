@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import type { Analysis } from "@/lib/swings";
 import { SIDE_COLOR, TRACE_COLOR } from "@/lib/skeleton";
 import { OVERLAY_GROUPS, type ToggleKey, type Toggles } from "@/lib/overlays";
-import { SMOOTHING_OPTIONS, type SmoothingKey } from "@/lib/traceSmoothing";
 import { MicroHead } from "./ui/kiosk";
 
 /**
@@ -19,13 +18,11 @@ import { MicroHead } from "./ui/kiosk";
  */
 export default function OverlayMenu({
   analysis, t, setT, cropAvailable, cropInfo, hasDetector, hasSilhouette, silhouetteLoading,
-  clubOptions, clubVar, onPickClub, smoothing, onPickSmoothing, onClearAll,
+  onClearAll,
 }: {
   analysis: Analysis;
   t: Toggles;
   setT: (k: ToggleKey, v: boolean) => void;
-  smoothing: SmoothingKey;
-  onPickSmoothing: (k: SmoothingKey) => void;
   cropAvailable: boolean;
   cropInfo: { cw: number; ch: number } | null;
   hasDetector: boolean;
@@ -36,9 +33,6 @@ export default function OverlayMenu({
   silhouetteLoading: boolean;
   /** Turn every overlay off in one go. Whole-set, not per-visible-group — see the button. */
   onClearAll: () => void;
-  clubOptions: { key: string; label: string; cov?: Record<string, number> }[];
-  clubVar: string;
-  onPickClub: (key: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
@@ -157,72 +151,9 @@ export default function OverlayMenu({
             </div>
           ))}
 
-          {clubOptions.length > 1 && (
-            <>
-              <p className="overlay-menu-head">Club solution — click to compare</p>
-              <div className="flex flex-col gap-1">
-                {clubOptions.map((o) => {
-                  const on = clubVar === o.key;
-                  return (
-                    <button key={o.key} type="button" onClick={() => onPickClub(o.key)}
-                      title="Switch solution, show the club, and loop the swing"
-                      className={`rounded-xl border px-2.5 py-2 text-left transition ${on
-                        ? "border-acid/40 bg-acid/[.10] text-neutral-100"
-                        : "border-white/[.07] bg-white/[.02] text-neutral-400 hover:border-white/20 hover:text-neutral-100"}`}>
-                      <span className="block text-[12px] font-semibold leading-tight">{o.label}</span>
-                      {o.cov && (
-                        <span className={`text-[10px] tabular-nums ${on ? "text-acid/80" : "text-neutral-600"}`}>
-                          coverage {(o.cov.backswing * 100).toFixed(0)}/
-                          {(o.cov.downswing * 100).toFixed(0)}/
-                          {(o.cov.followthrough * 100).toFixed(0)}%
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="mt-2 px-1 text-[10px] leading-4 text-neutral-600">
-                Same frames, same detections — only the solve differs, and switching redraws
-                rather than re-analysing. Lower coverage is usually the <i>more</i> honest
-                number: it counts measured frames, not interpolated ones.
-              </p>
-            </>
-          )}
-
-          {t.trace && !traceLocked && (
-            <>
-              <p className="overlay-menu-head">Trace smoothing — click to compare</p>
-              <div className="flex flex-col gap-1">
-                {SMOOTHING_OPTIONS.map((o) => {
-                  const on = smoothing === o.key;
-                  return (
-                    <button key={o.key} type="button" onClick={() => onPickSmoothing(o.key)}
-                      title="Redraws immediately — nothing is re-analysed"
-                      className={`rounded-xl border px-2.5 py-2 text-left transition ${on
-                        ? "border-acid/40 bg-acid/[.10] text-neutral-100"
-                        : "border-white/[.07] bg-white/[.02] text-neutral-400 hover:border-white/20 hover:text-neutral-100"}`}>
-                      <span className="flex items-baseline gap-2">
-                        <span className="text-[12px] font-semibold leading-tight">{o.label}</span>
-                        <span className={`text-[9px] uppercase tracking-[.08em] ${on ? "text-acid/70" : "text-neutral-600"}`}>
-                          {o.strength}
-                        </span>
-                      </span>
-                      <span className="mt-0.5 block text-[10px] leading-3 text-neutral-500">
-                        {o.hint}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-              <p className="mt-2 px-1 text-[10px] leading-4 text-neutral-600">
-                Drawing only — no measurement changes, and the ends stay pinned so the head of
-                the line still sits on the club as you scrub. The stronger settings buy fluidity
-                by moving the line off the measured heads; the gaps stay dashed either way, and
-                <code className="px-1">checktrace.py</code> still scores fidelity against the raw
-                samples.
-              </p>
-            </>
-          )}
+          {/* The club-solution and trace-smoothing comparison pickers moved to the Debug
+              Menu (user directive 2026-08-08): they are engineering comparisons, and this
+              menu stays a viewer control. */}
 
           <p className="overlay-menu-head">Legend</p>
           <div className="flex flex-wrap gap-x-3 gap-y-1.5 px-1 pb-1 text-[11px] text-neutral-400">

@@ -7,6 +7,7 @@ import type { ClubTest } from "@/lib/useClubTest";
 import { IMPLEMENTED_TESTS, TEST_LABELS, TRACKING_TEST_IDS, VARIANT_IDS,
          VARIANT_LABELS, type TrackingTestId, type VariantId } from "@/lib/clubTests";
 import { SMOOTHING_OPTIONS, type SmoothingKey } from "@/lib/traceSmoothing";
+import type { ClubVariantOption } from "@/lib/clubVariants";
 
 /**
  * Developer actions, off the main chrome.
@@ -23,7 +24,8 @@ import { SMOOTHING_OPTIONS, type SmoothingKey } from "@/lib/traceSmoothing";
  * an un-run implemented test spawns the runner and refreshes on merge.
  */
 export default function DebugMenu({ id, reanalyze, clubTest, cached, sel, onPickTest,
-                                    onPickVariant, smoothing, onPickSmoothing }: {
+                                    onPickVariant, smoothing, onPickSmoothing,
+                                    clubOptions, clubVar, onPickClub }: {
   id: string;
   /** The page's shared re-analysis job — the same one the video's settings menu starts. */
   reanalyze: Reanalyze;
@@ -35,10 +37,15 @@ export default function DebugMenu({ id, reanalyze, clubTest, cached, sel, onPick
   sel: { test: TrackingTestId; variant: VariantId } | null;
   onPickTest: (t: TrackingTestId | null) => void;
   onPickVariant: (v: VariantId) => void;
-  /** Legacy-trace smoothing (D46), shown while the tracking test is Off. The same
-   * selection the video's Overlay menu drives — one state, two surfaces. */
+  /** Legacy-trace smoothing (D46), shown while the tracking test is Off. */
   smoothing: SmoothingKey;
   onPickSmoothing: (k: SmoothingKey) => void;
+  /** Legacy club solutions (moved here from the Overlay menu — engineering comparisons
+   * live in Debug). Picking one also turns the club+trace overlays on and loops the
+   * swing, because a still frame is the worst way to compare solves. */
+  clubOptions: ClubVariantOption[];
+  clubVar: string;
+  onPickClub: (key: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
@@ -114,7 +121,32 @@ export default function DebugMenu({ id, reanalyze, clubTest, cached, sel, onPick
             </p>
           )}
 
-          {/* ---- Legacy trace smoothing (D46, render-time) — only while tests are Off ---- */}
+          {/* ---- Legacy club solution + smoothing — only while tests are Off ---- */}
+          {sel === null && clubOptions.length > 1 && (
+            <>
+              <p className="mt-3 text-[9px] font-bold uppercase tracking-[.18em] text-neutral-600">
+                Legacy club solution
+              </p>
+              <div className="mt-2 space-y-1">
+                {clubOptions.map((o) => (
+                  <button key={o.key} type="button" onClick={() => onPickClub(o.key)}
+                          title="Switch solution, show the club, and loop the swing"
+                          className={pickBtn(clubVar === o.key)}>
+                    <span className="flex items-baseline justify-between gap-2">
+                      <span className="truncate">{o.label}</span>
+                      {o.cov && (
+                        <span className="shrink-0 text-[9px] tabular-nums text-neutral-600">
+                          {(o.cov.backswing * 100).toFixed(0)}/
+                          {(o.cov.downswing * 100).toFixed(0)}/
+                          {(o.cov.followthrough * 100).toFixed(0)}%
+                        </span>
+                      )}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
           {sel === null && (
             <>
               <p className="mt-3 text-[9px] font-bold uppercase tracking-[.18em] text-neutral-600">

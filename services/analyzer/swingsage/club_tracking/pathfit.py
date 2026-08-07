@@ -24,7 +24,7 @@ from scipy.signal import savgol_filter
 
 from .model import ClubObservation
 
-VARIANT_IDS = ("default", "a", "b", "c", "d", "e", "f", "g", "h", "i")
+VARIANT_IDS = ("default", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l")
 
 VARIANT_LABELS = {
     "default": "Robust global fit",
@@ -37,6 +37,10 @@ VARIANT_LABELS = {
     "g": "Centripetal Catmull-Rom",
     "h": "Penalized P-spline",
     "i": "SG + Catmull-Rom",
+    # second wave (user brainstorm session, 2026-08-08)
+    "j": "Robust LOWESS",
+    "k": "Fourier low-pass",
+    "l": "Total-variation",
 }
 
 _ENDPOINT_WEIGHT = 1e3   # endpoint pinning (D43) via anchor weight, not post-hoc snapping
@@ -259,6 +263,66 @@ def _catmull_rom(t, x, y, ts, alpha=0.5):
     return out[:, 0], out[:, 1]
 
 
+def _lowess(t, v, w, ts, frac=0.18, iters=2):
+    """Robust local linear regression (LOWESS): tricube distance weights x confidence,
+    with bisquare residual reweighting. Evaluated directly on the sample grid."""
+    n = len(t)
+    span = max(4, int(np.ceil(frac * n)))
+    rw = np.ones(n)
+    fitted_at_obs = v.copy()
+    for _ in range(iters + 1):
+        out_obs = np.empty(n)
+        for i in range(n):
+            d = np.abs(t - t[i])
+            cut = np.sort(d)[min(span, n - 1)]
+            wt = (1 - np.clip(d / max(cut, 1e-9), 0, 1) ** 3) ** 3 * w * rw
+            W = wt.sum()
+            if W < 1e-9:
+                out_obs[i] = v[i]
+                continue
+            tb = (wt * t).sum() / W
+            vb = (wt * v).sum() / W
+            cov = (wt * (t - tb) * (v - vb)).sum()
+            var = (wt * (t - tb) ** 2).sum()
+            b = cov / var if var > 1e-12 else 0.0
+            out_obs[i] = vb + b * (t[i] - tb)
+        fitted_at_obs = out_obs
+        r = v - fitted_at_obs
+        s = np.median(np.abs(r)) + 1e-9
+        rw = np.clip(1 - (r / (6 * s)) ** 2, 0, 1) ** 2
+    return np.interp(ts, t, fitted_at_obs)
+
+
+def _fourier_lowpass(t, v, ts, keep=8):
+    """Keep the first `keep` harmonics of the (uniformly resampled) series — the
+    "broadcast arc" look: nothing sharper than the swing's own rhythm survives."""
+    n = max(len(ts), 16)
+    grid = np.linspace(t[0], t[-1], n)
+    u = np.interp(grid, t, v)
+    # reflect-pad to soften the periodicity assumption at the ends
+    ext = np.concatenate([u[::-1], u, u[::-1]])
+    F = np.fft.rfft(ext)
+    F[3 * keep:] = 0.0
+    sm = np.fft.irfft(F, len(ext))[n:2 * n]
+    return np.interp(ts, grid, sm)
+
+
+def _tv_denoise(t, v, ts, lam=0.08, iters=120):
+    """1-D total variation via projected gradient on the dual — edge-preserving: keeps
+    the genuine sharp reversal at the top instead of rounding it, flattens jitter."""
+    grid_v = np.interp(ts, t, v)
+    n = len(grid_v)
+    if n < 3:
+        return grid_v
+    p = np.zeros(n - 1)
+    tau = 0.25
+    for _ in range(iters):
+        u = grid_v - np.concatenate([[0.0], p]) + np.concatenate([p, [0.0]])
+        grad = np.diff(u)
+        p = np.clip(p + tau * grad, -lam, lam)
+    return grid_v - np.concatenate([[0.0], p]) + np.concatenate([p, [0.0]])
+
+
 # ------------------------------------------------------------------ the registry
 
 
@@ -352,5 +416,10 @@ def fit_variants(observations: list[ClubObservation], fps: float,
     else:
         ix, iy = x, y
     out["i"] = emit(*_catmull_rom(t, ix, iy, ts))
+
+    # j/k/l — second wave (user brainstorm): local regression, spectral, edge-preserving
+    out["j"] = emit(_lowess(t, x, w, ts), _lowess(t, y, w, ts))
+    out["k"] = emit(_fourier_lowpass(t, x, ts), _fourier_lowpass(t, y, ts))
+    out["l"] = emit(_tv_denoise(t, x, ts), _tv_denoise(t, y, ts))
 
     return out

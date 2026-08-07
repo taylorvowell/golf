@@ -23,6 +23,10 @@ TEST_IDS: dict[str, str] = {
     "t10_physics_conic": "Physics-Constrained Conic / Factor-Graph",
     "t11_temporal_densification": "Synthetic Temporal Densification",
     "t12_av_impact": "Audio-Visual Impact Anchor",
+    # Second wave — user brainstorm 2026-08-08 (append-only; the plan's 12 keep their ids)
+    "t13_motion_composite": "Motion Composite / Long-Exposure Envelope",
+    "t14_silhouette_subtract": "Silhouette-Subtracted Motion",
+    "t15_envelope_graph": "Envelope-Constrained Candidate Graph",
 }
 
 TESTS: dict[str, type] = {}
