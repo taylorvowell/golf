@@ -42,6 +42,7 @@ TEST_IDS: dict[str, str] = {
     "t27_red_legacy": "Red Boxes + Legacy Fill",
     "t28_red_llm": "Red Box Only + LLM",
     "t29_red_llm_ball": "Red Box Only + LLM + Ball",
+    "t30_legacy_model_ma": "Legacy Model Head + Moving Avg (SG)",
 }
 
 TESTS: dict[str, type] = {}

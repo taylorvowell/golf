@@ -25,7 +25,7 @@ from scipy.signal import savgol_filter
 from .model import ClubObservation
 
 VARIANT_IDS = ("default", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k",
-               "l", "m", "n", "o")
+               "l", "m", "n", "o", "p")
 
 VARIANT_LABELS = {
     "default": "Robust global fit",
@@ -46,6 +46,7 @@ VARIANT_LABELS = {
     "m": "Phase blend (zone mix)",
     "n": "Speed-adaptive",
     "o": "Akima spline",
+    "p": "Savitzky-Golay (pure)",
 }
 
 _ENDPOINT_WEIGHT = 1e3   # endpoint pinning (D43) via anchor weight, not post-hoc snapping
@@ -471,6 +472,18 @@ def fit_variants(observations: list[ClubObservation], fps: float,
         out["m"] = emit(*_linear_fallback(t, x, y, w, ts))
         out["n"] = emit(*_linear_fallback(t, x, y, w, ts))
 
+    # p — pure Savitzky-Golay on the observation series, read out linearly. The classic
+    # polynomial-window filter on its own: preserves local extrema (the top, impact)
+    # better than a moving average without adding spline dynamics of its own.
+    win_p = _odd_window(9, len(t))
+    if win_p >= 5:
+        px_ = savgol_filter(x, win_p, 2)
+        py_ = savgol_filter(y, win_p, 2)
+        px_[0], py_[0], px_[-1], py_[-1] = x[0], y[0], x[-1], y[-1]
+    else:
+        px_, py_ = x, y
+    out["p"] = emit(np.interp(ts, t, px_), np.interp(ts, t, py_))
+
     # o — Akima: through-the-points interpolant with less overshoot than Catmull-Rom
     try:
         from scipy.interpolate import Akima1DInterpolator
@@ -482,5 +495,7 @@ def fit_variants(observations: list[ClubObservation], fps: float,
         out["default"] = emit(*_linear_fallback(t, x, y, w, ts))
     elif default_style == "catmull":
         out["default"] = [dict(p) for p in out["g"]]
+    elif default_style == "savgol":
+        out["default"] = [dict(p) for p in out["p"]]
 
     return out
