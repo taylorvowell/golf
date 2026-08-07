@@ -43,6 +43,7 @@ export const IMPLEMENTED_TESTS = [
   "t1_candidate_graph",
   "t3_point_tracking",
   "t4_video_segmentation",
+  "t5_blur_flow",
   "t6_grip_kinematic",
   "t10_physics_conic",
 ] as const;

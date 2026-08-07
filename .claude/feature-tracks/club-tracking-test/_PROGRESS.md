@@ -40,6 +40,23 @@ Phase 7 — Hybrids:
 Phase 8 — Production reduction:
 - **20** Reduce the winning hybrid, freeze versions, lock regression fixtures, final benchmark report (plan §35–36)
 
+## 12 - Test 5: Blur + Flow + Deblatting
+**Completed:** 2026-08-07 21:55 UTC
+**Phase:** Phase 2 — Zero-shot visual experts (completes Phase 2 — 6/12 selectable)
+**Summary:** `blur.py` (pure): streak extraction from frame differences — elongation via
+PCA, area/grip/direction filters, head at the LEADING tip, emitted as `mixed`/`deblatting`
+with `blur_streak` visibility, never a fake crisp center (§5.4). Flow advection
+(torchvision RAFT-small — SEA-RAFT has no packaged distribution; plan sanctions "strongest
+compatible flow model"; source tag is honestly `raft`) fills frames still empty, `inferred`
+with decaying confidence. All 7 merged (1–5 s each). Suite 161 passed; gates clean.
+**Notes:** Camera-motion compensation skipped (tripod fixtures — revisit for handheld).
+Overlapping consecutive streaks cancel in difference images; appearance/disappearance
+diffs are what streaks actually serve — encoded in the test. TACTICAL REORDER ahead: T12
+(audio), T7 (Claude), T8 (fusion), T11 (VFI) land before T2 (needs training) and T9
+(needs the strongest experts) so the menu fills fastest.
+
+---
+
 ## 11 - Test 4: Video Object Segmentation
 **Completed:** 2026-08-07 21:25 UTC
 **Phase:** Phase 2 — Zero-shot visual experts

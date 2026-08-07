@@ -1,3 +1,4 @@
 """Implemented tracking tests. Importing this package runs each module's @register."""
 from . import (t1_candidate_graph, t3_point_tracking,  # noqa: F401
-               t4_video_segmentation, t6_grip_kinematic, t10_physics_conic)
+               t4_video_segmentation, t5_blur_flow, t6_grip_kinematic,
+               t10_physics_conic)
