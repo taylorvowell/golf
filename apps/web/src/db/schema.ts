@@ -82,7 +82,9 @@ export const swings = pgTable("swings", {
 export const jobs = pgTable("jobs", {
   id: text("id").primaryKey(),
   swingId: text("swing_id").notNull().references(() => swings.id, { onDelete: "cascade" }),
-  type: text("type", { enum: ["analyze", "reanalyze"] }).notNull(),
+  // `club_test` runs scripts/club_test.py to merge one tracking experiment (D55). The enum
+  // is type-level only on a text column, so widening it needs no migration.
+  type: text("type", { enum: ["analyze", "reanalyze", "club_test"] }).notNull(),
   status: text("status", { enum: ["queued", "running", "done", "failed"] }).notNull(),
   stage: text("stage").notNull(),
   progressPct: integer("progress_pct").notNull().default(0),

@@ -11,6 +11,8 @@ import { useHeadMarkers } from "@/lib/useHeadMarkers";
 import { useSilhouette } from "@/lib/useSilhouette";
 import { buildTracePath, cutAt, DEFAULT_SMOOTHING, type SmoothingKey,
          type TracePiece } from "@/lib/traceSmoothing";
+import { PHASE_COLORS, type ExperimentTracePoint, type TrackingTestId,
+         type VariantId } from "@/lib/clubTests";
 import OverlayMenu from "./OverlayMenu";
 import HeadMarkerBar, { type HeadPoint } from "./HeadMarkerBar";
 import type { SwingStages } from "@/lib/useSwingStages";
@@ -28,6 +30,7 @@ export default function SwingStage({
   id, analysis, player, angles, moment, targetOverlay,
   toggles, setToggles, variant = "primary",
   autoStart = true, onReady, topLeft, topRight, onEditingChange, stages, phases, reanalyze,
+  experiment,
 }: {
   id: string;
   analysis: Analysis;
@@ -77,6 +80,10 @@ export default function SwingStage({
   /** The page's shared re-analysis job, surfaced in the settings menu. The job itself is owned
    * by the workspace so it outlives this dropdown — see `useReanalyze`. */
   reanalyze?: { busy: boolean; pct: number; start: () => void };
+  /** A club-tracking experiment selection from the Debug Menu (D55). While set, its
+   * precomputed trace REPLACES the legacy trace: analyzer-fitted points drawn as-is with
+   * plan §2.2's phase colors — no client smoothing, no follow-through samples. */
+  experiment?: { test: TrackingTestId; variant: VariantId } | null;
 }) {
   const { videoRef, canvasRef, stageRef, frame, playing,
           seek, seekFile, toggle, playRange, onSeeked, win, nFrames } = player;
@@ -307,6 +314,51 @@ export default function SwingStage({
   }, [club, spans, marks, smoothing, analysis]);
 
   /**
+   * The selected club-tracking experiment's trace, cut into strokeable pieces (D55).
+   *
+   * The analyzer already fitted and sampled these points (pathfit.py), so this memo does NO
+   * smoothing — it only scales to video pixels and splits each phase span into runs of
+   * measured (solid) versus bridged (dashed) segments, reusing the legacy `TracePiece`
+   * shape so `cutAt` gives playhead growth for free. `display_mode: "split_at_top"` needs
+   * no special handling here: the spans are separate pieces already and nothing joins them.
+   */
+  const experimentPieces = useMemo(() => {
+    if (!experiment) return null;
+    const exp = analysis.club_tracking?.experiments?.[experiment.test];
+    const pts = exp?.trace.variants?.[experiment.variant];
+    if (!exp || !pts?.length) return null;
+    const vw = analysis.video.width, vh = analysis.video.height;
+
+    const segBridge = (a: ExperimentTracePoint, b: ExperimentTracePoint) =>
+      a.mode !== "observed" || b.mode !== "observed";
+    const mk = (run: ExperimentTracePoint[], bridge: boolean): TracePiece => ({
+      pts: run.map((p) => [p.x * vw, p.y * vh] as [number, number]),
+      frames: run.map((p) => p.frame),
+      bridge,
+    });
+
+    const out: { color: string; pieces: TracePiece[] }[] = [];
+    for (const span of Object.values(exp.trace.phase_spans)) {
+      const inSpan = pts.filter((p) => p.frame >= span.start_frame && p.frame <= span.end_frame);
+      if (inSpan.length < 2) continue;
+      const pieces: TracePiece[] = [];
+      let runStart = 0;
+      let runBridge = segBridge(inSpan[0], inSpan[1]);
+      for (let i = 1; i < inSpan.length - 1; i++) {
+        const br = segBridge(inSpan[i], inSpan[i + 1]);
+        if (br !== runBridge) {
+          pieces.push(mk(inSpan.slice(runStart, i + 1), runBridge));
+          runStart = i;
+          runBridge = br;
+        }
+      }
+      pieces.push(mk(inSpan.slice(runStart), runBridge));
+      out.push({ color: PHASE_COLORS[span.color_role] ?? "#F1F5F9", pieces });
+    }
+    return out.length ? out : null;
+  }, [experiment, analysis]);
+
+  /**
    * The club head this frame is currently showing — the hand-placed one if there is one, else
    * the analyzer's own answer, else nothing (the detector had nothing to say here).
    *
@@ -472,41 +524,58 @@ export default function SwingStage({
       });
     };
 
+    /**
+     * Stroke one already-smoothed run, as a ribbon of uniform width.
+     *
+     * A single round-joined STROKE, not a filled polygon offset along the path normals. The
+     * offset approach existed to vary width along the stroke (canvas cannot), and once that
+     * taper was removed it was pure cost: the normal at each sample comes from a central
+     * difference over its neighbours, and after subdivision those neighbours are a fraction of
+     * a pixel apart, so the direction is dominated by noise and both edges grow fine teeth.
+     * Stroking has no normals to get wrong and is faster besides.
+     * The path arrives in video pixels and is scaled to the
+     * canvas here, so the curve is identical at every window size.
+     */
+    const stroke = (P: [number, number][],
+                    { alpha, peak, dashed }: { alpha: number; peak: number; dashed?: boolean }) => {
+      if (P.length < 2) return;
+      const sx = w / analysis.video.width, sy = h / analysis.video.height;
+      ctx.globalAlpha = alpha;
+      ctx.lineWidth = peak;
+      ctx.lineJoin = "round";
+      ctx.lineCap = "round";
+      if (dashed) ctx.setLineDash([peak * 0.9, peak * 1.6]);
+      ctx.beginPath();
+      ctx.moveTo(P[0][0] * sx, P[0][1] * sy);
+      for (let i = 1; i < P.length; i++) ctx.lineTo(P[i][0] * sx, P[i][1] * sy);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+    };
+
+    // An experiment trace (Debug Menu, D55) REPLACES the legacy trace while selected —
+    // analyzer-fitted points drawn as-is: backswing blue, downswing green, nothing after
+    // impact, bridges dashed. No client smoothing touches these (plan §37).
+    if (experimentPieces && t.trace) {
+      const growing = t.grow;
+      const peak = Math.max(2.5, w / 300) * 3.6;
+      for (const { color, pieces } of experimentPieces) {
+        ctx.strokeStyle = color;
+        for (const piece of pieces) {
+          const P = growing ? cutAt(piece, frame) : piece.pts;
+          if (!P) continue;
+          if (piece.bridge) stroke(P, { alpha: 0.55, peak, dashed: true });
+          else stroke(P, { alpha: 1, peak });
+        }
+      }
+    }
+
     // `club` here is the selected variant (or the primary solution) — see the memo above.
-    if (club && t.trace && club.trace_enabled && spans) {
+    else if (club && t.trace && club.trace_enabled && spans) {
       // Growth follows the FRAME, not playback. Gating it on `playing` meant scrubbing always
       // drew the finished path, so the one interaction where you are studying a position gave
       // you the least information — and the toggle looked broken while paused.
       const growing = t.grow;
-
-      /**
-       * Stroke one already-smoothed run, as a ribbon of uniform width.
-       *
-       * A single round-joined STROKE, not a filled polygon offset along the path normals. The
-       * offset approach existed to vary width along the stroke (canvas cannot), and once that
-       * taper was removed it was pure cost: the normal at each sample comes from a central
-       * difference over its neighbours, and after subdivision those neighbours are a fraction of
-       * a pixel apart, so the direction is dominated by noise and both edges grow fine teeth.
-       * Stroking has no normals to get wrong and is faster besides.
-       * The path arrives in video pixels and is scaled to the
-       * canvas here, so the curve is identical at every window size.
-       */
-      const stroke = (P: [number, number][],
-                      { alpha, peak, dashed }: { alpha: number; peak: number; dashed?: boolean }) => {
-        if (P.length < 2) return;
-        const sx = w / analysis.video.width, sy = h / analysis.video.height;
-        ctx.globalAlpha = alpha;
-        ctx.lineWidth = peak;
-        ctx.lineJoin = "round";
-        ctx.lineCap = "round";
-        if (dashed) ctx.setLineDash([peak * 0.9, peak * 1.6]);
-        ctx.beginPath();
-        ctx.moveTo(P[0][0] * sx, P[0][1] * sy);
-        for (let i = 1; i < P.length; i++) ctx.lineTo(P[i][0] * sx, P[i][1] * sy);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.globalAlpha = 1;
-      };
 
       // Follow-through FIRST so it sits behind the two segments a coach actually reads. It is
       // the longest and least reliable part of the path, and drawn last it covered the
@@ -696,7 +765,7 @@ export default function SwingStage({
     }
   }, [analysis, frame, idx, spans, t, rawBoxes, club, angles, angleFields, view,
       canvasRef, stageRef, targetOverlay, marks, markers.editing, handle, tracePath,
-      silhouette.byFrame, buttLine]);
+      experimentPieces, silhouette.byFrame, buttLine]);
 
   /**
    * Screen point -> normalized frame coordinate, inverting exactly the transform `draw` applies.

@@ -11,6 +11,8 @@ import { usePlayer } from "@/lib/usePlayer";
 import DebugMenu from "./DebugMenu";
 import ReanalyzeProgress from "./ReanalyzeProgress";
 import { useReanalyze } from "@/lib/useReanalyze";
+import { useClubTest } from "@/lib/useClubTest";
+import type { TrackingTestId, VariantId } from "@/lib/clubTests";
 import SwingStage from "./SwingStage";
 import SwingTransport from "./SwingTransport";
 import ComparisonPane from "./ComparisonPane";
@@ -178,6 +180,22 @@ export default function SwingWorkspace({
    */
   const reanalyze = useReanalyze(id);
 
+  /**
+   * Club-tracking experiment selection (12-test plan, D55). The job is owned here for the
+   * same reason `reanalyze` is: the Debug Menu closes on the click that starts a tracker
+   * run, so nothing inside it can be where the run lives. The selection pair drives
+   * SwingStage's experiment trace; null means the legacy trace.
+   */
+  const clubTest = useClubTest(id);
+  const [expTest, setExpTest] = useState<TrackingTestId | null>(null);
+  const [expVariant, setExpVariant] = useState<VariantId>("default");
+  const cachedTests = useMemo(
+    () => Object.keys(analysis.club_tracking?.experiments ?? {}) as TrackingTestId[],
+    [analysis]);
+  const experimentSel = useMemo(
+    () => (expTest ? { test: expTest, variant: expVariant } : null),
+    [expTest, expVariant]);
+
   return (
     <main className="relative mx-auto max-w-[1800px] space-y-5 px-3 py-4 sm:px-5 sm:py-5 lg:px-8 lg:py-7">
       <section id="summaryPanel"
@@ -220,6 +238,7 @@ export default function SwingWorkspace({
                        onEditingChange={setEditingHeads}
                        stages={stages} phases={phases}
                        reanalyze={reanalyze}
+                       experiment={experimentSel}
                        topRight={<CompareButton enabled={compareOn} onToggle={setCompareOn} />} />
 
             {showCompare && refAnalysis && (
@@ -405,7 +424,9 @@ export default function SwingWorkspace({
       )}
 
       {/* Sticky, bottom right, out of the product's own chrome. */}
-      <DebugMenu id={id} reanalyze={reanalyze} />
+      <DebugMenu id={id} reanalyze={reanalyze} clubTest={clubTest}
+                 cached={cachedTests} sel={experimentSel}
+                 onPickTest={setExpTest} onPickVariant={setExpVariant} />
     </main>
   );
 }

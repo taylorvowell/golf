@@ -145,6 +145,12 @@ export type RawBox = {
 
 export interface Analysis {
   schema_version: number;
+  /**
+   * Club-tracking experiment results (12-test plan, D55). Optional and append-only: the
+   * block appears the first time `scripts/club_test.py` merges an experiment; legacy
+   * artifacts simply lack it. Not part of `CURRENT_SCHEMA` on purpose.
+   */
+  club_tracking?: import("@/lib/clubTests").ClubTrackingBlock | null;
   video: {
     fps: number; frame_count: number; width: number; height: number;
     view: "dtl" | "face_on"; handedness: "right" | "left";

@@ -40,6 +40,27 @@ Phase 7 — Hybrids:
 Phase 8 — Production reduction:
 - **20** Reduce the winning hybrid, freeze versions, lock regression fixtures, final benchmark report (plan §35–36)
 
+## 07 - Debug Menu, Club-Test API, and Experiment Trace Rendering
+**Completed:** 2026-08-07 19:05 UTC
+**Phase:** Phase 0/1 boundary — the user's visual-judgment surface
+**Summary:** The Debug Menu now has the plan §27 radio groups: 12 tracking tests
+(unimplemented disabled, cached dotted, un-run implemented ones spawn the runner) and the
+10 path fits (instant switch). `SwingStage` renders the selected experiment's precomputed
+trace in place of the legacy one — analyzer points drawn as-is (no client smoothing, plan
+§37), backswing blue / downswing green from `color_role`, nothing after impact, bridges
+dashed, `cutAt` playhead growth reused. New `POST/GET /api/swings/[id]/club-test` follows
+the jobs-table protocol (new `club_test` type — text enum is type-level, no migration;
+type-filtered lookups so club-test and re-analyze jobs never collide; reconcile reads
+`.experiment.lock` + the artifact). `useClubTest` refreshes via `router.refresh()`, not a
+reload (video untouched). TS mirror `lib/clubTests.ts` is lock-stepped to the Python
+registry by a new pytest that parses the TS literals. Gates: pytest 120 passed, tsc clean,
+eslint clean.
+**Notes:** The request body carries ONLY the enum-validated testId (plan §29); Python
+re-validates via argparse choices. Manual visual check remains for the user: open a swing →
+Debug → Tracking test t6 → play.
+
+---
+
 ## 06 - Test 6: Grip-Centered Kinematic Reconstruction
 **Completed:** 2026-08-07 18:26 UTC
 **Phase:** Phase 1 — Deterministic baselines (revised arc)

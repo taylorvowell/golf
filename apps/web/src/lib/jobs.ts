@@ -2,11 +2,12 @@ import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
 import { jobs as jobsTable, swings as swingsTable } from "@/db/schema";
 import { syncSwingScore } from "@/db/scores";
 import { MEDIA_ROOT, getAnalysis } from "@/lib/swings";
+import { IMPLEMENTED_TESTS, type TrackingTestId } from "@/lib/clubTests";
 
 /**
  * Re-analysis jobs, persisted in Postgres (docs/DECISIONS.md D38) — replacing the
@@ -143,8 +144,11 @@ export async function getJob(swingId: string): Promise<Job | null> {
   const inMemory = live.get(swingId);
   if (inMemory) return inMemory;
 
+  // Filter to full-analysis job types: a club-test job on the same swing (below) must not
+  // hijack the re-analyze poll, and vice versa.
   const rows = await db.select().from(jobsTable)
-    .where(eq(jobsTable.swingId, swingId))
+    .where(and(eq(jobsTable.swingId, swingId),
+               inArray(jobsTable.type, ["analyze", "reanalyze"])))
     .orderBy(desc(jobsTable.startedAt))
     .limit(1);
   return rows[0] ? await reconcile(toJob(rows[0])) : null;
@@ -275,6 +279,134 @@ export async function startReanalysis(swingId: string): Promise<Job> {
     if (job.status === "failed") return; // child.on("error") already finished it
     if (code === 0) finish("done", "complete", 100, "analysis rewritten");
     else finish("failed", job.stage, job.progressPct, `analyzer exited ${code} — see log`);
+  });
+
+  return job;
+}
+
+/* ------------------------------------------------------------------------------------------
+ * Club-tracking experiment jobs (12-test plan, D55).
+ *
+ * Same protocol and storage as re-analysis, deliberately lighter: `scripts/club_test.py`
+ * runs one registered tracker over the stored artifact and merges a `club_tracking`
+ * experiment block — seconds for the deterministic tests, minutes for the model-based ones
+ * later. Separate `live` map and a type-filtered lookup so a club test and a re-analysis on
+ * the same swing never collide on "the latest job". The job row stores the test id in
+ * `stage`, which is what reconciliation reads back to check the artifact.
+ */
+const liveClub = new Map<string, Job>();
+
+async function reconcileClubTest(job: Job): Promise<Job> {
+  if (job.status !== "running" && job.status !== "queued") return job;
+  const dir = path.join(MEDIA_ROOT, job.swingId);
+  try {
+    await fs.access(path.join(dir, ".experiment.lock"));
+    return job;                        // merge in progress elsewhere
+  } catch { /* no lock: the runner is gone — settle from the artifact */ }
+
+  const analysis = await getAnalysis(job.swingId).catch(() => null);
+  const merged = Boolean(
+    analysis?.club_tracking?.experiments?.[job.stage as TrackingTestId]);
+  job.finishedAt = Date.now();
+  if (merged) {
+    job.status = "done";
+    job.progressPct = 100;
+    job.message = "experiment merged";
+  } else {
+    job.status = "failed";
+    job.message = "the test runner stopped without merging a result — see log";
+  }
+  await persist(job).catch(() => {});
+  return job;
+}
+
+export async function getClubTestJob(swingId: string): Promise<Job | null> {
+  const inMemory = liveClub.get(swingId);
+  if (inMemory) return inMemory;
+
+  const rows = await db.select().from(jobsTable)
+    .where(and(eq(jobsTable.swingId, swingId), eq(jobsTable.type, "club_test")))
+    .orderBy(desc(jobsTable.startedAt))
+    .limit(1);
+  return rows[0] ? await reconcileClubTest(toJob(rows[0])) : null;
+}
+
+export async function startClubTest(swingId: string, testId: TrackingTestId): Promise<Job> {
+  if (!(IMPLEMENTED_TESTS as readonly string[]).includes(testId)) {
+    throw new Error(`${testId} is not implemented in the analyzer yet`);
+  }
+
+  const existing = await getClubTestJob(swingId);
+  if (existing && (existing.status === "running" || existing.status === "queued")) {
+    return existing;
+  }
+
+  const analysis = await getAnalysis(swingId);
+  if (!analysis) throw new Error("no analysis.json for this swing");
+  // Already merged -> done, no spawn. Cached experiments are only recomputed by an
+  // explicit re-run elsewhere, never by selecting them (plan §28).
+  if (analysis.club_tracking?.experiments?.[testId]) {
+    return {
+      id: "cached", swingId, status: "done", stage: testId, progressPct: 100,
+      message: "experiment already computed", log: [],
+      startedAt: Date.now(), finishedAt: Date.now(),
+    };
+  }
+
+  const job: Job = {
+    id: randomUUID(),
+    swingId,
+    status: "running",
+    stage: testId,
+    progressPct: 10,
+    message: "running tracker",
+    log: [],
+    startedAt: Date.now(),
+    finishedAt: null,
+  };
+  liveClub.set(swingId, job);
+
+  await db.insert(jobsTable).values({
+    id: job.id, swingId, type: "club_test",
+    status: job.status, stage: job.stage, progressPct: job.progressPct,
+    message: job.message, log: job.log,
+  });
+
+  const args = [
+    path.join("scripts", "club_test.py"),
+    path.join(MEDIA_ROOT, swingId),
+    "--test", testId,
+  ];
+  const child: ChildProcess = spawn(PYTHON, args, { cwd: ANALYZER, windowsHide: true });
+
+  const absorb = (buf: Buffer) => {
+    for (const raw of buf.toString().split(/\r?\n/)) {
+      const line = raw.trimEnd();
+      if (!line) continue;
+      job.log.push(line);
+      if (job.log.length > 200) job.log.shift();
+      job.message = line.trim();
+    }
+  };
+  child.stdout?.on("data", absorb);
+  child.stderr?.on("data", absorb);
+
+  const finish = async (status: JobStatus, message: string) => {
+    job.status = status;
+    job.progressPct = status === "done" ? 100 : job.progressPct;
+    job.message = message;
+    job.finishedAt = Date.now();
+    liveClub.delete(swingId);
+    await persist(job).catch(() => {});
+  };
+
+  child.on("error", (err) => {
+    finish("failed", `could not start ${PYTHON}: ${err.message}`);
+  });
+  child.on("close", (code) => {
+    if (job.status === "failed") return;
+    if (code === 0) finish("done", "experiment merged");
+    else finish("failed", `test runner exited ${code} — ${job.log.at(-1) ?? "see log"}`);
   });
 
   return job;

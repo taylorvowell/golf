@@ -3,6 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import ReanalyzeButton from "./ReanalyzeButton";
 import type { Reanalyze } from "@/lib/useReanalyze";
+import type { ClubTest } from "@/lib/useClubTest";
+import { IMPLEMENTED_TESTS, TEST_LABELS, TRACKING_TEST_IDS, VARIANT_IDS,
+         VARIANT_LABELS, type TrackingTestId, type VariantId } from "@/lib/clubTests";
 
 /**
  * Developer actions, off the main chrome.
@@ -12,12 +15,24 @@ import type { Reanalyze } from "@/lib/useReanalyze";
  * row of buttons that existed. A floating, sticky corner keeps it one click away without
  * putting a 90-second Python job at the same weight as the product's own actions.
  *
- * Anything that only makes sense while building the pipeline belongs here.
+ * Anything that only makes sense while building the pipeline belongs here — including the
+ * club-tracking experiment switcher (12-test plan, D55): pick a test, pick a path fit, judge
+ * the trace by eye. Unimplemented tests render disabled (the analyzer registry's
+ * NotImplementedError surfaced honestly); a cached test shows a dot and switches instantly;
+ * an un-run implemented test spawns the runner and refreshes on merge.
  */
-export default function DebugMenu({ id, reanalyze }: {
+export default function DebugMenu({ id, reanalyze, clubTest, cached, sel, onPickTest, onPickVariant }: {
   id: string;
   /** The page's shared re-analysis job — the same one the video's settings menu starts. */
   reanalyze: Reanalyze;
+  /** The page's shared club-test job (owned by the workspace, like `reanalyze`). */
+  clubTest: ClubTest;
+  /** Test ids with an experiment already merged into this swing's artifact. */
+  cached: TrackingTestId[];
+  /** Current experiment selection, or null for the legacy trace. */
+  sel: { test: TrackingTestId; variant: VariantId } | null;
+  onPickTest: (t: TrackingTestId | null) => void;
+  onPickVariant: (v: VariantId) => void;
 }) {
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
@@ -36,37 +51,106 @@ export default function DebugMenu({ id, reanalyze }: {
     };
   }, [open]);
 
+  const pickBtn = (on: boolean, disabled = false) =>
+    `w-full rounded-xl border px-2.5 py-1.5 text-left text-[11px] font-semibold transition ${
+      disabled
+        ? "cursor-not-allowed border-white/[.04] bg-transparent text-neutral-700"
+        : on
+          ? "border-acid/40 bg-acid/[.10] text-neutral-100"
+          : "border-white/[.07] bg-white/[.02] text-neutral-400 hover:border-white/20 hover:text-neutral-100"}`;
+
   return (
     <div ref={wrap} className="fixed bottom-5 right-5 z-[130] flex flex-col items-end gap-3">
       {open && (
-        <div className="glass w-[290px] rounded-[22px] border border-white/10 p-4
+        <div className="glass w-[320px] max-h-[min(75vh,700px)] overflow-y-auto overscroll-contain
+                        rounded-[22px] border border-white/10 p-4
                         shadow-[0_30px_90px_rgba(0,0,0,.55)]">
           <p className="text-[9px] font-bold uppercase tracking-[.18em] text-neutral-600">Debug</p>
 
-          <p className="mt-3 text-[11px] leading-4 text-neutral-500">
-            Editing <code className="text-neutral-400">swingsage/</code> does not change a stored
-            <code className="text-neutral-400"> analysis.json</code> — the player keeps drawing the
-            old artifact until the analyzer re-runs. Takes about 90 seconds. The same action is
-            on the video&rsquo;s settings gear, which is where a golfer would look for it.
+          {/* ---- Tracking test (12-test plan) ---- */}
+          <p className="mt-3 text-[9px] font-bold uppercase tracking-[.18em] text-neutral-600">
+            Tracking test
           </p>
-          <div className="mt-3 flex justify-start">
-            <ReanalyzeButton r={reanalyze} />
+          <div className="mt-2 space-y-1">
+            <button type="button" onClick={() => onPickTest(null)}
+                    className={pickBtn(sel === null)}>
+              Off — legacy trace
+            </button>
+            {TRACKING_TEST_IDS.map((tid) => {
+              const implemented = (IMPLEMENTED_TESTS as readonly string[]).includes(tid);
+              const has = cached.includes(tid);
+              const running = clubTest.busy && clubTest.job.stage === tid;
+              const on = sel?.test === tid;
+              return (
+                <button key={tid} type="button" disabled={!implemented || clubTest.busy}
+                        title={implemented ? TEST_LABELS[tid] : "not implemented yet"}
+                        onClick={() => {
+                          if (on) return;
+                          onPickTest(tid);
+                          if (!has) clubTest.start(tid);
+                        }}
+                        className={pickBtn(on, !implemented || (clubTest.busy && !on))}>
+                  <span className="flex items-center gap-2">
+                    <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                      running ? "animate-pulse bg-amber-300"
+                        : has ? "bg-acid/80" : "bg-white/15"}`} />
+                    <span className="truncate">{TEST_LABELS[tid]}</span>
+                  </span>
+                </button>
+              );
+            })}
           </div>
+          {clubTest.job.status === "failed" && (
+            <p className="mt-2 text-[10px] leading-4 text-amber-300/90">
+              {clubTest.job.message ?? "test run failed"}
+              <button type="button" onClick={clubTest.dismiss}
+                      className="ml-2 underline decoration-dotted">dismiss</button>
+            </p>
+          )}
 
-          <a href={`/api/swings/${id}/analysis`} target="_blank" rel="noreferrer"
-             className="mt-3 flex items-center gap-2 rounded-xl border border-line bg-raised px-3 py-2.5
-                        text-[11px] font-semibold text-neutral-400 hover:border-white/25 hover:text-neutral-100">
-            <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M14 3h7v7" /><path d="M10 14 21 3" />
-              <path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5" />
-            </svg>
-            Open raw analysis.json
-          </a>
+          {/* ---- Path fit (Default + A–I, precomputed analyzer-side) ---- */}
+          {sel && (
+            <>
+              <p className="mt-3 text-[9px] font-bold uppercase tracking-[.18em] text-neutral-600">
+                Path fit — instant switch
+              </p>
+              <div className="mt-2 space-y-1">
+                {VARIANT_IDS.map((vid) => (
+                  <button key={vid} type="button"
+                          onClick={() => onPickVariant(vid)}
+                          className={pickBtn(sel.variant === vid)}>
+                    <span className="flex items-baseline gap-2">
+                      <span className="w-4 shrink-0 text-[10px] uppercase text-neutral-500">
+                        {vid === "default" ? "•" : vid}
+                      </span>
+                      {VARIANT_LABELS[vid]}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
 
-          <p className="mt-3 text-[10px] leading-4 text-neutral-600">
-            Pose, club, face and sync diagnostics are in the <b className="text-neutral-500">Advanced
-            Stats</b> tab.
-          </p>
+          <div className="mt-3 border-t border-white/[.06] pt-3">
+            <div className="flex justify-start">
+              <ReanalyzeButton r={reanalyze} />
+            </div>
+
+            <a href={`/api/swings/${id}/analysis`} target="_blank" rel="noreferrer"
+               className="mt-3 flex items-center gap-2 rounded-xl border border-line bg-raised px-3 py-2.5
+                          text-[11px] font-semibold text-neutral-400 hover:border-white/25 hover:text-neutral-100">
+              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M14 3h7v7" /><path d="M10 14 21 3" />
+                <path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5" />
+              </svg>
+              Open raw analysis.json
+            </a>
+
+            <p className="mt-3 text-[10px] leading-4 text-neutral-600">
+              Pose, club, face and sync diagnostics are in the <b className="text-neutral-500">Advanced
+              Stats</b> tab.
+            </p>
+          </div>
         </div>
       )}
 
