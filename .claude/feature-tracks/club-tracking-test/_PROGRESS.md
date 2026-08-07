@@ -40,6 +40,23 @@ Phase 7 — Hybrids:
 Phase 8 — Production reduction:
 - **20** Reduce the winning hybrid, freeze versions, lock regression fixtures, final benchmark report (plan §35–36)
 
+## 11 - Test 4: Video Object Segmentation
+**Completed:** 2026-08-07 21:25 UTC
+**Phase:** Phase 2 — Zero-shot visual experts
+**Summary:** SAM 2.1 small via ultralytics (already-pinned dependency, 71 MB
+auto-cached; API verified against the installed package by docs-researcher before
+coding). Per-frame point prompts at a velocity-predicted position rather than the
+stateful video propagator — a poisoned memory bank can't drag forward; §13's drift stays
+one frame big. Pure logic in `segmentation.py` (mask stats, area/grip/jump sanity gate,
+branch death + anchor reseed) hermetic-tested with a fake segmenter. All 7 merged; suite
+153 passed; mirror 5/12.
+**Notes:** Honest zero-shot result: 39–51 usable observations on the 60 fps clips, but
+`perfect` (1) and `pro_2` (2) die immediately — precisely §13's "tiny blurred head below
+mask granularity" prediction, now visible in the menu. Test-fake lesson: encode the frame
+index in pixels, not a call counter — branch deaths desync counters.
+
+---
+
 ## 10 - Test 3: Modern Point Tracking
 **Completed:** 2026-08-07 20:55 UTC
 **Phase:** Phase 2 — Zero-shot visual experts
