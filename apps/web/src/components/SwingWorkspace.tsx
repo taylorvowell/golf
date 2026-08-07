@@ -16,6 +16,9 @@ import type { TrackingTestId, VariantId } from "@/lib/clubTests";
 import { DEFAULT_SMOOTHING, type SmoothingKey } from "@/lib/traceSmoothing";
 import { clubVariantOptions, defaultClubVar } from "@/lib/clubVariants";
 import { useRawModels } from "@/lib/useRawModels";
+import { persistKey, usePersistentState } from "@/lib/usePersistentState";
+import { TRACKING_TEST_IDS, VARIANT_IDS } from "@/lib/clubTests";
+import { SMOOTHING_OPTIONS } from "@/lib/traceSmoothing";
 import SwingStage from "./SwingStage";
 import SwingTransport from "./SwingTransport";
 import ComparisonPane from "./ComparisonPane";
@@ -63,7 +66,12 @@ export default function SwingWorkspace({
   missing: string[];
   currentSchema: number;
 }) {
-  const [view, setView] = useState<ViewKey>("overview");
+  // Workspace selections persist across refresh and navigation (usePersistentState) —
+  // they are comparison controls, and losing them on every swing change defeated the
+  // whole flip-between-swings workflow.
+  const [view, setView] = usePersistentState<ViewKey>(
+    persistKey("view"), "overview",
+    (v) => (TABS.some((t) => t.key === v) ? (v as ViewKey) : null));
   const [modal, setModal] = useState<"new" | "delete" | null>(null);
   const player = usePlayer(analysis);
 
@@ -91,7 +99,10 @@ export default function SwingWorkspace({
 
   // Overlay toggles live here, not in SwingStage, so the comparison video renders the same
   // overlays as the main one from a single set of controls (see SwingStage's `toggles` prop).
-  const [toggles, setToggles] = useState<Toggles>(DEFAULT_TOGGLES);
+  const [toggles, setToggles] = usePersistentState<Toggles>(
+    persistKey("toggles"), DEFAULT_TOGGLES,
+    (v, fb) => (v && typeof v === "object"
+      ? { ...fb, ...(v as Partial<Toggles>) } : null));
 
   /**
    * Hand-corrected phase boundaries, and the boundaries themselves once the corrections are
@@ -190,8 +201,14 @@ export default function SwingWorkspace({
    * SwingStage's experiment trace; null means the legacy trace.
    */
   const clubTest = useClubTest(id);
-  const [expTest, setExpTest] = useState<TrackingTestId | null>(null);
-  const [expVariant, setExpVariant] = useState<VariantId>("default");
+  const [expTest, setExpTest] = usePersistentState<TrackingTestId | null>(
+    persistKey("expTest"), null,
+    (v) => (v === null || (TRACKING_TEST_IDS as readonly string[]).includes(v as string)
+      ? (v as TrackingTestId | null) : null));
+  const [expVariant, setExpVariant] = usePersistentState<VariantId>(
+    persistKey("expVariant"), "default",
+    (v) => ((VARIANT_IDS as readonly string[]).includes(v as string)
+      ? (v as VariantId) : null));
   const cachedTests = useMemo(
     () => Object.keys(analysis.club_tracking?.experiments ?? {}) as TrackingTestId[],
     [analysis]);
@@ -200,27 +217,31 @@ export default function SwingWorkspace({
     [expTest, expVariant]);
   /** Legacy-trace smoothing, lifted so the Debug Menu drives the primary stage's
    * selection (the comparison pane keeps its own, D46). */
-  const [traceSmoothing, setTraceSmoothing] =
-    useState<SmoothingKey>(DEFAULT_SMOOTHING);
+  const [traceSmoothing, setTraceSmoothing] = usePersistentState<SmoothingKey>(
+    persistKey("smoothing"), DEFAULT_SMOOTHING,
+    (v) => (SMOOTHING_OPTIONS.some((o) => o.key === v) ? (v as SmoothingKey) : null));
   /** Legacy club solution — the picker moved from the Overlay menu into Debug. Picking
    * turns the club+trace overlays on and loops the swing (comparing on a still frame
    * reads as a broken control). */
-  const [clubVar, setClubVar] = useState(() => defaultClubVar(analysis));
+  const clubOptions = useMemo(() => clubVariantOptions(analysis), [analysis]);
+  const [clubVar, setClubVar] = usePersistentState<string>(
+    persistKey("clubVar"), defaultClubVar(analysis),
+    (v) => (typeof v === "string" && clubOptions.some((o) => o.key === v) ? v : null));
   /** Candidate raw-detection models (scripts/rawmodels.py). Picking one turns the raw
    * overlay on — comparing model output with the overlay off would show nothing. */
   const rawModels = useRawModels(id, true);
-  const [rawModelSel, setRawModelSel] = useState("builtin");
+  const [rawModelSel, setRawModelSel] = usePersistentState<string>(
+    persistKey("rawModel"), "builtin");
   const pickRawModel = useCallback((k: string) => {
     setRawModelSel(k);
     setToggles((cur) => ({ ...cur, rawDet: true }));
-  }, [setToggles]);
-  const clubOptions = useMemo(() => clubVariantOptions(analysis), [analysis]);
+  }, [setToggles, setRawModelSel]);
   const pickClubVar = useCallback((key: string) => {
     setClubVar(key);
     setToggles((cur) => ({ ...cur, club: true, trace: true }));
     const e = analysis.events;
     if (e) player.playRange(e.address.frame, e.finish.frame);
-  }, [analysis, player, setToggles]);
+  }, [analysis, player, setToggles, setClubVar]);
 
   return (
     <main className="relative mx-auto max-w-[1800px] space-y-5 px-3 py-4 sm:px-5 sm:py-5 lg:px-8 lg:py-7">
