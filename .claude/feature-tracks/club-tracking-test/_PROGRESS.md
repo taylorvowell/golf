@@ -40,6 +40,27 @@ Phase 7 — Hybrids:
 Phase 8 — Production reduction:
 - **20** Reduce the winning hybrid, freeze versions, lock regression fixtures, final benchmark report (plan §35–36)
 
+## 09 - Test 10: Physics-Conic + Event Refiner
+**Completed:** 2026-08-07 20:10 UTC
+**Phase:** Phase 1 — Deterministic baselines (completes Phase 1)
+**Summary:** `physics_fit.py` solves the trajectory as Huber least squares over the frozen
+baseline candidate source (per §19 — deliberately blind to t6/other experts): robust
+nearest-candidate association re-done per IRLS round, accel+jerk penalties, soft
+second-difference grip-radius factor (slowly varying, never constant), and a Fitzgibbon
+ellipse conic prior confined to the lower half of the downswing (`conic.py`,
+degenerate-safe). `event_refiner.py` is the shared §24 refiner: address = still-RUN then
+moving-RUN (single-frame dips like the top turnaround can't fire it), top = velocity
+direction reversal, impact = fastest pass through the address-anchored corridor; T10
+attaches the evidence and `build_experiment` prefers it. All 7 fixtures merged (0.5–4.6 s;
+association 74–100%). Suite 135 passed; tsc/lint clean; mirror 3/12.
+**Notes:** First real event disagreement surfaced: on swing1, t10's club-trajectory top is
+frame 191 vs the artifact's hand-landmark 198 — D49 (OPEN) predicts club-based tops
+DISAGREE with hand tops, and the debug menu now shows the difference visually (blue/green
+transition). §19's metric ablation grid intentionally not built (visual ablation via the
+menu); factor weights are module constants for easy A/B.
+
+---
+
 ## 08 - Test 1: Global Candidate Graph
 **Completed:** 2026-08-07 19:38 UTC
 **Phase:** Phase 1 — Deterministic baselines

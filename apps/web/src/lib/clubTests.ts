@@ -42,6 +42,7 @@ export const TEST_LABELS: Record<TrackingTestId, string> = {
 export const IMPLEMENTED_TESTS = [
   "t1_candidate_graph",
   "t6_grip_kinematic",
+  "t10_physics_conic",
 ] as const;
 
 export const VARIANT_IDS = [
