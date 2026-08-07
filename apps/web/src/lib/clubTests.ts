@@ -46,6 +46,7 @@ export const IMPLEMENTED_TESTS = [
   "t5_blur_flow",
   "t6_grip_kinematic",
   "t10_physics_conic",
+  "t12_av_impact",
 ] as const;
 
 export const VARIANT_IDS = [

@@ -40,6 +40,23 @@ Phase 7 — Hybrids:
 Phase 8 — Production reduction:
 - **20** Reduce the winning hybrid, freeze versions, lock regression fixtures, final benchmark report (plan §35–36)
 
+## 13 - Test 12: Audio-Visual Impact Anchor (reordered ahead of T2)
+**Completed:** 2026-08-07 22:20 UTC
+**Phase:** Phase 4 content executed early per the fill-the-menu reorder (7/12 selectable)
+**Summary:** `audio_impact.py` — deterministic §21 detector: ffmpeg mono extraction from
+the ORIGINAL upload (derivatives are `-an`), HF-emphasis onset envelope, salience vs local
+floor, ambiguity flag for competing transients, ±30 ms A/V uncertainty. The t12 tracker
+fuses: agreement within 150 ms → audio refines impact (EventEvidence source `audio`, no
+coordinates by construction); disagreement → exposed in diagnostics, never used; no
+audio → structural silent fallback. All 7 merged; suite 171 passed.
+**Notes:** Real findings: 6iron-1/2/3 agree within −5…+20 ms and swing2 +47 ms (audio
+refined impact on four fixtures); swing1 has a 292-salience transient +177 ms late —
+correctly EXPOSED as disagreement (likely a second noise after the strike); perfect and
+pro_2 show no salient strike in-window (fallback stood). Exactly §3.11's
+agreement-raises/disagreement-exposes contract, on first real contact with data.
+
+---
+
 ## 12 - Test 5: Blur + Flow + Deblatting
 **Completed:** 2026-08-07 21:55 UTC
 **Phase:** Phase 2 — Zero-shot visual experts (completes Phase 2 — 6/12 selectable)
