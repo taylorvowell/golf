@@ -25,6 +25,7 @@ export const TRACKING_TEST_IDS = [
   "t17_llm_gap_fill",
   "t18_shaft_line",
   "t19_legacy_isolation_gate",
+  "t20_raw_head_trace",
 ] as const;
 
 export type TrackingTestId = (typeof TRACKING_TEST_IDS)[number];
@@ -49,6 +50,7 @@ export const TEST_LABELS: Record<TrackingTestId, string> = {
   t17_llm_gap_fill: "Confidence-Triaged LLM Gap Fill",
   t18_shaft_line: "Shaft-Line Far End",
   t19_legacy_isolation_gate: "Legacy Solve Gated by Isolation",
+  t20_raw_head_trace: "Raw Head Trace (red boxes only)",
 };
 
 // Tests with a registered implementation in the analyzer TODAY. Rows outside this set
@@ -73,6 +75,7 @@ export const IMPLEMENTED_TESTS = [
   "t17_llm_gap_fill",
   "t18_shaft_line",
   "t19_legacy_isolation_gate",
+  "t20_raw_head_trace",
 ] as const;
 
 export const VARIANT_IDS = [
