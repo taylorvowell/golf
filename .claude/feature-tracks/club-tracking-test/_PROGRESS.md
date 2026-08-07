@@ -40,6 +40,24 @@ Phase 7 — Hybrids:
 Phase 8 — Production reduction:
 - **20** Reduce the winning hybrid, freeze versions, lock regression fixtures, final benchmark report (plan §35–36)
 
+## SECOND WAVE — 2026-08-08 (user brainstorm: tracking "not matching all that well")
+The catalogue grew 12 → 15 (append-only): **t13 Motion Composite / Long-Exposure
+Envelope** (accumulate motion energy, take the outer envelope from the grip hub — the
+head sweeps the outermost arc; per-frame position pinned by that frame's motion against
+the envelope band, body-zone bins suppressed), **t14 Silhouette-Subtracted Motion**
+(motion mask minus the Stage-2b body silhouette; head = the grip-connected blob's
+farthest reach), **t15 Envelope-Constrained Graph** (t13's envelope as a corridor prior
+decaying off-path candidates inside t1's solver). Path-fit registry grew 10 → 13
+variants: **j Robust LOWESS, k Fourier low-pass, l Total-variation** (edge-preserving —
+keeps the sharp top reversal). UI: the club-solution and smoothing pickers moved OUT of
+the video's Overlay menu into Debug (engineering comparisons live in Debug; Overlay stays
+a viewer control), sharing one state via `lib/clubVariants.ts`. Endpoint anchoring
+(anchors.py) now guarantees EVERY test's trace starts on the measured club head at
+address and ends on it at impact, structurally pinned across all 13 variants. Suite: 225
+passed. Full 15×7 sweep regenerating all experiments in background.
+
+---
+
 ## 16 - Test 11: Synthetic Temporal Densification (reordered)
 **Completed:** 2026-08-08 00:05 UTC
 **Phase:** Phase 5 content (10/12 selectable once t7 lands)
