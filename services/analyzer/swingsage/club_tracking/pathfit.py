@@ -24,7 +24,8 @@ from scipy.signal import savgol_filter
 
 from .model import ClubObservation
 
-VARIANT_IDS = ("default", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l")
+VARIANT_IDS = ("default", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k",
+               "l", "m", "n", "o")
 
 VARIANT_LABELS = {
     "default": "Robust global fit",
@@ -41,6 +42,10 @@ VARIANT_LABELS = {
     "j": "Robust LOWESS",
     "k": "Fourier low-pass",
     "l": "Total-variation",
+    # third wave (user ask 2026-08-08: "a mix depending on where it is on the swing path")
+    "m": "Phase blend (zone mix)",
+    "n": "Speed-adaptive",
+    "o": "Akima spline",
 }
 
 _ENDPOINT_WEIGHT = 1e3   # endpoint pinning (D43) via anchor weight, not post-hoc snapping
@@ -427,6 +432,51 @@ def fit_variants(observations: list[ClubObservation], fps: float,
     out["j"] = emit(_lowess(t, x, w, ts), _lowess(t, y, w, ts))
     out["k"] = emit(_fourier_lowpass(t, x, ts), _fourier_lowpass(t, y, ts))
     out["l"] = emit(_tv_denoise(t, x, ts), _tv_denoise(t, y, ts))
+
+    # ---- m/n/o: the mixing wave ----
+    heavy_x = _smooth_spline(t, x, w, 1e-4)
+    heavy_y = _smooth_spline(t, y, w, 1e-4)
+    light_x = _smooth_spline(t, x, w, 4e-6)
+    light_y = _smooth_spline(t, y, w, 4e-6)
+    if heavy_x and heavy_y and light_x and light_y:
+        hx_s, hy_s = heavy_x(ts), heavy_y(ts)
+        lx_s, ly_s = light_x(ts), light_y(ts)
+
+        # m — phase blend: heavy at address, medium back, TV through the top (keeps the
+        # reversal sharp), light down into impact. Weights cross-fade over ~8 samples.
+        tvx, tvy = _tv_denoise(t, x, ts), _tv_denoise(t, y, ts)
+        n_s = len(ts)
+        top_i = (int(np.clip(np.searchsorted(ts, top_frame / fps), 0, n_s - 1))
+                 if top_frame is not None else n_s // 2)
+        w_heavy = np.zeros(n_s)
+        w_tv = np.zeros(n_s)
+        idx_s = np.arange(n_s)
+        w_heavy = np.clip(1.0 - idx_s / 10.0, 0.0, 1.0)          # address de-jitter
+        w_tv = np.clip(1.0 - np.abs(idx_s - top_i) / 8.0, 0.0, 1.0)  # top sharpness
+        w_med = np.clip((idx_s < top_i) * 0.5 * (1 - w_heavy - w_tv), 0.0, 1.0)
+        w_rest = np.clip(1.0 - w_heavy - w_tv - w_med, 0.0, 1.0)
+        mx = w_heavy * hx_s + w_tv * tvx + w_med * (0.5 * hx_s + 0.5 * lx_s) + w_rest * lx_s
+        my = w_heavy * hy_s + w_tv * tvy + w_med * (0.5 * hy_s + 0.5 * ly_s) + w_rest * ly_s
+        out["m"] = emit(mx, my)
+
+        # n — speed-adaptive: smoothing strength falls as local speed rises
+        vx = np.gradient(lx_s, ts)
+        vy = np.gradient(ly_s, ts)
+        speed = np.hypot(vx, vy)
+        s_mid = max(float(np.median(speed)), 1e-6)
+        w_light = 1.0 / (1.0 + np.exp(-(speed - s_mid) / (0.5 * s_mid)))
+        out["n"] = emit(w_light * lx_s + (1 - w_light) * hx_s,
+                        w_light * ly_s + (1 - w_light) * hy_s)
+    else:
+        out["m"] = emit(*_linear_fallback(t, x, y, w, ts))
+        out["n"] = emit(*_linear_fallback(t, x, y, w, ts))
+
+    # o — Akima: through-the-points interpolant with less overshoot than Catmull-Rom
+    try:
+        from scipy.interpolate import Akima1DInterpolator
+        out["o"] = emit(Akima1DInterpolator(t, x)(ts), Akima1DInterpolator(t, y)(ts))
+    except Exception:
+        out["o"] = emit(*_catmull_rom(t, x, y, ts))
 
     if default_style == "linear":
         out["default"] = emit(*_linear_fallback(t, x, y, w, ts))

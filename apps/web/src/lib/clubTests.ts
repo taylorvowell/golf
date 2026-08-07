@@ -101,6 +101,7 @@ export const IMPLEMENTED_TESTS = [
 
 export const VARIANT_IDS = [
   "default", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l",
+  "m", "n", "o",
 ] as const;
 
 export type VariantId = (typeof VARIANT_IDS)[number];
@@ -119,6 +120,9 @@ export const VARIANT_LABELS: Record<VariantId, string> = {
   j: "Robust LOWESS",
   k: "Fourier low-pass",
   l: "Total-variation",
+  m: "Phase blend (zone mix)",
+  n: "Speed-adaptive",
+  o: "Akima spline",
 };
 
 // Plan §2.2: backswing blue, downswing green. Keyed by the artifact's color_role so the
