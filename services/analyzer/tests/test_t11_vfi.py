@@ -44,7 +44,9 @@ def _make_doc(n=60):
         # sparse real evidence in the downswing: every third frame only
         if f < 30 or f % 3 == 0:
             boxes.append({"f": f, "d": [{"c": 0, "xy": [float(x), float(y)],
-                                         "wh": [0.02, 0.02], "p": 0.6}]})
+                                         "wh": [0.02, 0.02], "p": 0.6},
+                                        {"c": 1, "xy": [0.5, 0.5],
+                                         "wh": [1.2, 1.2], "p": 0.9}]})
     return {
         "video": {"fps": FPS, "frame_count": n, "width": W, "height": H,
                   "view": "dtl", "handedness": "right", "source": {"path": "x.mp4"}},

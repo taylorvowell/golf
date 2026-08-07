@@ -16,6 +16,7 @@ import math
 
 from .interface import ClubTrackingContext
 from .model import ClubCandidate
+from .red_gate import gated_heads
 
 CLASSICAL_WEIGHT = 0.6
 HEAD_CLASS_NAME = "clubhead"
@@ -48,9 +49,10 @@ def harvest(ctx: ClubTrackingContext) -> dict[int, list[ClubCandidate]]:
     head_classes = {int(k) for k, v in names.items() if v == HEAD_CLASS_NAME}
     for row in det.get("boxes") or []:
         f = row.get("f")
-        for d in row.get("d") or []:
-            if d.get("c") not in head_classes:
-                continue
+        # HARD RULE (red_gate): only shaft-validated heads may become candidates
+        for d in gated_heads(row.get("d") or [],
+                             is_head=lambda d: d.get("c") in head_classes,
+                             is_green=lambda d: d.get("c") not in head_classes):
             x, y = d["xy"]
             w, h = d.get("wh", (0.0, 0.0))
             add(f, x, y, d.get("p", 0.0), "detector",

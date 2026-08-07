@@ -75,7 +75,9 @@ def _make_doc(dup=False):
     for f in range(n):
         x, y = _path(f)
         dets = [{"c": 0, "xy": [float(x), float(y)], "wh": [0.02, 0.02], "p": 0.4},
-                {"c": 1, "xy": [0.5, 0.5], "wh": [0.3, 0.2], "p": 0.9}]  # stick ignored
+                # a frame-covering stick: the red-gate hard rule requires every counted
+                # head to sit inside a green box
+                {"c": 1, "xy": [0.5, 0.5], "wh": [1.2, 1.2], "p": 0.9}]
         boxes.append({"f": f, "d": dets})
     doc = {
         "video": {"fps": FPS, "frame_count": n, "width": 1080, "height": 1920,

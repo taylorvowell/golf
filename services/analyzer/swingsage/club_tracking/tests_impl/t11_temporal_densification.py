@@ -30,17 +30,22 @@ def _default_detector():
 
     def detect(frame_rgb: np.ndarray) -> list[tuple[float, float, float]]:
         import cv2
+        from ..red_gate import gated_heads
         bgr = cv2.cvtColor(frame_rgb.astype(np.uint8), cv2.COLOR_RGB2BGR)
         res = model.predict(bgr, conf=DET_CONF_FLOOR, verbose=False)[0]
         h, w = frame_rgb.shape[:2]
-        out = []
         names = res.names
+        dets = []
         for b in res.boxes:
-            if names.get(int(b.cls[0])) != "clubhead":
-                continue
             x0, y0, x1, y1 = b.xyxy[0].tolist()
-            out.append(((x0 + x1) / 2 / w, (y0 + y1) / 2 / h, float(b.conf[0])))
-        return out
+            dets.append({"c": 0 if names.get(int(b.cls[0])) == "clubhead" else 1,
+                         "xy": [(x0 + x1) / 2 / w, (y0 + y1) / 2 / h],
+                         "wh": [(x1 - x0) / w, (y1 - y0) / h],
+                         "p": float(b.conf[0])})
+        # HARD RULE (red_gate): a head with no shaft in the same result does not exist
+        return [(d["xy"][0], d["xy"][1], d["p"])
+                for d in gated_heads(dets, is_head=lambda d: d["c"] == 0,
+                                     is_green=lambda d: d["c"] == 1)]
 
     return detect
 

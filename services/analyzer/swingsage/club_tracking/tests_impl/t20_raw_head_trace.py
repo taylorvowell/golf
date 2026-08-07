@@ -18,34 +18,16 @@ from ..model import ClubObservation
 from ..registry import TEST_IDS, register
 
 HEAD_CLASS_NAME = "clubhead"
-GREEN_MARGIN = 1.2       # a red counts inside a green box grown by this factor
 
-
-def _in_green(hx: float, hy: float, greens: list[tuple[float, float, float, float]]
-              ) -> bool:
-    """User rule (2026-08-08): a red head detection only COUNTS when it sits inside a
-    same-frame green (shaft) box — the head is attached to the club, so a red with no
-    shaft under it is spurious. Strict: a frame with no green box validates nothing."""
-    for gx, gy, gw, gh in greens:
-        if (abs(hx - gx) <= gw / 2 * GREEN_MARGIN
-                and abs(hy - gy) <= gh / 2 * GREEN_MARGIN):
-            return True
-    return False
+from ..red_gate import gated_heads  # noqa: E402  (the hard rule lives in one place)
 
 
 def _best_heads(rows, is_head, is_green) -> dict[int, tuple[float, float, float]]:
-    """Shared harvest: per frame, greens first, then the best green-validated red."""
+    """Shared harvest: per frame, the best GREEN-VALIDATED red (red_gate hard rule)."""
     best: dict[int, tuple[float, float, float]] = {}
     for row in rows:
         f = row.get("f")
-        dets = row.get("d") or []
-        greens = [(d["xy"][0], d["xy"][1], d["wh"][0], d["wh"][1])
-                  for d in dets if is_green(d)]
-        for d in dets:
-            if not is_head(d):
-                continue
-            if not _in_green(d["xy"][0], d["xy"][1], greens):
-                continue
+        for d in gated_heads(row.get("d") or [], is_head, is_green):
             p = d.get("p", 0.0)
             if f not in best or p > best[f][2]:
                 best[f] = (d["xy"][0], d["xy"][1], p)

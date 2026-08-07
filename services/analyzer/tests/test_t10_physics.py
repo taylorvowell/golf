@@ -124,7 +124,9 @@ class TestTracker:
         for f in range(n):
             x, y = _truth(f / FPS)
             boxes.append({"f": f, "d": [{"c": 0, "xy": [float(x), float(y)],
-                                         "wh": [0.02, 0.02], "p": 0.5}]})
+                                         "wh": [0.02, 0.02], "p": 0.5},
+                                        {"c": 1, "xy": [0.5, 0.5],
+                                         "wh": [1.2, 1.2], "p": 0.9}]})
         doc = {
             "video": {"fps": FPS, "frame_count": n, "width": 1080, "height": 1920,
                       "view": "dtl", "handedness": "right",
