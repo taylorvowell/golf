@@ -34,6 +34,7 @@ export const TRACKING_TEST_IDS = [
   "t26_gated_dedup",
   "t27_red_legacy",
   "t28_red_llm",
+  "t29_red_llm_ball",
 ] as const;
 
 export type TrackingTestId = (typeof TRACKING_TEST_IDS)[number];
@@ -67,6 +68,7 @@ export const TEST_LABELS: Record<TrackingTestId, string> = {
   t26_gated_dedup: "Gated, Red, Legacy, Ball, Deduped",
   t27_red_legacy: "Red Boxes + Legacy Fill",
   t28_red_llm: "Red Box Only + LLM",
+  t29_red_llm_ball: "Red Box Only + LLM + Ball",
 };
 
 // Tests with a registered implementation in the analyzer TODAY. Rows outside this set
@@ -100,6 +102,7 @@ export const IMPLEMENTED_TESTS = [
   "t26_gated_dedup",
   "t27_red_legacy",
   "t28_red_llm",
+  "t29_red_llm_ball",
 ] as const;
 
 export const VARIANT_IDS = [

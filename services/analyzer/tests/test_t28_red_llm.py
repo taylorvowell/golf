@@ -93,3 +93,30 @@ def test_provider_dead_reds_untouched():
     assert res.diagnostics["llm"] == "fallback"
     assert all(o.source == "detector" for o in res.observations)
     assert len(res.observations) == 56
+
+
+def test_t29_adds_ball_impact_on_top_of_t28():
+    from swingsage.club_tracking.tests_impl.t29_red_llm_ball import RedLlmBallTracker
+    assert "t29_red_llm_ball" in available()
+    ball = (0.62, 0.82)
+    raw_doc = {"schema": 1, "models": {"m": {"label": "x", "stride": 3, "frames": [
+        {"f": f, "d": [{"c": 1, "xy": [ball[0], ball[1]], "wh": [0.02, 0.02],
+                        "p": 0.9, "label": "golf_ball"}]} for f in range(0, 18, 3)]}}}
+
+    def loader(ctx, lo, hi):
+        v = np.zeros((hi - lo + 1, H, W, 3), dtype=np.float32)
+        bx, by = int(ball[0] * W), int(ball[1] * H)
+        for i in range(v.shape[0]):
+            if lo + i < 50:                        # ball leaves at frame 50
+                v[i, by - 4:by + 5, bx - 4:bx + 5] = 255.0
+        return v
+
+    ctx = ClubTrackingContext.from_artifacts(_make_doc())
+    with tempfile.TemporaryDirectory() as td:
+        ctx.out_dir = Path(td)
+        res = RedLlmBallTracker(provider=lambda p: None, loader=loader,
+                                raw_models_doc=raw_doc).run(ctx)
+    assert res.test_id == "t29_red_llm_ball"
+    assert res.diagnostics["ball_departure_frame"] == 50
+    imp = [e for e in res.event_evidence if e.event == "impact"]
+    assert imp and imp[0].source == "ball_departure"
