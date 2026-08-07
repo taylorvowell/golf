@@ -13,6 +13,7 @@ import ReanalyzeProgress from "./ReanalyzeProgress";
 import { useReanalyze } from "@/lib/useReanalyze";
 import { useClubTest } from "@/lib/useClubTest";
 import type { TrackingTestId, VariantId } from "@/lib/clubTests";
+import { DEFAULT_SMOOTHING, type SmoothingKey } from "@/lib/traceSmoothing";
 import SwingStage from "./SwingStage";
 import SwingTransport from "./SwingTransport";
 import ComparisonPane from "./ComparisonPane";
@@ -195,6 +196,10 @@ export default function SwingWorkspace({
   const experimentSel = useMemo(
     () => (expTest ? { test: expTest, variant: expVariant } : null),
     [expTest, expVariant]);
+  /** Legacy-trace smoothing, lifted so the Debug Menu and the Overlay menu drive ONE
+   * selection for the primary stage (the comparison pane keeps its own, D46). */
+  const [traceSmoothing, setTraceSmoothing] =
+    useState<SmoothingKey>(DEFAULT_SMOOTHING);
 
   return (
     <main className="relative mx-auto max-w-[1800px] space-y-5 px-3 py-4 sm:px-5 sm:py-5 lg:px-8 lg:py-7">
@@ -239,6 +244,7 @@ export default function SwingWorkspace({
                        stages={stages} phases={phases}
                        reanalyze={reanalyze}
                        experiment={experimentSel}
+                       smoothing={traceSmoothing} onSmoothing={setTraceSmoothing}
                        topRight={<CompareButton enabled={compareOn} onToggle={setCompareOn} />} />
 
             {showCompare && refAnalysis && (
@@ -426,7 +432,8 @@ export default function SwingWorkspace({
       {/* Sticky, bottom right, out of the product's own chrome. */}
       <DebugMenu id={id} reanalyze={reanalyze} clubTest={clubTest}
                  cached={cachedTests} sel={experimentSel}
-                 onPickTest={setExpTest} onPickVariant={setExpVariant} />
+                 onPickTest={setExpTest} onPickVariant={setExpVariant}
+                 smoothing={traceSmoothing} onPickSmoothing={setTraceSmoothing} />
     </main>
   );
 }

@@ -6,6 +6,7 @@ import type { Reanalyze } from "@/lib/useReanalyze";
 import type { ClubTest } from "@/lib/useClubTest";
 import { IMPLEMENTED_TESTS, TEST_LABELS, TRACKING_TEST_IDS, VARIANT_IDS,
          VARIANT_LABELS, type TrackingTestId, type VariantId } from "@/lib/clubTests";
+import { SMOOTHING_OPTIONS, type SmoothingKey } from "@/lib/traceSmoothing";
 
 /**
  * Developer actions, off the main chrome.
@@ -21,7 +22,8 @@ import { IMPLEMENTED_TESTS, TEST_LABELS, TRACKING_TEST_IDS, VARIANT_IDS,
  * NotImplementedError surfaced honestly); a cached test shows a dot and switches instantly;
  * an un-run implemented test spawns the runner and refreshes on merge.
  */
-export default function DebugMenu({ id, reanalyze, clubTest, cached, sel, onPickTest, onPickVariant }: {
+export default function DebugMenu({ id, reanalyze, clubTest, cached, sel, onPickTest,
+                                    onPickVariant, smoothing, onPickSmoothing }: {
   id: string;
   /** The page's shared re-analysis job — the same one the video's settings menu starts. */
   reanalyze: Reanalyze;
@@ -33,6 +35,10 @@ export default function DebugMenu({ id, reanalyze, clubTest, cached, sel, onPick
   sel: { test: TrackingTestId; variant: VariantId } | null;
   onPickTest: (t: TrackingTestId | null) => void;
   onPickVariant: (v: VariantId) => void;
+  /** Legacy-trace smoothing (D46), shown while the tracking test is Off. The same
+   * selection the video's Overlay menu drives — one state, two surfaces. */
+  smoothing: SmoothingKey;
+  onPickSmoothing: (k: SmoothingKey) => void;
 }) {
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
@@ -106,6 +112,30 @@ export default function DebugMenu({ id, reanalyze, clubTest, cached, sel, onPick
               <button type="button" onClick={clubTest.dismiss}
                       className="ml-2 underline decoration-dotted">dismiss</button>
             </p>
+          )}
+
+          {/* ---- Legacy trace smoothing (D46, render-time) — only while tests are Off ---- */}
+          {sel === null && (
+            <>
+              <p className="mt-3 text-[9px] font-bold uppercase tracking-[.18em] text-neutral-600">
+                Legacy trace smoothing
+              </p>
+              <div className="mt-2 space-y-1">
+                {SMOOTHING_OPTIONS.map((o) => (
+                  <button key={o.key} type="button"
+                          onClick={() => onPickSmoothing(o.key)}
+                          title={o.hint}
+                          className={pickBtn(smoothing === o.key)}>
+                    <span className="flex items-baseline justify-between gap-2">
+                      <span className="truncate">{o.label}</span>
+                      <span className="shrink-0 text-[9px] uppercase text-neutral-600">
+                        {o.strength}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </>
           )}
 
           {/* ---- Path fit (Default + A–I, precomputed analyzer-side) ---- */}

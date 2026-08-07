@@ -30,7 +30,7 @@ export default function SwingStage({
   id, analysis, player, angles, moment, targetOverlay,
   toggles, setToggles, variant = "primary",
   autoStart = true, onReady, topLeft, topRight, onEditingChange, stages, phases, reanalyze,
-  experiment,
+  experiment, smoothing: smoothingProp, onSmoothing,
 }: {
   id: string;
   analysis: Analysis;
@@ -84,6 +84,11 @@ export default function SwingStage({
    * precomputed trace REPLACES the legacy trace: analyzer-fitted points drawn as-is with
    * plan §2.2's phase colors — no client smoothing, no follow-through samples. */
   experiment?: { test: TrackingTestId; variant: VariantId } | null;
+  /** Optional controlled legacy-trace smoothing. The workspace passes these for the
+   * PRIMARY stage so the Debug Menu can drive the same selection the Overlay menu shows;
+   * the comparison pane omits them and keeps its own per-stage choice (D46). */
+  smoothing?: SmoothingKey;
+  onSmoothing?: (k: SmoothingKey) => void;
 }) {
   const { videoRef, canvasRef, stageRef, frame, playing,
           seek, seekFile, toggle, playRange, onSeeked, win, nFrames } = player;
@@ -190,7 +195,9 @@ export default function SwingStage({
    * flattering method cannot hide how far it moved the line. Per-stage like `clubVar`, so the
    * comparison pane can be set differently while you decide which reads best.
    */
-  const [smoothing, setSmoothing] = useState<SmoothingKey>(DEFAULT_SMOOTHING);
+  const [localSmoothing, setLocalSmoothing] = useState<SmoothingKey>(DEFAULT_SMOOTHING);
+  const smoothing = smoothingProp ?? localSmoothing;
+  const setSmoothing = onSmoothing ?? setLocalSmoothing;
 
   /**
    * The three traced spans, from the corrected phase boundaries rather than from
