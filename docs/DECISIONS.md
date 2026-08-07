@@ -3080,3 +3080,29 @@ Measured on the seven out/ folders: perfect 415 obs → 829 CFR (414 duplicated)
 161 → 322 (all duplicated), 6iron-1 504 → 519 (8 dup groups), swing1 399 → 396 (3 source
 frames dropped — a >60 fps stretch), all seven with 48 kHz AAC audio. Every fixture's
 "effective frame rate" is now a recorded fact instead of a guess.
+
+## D55 — The `club_tracking` experiment block: snake_case, append-only, atomically merged
+
+Status: ACTIVE
+
+Experiment results from the 12-test club-tracking evaluation live in `analysis.json` under
+an optional top-level `club_tracking` block (plan §25), merged per test id by
+`swingsage/club_tracking/experiment_store.py` and runnable via `scripts/club_test.py`.
+Decisions made autonomously (user directive 2026-08-07: no approval gates — decide, log,
+proceed):
+
+- **snake_case keys**, not the plan sketch's camelCase — the artifact is uniformly
+  snake_case and consistency beats fidelity to a sketch.
+- **Append-only and optional**: the block appears on first merge; legacy artifacts lack it
+  and every reader treats that as normal. `burnin.py`'s `SCHEMA_VERSION` is untouched —
+  same reasoning as D48's posture patch: an optional gained block, not a new full-contract
+  assertion.
+- **Trace scope is address→impact only** (plan §2.1) with `phase_spans` for
+  backswing/downswing color roles; no follow-through samples exist in any variant.
+- **Continuity gate v1**: `display_mode = split_at_top` iff the default variant bridges the
+  top on `inferred` samples for > 150 ms; else `continuous`. The full §23 metric suite is
+  deferred until a real tracker exists (and per the user's directive, quality judgment is
+  visual anyway).
+- **Single writer per swing** (plan §29.7): `.experiment.lock` beside the artifact
+  (stale-broken after 300 s), tmp write, `os.replace`. A re-merge replaces only its own
+  `experiments[test_id]` entry.

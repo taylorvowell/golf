@@ -40,6 +40,42 @@ Phase 7 — Hybrids:
 Phase 8 — Production reduction:
 - **20** Reduce the winning hybrid, freeze versions, lock regression fixtures, final benchmark report (plan §35–36)
 
+## 06 - Test 6: Grip-Centered Kinematic Reconstruction
+**Completed:** 2026-08-07 18:26 UTC
+**Phase:** Phase 1 — Deterministic baselines (revised arc)
+**Summary:** First registered tracker. `tests_impl/t6_grip_kinematic.py` anchors on the
+existing Stage 4 head detections (conf ≥ 0.35, interp half-weight), decomposes head−grip
+into unwrapped angle + projected radius, fits weighted splines (radius heavily smoothed —
+the plan §15 "never constant" correction), and reconstructs unanchored frames as honest
+`inferred` kinematic observations with decaying confidence. Hermetic test: a hidden 31%
+anchor span reconstructs within 0.03 normalized units. Ran over all 7 fixtures — every
+artifact now carries `club_tracking.experiments.t6_grip_kinematic` with 10 variants and
+correct phase spans (~0.1–0.4 s each). Suite: 116 passed.
+**Notes:** TACTICAL REORDER (autonomy directive): T6 executed as step 06, the player/debug
+menu moves to step 07 — so the UI step builds against real experiment data instead of
+empty menus. Anchor fractions are 97–100% on these fixtures (the classical solve already
+covers them); T6's reconstruction value shows on gaps, and it is the designated gap-filler
+expert for Tests 8/9.
+
+---
+
+## 05 - Experiment Schema and Atomic Merge
+**Completed:** 2026-08-07 18:10 UTC
+**Phase:** Phase 0 — Ground truth and shared infrastructure (revised arc)
+**Summary:** `experiment_store.py` builds plan-§25 experiment entries (snake_case,
+append-only optional `club_tracking` block; address→impact trace scope with
+backswing/downswing phase spans; continuity gate v1: split_at_top iff the default fit
+bridges top on inferred samples > 150 ms) and merges them atomically under a stale-safe
+per-swing lock — a re-merge replaces only its own experiment. `scripts/club_test.py` is the
+runner the debug menu's API will call (`--list`, exit 2 on declared-but-unbuilt tests).
+7 new tests; suite: 111 passed. Logged as D55. Executed WITHOUT an approval stop per the
+user's autonomy directive — the block is append-only so it stays reversible.
+**Notes:** burnin's SCHEMA_VERSION deliberately untouched (D48-style optional-block
+reasoning). Cached experiments are never recomputed by the runner; re-run is an explicit
+caller choice (plan §28).
+
+---
+
 ## 04 - Analyzer-Side Path-Fit Registry
 **Completed:** 2026-08-07 17:52 UTC
 **Phase:** Phase 0 — Ground truth and shared infrastructure (revised arc)
