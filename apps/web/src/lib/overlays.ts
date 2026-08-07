@@ -81,7 +81,7 @@ export const OVERLAY_GROUPS: OverlayGroup[] = [
       },
       {
         key: "clubOnly", label: "Isolate the club (subtract golfer)",
-        hint: "only what moves and is not the body — the club by elimination",
+        hint: "golfer+club minus the golfer — the club by set difference",
       },
       { key: "outline", label: "Draw the outline" },
     ],

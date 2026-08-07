@@ -171,12 +171,14 @@ export default function SwingStage({
    * the fetch 404s and the overlay draws nothing; `scripts/resegment.py` puts it back.
    */
   const hasSil = !!analysis.posture;
-  const silhouette = useSilhouette(id, hasSil && (toggles.isolate || toggles.outline));
-  /** Golfer+club rings (scripts/isolate.py) — fetched only when its toggle goes on; a
-   * 404 simply draws nothing, and the menu hint says how to generate it. */
-  const isolation = useSilhouette(id, toggles.isolateClub, "isolation");
-  /** The subtractive view: attached motion minus the body — the club by elimination. */
-  const clubOnly = useSilhouette(id, toggles.clubOnly, "club-only");
+  const silhouette = useSilhouette(
+    id, hasSil && (toggles.isolate || toggles.outline || toggles.clubOnly));
+  /** Golfer+club rings (scripts/isolate.py) — fetched only when a toggle needs them; a
+   * 404 simply draws nothing, and the menu hint says how to generate it. The club-only
+   * view needs BOTH ring sets: it is (golfer+club) minus (golfer), composed at fill time
+   * by the even-odd rule — no third artifact, no motion flicker. */
+  const isolation = useSilhouette(
+    id, toggles.isolateClub || toggles.clubOnly, "isolation");
   const buttLine = analysis.posture?.butt_line ?? null;
 
   /**
@@ -456,14 +458,11 @@ export default function SwingStage({
      * every other ring: the scrim then covers everything the golfer is not, and the holes come
      * back as scrim too. No second path, no clip, no compositing mode.
      */
-    const rings = (t.isolate || t.outline) ? silhouette.byFrame.get(frame) : undefined;
-    // Golfer+club rings replace the body-only scrim when their toggle is on — the union
-    // artifact shares silhouette.json's exact shape, so the same fill path renders both.
-    // The subtractive club-only view outranks both isolations: it is the narrowest cut.
-    const clubOnlyRings = t.clubOnly ? clubOnly.byFrame.get(frame) : undefined;
-    const isoRings = t.isolateClub ? isolation.byFrame.get(frame) : undefined;
-    const ringsToPath = (rr: [number, number][][]) => {
-      const p = new Path2D();
+    const bodyRings = (t.isolate || t.outline || t.clubOnly)
+      ? silhouette.byFrame.get(frame) : undefined;
+    const isoRings = (t.isolateClub || t.clubOnly)
+      ? isolation.byFrame.get(frame) : undefined;
+    const ringsToPath = (p: Path2D, rr: [number, number][][]) => {
       for (const ring of rr) {
         p.moveTo(ring[0][0] * w, ring[0][1] * h);
         for (let i = 1; i < ring.length; i++) p.lineTo(ring[i][0] * w, ring[i][1] * h);
@@ -471,23 +470,40 @@ export default function SwingStage({
       }
       return p;
     };
-    const scrimRings = clubOnlyRings?.length ? clubOnlyRings
-      : isoRings?.length ? isoRings
-      : (t.isolate ? rings : undefined);
-    if (scrimRings?.length) {
-      const scrim = new Path2D();
+    /**
+     * One even-odd scrim serves all three isolation modes. The club-only view is the
+     * literal set difference (golfer+club) − (golfer), composed by the fill rule: a
+     * pixel inside the union crosses two rings (rect + union) and stays visible; inside
+     * the body it crosses three and is dimmed again. No third artifact, and no flicker
+     * on frames where the club barely moved — the body always closes the scrim.
+     */
+    const scrim = new Path2D();
+    let scrimOn = false;
+    if (t.clubOnly && isoRings?.length) {
+      ringsToPath(scrim, isoRings);
+      if (bodyRings?.length) ringsToPath(scrim, bodyRings);
+      scrimOn = true;
+    } else if (t.isolateClub && isoRings?.length) {
+      ringsToPath(scrim, isoRings);
+      scrimOn = true;
+    } else if (t.isolate && bodyRings?.length) {
+      ringsToPath(scrim, bodyRings);
+      scrimOn = true;
+    }
+    if (scrimOn) {
+      const full = new Path2D();
       // The whole frame at this zoom, not the visible crop — a rect stopping at the crop
       // window would leave the picture un-dimmed anywhere the window is later widened.
-      scrim.rect(0, 0, w, h);
-      scrim.addPath(ringsToPath(scrimRings));
+      full.rect(0, 0, w, h);
+      full.addPath(scrim);
       ctx.fillStyle = "rgba(8,10,14,.86)";
-      ctx.fill(scrim, "evenodd");
+      ctx.fill(full, "evenodd");
     }
-    if (t.outline && rings?.length) {
+    if (t.outline && bodyRings?.length) {
       ctx.strokeStyle = "rgba(226,232,240,.9)";
       ctx.lineWidth = Math.max(1.5, w / 520);
       ctx.lineJoin = "round";
-      ctx.stroke(ringsToPath(rings));
+      ctx.stroke(ringsToPath(new Path2D(), bodyRings));
     }
 
     const drawSkel = (kp: number[][]) => {
@@ -756,8 +772,7 @@ export default function SwingStage({
     }
   }, [analysis, frame, idx, spans, t, rawBoxes, club, angles, angleFields, view,
       canvasRef, stageRef, targetOverlay, marks, markers.editing, handle, tracePath,
-      experimentPieces, silhouette.byFrame, isolation.byFrame, clubOnly.byFrame,
-      buttLine]);
+      experimentPieces, silhouette.byFrame, isolation.byFrame, buttLine]);
 
   /**
    * Screen point -> normalized frame coordinate, inverting exactly the transform `draw` applies.
