@@ -1,5 +1,9 @@
 # Research Brief: Club-Head Tracking & Swing Tracing
 
+> **Deliverable:** the design produced from this brief lives at
+> [`docs/CLUB-TRACKING-DESIGN.md`](CLUB-TRACKING-DESIGN.md) — seven candidate tracking
+> approaches, smoothing options, and a wiring plan. Nothing in it is built yet.
+
 > **How to use this file:** copy everything below the horizontal rule into your research AI.
 > Parts 1–3 are the environment it will be building in. Part 4 is the task. Part 5 is the
 > output format.

@@ -43,6 +43,29 @@ SwingSage is an upload-based (not live) golf swing analysis app. A golfer upload
    simulator's bird's-eye club-face/impact readout; AI parses both into structured data.
 7. **Swing Log** — every swing (video analysis + simulator data) stored as a session entry;
    histories, trends, and improvement tracking over time.
+8. **Coach sharing** — a coach role can view and annotate a linked student's swing log, not
+   just their own. This is a stated target of the product, not a "someday" idea — the data
+   model must support it, even where the coach-facing UI itself ships later.
+
+## Who This Is For, and How It's Funded
+
+Two user roles, not one: **golfers** (upload and review their own swings) and **coaches**
+(review and annotate one or more linked students' swing logs — a permission relationship, not
+just another golfer account). The product is subscription-funded: a **free tier** (capped
+uploads/history, or scoring without the full coach narrative — exact gating is a product
+decision, not an engineering one, and isn't fixed by this doc) and a **paid tier** unlocking
+full history, simulator ingestion, and unlimited analysis.
+
+This is a real target, not aspirational color — it means "production-grade" here concretely
+includes: **real authentication** (not the single seeded admin user the schema runs against
+today, per `docs/DECISIONS.md` D38), **payment processing** tied to the tiers above, an
+**uptime/hosting commitment** (the app reachable by real users, not just runnable by a
+developer via a hand-invoked CLI), and a **data privacy/retention policy** (users are
+uploading video of themselves swinging a golf club — storage, deletion, and who-can-see-what
+need a stated answer before this ships to strangers). None of this is built yet — `CLAUDE.md`'s
+"Current State" is the source of truth for what's actually implemented versus this doc's
+target state. Don't let the gap between the two silently narrow by treating this section as
+already true.
 
 ## Non-Negotiable Constraints
 

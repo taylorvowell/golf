@@ -3040,3 +3040,43 @@ found, while testing D52's button.
 if not. The general rule this is an instance of: a field whose only consumer is a rarely-used
 code path is a field that will be silently wrong. Verify it at the point it is written, where the
 truth is still at hand, rather than at the point it is read, where it is a mystery.
+
+## D54 — Source timing is preserved at Stage 0 as a sidecar, PTS-from-packets primary
+
+Status: ACTIVE
+
+The CFR-60 normalize (Stage 0) rewrites what the camera actually recorded and kept no
+record: `perfect` is a 30 fps source where every CFR frame pair is one real observation
+shown twice, `6iron-1` is a 59.28 fps VFR source silently resampled, and nothing anywhere
+read per-frame PTS — `video.probe()` even ran ffprobe with `-select_streams v:0`, so audio
+streams were invisible, while `-an` strips audio from every derivative. The club-tracking
+test plan (§3.1, §6) makes the distinction between a *genuine camera observation* and a
+*normalized output sample* foundational for Tests 9/11/12, and audio metadata a
+prerequisite for Test 12.
+
+**Decision.** `swingsage/source_timing.py` demuxes the ORIGINAL upload (two ffprobe calls,
+no decode: stream/format metadata with audio visible, plus video-packet `pts_time`), maps
+every source frame onto the normalized CFR timeline (`map_observations`, a pure function —
+output frame `n` at `n/fps` shows the latest source frame presented by then, half-frame
+epsilon against boundary flapping), and writes `out/<stem>/source_timing.json` atomically.
+`burnin.py` writes it in Stage 0 (failure degrades to a warning, never fatal);
+`scripts/retiming.py` backfills existing out/ folders without re-running anything (same
+reasoning as `resegment.py`/`rescore.py` — never re-run burnin to gain one artifact).
+
+Three boundaries drawn deliberately:
+
+- **`analysis.json` is untouched** — no new fields, no schema bump. Source timing is a
+  separate artifact until the `clubTracking` experiment schema lands (plan §25), because
+  touching the player contract is a human-review change and the frontend is not required
+  to consume timing at all (plan §6).
+- **PTS-from-packets is the primary method; duplicate-image detection was NOT built.** The
+  plan reserves image differencing for containers that lie about PTS — build it as a
+  fallback inside the test that first needs it, not speculatively.
+- **Audio is still stripped from derivatives; only metadata (presence, rate, codec) is
+  recorded.** Test 12 reads waveforms from the original at `video.source.path` (D53
+  guarantees it). If an upload flow ever deletes originals, that step must revisit this.
+
+Measured on the seven out/ folders: perfect 415 obs → 829 CFR (414 duplicated), pro_2
+161 → 322 (all duplicated), 6iron-1 504 → 519 (8 dup groups), swing1 399 → 396 (3 source
+frames dropped — a >60 fps stretch), all seven with 48 kHz AAC audio. Every fixture's
+"effective frame rate" is now a recorded fact instead of a guess.

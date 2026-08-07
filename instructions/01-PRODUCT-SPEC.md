@@ -6,8 +6,11 @@
   a home simulator, wants concrete feedback and proof of improvement.
 - **The Sim Owner**: has a launch monitor (Garmin, SkyTrak, Mevo, Trackman, Uneekor, etc.),
   wants swing video + monitor numbers unified in one log.
-- **The Coach (future)**: reviews students' swing logs, annotates. Out of scope for v1 but
-  don't design the data model in a way that precludes multi-user sharing later.
+- **The Coach**: reviews and annotates one or more linked students' swing logs. A stated
+  product target, not a someday idea — needs a real permission relationship (coach ↔ student,
+  not just "another golfer account"), even where the coach-facing UI ships after the golfer
+  flow. See "Who This Is For, and How It's Funded" in `00-README.md` for the business-model
+  framing this persona sits inside (subscription tiers, real auth, data privacy).
 
 ## Core Objects (user-facing vocabulary)
 
@@ -86,9 +89,27 @@ Pipeline stages (details in docs 03–05):
   panel. Compare any two swings.
 - Export: swing entry as JSON; log as CSV.
 
-### F8. Accounts & Settings (minimal v1)
-- Single-user local-first is fine for v1 (SQLite). Auth (email magic link) in v1.5.
+### F8. Accounts, Subscriptions & Coach Sharing
+- **Real authentication** — not the single seeded admin user the app runs against today
+  (`docs/DECISIONS.md` D38). Every user-scoped table already carries a real `user_id` FK for
+  exactly this reason; what's missing is the auth layer itself and sign-up/login flows.
+- **Two roles**: golfer and coach. A coach is linked to one or more student golfers via an
+  explicit sharing/permission grant (student invites or approves — never coach-initiated
+  unilateral access); a coach sees linked students' swing logs and can annotate, but does not
+  own their data.
+- **Subscription tiers**: free (capped uploads/history, or scoring without the full coach
+  narrative — exact gating is a product decision to make later, not fixed here) and paid
+  (full history, simulator ingestion, unlimited analysis). Payment processing (e.g. Stripe)
+  ties account state to tier.
+- **Data privacy/retention**: users upload video of themselves — a stated policy on storage
+  duration, deletion, and exactly who can see a given swing (owner; linked coach if shared;
+  no one else) is required before this is exposed to real users, not an afterthought.
+- **Hosting/uptime**: production means the app and analyzer are reliably reachable by real
+  users, not hand-invoked locally via `burnin.py` on a developer machine.
 - Profile: handedness, height (used to sanity-scale pose), default club set.
+
+None of the above is built yet — this section states the target, not the current
+implementation. `CLAUDE.md`'s "Current State" is the source of truth for what actually exists.
 
 ---
 

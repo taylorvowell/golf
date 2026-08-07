@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "phases": [
+    { "id": "club-tracking-rnd", "label": "Club Tracking R&D (12-test evaluation)", "order": 1 }
+  ],
+  "tracks": [
+    {
+      "id": "club-tracking-test",
+      "spine": true,
+      "lifecycle": "active",
+      "phase": "club-tracking-rnd",
+      "goal": "Implement and evaluate the 12 club-head tracking tests from docs/SwingSage_Club_Tracking_Comprehensive_12_Test_Plan.md: shared source-time/audio infrastructure, ground truth, evaluation harness, path-fit registry, the 12 selectable tests, and production reduction of the winner.",
+      "statusFile": ".claude/feature-tracks/club-tracking-test/_STATUS.json",
+      "specRefs": [
+        "docs/SwingSage_Club_Tracking_Comprehensive_12_Test_Plan.md",
+        "instructions/04-CLUB-TRACKING.md"
+      ],
+      "owns": [
+        "services/analyzer/swingsage/club_tracking",
+        "services/analyzer/scripts/club_eval",
+        "apps/web/src/components/debug-menu"
+      ],
+      "dependsOn": []
+    }
+  ],
+  "shared": []
+}

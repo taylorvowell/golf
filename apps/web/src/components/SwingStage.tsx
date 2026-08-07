@@ -17,8 +17,6 @@ import type { SwingStages } from "@/lib/useSwingStages";
 import type { PhaseFrames } from "@/lib/swingPhases";
 import SettingsMenu from "./SettingsMenu";
 
-const LOW = 0.5;
-
 /**
  * The video stage: picture and overlay canvas.
  *
@@ -449,44 +447,30 @@ export default function SwingStage({
       }
     }
 
-    const drawSkel = (kp: number[][], alpha: number) => {
-      ctx.globalAlpha = alpha;
+    const drawSkel = (kp: number[][]) => {
       ctx.lineWidth = Math.max(2, w / 320);
       ctx.lineCap = "round";
+      ctx.setLineDash([]);
       for (const [a, b, side] of BONES) {
         const pa = kp[idx[a]], pb = kp[idx[b]];
         if (!pa || !pb || pa[2] <= 0 || pb[2] <= 0) continue;
-        const lo = Math.min(pa[2], pb[2]);
-        if (t.hideLow && lo < LOW) continue;
         ctx.strokeStyle = SIDE_COLOR[side];
-        ctx.setLineDash(t.confStyle && lo < LOW ? [7, 5] : []);
         ctx.beginPath();
         ctx.moveTo(pa[0] * w, pa[1] * h);
         ctx.lineTo(pb[0] * w, pb[1] * h);
         ctx.stroke();
       }
-      ctx.setLineDash([]);
       const R = Math.max(3, w / 190);
       analysis.pose.keypoint_names.forEach((n, i) => {
         const p = kp[i];
         if (!p || p[2] <= 0 || HIDE_JOINT.test(n)) return;
-        if (t.hideLow && p[2] < LOW) return;
         const side = n.startsWith("left_") ? "L" : n.startsWith("right_") ? "R" : "M";
         ctx.beginPath();
         ctx.arc(p[0] * w, p[1] * h, R, 0, Math.PI * 2);
-        if (t.confStyle && p[2] < LOW) {
-          ctx.strokeStyle = SIDE_COLOR[side]; ctx.lineWidth = 2; ctx.stroke();
-        } else {
-          ctx.fillStyle = SIDE_COLOR[side]; ctx.fill();
-        }
+        ctx.fillStyle = SIDE_COLOR[side];
+        ctx.fill();
       });
-      ctx.globalAlpha = 1;
     };
-
-    if (t.ghost && analysis.events) {
-      const g = analysis.pose.frames[analysis.events.address.frame];
-      if (g) drawSkel(g.kp, 0.22);
-    }
 
     // `club` here is the selected variant (or the primary solution) — see the memo above.
     if (club && t.trace && club.trace_enabled && spans) {
@@ -658,7 +642,7 @@ export default function SwingStage({
       }
     }
 
-    if (t.skeleton) drawSkel(fr.kp, 1);
+    if (t.skeleton) drawSkel(fr.kp);
 
     /**
      * The butt line — a vertical tangent to the rear of the seat, measured over the address
@@ -688,16 +672,6 @@ export default function SwingStage({
       ctx.beginPath();
       ctx.moveTo(x, y0); ctx.lineTo(x, y1);
       ctx.stroke();
-    }
-
-    if (t.grip) {
-      const g = fr.kp[idx["grip_center"]];
-      if (g && g[2] > 0) {
-        ctx.strokeStyle = "#fff"; ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(g[0] * w, g[1] * h, Math.max(8, w / 90), 0, Math.PI * 2);
-        ctx.stroke();
-      }
     }
 
     // Selected angles, drawn last so the arc and its label sit above the skeleton they are

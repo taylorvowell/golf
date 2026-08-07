@@ -6,11 +6,11 @@
  * plus a label plus a caveat paragraph in three places.
  *
  * The canvas stack order is fixed and lives in the draw function, not here (doc 02):
- * `video → ghost → trace → club → raw boxes → skeleton → grip → angles`.
+ * `video → trace → club → raw boxes → skeleton → angles`.
  */
 
 export type ToggleKey =
-  | "skeleton" | "confStyle" | "hideLow" | "ghost" | "grip"
+  | "skeleton"
   | "club" | "trace" | "grow" | "rawDet" | "crop"
   | "isolate" | "outline" | "butt";
 
@@ -22,11 +22,11 @@ export type Toggles = Record<ToggleKey, boolean>;
  * Exactly three overlays ship ON: the stick figure, the club head trace, and the trace
  * following the frame as it grows. That trio is the single most compelling image the
  * pipeline can produce and what a first-time user should see with no menu digging.
- * Everything else — confidence styling, the raw shaft/head line, crop-to-golfer, etc. —
- * starts OFF so the first render is uncluttered; a viewer can layer them back in.
+ * Everything else — the raw shaft/head line, crop-to-golfer, etc. — starts OFF so the
+ * first render is uncluttered; a viewer can layer them back in.
  */
 export const DEFAULT_TOGGLES: Toggles = {
-  skeleton: true, confStyle: false, hideLow: false, ghost: false, grip: false,
+  skeleton: true,
   club: false, trace: true, grow: true, rawDet: false, crop: false,
   isolate: false, outline: false, butt: false,
 };
@@ -63,10 +63,6 @@ export const OVERLAY_GROUPS: OverlayGroup[] = [
     title: "Body",
     items: [
       { key: "skeleton", label: "Stick figure" },
-      { key: "confStyle", label: "Confidence styling", hint: "below 0.5 goes dashed and hollow" },
-      { key: "hideLow", label: "Hide joints below 0.5" },
-      { key: "ghost", label: "Ghost address pose", hint: "the setup skeleton, held at 22%" },
-      { key: "grip", label: "Mark grip centre" },
     ],
   },
   {

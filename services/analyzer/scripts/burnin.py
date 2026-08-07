@@ -28,7 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from swingsage import (checkpoints, club, club_detect, events, face,  # noqa: E402
                        metrics, pose, pose_rtm, postprocess, render, scoring,
-                       silhouette, video)
+                       silhouette, source_timing, video)
 from swingsage.skeleton import KEYPOINT_NAMES, strip_derived  # noqa: E402
 
 # Bump whenever a field is ADDED to analysis.json, not only on breaking changes.
@@ -285,6 +285,20 @@ def main() -> int:
     print(f"normalized {norm.width}x{norm.height} @ {norm.fps:.3f} "
           f"frames={norm.frame_count} | analysis {anal.width}x{anal.height} "
           f"({time.time() - t:.1f}s)")
+
+    # Source timing sidecar (D54): what the camera actually observed, before the CFR
+    # resample rewrote it. Degrades to a warning — the pipeline never fails over metadata.
+    try:
+        timing = source_timing.build(src, out_fps=norm.fps,
+                                     out_frame_count=norm.frame_count)
+        source_timing.write_sidecar(timing, out)
+        dups = sum(1 for o in timing.observations if o.is_duplicate_group)
+        print(f"timing     {timing.distinct_observation_count} source observations "
+              f"({dups} duplicated into CFR), audio="
+              + (f"{timing.audio_sample_rate}Hz {timing.audio_codec}"
+                 if timing.has_audio else "none"))
+    except Exception as e:  # noqa: BLE001 — sidecar is advisory, never fatal
+        print(f"           ! source timing failed ({e}); {source_timing.SIDECAR_NAME} skipped")
 
     # --- Stage 2: pose --------------------------------------------------------------
     def prog(done, total):
