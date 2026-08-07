@@ -116,6 +116,32 @@ def build_prompt(entries: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def build_verify_prompt(entries: list[dict]) -> str:
+    """Verify-and-adjust mode (t28): each crop carries a MAGENTA circle at our current
+    club-head estimate. The model confirms the cell or answers the corrected one."""
+    lines = [
+        "Verify GOLF CLUB HEAD positions in each image. Every image is one frame from",
+        "the same swing's DOWNSWING (high club speed — the head may be a motion-blurred",
+        "streak), cropped with a labeled grid (columns A-L, rows 1-12) and a MAGENTA",
+        "CIRCLE at our current estimate of the club head.",
+        "For each image: if the circle is on the club head, answer its cell. If it is",
+        "NOT, answer the cell where the club head actually is (for a blur streak: the",
+        "streak's leading tip). The head is at the far end of the shaft from the hands.",
+        "",
+        "Images (temporal order), with our current cell:",
+    ]
+    for e in entries:
+        lines.append(f"  frame {e['frame']} (current: {e['current_cell']}): {e['path']}")
+    lines += [
+        "",
+        "Respond with ONLY a JSON array, one object per image, same order:",
+        '[{"frame": <int>, "visible": true|false, "cell": "F7", "confidence": 0.0-1.0}]',
+        'Use "visible": false (cell may be null) when you genuinely cannot find the',
+        "club head. No prose, no markdown fences.",
+    ]
+    return "\n".join(lines)
+
+
 def validate_response(obj, expected_frames: list[int]) -> str | None:
     if not isinstance(obj, list):
         return "response is not a JSON array"
@@ -163,11 +189,11 @@ def cli_array_provider(prompt: str) -> list | None:
 
 
 def locate(entries: list[dict], cache_path: Path | None = None,
-           provider=None) -> tuple[list[dict] | None, str]:
+           provider=None, prompt_builder=None) -> tuple[list[dict] | None, str]:
     """One call, one retry, cached — same discipline as adjudication.adjudicate."""
     import hashlib
 
-    prompt = build_prompt(entries)
+    prompt = (prompt_builder or build_prompt)(entries)
     frames = [e["frame"] for e in entries]
     key = hashlib.sha256((PROMPT_VERSION + prompt).encode()).hexdigest()[:24]
     cache = {}
