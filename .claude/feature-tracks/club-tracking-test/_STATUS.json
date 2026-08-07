@@ -1,14 +1,14 @@
 {
   "schemaVersion": 1,
   "featureName": "club-tracking-test",
-  "currentStep": "04",
+  "currentStep": "05",
   "phase": "Phase 0 — Ground truth and shared infrastructure",
-  "lastUpdated": "2026-08-07T17:28:00Z",
+  "lastUpdated": "2026-08-07T17:52:00Z",
   "steps": {
     "01": { "status": "complete", "completedAt": "2026-08-07T17:07:38Z" },
     "02": { "status": "complete", "completedAt": "2026-08-07T17:14:00Z" },
     "03": { "status": "complete", "completedAt": "2026-08-07T17:28:00Z" },
-    "04": { "status": "not-started" },
+    "04": { "status": "complete", "completedAt": "2026-08-07T17:52:00Z" },
     "05": { "status": "not-started" },
     "06": { "status": "not-started" },
     "07": { "status": "not-started" },
@@ -23,17 +23,8 @@
     "16": { "status": "not-started" },
     "17": { "status": "not-started" },
     "18": { "status": "not-started" },
-    "19": { "status": "not-started" },
-    "20": { "status": "not-started" }
+    "19": { "status": "not-started" }
   },
-  "blockers": [
-    {
-      "step": "04+",
-      "classification": "USER-ACTION-NEEDED",
-      "loggedAt": "2026-08-07T17:28:00Z",
-      "description": "Fixtures need human club-head + event labeling before any evaluation can report real accuracy. Tooling shipped in step 03: run `python scripts/label_club.py out/<stem>` (and `--events`) from services/analyzer for each of the 7 analysed fixtures. Step 04 can be BUILT against synthetic truth meanwhile, but plan §8 accuracy numbers and test_hand_labeled.py stay unfilled until labels exist. Also confirm the labeling GUI opens and labels/resumes correctly on this machine — it cannot be auto-verified.",
-      "blocking": false
-    }
-  ],
+  "blockers": [],
   "skipped": []
 }

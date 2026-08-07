@@ -40,6 +40,44 @@ Phase 7 — Hybrids:
 Phase 8 — Production reduction:
 - **20** Reduce the winning hybrid, freeze versions, lock regression fixtures, final benchmark report (plan §35–36)
 
+## 04 - Analyzer-Side Path-Fit Registry
+**Completed:** 2026-08-07 17:52 UTC
+**Phase:** Phase 0 — Ground truth and shared infrastructure (revised arc)
+**Summary:** `swingsage/club_tracking/pathfit.py` implements all ten plan-§22 variants
+(Default/A/B robust IRLS-Tukey weighted smoothing splines, C RTS constant-acceleration
+smoother, D phase-split Hermite joined at top, E minimum-jerk, F few-knot LSQ B-spline,
+G centripetal Catmull-Rom α=0.5, H Whittaker-Henderson with GCV-picked λ, I SG+Catmull-Rom)
+over one shared sample grid, JSON-ready for step 05's schema. Gap samples are `inferred`
+with decayed confidence capped by bounding observations; endpoints pinned (D43). 12 new
+hermetic tests over synthetic arcs with noise/gaps/outliers — suite: 104 passed. No new
+dependencies (scipy 1.18 already in venv).
+**Notes:** These tests are unit tests of the MATH (noise suppression, gap honesty,
+determinism), not accuracy evaluation — consistent with the user-judges-visually directive.
+F is few-knot LSQ B-spline rather than literal Schneider fit-and-subdivide; revisit only if
+the user's eye dislikes F.
+
+---
+
+## ARC REVISION — 2026-08-07 (user directive: no automated accuracy tests)
+The user will judge tracking quality VISUALLY by playing a swing in the player — no plan-§8
+accuracy-metrics harness, no hand-labeling drive, no label-based gates. The original step 04
+(evaluation harness) is REMOVED and the arc compresses to 19 steps; player-visible surfaces
+move up so visual judging is possible as early as possible. Step 03's schema + labeling tool
+stay committed but dormant (only relevant again if a learned model ever needs TRAINING
+labels — user's call). Structural/invariant tests remain; ablations (§33) happen visually
+via the debug menu. Revised arc from here:
+
+- **04** Analyzer-side path-fit registry: Default + A–I variants (plan §22)
+- **05** `analysis.json` `clubTracking` experiment schema + atomic merge (plan §25, §29.7) — human-review-required
+- **06** Debug menu, safe re-analysis enum flow, player rendering (blue/green, address→impact), scrub segments (plan §27–31)
+- **07** Test 6 Grip Kinematic · **08** Test 1 Candidate Graph · **09** Test 10 Physics/Conic + event refiner + impact corridor
+- **10** Test 3 Point Tracking · **11** Test 4 Segmentation · **12** Test 5 Blur/SEA-RAFT/Deblatting
+- **13** Test 2 Temporal Heatmap · **14** Test 12 A/V Impact · **15** Test 11 VFI Densification
+- **16** Test 7 Claude Adjudication · **17** Test 8 Phase Fusion · **18** Test 9 Forensic Fusion
+- **19** Production reduction of the user-picked winner + final visual sign-off
+
+---
+
 ## 03 - Ground Truth Schema, Labeling Tool, and Mirrored Fixtures
 **Completed:** 2026-08-07 17:28 UTC
 **Phase:** Phase 0 — Ground truth and shared infrastructure
