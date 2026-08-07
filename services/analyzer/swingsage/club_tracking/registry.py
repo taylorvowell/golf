@@ -31,6 +31,7 @@ TEST_IDS: dict[str, str] = {
     "t16_ridge_trace": "Motion Ridge Centerline",
     "t17_llm_gap_fill": "Confidence-Triaged LLM Gap Fill",
     "t18_shaft_line": "Shaft-Line Far End",
+    "t19_legacy_isolation_gate": "Legacy Solve Gated by Isolation",
 }
 
 TESTS: dict[str, type] = {}

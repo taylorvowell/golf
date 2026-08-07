@@ -53,15 +53,23 @@ def _mask_to_rings(mask: np.ndarray, kernel: np.ndarray, w: int, h: int) -> list
     return rings
 
 
+FOOT_RADIUS = 0.055      # exclusion disk around each foot keypoint, of the long side —
+                         # shoe shuffle and turf spray are never the club (user directive);
+                         # the ball/club at address sits laterally OUTSIDE these disks
+
+
 def frame_rings(gray_prev: np.ndarray, gray_cur: np.ndarray,
                 body_rings: list | None,
-                grip: tuple[float, float] | None) -> tuple[list, list]:
+                grip: tuple[float, float] | None,
+                feet: list[tuple[float, float]] | None = None) -> tuple[list, list]:
     """One frame's (golfer+club union rings, CLUB-ONLY rings), both normalized.
 
     Club-only is the SUBTRACTIVE view (user request 2026-08-08): the kept moving
     components minus the body mask — the shaft/head poking out of the golfer survives
     because the subtraction uses the raw body, while attachment testing uses the dilated
-    one. One pass computes both; the generator is too slow to run twice."""
+    one. `feet` are normalized foot-keypoint positions; motion inside their exclusion
+    disks is dropped from the CLUB view only (it stays golfer in the union). One pass
+    computes both; the generator is too slow to run twice."""
     import cv2
     from scipy import ndimage
 
@@ -72,6 +80,11 @@ def frame_rings(gray_prev: np.ndarray, gray_cur: np.ndarray,
             np.zeros((h, w), dtype=np.uint8))
     kernel = np.ones((BODY_DILATE_PX, BODY_DILATE_PX), np.uint8)
     body_dil = cv2.dilate(body, kernel)
+
+    foot_mask = np.zeros((h, w), dtype=np.uint8)
+    for fx, fy in feet or []:
+        cv2.circle(foot_mask, (int(fx * w), int(fy * h)),
+                   int(FOOT_RADIUS * scale), 1, -1)
 
     motion = (np.abs(gray_cur.astype(np.float32) - gray_prev.astype(np.float32))
               >= DIFF_THRESH).astype(np.uint8)
@@ -92,7 +105,7 @@ def frame_rings(gray_prev: np.ndarray, gray_cur: np.ndarray,
             keep |= comp
 
     union = ((body > 0) | (keep > 0))
-    club = (keep > 0) & ~(body > 0)
+    club = (keep > 0) & ~(body > 0) & ~(foot_mask > 0)
     return (_mask_to_rings(union, kernel, w, h),
             _mask_to_rings(club, kernel, w, h))
 
@@ -100,6 +113,25 @@ def frame_rings(gray_prev: np.ndarray, gray_cur: np.ndarray,
 def union_rings(gray_prev, gray_cur, body_rings, grip) -> list:
     """Back-compat: the union view alone."""
     return frame_rings(gray_prev, gray_cur, body_rings, grip)[0]
+
+
+FOOT_KEYPOINTS = ("left_ankle", "right_ankle", "left_heel", "right_heel",
+                  "left_foot_index", "right_foot_index",
+                  "left_small_toe", "right_small_toe")
+
+
+def foot_positions(kp: list, names: list[str], min_conf: float = 0.3
+                   ) -> list[tuple[float, float]]:
+    """Confidence-gated foot keypoints for one pose frame."""
+    out = []
+    for n in FOOT_KEYPOINTS:
+        try:
+            x, y, c = kp[names.index(n)]
+        except (ValueError, IndexError):
+            continue
+        if c >= min_conf:
+            out.append((x, y))
+    return out
 
 
 def payload(frames: list[dict], w: int, h: int, frame_count: int) -> dict:

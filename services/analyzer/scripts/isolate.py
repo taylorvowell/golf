@@ -49,10 +49,12 @@ def isolate_one(out_dir: Path, dry_run: bool = False) -> bool:
     names = doc["pose"]["keypoint_names"]
     gi = names.index("grip_center")
     grip_by_frame = {}
+    feet_by_frame = {}
     for fr in doc["pose"]["frames"]:
         x, y, c = fr["kp"][gi]
         if c > 0:
             grip_by_frame[fr["f"]] = (x, y)
+        feet_by_frame[fr["f"]] = isolation.foot_positions(fr["kp"], names)
 
     t0 = time.time()
     cap = cv2.VideoCapture(str(video_p))
@@ -71,7 +73,8 @@ def isolate_one(out_dir: Path, dry_run: bool = False) -> bool:
             h, w = gray.shape
         if prev is not None:
             union, club = isolation.frame_rings(prev, gray, sil_by_frame.get(f),
-                                                grip_by_frame.get(f))
+                                                grip_by_frame.get(f),
+                                                feet=feet_by_frame.get(f))
             frames_out.append({"f": f, "p": union})
             club_out.append({"f": f, "p": club})
         prev = gray

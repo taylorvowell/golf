@@ -11,7 +11,7 @@
 
 export type ToggleKey =
   | "skeleton"
-  | "club" | "trace" | "grow" | "rawDet" | "crop"
+  | "club" | "trace" | "grow" | "allHeads" | "rawDet" | "crop"
   | "isolate" | "isolateClub" | "clubOnly" | "outline" | "butt";
 
 export type Toggles = Record<ToggleKey, boolean>;
@@ -27,7 +27,7 @@ export type Toggles = Record<ToggleKey, boolean>;
  */
 export const DEFAULT_TOGGLES: Toggles = {
   skeleton: true,
-  club: false, trace: true, grow: true, rawDet: false, crop: false,
+  club: false, trace: true, grow: true, allHeads: false, rawDet: false, crop: false,
   isolate: false, isolateClub: false, clubOnly: false, outline: false, butt: false,
 };
 
@@ -106,6 +106,10 @@ export const OVERLAY_GROUPS: OverlayGroup[] = [
       { key: "club", label: "Club shaft + head" },
       { key: "trace", label: "Club head trace", hint: "dashed where the club was not measured" },
       { key: "grow", label: "Trace follows the frame", hint: "draws up to the playhead as you scrub" },
+      {
+        key: "allHeads", label: "Every detected head (layered)",
+        hint: "all frames' heads at once — the constellation the solvers work from",
+      },
     ],
   },
   {
