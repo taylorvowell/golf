@@ -559,22 +559,10 @@ export default function SwingStage({
       // `dash` overrides it where dashing is a deliberate style (the experiment
       // backswing), which wants a tighter, more regular pattern.
       if (dashed) ctx.setLineDash(dash ?? [peak * 0.9, peak * 1.6]);
-      // A subtle drop shadow lifts the line off the turf and the golfer's shirt, where a
-      // flat stroke of either colour can vanish. Kept soft and close — offset far enough
-      // to read as depth, not far enough to look like a second, misaligned trace.
-      ctx.shadowColor = "rgba(0,0,0,.5)";
-      ctx.shadowBlur = peak * 0.7;
-      ctx.shadowOffsetX = peak * 0.12;
-      ctx.shadowOffsetY = peak * 0.22;
       ctx.beginPath();
       ctx.moveTo(P[0][0] * sx, P[0][1] * sy);
       for (let i = 1; i < P.length; i++) ctx.lineTo(P[i][0] * sx, P[i][1] * sy);
       ctx.stroke();
-      // Reset, or every later overlay (skeleton, angles, markers) inherits the shadow.
-      ctx.shadowColor = "transparent";
-      ctx.shadowBlur = 0;
-      ctx.shadowOffsetX = 0;
-      ctx.shadowOffsetY = 0;
       ctx.setLineDash([]);
       ctx.globalAlpha = 1;
     };
@@ -584,7 +572,7 @@ export default function SwingStage({
     // impact, bridges dashed. No client smoothing touches these (plan §37).
     if (experimentPieces && t.trace) {
       const growing = t.grow;
-      const peak = Math.max(2.5, w / 300) * 3.6;
+      const peak = Math.max(2.5, w / 300) * 2.1;
       for (const { color, dashed, pieces } of experimentPieces) {
         ctx.strokeStyle = color;
         for (const piece of pieces) {
@@ -610,7 +598,7 @@ export default function SwingStage({
         const pieces = tracePath[key];
         if (!pieces?.length) return;
         ctx.strokeStyle = TRACE_COLOR[key];
-        const peak = Math.max(2.5, w / 300) * 3.6;
+        const peak = Math.max(2.5, w / 300) * 2.1;
 
         // PHASE decides the style, not measurement (user directive 2026-08-08): the
         // backswing is dashed, the downswing solid, and nothing dims. Bridges used to
