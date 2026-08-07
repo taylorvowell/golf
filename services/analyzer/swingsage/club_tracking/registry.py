@@ -34,6 +34,8 @@ TEST_IDS: dict[str, str] = {
     "t19_legacy_isolation_gate": "Legacy Solve Gated by Isolation",
     "t20_raw_head_trace": "Raw Head Trace (red boxes only)",
     "t21_red_legacy_ball": "Red Boxes + Legacy Fill + Ball Impact",
+    "t22_red_dedup": "Red + Deduped Legacy",
+    "t23_red_connected": "Frame Red Box Connected",
 }
 
 TESTS: dict[str, type] = {}

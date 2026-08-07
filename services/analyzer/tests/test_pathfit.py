@@ -66,6 +66,17 @@ class TestRegistryShape:
         v = fit_variants(few, FPS, (100, 102))
         assert set(v) == set(VARIANT_IDS)  # linear fallback, no crash
 
+    def test_linear_default_is_straight_chords(self):
+        obs = _make_obs(noise=0.0, conf=1.0)
+        v = fit_variants(obs, FPS, FRAME_RANGE, linear_default=True)
+        by = {o.frame: o for o in obs}
+        for p in v["default"]:
+            if p["frame"] in by:
+                o = by[p["frame"]]
+                assert abs(p["x"] - o.x) < 1e-9 and abs(p["y"] - o.y) < 1e-9,                     "linear default moved an observed point"
+        # the lettered variants still smooth
+        assert v["b"] != v["default"]
+
     def test_even_length_phase_segment_does_not_crash(self):
         # 6 observations before top, even count — the savgol odd-window off-by-one
         # regression (6iron-1 via t3).

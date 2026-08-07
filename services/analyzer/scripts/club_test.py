@@ -61,7 +61,8 @@ def run(out_dir: Path, test_id: str) -> int:
     result.diagnostics.update(anchor_diag)
     frame_range = (ctx.events["address"], ctx.events["impact"])
     variants = fit_variants(result.observations, ctx.fps, frame_range,
-                            top_frame=ctx.events.get("top"))
+                            top_frame=ctx.events.get("top"),
+                            linear_default=getattr(test, "linear_default", False))
     exp = build_experiment(result, ctx, variants)
     merge_experiment(out_dir, exp)
 

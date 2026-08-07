@@ -63,7 +63,8 @@ def _make_doc(n=60):
                "interp": False} for f in range(n)]
     # red boxes everywhere EXCEPT a downswing hole at 40-46
     boxes = [{"f": f, "d": [{"c": 0, "xy": [0.3 + 0.005 * f, 0.6],
-                             "wh": [0.02, 0.02], "p": 0.8}]}
+                             "wh": [0.02, 0.02], "p": 0.8},
+                            {"c": 1, "xy": [0.4, 0.6], "wh": [0.45, 0.2], "p": 0.9}]}
              for f in range(n) if not 40 <= f < 47]
     legacy = [{"f": f, "head": [0.3 + 0.005 * f, 0.61], "conf": 0.7,
                "interp": False} for f in range(n)]

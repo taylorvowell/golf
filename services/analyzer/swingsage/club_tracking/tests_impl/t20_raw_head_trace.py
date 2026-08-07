@@ -18,22 +18,47 @@ from ..model import ClubObservation
 from ..registry import TEST_IDS, register
 
 HEAD_CLASS_NAME = "clubhead"
+GREEN_MARGIN = 1.2       # a red counts inside a green box grown by this factor
+
+
+def _in_green(hx: float, hy: float, greens: list[tuple[float, float, float, float]]
+              ) -> bool:
+    """User rule (2026-08-08): a red head detection only COUNTS when it sits inside a
+    same-frame green (shaft) box — the head is attached to the club, so a red with no
+    shaft under it is spurious. Strict: a frame with no green box validates nothing."""
+    for gx, gy, gw, gh in greens:
+        if (abs(hx - gx) <= gw / 2 * GREEN_MARGIN
+                and abs(hy - gy) <= gh / 2 * GREEN_MARGIN):
+            return True
+    return False
+
+
+def _best_heads(rows, is_head, is_green) -> dict[int, tuple[float, float, float]]:
+    """Shared harvest: per frame, greens first, then the best green-validated red."""
+    best: dict[int, tuple[float, float, float]] = {}
+    for row in rows:
+        f = row.get("f")
+        dets = row.get("d") or []
+        greens = [(d["xy"][0], d["xy"][1], d["wh"][0], d["wh"][1])
+                  for d in dets if is_green(d)]
+        for d in dets:
+            if not is_head(d):
+                continue
+            if not _in_green(d["xy"][0], d["xy"][1], greens):
+                continue
+            p = d.get("p", 0.0)
+            if f not in best or p > best[f][2]:
+                best[f] = (d["xy"][0], d["xy"][1], p)
+    return best
 
 
 def _artifact_heads(ctx: ClubTrackingContext) -> dict[int, tuple[float, float, float]]:
     det = (ctx.doc.get("club") or {}).get("detector") or {}
     names = det.get("names") or {}
     head_classes = {int(k) for k, v in names.items() if v == HEAD_CLASS_NAME}
-    best: dict[int, tuple[float, float, float]] = {}
-    for row in det.get("boxes") or []:
-        f = row.get("f")
-        for d in row.get("d") or []:
-            if d.get("c") not in head_classes:
-                continue
-            p = d.get("p", 0.0)
-            if f not in best or p > best[f][2]:
-                best[f] = (d["xy"][0], d["xy"][1], p)
-    return best
+    return _best_heads(det.get("boxes") or [],
+                       is_head=lambda d: d.get("c") in head_classes,
+                       is_green=lambda d: d.get("c") not in head_classes)
 
 
 def _sidecar_heads(ctx: ClubTrackingContext) -> dict[int, tuple[float, float, float]]:
@@ -47,16 +72,9 @@ def _sidecar_heads(ctx: ClubTrackingContext) -> dict[int, tuple[float, float, fl
     except json.JSONDecodeError:
         return {}
     entry = (doc.get("models") or {}).get("builtin")
-    best: dict[int, tuple[float, float, float]] = {}
-    for row in (entry or {}).get("frames") or []:
-        f = row.get("f")
-        for d in row.get("d") or []:
-            if d.get("c") != 0:
-                continue
-            p_ = d.get("p", 0.0)
-            if f not in best or p_ > best[f][2]:
-                best[f] = (d["xy"][0], d["xy"][1], p_)
-    return best
+    return _best_heads((entry or {}).get("frames") or [],
+                       is_head=lambda d: d.get("c") == 0,
+                       is_green=lambda d: d.get("c") == 1)
 
 
 @register

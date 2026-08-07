@@ -328,8 +328,13 @@ def _tv_denoise(t, v, ts, lam=0.08, iters=120):
 
 def fit_variants(observations: list[ClubObservation], fps: float,
                  frame_range: tuple[int, int],
-                 top_frame: int | None = None) -> dict[str, list[dict]]:
-    """Fit all ten §22.2 variants over the same sample grid. Returns JSON-ready dicts."""
+                 top_frame: int | None = None,
+                 linear_default: bool = False) -> dict[str, list[dict]]:
+    """Fit all §22.2 variants over the same sample grid. Returns JSON-ready dicts.
+
+    `linear_default=True` replaces the Default with PURE straight-chord connection of the
+    observations (no fitting whatsoever) — for tests whose whole point is showing the raw
+    dots joined (t23), with the lettered variants still offering every smoothing on top."""
     if not observations:
         return {}
     obs, t, x, y, w = _prepare(observations, fps)
@@ -421,5 +426,8 @@ def fit_variants(observations: list[ClubObservation], fps: float,
     out["j"] = emit(_lowess(t, x, w, ts), _lowess(t, y, w, ts))
     out["k"] = emit(_fourier_lowpass(t, x, ts), _fourier_lowpass(t, y, ts))
     out["l"] = emit(_tv_denoise(t, x, ts), _tv_denoise(t, y, ts))
+
+    if linear_default:
+        out["default"] = emit(*_linear_fallback(t, x, y, w, ts))
 
     return out

@@ -27,6 +27,8 @@ export const TRACKING_TEST_IDS = [
   "t19_legacy_isolation_gate",
   "t20_raw_head_trace",
   "t21_red_legacy_ball",
+  "t22_red_dedup",
+  "t23_red_connected",
 ] as const;
 
 export type TrackingTestId = (typeof TRACKING_TEST_IDS)[number];
@@ -53,6 +55,8 @@ export const TEST_LABELS: Record<TrackingTestId, string> = {
   t19_legacy_isolation_gate: "Legacy Solve Gated by Isolation",
   t20_raw_head_trace: "Raw Head Trace (red boxes only)",
   t21_red_legacy_ball: "Red Boxes + Legacy Fill + Ball Impact",
+  t22_red_dedup: "Red + Deduped Legacy",
+  t23_red_connected: "Frame Red Box Connected",
 };
 
 // Tests with a registered implementation in the analyzer TODAY. Rows outside this set
@@ -79,6 +83,8 @@ export const IMPLEMENTED_TESTS = [
   "t19_legacy_isolation_gate",
   "t20_raw_head_trace",
   "t21_red_legacy_ball",
+  "t22_red_dedup",
+  "t23_red_connected",
 ] as const;
 
 export const VARIANT_IDS = [
