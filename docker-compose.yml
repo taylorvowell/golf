@@ -1,0 +1,29 @@
+# Local Postgres for development — same engine Railway provisions in production (D38), so
+# nothing about the schema or queries has to change between here and there. Not SQLite: see
+# docs/DECISIONS.md D38 for why the "v1 SQLite" shortcut in doc 02 was skipped outright.
+#
+# Usage: docker compose up -d   (from the repo root)
+#        pnpm --filter web db:migrate   once it's up, to apply apps/web/drizzle/*.sql
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: swingsage
+      POSTGRES_PASSWORD: swingsage
+      POSTGRES_DB: swingsage
+    ports:
+      # Host port 5433, not 5432 — this machine already runs another project's Postgres
+      # container bound to 5432. Match apps/web/.env's DATABASE_URL port if you change this.
+      - "5433:5432"
+    volumes:
+      - swingsage_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U swingsage -d swingsage"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  swingsage_postgres_data:

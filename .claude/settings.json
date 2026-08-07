@@ -1,0 +1,57 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(railway var:*)",
+      "Bash(railway var)",
+      "Bash(railway vars:*)",
+      "Bash(railway vars)",
+      "Bash(railway variable:*)",
+      "Bash(railway variable)",
+      "Bash(railway variables:*)",
+      "Bash(railway variables)",
+      "Bash(railway run:*)",
+      "Bash(railway run)",
+      "Bash(railway local:*)",
+      "Bash(railway local)",
+      "Bash(railway shell:*)",
+      "Bash(railway shell)",
+      "Bash(railway connect:*)",
+      "Bash(railway connect)",
+      "Bash(vercel env pull:*)",
+      "Bash(vercel env pull)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/guard-protected-paths.mjs"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/guard-secret-exposure.mjs"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node .claude/hooks/lint-touched-file.mjs"
+          }
+        ]
+      }
+    ]
+  }
+}

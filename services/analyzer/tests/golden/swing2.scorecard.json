@@ -1,0 +1,1276 @@
+{
+  "arc_shift": null,
+  "band": "Building",
+  "categories": {
+    "backswing_top": {
+      "category": "backswing_top",
+      "checks": [
+        {
+          "abs_value": false,
+          "advice": null,
+          "band": {
+            "falloff": 20,
+            "max": 180,
+            "min": 150
+          },
+          "category": "backswing_top",
+          "checkpoint": "P4",
+          "deferred": false,
+          "effort": 3,
+          "field": "lead_arm_angle",
+          "fix": "Width drills \u2014 comfortably extended, not locked.",
+          "good_values": null,
+          "id": "BKS-01",
+          "kind": "band",
+          "label": "Lead arm structure at top (relatively straight)",
+          "leverage": 38.3,
+          "leverage_breakdown": {
+            "ease": 60,
+            "impact": 55.0,
+            "severity": 0.0
+          },
+          "score": 100.0,
+          "skip_reason": null,
+          "unit": "deg",
+          "value": 151.9,
+          "weight": 55
+        },
+        {
+          "abs_value": false,
+          "advice": "Fold your trail elbow more at the top \u2014 it's staying too straight and away from your body (a 'flying elbow').",
+          "band": {
+            "falloff": 20,
+            "max": 105,
+            "min": 75
+          },
+          "category": "backswing_top",
+          "checkpoint": "P4",
+          "deferred": false,
+          "effort": 3,
+          "field": "trail_elbow_flex",
+          "fix": "Elbow-down feel.",
+          "good_values": null,
+          "id": "TOP-02",
+          "kind": "band",
+          "label": "Trail elbow flex at top (~90 deg, in front of the body)",
+          "leverage": 71.7,
+          "leverage_breakdown": {
+            "ease": 60,
+            "impact": 55.0,
+            "severity": 100.0
+          },
+          "score": 0.0,
+          "skip_reason": null,
+          "unit": "deg",
+          "value": 127.8,
+          "weight": 55
+        },
+        {
+          "abs_value": false,
+          "advice": "Set your wrists more in the backswing \u2014 you're not hinging enough by the top, which costs stored power.",
+          "band": {
+            "falloff": 25,
+            "max": 105,
+            "min": 75
+          },
+          "category": "backswing_top",
+          "checkpoint": "P4",
+          "deferred": false,
+          "effort": 3,
+          "field": "lead_wrist_hinge",
+          "fix": "Hinge drills.",
+          "good_values": null,
+          "id": "WRS-01",
+          "kind": "band",
+          "label": "Wrist hinge / set (radial) at top",
+          "leverage": 72.7,
+          "leverage_breakdown": {
+            "ease": 60,
+            "impact": 58.0,
+            "severity": 100.0
+          },
+          "score": 0.0,
+          "skip_reason": null,
+          "unit": "deg",
+          "value": 29.1,
+          "weight": 58
+        },
+        {
+          "abs_value": false,
+          "advice": null,
+          "band": {
+            "falloff": 20,
+            "max": 195,
+            "min": 165
+          },
+          "category": "backswing_top",
+          "checkpoint": "P4",
+          "deferred": false,
+          "effort": 4,
+          "field": "lead_wrist_deviation",
+          "fix": "Flatten/bow the lead wrist; HackMotion-style feedback. Sign of bow-vs-cup not yet verified against a fixture (checkangles.py) \u2014 band is symmetric around straight until confirmed; see COVERAGE.md.",
+          "good_values": null,
+          "id": "TOP-01",
+          "kind": "band",
+          "label": "Lead wrist condition at top (flat to slightly bowed)",
+          "leverage": 39.3,
+          "leverage_breakdown": {
+            "ease": 40,
+            "impact": 78.0,
+            "severity": 0.0
+          },
+          "score": 100.0,
+          "skip_reason": null,
+          "unit": "deg",
+          "value": 177.4,
+          "weight": 78
+        },
+        {
+          "abs_value": false,
+          "advice": null,
+          "band": {
+            "falloff": 25,
+            "max": 105,
+            "min": 75
+          },
+          "category": "backswing_top",
+          "checkpoint": "P4",
+          "deferred": true,
+          "effort": 3,
+          "field": "shoulder_turn_from_address",
+          "fix": "Thoracic mobility, full shoulder turn.",
+          "good_values": null,
+          "id": "ROT-03",
+          "kind": "band",
+          "label": "Shoulder turn at top (~90 deg)",
+          "leverage": null,
+          "leverage_breakdown": null,
+          "score": null,
+          "skip_reason": "shoulder/hip turn is derived from a 2D projected width (arccos of shoulder width over this clip's widest), which is sign-unstable through square and under-reads true turn by roughly half \u2014 it cannot be scored against criteria.md's anatomical degree bands. Needs a real turn estimate first; see scoring_config/COVERAGE.md.",
+          "unit": "deg (2D-projected estimate)",
+          "value": null,
+          "weight": 68
+        },
+        {
+          "abs_value": false,
+          "advice": null,
+          "band": {
+            "falloff": 20,
+            "max": 55,
+            "min": 35
+          },
+          "category": "backswing_top",
+          "checkpoint": "P4",
+          "deferred": true,
+          "effort": 3,
+          "field": "hip_turn_from_address",
+          "fix": "Trail-leg stability; don't over-turn the hips.",
+          "good_values": null,
+          "id": "ROT-04",
+          "kind": "band",
+          "label": "Hip turn at top (~45 deg)",
+          "leverage": null,
+          "leverage_breakdown": null,
+          "score": null,
+          "skip_reason": "shoulder/hip turn is derived from a 2D projected width (arccos of shoulder width over this clip's widest), which is sign-unstable through square and under-reads true turn by roughly half \u2014 it cannot be scored against criteria.md's anatomical degree bands. Needs a real turn estimate first; see scoring_config/COVERAGE.md.",
+          "unit": "deg (2D-projected estimate)",
+          "value": null,
+          "weight": 62
+        },
+        {
+          "abs_value": false,
+          "advice": null,
+          "band": {
+            "falloff": 20,
+            "max": 55,
+            "min": 30
+          },
+          "category": "backswing_top",
+          "checkpoint": "P4",
+          "deferred": true,
+          "effort": 4,
+          "field": "xfactor_rotation_est",
+          "fix": "Resist the hips, full shoulder turn.",
+          "good_values": null,
+          "id": "ROT-01",
+          "kind": "band",
+          "label": "X-Factor at top (~40-45 deg shoulder-hip separation)",
+          "leverage": null,
+          "leverage_breakdown": null,
+          "score": null,
+          "skip_reason": "shoulder/hip turn is derived from a 2D projected width (arccos of shoulder width over this clip's widest), which is sign-unstable through square and under-reads true turn by roughly half \u2014 it cannot be scored against criteria.md's anatomical degree bands. Needs a real turn estimate first; see scoring_config/COVERAGE.md.",
+          "unit": "deg (2D-projected estimate)",
+          "value": null,
+          "weight": 72
+        },
+        {
+          "abs_value": false,
+          "advice": "Hold more flex in your trail knee at the top \u2014 it's straightening out too much during the backswing.",
+          "band": {
+            "falloff": 15,
+            "max": 35,
+            "min": 10
+          },
+          "category": "backswing_top",
+          "checkpoint": "P4",
+          "deferred": false,
+          "effort": 2,
+          "field": "trail_knee_flex",
+          "fix": "Feel the trail knee flex held, not straightened.",
+          "good_values": null,
+          "id": "LOW-01",
+          "kind": "band",
+          "label": "Trail knee flex retained at top (vs address)",
+          "leverage": 53.8,
+          "leverage_breakdown": {
+            "ease": 80,
+            "impact": 50.0,
+            "severity": 31.3
+          },
+          "score": 68.7,
+          "skip_reason": null,
+          "unit": "deg",
+          "value": 5.3,
+          "weight": 50
+        }
+      ],
+      "n_deferred": 3,
+      "n_measurable": 5,
+      "n_total": 5,
+      "score": 56.5
+    },
+    "downswing_plane": {
+      "category": "downswing_plane",
+      "checks": [
+        {
+          "abs_value": false,
+          "advice": "Hold your wrist angle longer coming down \u2014 you're releasing (casting) the club too early, which costs speed.",
+          "band": {
+            "falloff": 25,
+            "max": 100,
+            "min": 60
+          },
+          "category": "downswing_plane",
+          "checkpoint": "P5",
+          "deferred": false,
+          "effort": 5,
+          "field": "lead_wrist_hinge",
+          "fix": "Pump drill, pressure-handle drill \u2014 retain the angle deep into the downswing.",
+          "good_values": null,
+          "id": "DSW-01",
+          "kind": "band",
+          "label": "Lag / wrist angle retention (mid-downswing)",
+          "leverage": 58.6,
+          "leverage_breakdown": {
+            "ease": 20,
+            "impact": 75.0,
+            "severity": 80.8
+          },
+          "score": 19.2,
+          "skip_reason": null,
+          "unit": "deg",
+          "value": 39.8,
+          "weight": 75
+        },
+        {
+          "abs_value": false,
+          "advice": null,
+          "band": {
+            "falloff": 20,
+            "max": 55,
+            "min": 25
+          },
+          "category": "downswing_plane",
+          "checkpoint": "P7",
+          "deferred": true,
+          "effort": 4,
+          "field": "hip_turn_from_address",
+          "fix": "Wall drill \u2014 let the pelvis clear.",
+          "good_values": null,
+          "id": "DSW-03",
+          "kind": "band",
+          "label": "Hip clearing / rotation near impact",
+          "leverage": null,
+          "leverage_breakdown": null,
+          "score": null,
+          "skip_reason": "shoulder/hip turn is derived from a 2D projected width (arccos of shoulder width over this clip's widest), which is sign-unstable through square and under-reads true turn by roughly half \u2014 it cannot be scored against criteria.md's anatomical degree bands. Needs a real turn estimate first; see scoring_config/COVERAGE.md.",
+          "unit": "deg (2D-projected estimate)",
+          "value": null,
+          "weight": 70
+        },
+        {
+          "abs_value": false,
+          "advice": null,
+          "band": {
+            "falloff": 10,
+            "max": 6,
+            "min": -6
+          },
+          "category": "downswing_plane",
+          "checkpoint": null,
+          "deferred": false,
+          "effort": 3,
+          "field": "spine_change_at_impact",
+          "fix": "Chair drill, glute activation \u2014 retain the address spine angle.",
+          "good_values": null,
+          "id": "DSW-04",
+          "kind": "band",
+          "label": "Posture maintained into impact (spine angle change)",
+          "leverage": 42.7,
+          "leverage_breakdown": {
+            "ease": 60,
+            "impact": 68.0,
+            "severity": 0.0
+          },
+          "score": 100.0,
+          "skip_reason": null,
+          "unit": "deg",
+          "value": 4.5,
+          "weight": 68
+        },
+        {
+          "abs_value": false,
+          "advice": null,
+          "band": {
+            "falloff": 10,
+            "max": 6,
+            "min": -6
+          },
+          "category": "downswing_plane",
+          "checkpoint": null,
+          "deferred": false,
+          "effort": 3,
+          "field": "spine_change_at_impact",
+          "fix": "Posture-retention drills.",
+          "good_values": null,
+          "id": "FLT-10",
+          "kind": "band",
+          "label": "Loss of posture (spine change, whole downswing)",
+          "leverage": 43.3,
+          "leverage_breakdown": {
+            "ease": 60,
+            "impact": 70.0,
+            "severity": 0.0
+          },
+          "score": 100.0,
+          "skip_reason": null,
+          "unit": "deg",
+          "value": 4.5,
+          "weight": 70
+        }
+      ],
+      "n_deferred": 1,
+      "n_measurable": 3,
+      "n_total": 3,
+      "score": 71.5
+    },
+    "follow_through_balance": {
+      "category": "follow_through_balance",
+      "checks": [
+        {
+          "abs_value": false,
+          "advice": null,
+          "band": {
+            "falloff": 20,
+            "max": 25,
+            "min": 0
+          },
+          "category": "follow_through_balance",
+          "checkpoint": "P9",
+          "deferred": false,
+          "effort": 3,
+          "field": "lead_elbow_flex",
+          "fix": "Extension drills \u2014 both arms extend down the line.",
+          "good_values": null,
+          "id": "REL-03",
+          "kind": "band",
+          "label": "Extension through impact (lead elbow near straight at P9)",
+          "leverage": null,
+          "leverage_breakdown": null,
+          "score": null,
+          "skip_reason": "not tracked on this swing (low pose/club confidence or missing data)",
+          "unit": "deg",
+          "value": null,
+          "weight": 55
+        },
+        {
+          "abs_value": false,
+          "advice": null,
+          "band": {
+            "falloff": 20,
+            "max": 20,
+            "min": 0
+          },
+          "category": "follow_through_balance",
+          "checkpoint": "P9",
+          "deferred": false,
+          "effort": 3,
+          "field": "lead_elbow_flex",
+          "fix": "Rotate the body through; avoid the lead elbow pulling out.",
+          "good_values": null,
+          "id": "REL-04",
+          "kind": "band",
+          "label": "Chicken wing (lead elbow re-bends after extension)",
+          "leverage": null,
+          "leverage_breakdown": null,
+          "score": null,
+          "skip_reason": "not tracked on this swing (low pose/club confidence or missing data)",
+          "unit": "deg",
+          "value": null,
+          "weight": 60
+        },
+        {
+          "abs_value": false,
+          "advice": null,
+          "band": {
+            "falloff": 30,
+            "max": 200,
+            "min": 80
+          },
+          "category": "follow_through_balance",
+          "checkpoint": "P10",
+          "deferred": true,
+          "effort": 2,
+          "field": "shoulder_turn_from_address",
+          "fix": "Rotate fully \u2014 belt buckle/chest facing target or beyond.",
+          "good_values": null,
+          "id": "FIN-02",
+          "kind": "band",
+          "label": "Full rotation to target at finish",
+          "leverage": null,
+          "leverage_breakdown": null,
+          "score": null,
+          "skip_reason": "shoulder/hip turn is derived from a 2D projected width (arccos of shoulder width over this clip's widest), which is sign-unstable through square and under-reads true turn by roughly half \u2014 it cannot be scored against criteria.md's anatomical degree bands. Needs a real turn estimate first; see scoring_config/COVERAGE.md.",
+          "unit": "deg (2D-projected estimate)",
+          "value": null,
+          "weight": 40
+        }
+      ],
+      "n_deferred": 1,
+      "n_measurable": 0,
+      "n_total": 2,
+      "score": null
+    },
+    "impact": {
+      "category": "impact",
+      "checks": [
+        {
+          "abs_value": false,
+          "advice": null,
+          "band": {
+            "falloff": 18,
+            "max": 195,
+            "min": 165
+          },
+          "category": "impact",
+          "checkpoint": "P7",
+          "deferred": false,
+          "effort": 4,
+          "field": "lead_wrist_deviation",
+          "fix": "Impact-bag, flexion drills. Bow-vs-cup sign not yet verified \u2014 see TOP-01 note.",
+          "good_values": null,
+          "id": "IMP-01",
+          "kind": "band",
+          "label": "Flat / bowed lead wrist at impact",
+          "leverage": null,
+          "leverage_breakdown": null,
+          "score": null,
+          "skip_reason": "not tracked on this swing (low pose/club confidence or missing data)",
+          "unit": "deg",
+          "value": null,
+          "weight": 88
+        },
+        {
+          "abs_value": false,
+          "advice": null,
+          "band": {
+            "falloff": 25,
+            "max": 195,
+            "min": 150
+          },
+          "category": "impact",
+          "checkpoint": "P7",
+          "deferred": false,
+          "effort": 4,
+          "field": "trail_wrist_deviation",
+          "fix": "Trail-wrist-back feel, mirrors the lead-wrist checkpoint.",
+          "good_values": null,
+          "id": "WRS-03",
+          "kind": "band",
+          "label": "Trail wrist extension at impact ('waiter's tray')",
+          "leverage": 31.7,
+          "leverage_breakdown": {
+            "ease": 40,
+            "impact": 55.0,
+            "severity": 0.0
+          },
+          "score": 100.0,
+          "skip_reason": null,
+          "unit": "deg",
+          "value": 163.2,
+          "weight": 55
+        },
+        {
+          "abs_value": false,
+          "advice": "Ease off how far forward your hands are at impact \u2014 the shaft is leaning forward more than ideal, which can deloft the club too much.",
+          "band": {
+            "falloff": 12,
+            "max": 16,
+            "min": 5
+          },
+          "category": "impact",
+          "checkpoint": null,
+          "deferred": false,
+          "effort": 4,
+          "field": "shaft_from_vertical_at_impact",
+          "fix": "Pressure forward, flat/bowed wrist, impact-bag drill.",
+          "good_values": null,
+          "id": "ANG-56",
+          "kind": "band",
+          "label": "Shaft lean at impact (irons)",
+          "leverage": 74.7,
+          "leverage_breakdown": {
+            "ease": 40,
+            "impact": 84.0,
+            "severity": 100.0
+          },
+          "score": 0.0,
+          "skip_reason": null,
+          "unit": "deg",
+          "value": 40.5,
+          "weight": 84
+        },
+        {
+          "abs_value": true,
+          "advice": null,
+          "band": {
+            "falloff": 12,
+            "max": 8,
+            "min": -8
+          },
+          "category": "impact",
+          "checkpoint": null,
+          "deferred": false,
+          "effort": 4,
+          "field": "shaft_from_vertical_at_impact",
+          "fix": "Stay behind the ball, ball forward.",
+          "good_values": null,
+          "id": "ANG-57",
+          "kind": "band",
+          "label": "Shaft lean at impact (driver)",
+          "leverage": null,
+          "leverage_breakdown": null,
+          "score": null,
+          "skip_reason": "scored for driver, this swing is irons",
+          "unit": "deg",
+          "value": null,
+          "weight": 55
+        },
+        {
+          "abs_value": false,
+          "advice": null,
+          "band": {
+            "falloff": 20,
+            "max": 55,
+            "min": 25
+          },
+          "category": "impact",
+          "checkpoint": "P7",
+          "deferred": true,
+          "effort": 3,
+          "field": "hip_turn_from_address",
+          "fix": "Rotation drills.",
+          "good_values": null,
+          "id": "IMP-05",
+          "kind": "band",
+          "label": "Hip openness at impact",
+          "leverage": null,
+          "leverage_breakdown": null,
+          "score": null,
+          "skip_reason": "shoulder/hip turn is derived from a 2D projected width (arccos of shoulder width over this clip's widest), which is sign-unstable through square and under-reads true turn by roughly half \u2014 it cannot be scored against criteria.md's anatomical degree bands. Needs a real turn estimate first; see scoring_config/COVERAGE.md.",
+          "unit": "deg (2D-projected estimate)",
+          "value": null,
+          "weight": 60
+        },
+        {
+          "abs_value": false,
+          "advice": null,
+          "band": {
+            "falloff": 20,
+            "max": 50,
+            "min": 30
+          },
+          "category": "impact",
+          "checkpoint": "P7",
+          "deferred": true,
+          "effort": 3,
+          "field": "hip_turn_from_address",
+          "fix": "Hip clearing.",
+          "good_values": null,
+          "id": "ROT-05",
+          "kind": "band",
+          "label": "Hip turn at impact (~35-45 deg open)",
+          "leverage": null,
+          "leverage_breakdown": null,
+          "score": null,
+          "skip_reason": "shoulder/hip turn is derived from a 2D projected width (arccos of shoulder width over this clip's widest), which is sign-unstable through square and under-reads true turn by roughly half \u2014 it cannot be scored against criteria.md's anatomical degree bands. Needs a real turn estimate first; see scoring_config/COVERAGE.md.",
+          "unit": "deg (2D-projected estimate)",
+          "value": null,
+          "weight": 65
+        },
+        {
+          "abs_value": false,
+          "advice": null,
+          "band": {
+            "falloff": 20,
+            "max": 40,
+            "min": 15
+          },
+          "category": "impact",
+          "checkpoint": "P7",
+          "deferred": true,
+          "effort": 3,
+          "field": "shoulder_turn_from_address",
+          "fix": "Sequencing.",
+          "good_values": null,
+          "id": "ROT-06",
+          "kind": "band",
+          "label": "Shoulder turn at impact (~20-30 deg open)",
+          "leverage": null,
+          "leverage_breakdown": null,
+          "score": null,
+          "skip_reason": "shoulder/hip turn is derived from a 2D projected width (arccos of shoulder width over this clip's widest), which is sign-unstable through square and under-reads true turn by roughly half \u2014 it cannot be scored against criteria.md's anatomical degree bands. Needs a real turn estimate first; see scoring_config/COVERAGE.md.",
+          "unit": "deg (2D-projected estimate)",
+          "value": null,
+          "weight": 55
+        },
+        {
+          "abs_value": false,
+          "advice": null,
+          "band": {
+            "falloff": 0.04,
+            "max": 0.06,
+            "min": -0.03
+          },
+          "category": "impact",
+          "checkpoint": "P7",
+          "deferred": false,
+          "effort": 2,
+          "field": "head_sway",
+          "fix": "Stay behind the ball.",
+          "good_values": null,
+          "id": "ANG-44",
+          "kind": "band",
+          "label": "Head lateral movement at impact (vs address)",
+          "leverage": 41.7,
+          "leverage_breakdown": {
+            "ease": 80,
+            "impact": 45.0,
+            "severity": 0.0
+          },
+          "score": 100.0,
+          "skip_reason": null,
+          "unit": "body-heights",
+          "value": 0.032,
+          "weight": 45
+        }
+      ],
+      "n_deferred": 3,
+      "n_measurable": 3,
+      "n_total": 5,
+      "score": 54.3
+    },
+    "setup_posture": {
+      "category": "setup_posture",
+      "checks": [
+        {
+          "abs_value": true,
+          "advice": "Bend forward more from the hips at address \u2014 you're standing too upright, which tends to steepen the whole swing plane.",
+          "band": {
+            "falloff": 10,
+            "max": 45,
+            "min": 35
+          },
+          "category": "setup_posture",
+          "checkpoint": "P1",
+          "deferred": false,
+          "effort": 2,
+          "field": "spine_from_vertical",
+          "fix": "Hip hinge, club-on-spine drill.",
+          "good_values": null,
+          "id": "SET-01",
+          "kind": "band",
+          "label": "Spine forward bend at address",
+          "leverage": 83.3,
+          "leverage_breakdown": {
+            "ease": 80,
+            "impact": 70.0,
+            "severity": 100.0
+          },
+          "score": 0.0,
+          "skip_reason": null,
+          "unit": "deg",
+          "value": 14.2,
+          "weight": 70
+        },
+        {
+          "abs_value": false,
+          "advice": "Add a little flex in your lead knee at address \u2014 it's too straight for an athletic stance.",
+          "band": {
+            "falloff": 10,
+            "max": 30,
+            "min": 15
+          },
+          "category": "setup_posture",
+          "checkpoint": "P1",
+          "deferred": false,
+          "effort": 1,
+          "field": "lead_knee_flex",
+          "fix": "Athletic flex.",
+          "good_values": null,
+          "id": "ANG-07",
+          "kind": "band",
+          "label": "Lead knee flex at address",
+          "leverage": 70.3,
+          "leverage_breakdown": {
+            "ease": 100,
+            "impact": 50.0,
+            "severity": 61.0
+          },
+          "score": 39.0,
+          "skip_reason": null,
+          "unit": "deg",
+          "value": 8.9,
+          "weight": 50
+        },
+        {
+          "abs_value": false,
+          "advice": "Add a little flex in your trail knee at address to match your lead knee.",
+          "band": {
+            "falloff": 10,
+            "max": 30,
+            "min": 15
+          },
+          "category": "setup_posture",
+          "checkpoint": "P1",
+          "deferred": false,
+          "effort": 1,
+          "field": "trail_knee_flex",
+          "fix": "Match lead knee flex.",
+          "good_values": null,
+          "id": "ANG-08",
+          "kind": "band",
+          "label": "Trail knee flex at address",
+          "leverage": 60.7,
+          "leverage_breakdown": {
+            "ease": 100,
+            "impact": 50.0,
+            "severity": 32.0
+          },
+          "score": 68.0,
+          "skip_reason": null,
+          "unit": "deg",
+          "value": 11.8,
+          "weight": 50
+        },
+        {
+          "abs_value": true,
+          "advice": "Let your arms hang more naturally at address \u2014 right now they're reaching away from, or pulled in too close to, your body.",
+          "band": {
+            "falloff": 15,
+            "max": 10,
+            "min": -10
+          },
+          "category": "setup_posture",
+          "checkpoint": "P1",
+          "deferred": false,
+          "effort": 2,
+          "field": "lead_arm_hang",
+          "fix": "Let arms hang from posture.",
+          "good_values": null,
+          "id": "SET-05",
+          "kind": "band",
+          "label": "Lead arm hang from vertical at address",
+          "leverage": 76.7,
+          "leverage_breakdown": {
+            "ease": 80,
+            "impact": 50.0,
+            "severity": 100.0
+          },
+          "score": 0.0,
+          "skip_reason": null,
+          "unit": "deg",
+          "value": -25.8,
+          "weight": 50
+        },
+        {
+          "abs_value": false,
+          "advice": null,
+          "band": {
+            "falloff": 14,
+            "max": 98,
+            "min": 82
+          },
+          "category": "setup_posture",
+          "checkpoint": "P1",
+          "deferred": false,
+          "effort": 2,
+          "field": "chin_over_midfoot_deg",
+          "fix": "Balance / plumb-line mirror drill.",
+          "good_values": null,
+          "id": "SET-06",
+          "kind": "band",
+          "label": "Chin over mid-foot plumb at address",
+          "leverage": 46.7,
+          "leverage_breakdown": {
+            "ease": 80,
+            "impact": 60.0,
+            "severity": 0.0
+          },
+          "score": 100.0,
+          "skip_reason": null,
+          "unit": "deg",
+          "value": 84.2,
+          "weight": 60
+        },
+        {
+          "abs_value": false,
+          "advice": null,
+          "band": null,
+          "category": "setup_posture",
+          "checkpoint": null,
+          "deferred": false,
+          "effort": 3,
+          "field": "posture_type",
+          "fix": "Core engagement, neutral pelvis.",
+          "good_values": [
+            "neutral"
+          ],
+          "id": "SET-10",
+          "kind": "categorical",
+          "label": "Posture type (neutral vs S/C)",
+          "leverage": 39.3,
+          "leverage_breakdown": {
+            "ease": 60,
+            "impact": 58.0,
+            "severity": 0.0
+          },
+          "score": 100.0,
+          "skip_reason": null,
+          "unit": null,
+          "value": "neutral",
+          "weight": 58
+        },
+        {
+          "abs_value": false,
+          "advice": "Hinge more from the hips at address \u2014 your upper body is too upright/close to standing straight.",
+          "band": {
+            "falloff": 15,
+            "max": 150,
+            "min": 130
+          },
+          "category": "setup_posture",
+          "checkpoint": "P1",
+          "deferred": false,
+          "effort": 2,
+          "field": "lead_hip_hinge",
+          "fix": "Push hips back, hinge from the hips not the waist.",
+          "good_values": null,
+          "id": "ANG-06",
+          "kind": "band",
+          "label": "Lead hip hinge at address",
+          "leverage": 63.0,
+          "leverage_breakdown": {
+            "ease": 80,
+            "impact": 55.0,
+            "severity": 54.0
+          },
+          "score": 46.0,
+          "skip_reason": null,
+          "unit": "deg",
+          "value": 158.1,
+          "weight": 55
+        },
+        {
+          "abs_value": false,
+          "advice": null,
+          "band": {
+            "falloff": 0.3,
+            "max": 1.4,
+            "min": 1.0
+          },
+          "category": "setup_posture",
+          "checkpoint": "P1",
+          "deferred": false,
+          "effort": 1,
+          "field": "stance_width_ratio",
+          "fix": "Widen slightly for driver.",
+          "good_values": null,
+          "id": "BAL-03",
+          "kind": "band",
+          "label": "Stance width vs shoulder width (driver)",
+          "leverage": null,
+          "leverage_breakdown": null,
+          "score": null,
+          "skip_reason": "scored for driver, this swing is irons",
+          "unit": "ratio",
+          "value": null,
+          "weight": 55
+        },
+        {
+          "abs_value": false,
+          "advice": null,
+          "band": {
+            "falloff": 0.3,
+            "max": 1.15,
+            "min": 0.9
+          },
+          "category": "setup_posture",
+          "checkpoint": "P1",
+          "deferred": false,
+          "effort": 1,
+          "field": "stance_width_ratio",
+          "fix": "Shoulder-width baseline.",
+          "good_values": null,
+          "id": "BAL-04",
+          "kind": "band",
+          "label": "Stance width vs shoulder width (irons)",
+          "leverage": null,
+          "leverage_breakdown": null,
+          "score": null,
+          "skip_reason": "requires face_on view, this swing is dtl",
+          "unit": "ratio",
+          "value": null,
+          "weight": 50
+        }
+      ],
+      "n_deferred": 0,
+      "n_measurable": 7,
+      "n_total": 9,
+      "score": 50.1
+    },
+    "takeaway": {
+      "category": "takeaway",
+      "checks": [
+        {
+          "abs_value": false,
+          "advice": null,
+          "band": {
+            "falloff": 35,
+            "max": 45,
+            "min": 0
+          },
+          "category": "takeaway",
+          "checkpoint": "P2",
+          "deferred": false,
+          "effort": 3,
+          "field": "lead_wrist_hinge",
+          "fix": "Takeaway gate \u2014 keep the triangle intact through the first 18-24 inches.",
+          "good_values": null,
+          "id": "TKA-01",
+          "kind": "band",
+          "label": "One-piece takeaway (wrist hinge added vs address)",
+          "leverage": 39.3,
+          "leverage_breakdown": {
+            "ease": 60,
+            "impact": 58.0,
+            "severity": 0.0
+          },
+          "score": 100.0,
+          "skip_reason": null,
+          "unit": "deg",
+          "value": 15.2,
+          "weight": 58
+        },
+        {
+          "abs_value": false,
+          "advice": null,
+          "band": {
+            "falloff": 20,
+            "max": 35,
+            "min": -35
+          },
+          "category": "takeaway",
+          "checkpoint": "P2",
+          "deferred": true,
+          "effort": 3,
+          "field": "shaft_from_vertical",
+          "fix": "Takeaway gate.",
+          "good_values": null,
+          "id": "ANG-30",
+          "kind": "band",
+          "label": "Shaft plane at first parallel (takeaway)",
+          "leverage": null,
+          "leverage_breakdown": null,
+          "score": null,
+          "skip_reason": "`shaft_from_vertical` at P2 is ~+-90 by definition (P2 IS shaft-parallel), so this scored checkpoint detection rather than swing quality. True shaft plane (inside/outside the target line) is not observable down the line \u2014 metrics.py reports `shaft_plane` as 'in-plane angle (lean not visible)' for dtl.",
+          "unit": "deg",
+          "value": null,
+          "weight": 60
+        }
+      ],
+      "n_deferred": 1,
+      "n_measurable": 1,
+      "n_total": 1,
+      "score": 100.0
+    },
+    "transition_tempo": {
+      "category": "transition_tempo",
+      "checks": [
+        {
+          "abs_value": false,
+          "advice": "Slow your transition down \u2014 your downswing is rushing relative to your backswing (aim for roughly a 3:1 tempo).",
+          "band": {
+            "falloff": 1.2,
+            "max": 3.8,
+            "min": 2.2
+          },
+          "category": "transition_tempo",
+          "checkpoint": null,
+          "deferred": false,
+          "effort": 3,
+          "field": "ratio",
+          "fix": "Metronome / Tour Tempo tones \u2014 count '1-2-3 / 1'.",
+          "good_values": null,
+          "id": "SEQ-02",
+          "kind": "band",
+          "label": "Tempo ratio (backswing:downswing, ~3:1)",
+          "leverage": 64.1,
+          "leverage_breakdown": {
+            "ease": 60,
+            "impact": 78.0,
+            "severity": 54.2
+          },
+          "score": 45.8,
+          "skip_reason": null,
+          "unit": "ratio",
+          "value": 1.55,
+          "weight": 78
+        },
+        {
+          "abs_value": false,
+          "advice": null,
+          "band": {
+            "falloff": 300,
+            "max": 1150,
+            "min": 550
+          },
+          "category": "transition_tempo",
+          "checkpoint": null,
+          "deferred": false,
+          "effort": 3,
+          "field": "backswing_ms",
+          "fix": "Tempo training.",
+          "good_values": null,
+          "id": "SEQ-03",
+          "kind": "band",
+          "label": "Backswing duration (~0.85s)",
+          "leverage": 35.0,
+          "leverage_breakdown": {
+            "ease": 60,
+            "impact": 45.0,
+            "severity": 0.0
+          },
+          "score": 100.0,
+          "skip_reason": null,
+          "unit": "ms",
+          "value": 750,
+          "weight": 45
+        },
+        {
+          "abs_value": false,
+          "advice": "Accelerate through the downswing a bit more \u2014 it's taking longer than ideal, which usually means losing speed into the ball.",
+          "band": {
+            "falloff": 150,
+            "max": 380,
+            "min": 180
+          },
+          "category": "transition_tempo",
+          "checkpoint": null,
+          "deferred": false,
+          "effort": 3,
+          "field": "downswing_ms",
+          "fix": "Tempo tones.",
+          "good_values": null,
+          "id": "SEQ-04",
+          "kind": "band",
+          "label": "Downswing duration (~0.26s)",
+          "leverage": 58.9,
+          "leverage_breakdown": {
+            "ease": 60,
+            "impact": 48.0,
+            "severity": 68.7
+          },
+          "score": 31.3,
+          "skip_reason": null,
+          "unit": "ms",
+          "value": 483,
+          "weight": 48
+        },
+        {
+          "abs_value": false,
+          "advice": null,
+          "band": {
+            "falloff": 20,
+            "max": 60,
+            "min": 30
+          },
+          "category": "transition_tempo",
+          "checkpoint": "P5",
+          "deferred": true,
+          "effort": 5,
+          "field": "xfactor_rotation_est",
+          "fix": "Hips-first transition, pump drill.",
+          "good_values": null,
+          "id": "ROT-02",
+          "kind": "band",
+          "label": "X-Factor stretch (top -> transition)",
+          "leverage": null,
+          "leverage_breakdown": null,
+          "score": null,
+          "skip_reason": "shoulder/hip turn is derived from a 2D projected width (arccos of shoulder width over this clip's widest), which is sign-unstable through square and under-reads true turn by roughly half \u2014 it cannot be scored against criteria.md's anatomical degree bands. Needs a real turn estimate first; see scoring_config/COVERAGE.md.",
+          "unit": "deg (2D-projected estimate)",
+          "value": null,
+          "weight": 75
+        }
+      ],
+      "n_deferred": 1,
+      "n_measurable": 3,
+      "n_total": 3,
+      "score": 56.0
+    }
+  },
+  "checkpoints": {
+    "P1": {
+      "label": "Address",
+      "n_measurable": 6,
+      "p": "P1",
+      "score": 41.4
+    },
+    "P2": {
+      "label": "Backswing \u2014 bottom",
+      "n_measurable": 1,
+      "p": "P2",
+      "score": 100.0
+    },
+    "P4": {
+      "label": "Backswing \u2014 top",
+      "n_measurable": 5,
+      "p": "P4",
+      "score": 56.5
+    },
+    "P5": {
+      "label": "Downswing \u2014 top",
+      "n_measurable": 1,
+      "p": "P5",
+      "score": 19.2
+    },
+    "P7": {
+      "label": "Impact",
+      "n_measurable": 2,
+      "p": "P7",
+      "score": 100.0
+    }
+  },
+  "club_type": "irons",
+  "coverage": {
+    "deferred_in_config": 10,
+    "scored": 22,
+    "skipped_this_swing": 6,
+    "total_checks": 38
+  },
+  "drill": {
+    "copy": "Hip hinge, club-on-spine drill.",
+    "dose": "3 x 5",
+    "doseNote": "Three sets of five slow rehearsals, then apply the feel to a few full swings.",
+    "title": "Spine forward bend at address drill"
+  },
+  "findings": [
+    {
+      "detail": "impact",
+      "icon": "\u2193",
+      "title": "Shaft lean at impact (irons)",
+      "tone": "negative"
+    },
+    {
+      "detail": "transition_tempo",
+      "icon": "\u2193",
+      "title": "Tempo ratio (backswing:downswing, ~3:1)",
+      "tone": "negative"
+    },
+    {
+      "detail": "downswing_plane",
+      "icon": "\u2193",
+      "title": "Lag / wrist angle retention (mid-downswing)",
+      "tone": "negative"
+    },
+    {
+      "detail": "setup_posture",
+      "icon": "\u2193",
+      "title": "Spine forward bend at address",
+      "tone": "negative"
+    },
+    {
+      "detail": "backswing_top",
+      "icon": "\u2713",
+      "title": "Lead wrist condition at top (flat to slightly bowed)",
+      "tone": "positive"
+    },
+    {
+      "detail": "downswing_plane",
+      "icon": "\u2713",
+      "title": "Loss of posture (spine change, whole downswing)",
+      "tone": "positive"
+    },
+    {
+      "detail": "downswing_plane",
+      "icon": "\u2713",
+      "title": "Posture maintained into impact (spine angle change)",
+      "tone": "positive"
+    },
+    {
+      "detail": "setup_posture",
+      "icon": "\u2713",
+      "title": "Chin over mid-foot plumb at address",
+      "tone": "positive"
+    }
+  ],
+  "overall": 58.6,
+  "primary": {
+    "checkpoint": "P1",
+    "copy": "Hip hinge, club-on-spine drill.",
+    "id": "SET-01",
+    "leverage": 83.3,
+    "moment": "setup_posture",
+    "score": 0.0,
+    "title": "Bend forward more from the hips at address \u2014 you're standing too upright, which tends to steepen the whole swing plane."
+  },
+  "priorities": [
+    {
+      "checkpoint": "P1",
+      "cue": "Bend forward more from the hips at address \u2014 you're standing too upright, which tends to steepen the whole swing plane.",
+      "key": "SET-01",
+      "label": "Spine forward bend at address",
+      "leverage": 83.3,
+      "score": 0.0
+    },
+    {
+      "checkpoint": "P1",
+      "cue": "Let your arms hang more naturally at address \u2014 right now they're reaching away from, or pulled in too close to, your body.",
+      "key": "SET-05",
+      "label": "Lead arm hang from vertical at address",
+      "leverage": 76.7,
+      "score": 0.0
+    },
+    {
+      "checkpoint": null,
+      "cue": "Ease off how far forward your hands are at impact \u2014 the shaft is leaning forward more than ideal, which can deloft the club too much.",
+      "key": "ANG-56",
+      "label": "Shaft lean at impact (irons)",
+      "leverage": 74.7,
+      "score": 0.0
+    }
+  ],
+  "scoring_model_version": "v2",
+  "view": "dtl"
+}

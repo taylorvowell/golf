@@ -20,12 +20,15 @@ export const SIDE_COLOR: Record<string, string> = {
  * accepted knowingly. See docs/DECISIONS.md D34.
  *
  * Follow-through carries its alpha in the colour rather than being drawn at a lower opacity,
- * so it stays translucent regardless of how the renderer sets globalAlpha.
+ * so it stays translucent regardless of how the renderer sets globalAlpha. It is also drawn
+ * FIRST (see SwingStage), so it sits behind the two segments a coach reads rather than over
+ * them — the pairing of "behind" and "faint" is what keeps the long tail of the path from
+ * competing with the backswing and downswing it crosses.
  */
 export const TRACE_COLOR = {
   backswing: "#2E9BFF",
   downswing: "#B44BFF",
-  followthrough: "rgba(255,255,255,.55)",
+  followthrough: "rgba(255,255,255,.34)",
 } as const;
 
 export const BONES: [string, string, string][] = [

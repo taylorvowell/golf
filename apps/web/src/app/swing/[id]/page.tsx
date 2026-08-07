@@ -1,12 +1,17 @@
 import { notFound } from "next/navigation";
 import SwingWorkspace from "@/components/SwingWorkspace";
 import { CURRENT_SCHEMA, getAnalysis, listSwings, missingCapabilities } from "@/lib/swings";
+import { getCurrentUserId } from "@/lib/auth";
+import { getScorecard } from "@/lib/scoring";
 
 export const dynamic = "force-dynamic";
 
 export default async function SwingPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [analysis, swings] = await Promise.all([getAnalysis(id), listSwings()]);
+  const userId = await getCurrentUserId();
+  const [analysis, swings, scorecard] = await Promise.all([
+    getAnalysis(id), listSwings(userId), getScorecard(id),
+  ]);
   if (!analysis) notFound();
 
   // The log is newest-first, so the next entry is the older swing — which is what "previous"
@@ -19,6 +24,7 @@ export default async function SwingPage({ params }: { params: Promise<{ id: stri
     <SwingWorkspace
       id={id}
       analysis={analysis}
+      scorecard={scorecard}
       prevId={olderId}
       nextId={newerId}
       missing={missingCapabilities(analysis)}

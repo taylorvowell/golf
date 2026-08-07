@@ -78,9 +78,13 @@
       "to": 148
     }
   ],
+  "playback_pad": [
+    19,
+    0
+  ],
   "playback_window": [
     0,
-    227
+    208
   ],
   "swing_window": [
     85,

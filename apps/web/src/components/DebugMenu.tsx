@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import ReanalyzeButton from "./ReanalyzeButton";
+import type { Reanalyze } from "@/lib/useReanalyze";
 
 /**
  * Developer actions, off the main chrome.
@@ -13,7 +14,11 @@ import ReanalyzeButton from "./ReanalyzeButton";
  *
  * Anything that only makes sense while building the pipeline belongs here.
  */
-export default function DebugMenu({ id }: { id: string }) {
+export default function DebugMenu({ id, reanalyze }: {
+  id: string;
+  /** The page's shared re-analysis job — the same one the video's settings menu starts. */
+  reanalyze: Reanalyze;
+}) {
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
 
@@ -41,10 +46,11 @@ export default function DebugMenu({ id }: { id: string }) {
           <p className="mt-3 text-[11px] leading-4 text-neutral-500">
             Editing <code className="text-neutral-400">swingsage/</code> does not change a stored
             <code className="text-neutral-400"> analysis.json</code> — the player keeps drawing the
-            old artifact until the analyzer re-runs. Takes about 90 seconds.
+            old artifact until the analyzer re-runs. Takes about 90 seconds. The same action is
+            on the video&rsquo;s settings gear, which is where a golfer would look for it.
           </p>
           <div className="mt-3 flex justify-start">
-            <ReanalyzeButton id={id} />
+            <ReanalyzeButton r={reanalyze} />
           </div>
 
           <a href={`/api/swings/${id}/analysis`} target="_blank" rel="noreferrer"

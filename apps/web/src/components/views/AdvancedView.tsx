@@ -3,9 +3,12 @@
 import { useMemo, useState } from "react";
 import type { Analysis } from "@/lib/swings";
 import type { Player } from "@/lib/usePlayer";
+import type { Scorecard } from "@/lib/scoreDisplay";
 import { ANGLE_COLORS } from "@/lib/angleOverlay";
 import { EV_SHORT } from "@/lib/skeleton";
+import { useDragScroll } from "@/lib/useDragScroll";
 import CheckpointAngles from "../CheckpointAngles";
+import CriteriaBreakdown from "../CriteriaBreakdown";
 import {
   Chip, DataRow, Eyebrow, KioskPanel, MetricRow, MicroHead, NotBuilt, PanelTitle, QualityBar, StatTile,
 } from "../ui/kiosk";
@@ -28,9 +31,10 @@ type Sort = "change" | "position" | "name";
  * the measured value and its change from address.
  */
 export default function AdvancedView({
-  analysis, player, angles, onToggleAngle,
+  analysis, scorecard, player, angles, onToggleAngle,
 }: {
   analysis: Analysis;
+  scorecard: Scorecard | null;
   player: Player;
   angles: string[];
   onToggleAngle: (field: string) => void;
@@ -38,6 +42,9 @@ export default function AdvancedView({
   const { frame, drift, jumpTo, playRange, fps, nFrames, win } = player;
   const [open, setOpen] = useState(true);
   const [sort, setSort] = useState<Sort>("change");
+  // The explorer is a fixed-height window onto ~30 rows — grab it and pull, same as the
+  // angle table below, rather than having to find its scrollbar first.
+  const { ref: explorerRef, canScroll: explorerScrolls } = useDragScroll<HTMLDivElement>("y");
 
   const m = analysis.metrics;
   const fields = m?.angle_fields ?? null;
@@ -125,7 +132,7 @@ export default function AdvancedView({
               <MicroHead tone="violet">Selected evidence</MicroHead>
               {focus ? (
                 <>
-                  <h3 className="mt-1 truncate text-lg font-semibold">{focus.spec.label}</h3>
+                  <h3 className="mt-1 truncate text-base font-semibold">{focus.spec.label}</h3>
                   <p className="mt-1 text-[10px] leading-4 text-neutral-500">
                     {focus.cp ? <>Frame {focus.cp.frame} · {focus.cp.p} {focus.cp.label}</> : "not measurable"}
                     {focus.limited && " · not measurable in this view"}
@@ -134,15 +141,15 @@ export default function AdvancedView({
                 </>
               ) : (
                 <>
-                  <h3 className="mt-1 text-lg font-semibold text-neutral-400">Nothing selected</h3>
+                  <h3 className="mt-1 text-base font-semibold text-neutral-400">Nothing selected</h3>
                   <p className="mt-1 text-[10px] leading-4 text-neutral-500">
                     Play a row below, or click an angle name in the table, to draw it over the video.
                   </p>
                 </>
               )}
             </div>
-            <span className="grid h-16 w-16 shrink-0 place-items-center rounded-full border-8
-                             border-violet/20 bg-violet/10 text-xl font-bold tabular-nums text-violet">
+            <span className="grid h-14 w-14 shrink-0 place-items-center rounded-full border-[6px]
+                             border-violet/20 bg-violet/10 text-base font-bold tabular-nums text-violet">
               {focus?.value != null ? `${focus.value.toFixed(0)}°` : "—"}
             </span>
           </div>
@@ -154,15 +161,15 @@ export default function AdvancedView({
                      border-line bg-raised p-4 text-left">
           <div>
             <MicroHead>Metric explorer</MicroHead>
-            <h3 className="mt-1 text-xl font-semibold">
+            <h3 className="mt-1 text-base font-semibold">
               {open ? "Hide" : "Open"} all {fields?.length ?? 0} measured angles
             </h3>
             <p className="mt-1 text-[10px] text-neutral-500">
               Sort by largest change, swing position, or name.
             </p>
           </div>
-          <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl border
-                           border-line bg-black/20 text-2xl text-neutral-400">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border
+                           border-line bg-black/20 text-xl text-neutral-400">
             {open ? "−" : "+"}
           </span>
         </button>
@@ -181,7 +188,10 @@ export default function AdvancedView({
                     </button>
                   ))}
               </div>
-              <p className="text-[10px] text-neutral-500">Tap play to seek there and draw it</p>
+              <div className="flex items-center gap-2">
+                {explorerScrolls && <span className="drag-hint">↕ drag the list to scroll</span>}
+                <p className="text-[10px] text-neutral-500">Tap play to seek there and draw it</p>
+              </div>
             </div>
 
             <div className="grid grid-cols-[minmax(0,1.5fr)_110px_85px_85px_54px] gap-3 border-b
@@ -189,7 +199,8 @@ export default function AdvancedView({
               <span>Angle</span><span>Peaks at</span><span>Value</span><span>vs address</span><span />
             </div>
 
-            <div className="scrollbar max-h-[600px] space-y-2 overflow-y-auto py-3 pr-1">
+            <div ref={explorerRef}
+                 className="drag-scroll max-h-[600px] space-y-2 overflow-y-auto py-3 pr-1">
               {rows.length === 0 && (
                 <p className="text-xs text-neutral-500">
                   No checkpoint angles in this analysis — re-analyse to produce them.
@@ -333,22 +344,27 @@ export default function AdvancedView({
         </KioskPanel>
       </div>
 
+      <CriteriaBreakdown scorecard={scorecard} />
+
       <KioskPanel className="p-5">
         <div className="flex flex-wrap items-center gap-3">
           <MicroHead>Not built yet</MicroHead>
-          <NotBuilt what="scoring engine · doc 05 C" />
-          <NotBuilt what="coach report · doc 07" />
+          <NotBuilt what="AI coach narrative · doc 07" />
           <NotBuilt what="simulator ingestion · doc 06" />
-          <NotBuilt what="upload + job queue" />
+          <NotBuilt what="upload flow" />
           <NotBuilt what="trends & compare" />
         </div>
         <p className="mt-2 text-[11px] leading-5 text-neutral-500">
-          <b className="text-amber-400/90">Every score and every coaching line on the Overview and
-          Coach tabs is placeholder data</b> from{" "}
-          <code className="text-neutral-400">lib/mockScoring.ts</code> — deterministic per swing so
-          the scored layout can be designed and reviewed, and marked <b className="text-neutral-400">
-          DEMO</b> wherever it appears. Nothing on <i>this</i> tab passes through it: every number
-          here is read straight from <code className="text-neutral-400">analysis.json</code>, and{" "}
+          Scoring is real as of Stage 8 (<code className="text-neutral-400">swingsage/scoring.py</code>,
+          doc 05 Part C1) — the Overview and Coach tabs read <code className="text-neutral-400">
+          coach_report.json</code>, not placeholder data. Coverage is deliberately partial; see{" "}
+          <code className="text-neutral-400">services/analyzer/scoring_config/COVERAGE.md</code> for
+          exactly which <code className="text-neutral-400">criteria.md</code> rows are wired versus
+          deferred, and why. The narrative (<i>primary fix</i>, <i>drill</i>, <i>priorities</i>) is
+          deterministic — built from this swing&apos;s own weakest measured checks, not an AI call;
+          doc 07&apos;s real <code className="text-neutral-400">AIProvider</code> narrative is a
+          later, separate phase. Every number on <i>this</i> tab is still read straight from{" "}
+          <code className="text-neutral-400">analysis.json</code>, and{" "}
           {analysis.metrics?.provisional_thresholds
             ? <>the payload carries <code className="text-neutral-400">provisional_thresholds: true</code>.</>
             : <>thresholds are not yet tuned.</>}

@@ -11,22 +11,36 @@
 
 export type ToggleKey =
   | "skeleton" | "confStyle" | "hideLow" | "ghost" | "grip"
-  | "club" | "trace" | "grow" | "rawDet" | "crop";
+  | "club" | "trace" | "grow" | "rawDet" | "crop"
+  | "isolate" | "outline" | "butt";
 
 export type Toggles = Record<ToggleKey, boolean>;
 
 /**
  * Defaults.
  *
- * `club` and `trace` ship ON, reversing the old default. The club trace is the single most
- * compelling image the pipeline can produce and a first-time user never saw it — the UI
- * brief calls the old default "almost certainly wrong" (§4) and asks for exactly this as its
- * top deliverable (§10.1). Everything else keeps its previous default.
+ * Exactly three overlays ship ON: the stick figure, the club head trace, and the trace
+ * following the frame as it grows. That trio is the single most compelling image the
+ * pipeline can produce and what a first-time user should see with no menu digging.
+ * Everything else — confidence styling, the raw shaft/head line, crop-to-golfer, etc. —
+ * starts OFF so the first render is uncluttered; a viewer can layer them back in.
  */
 export const DEFAULT_TOGGLES: Toggles = {
-  skeleton: true, confStyle: true, hideLow: false, ghost: false, grip: false,
-  club: true, trace: true, grow: true, rawDet: false, crop: true,
+  skeleton: true, confStyle: false, hideLow: false, ghost: false, grip: false,
+  club: false, trace: true, grow: true, rawDet: false, crop: false,
+  isolate: false, outline: false, butt: false,
 };
+
+/**
+ * Every overlay off — what the menu's "clear all" applies.
+ *
+ * Derived from `DEFAULT_TOGGLES` rather than written out again, so adding an overlay cannot
+ * leave one stuck on with no way to clear it. Frozen because it is a shared module constant
+ * being handed straight to a state setter; mutating it would corrupt every later reset.
+ */
+export const CLEARED_TOGGLES: Toggles = Object.freeze(
+  Object.fromEntries(Object.keys(DEFAULT_TOGGLES).map((k) => [k, false])),
+) as Toggles;
 
 export interface OverlayItem {
   key: ToggleKey;
@@ -35,11 +49,13 @@ export interface OverlayItem {
   hint?: string;
 }
 
+export type Capability = "club" | "detector" | "crop" | "silhouette" | "posture";
+
 export interface OverlayGroup {
   title: string;
   items: OverlayItem[];
   /** Names the capability the whole group needs; the group is hidden when it is absent. */
-  needs?: "club" | "detector" | "crop";
+  needs?: Capability;
 }
 
 export const OVERLAY_GROUPS: OverlayGroup[] = [
@@ -54,11 +70,37 @@ export const OVERLAY_GROUPS: OverlayGroup[] = [
     ],
   },
   {
+    // Stage 2b. Both read `silhouette.json`, which is fetched only once one of them goes on,
+    // so this group is also the one place in the menu where a toggle can take a moment.
+    title: "Silhouette",
+    needs: "silhouette",
+    items: [
+      {
+        key: "isolate", label: "Isolate the golfer",
+        hint: "knocks the background back to the outline",
+      },
+      { key: "outline", label: "Draw the outline" },
+    ],
+  },
+  {
+    // Separate from the group above because it needs a different thing: the line is a handful
+    // of numbers in analysis.json and draws with no fetch at all, so it stays available on a
+    // swing whose per-frame outline was never stored.
+    title: "Setup reference",
+    needs: "posture",
+    items: [
+      {
+        key: "butt", label: "Butt position",
+        hint: "locked at address — the seat should stay against it",
+      },
+    ],
+  },
+  {
     title: "Club",
     needs: "club",
     items: [
       { key: "club", label: "Club shaft + head" },
-      { key: "trace", label: "Club head trace" },
+      { key: "trace", label: "Club head trace", hint: "dashed where the club was not measured" },
       { key: "grow", label: "Trace follows the frame", hint: "draws up to the playhead as you scrub" },
     ],
   },

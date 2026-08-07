@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Analysis } from "@/lib/swings";
 import { SIDE_COLOR, TRACE_COLOR } from "@/lib/skeleton";
 import { OVERLAY_GROUPS, type ToggleKey, type Toggles } from "@/lib/overlays";
+import { SMOOTHING_OPTIONS, type SmoothingKey } from "@/lib/traceSmoothing";
 import { MicroHead } from "./ui/kiosk";
 
 /**
@@ -17,15 +18,24 @@ import { MicroHead } from "./ui/kiosk";
  * The trigger stays lit while any non-default overlay is on, so the menu never hides state.
  */
 export default function OverlayMenu({
-  analysis, t, setT, cropAvailable, cropInfo, hasDetector,
-  clubOptions, clubVar, onPickClub,
+  analysis, t, setT, cropAvailable, cropInfo, hasDetector, hasSilhouette, silhouetteLoading,
+  clubOptions, clubVar, onPickClub, smoothing, onPickSmoothing, onClearAll,
 }: {
   analysis: Analysis;
   t: Toggles;
   setT: (k: ToggleKey, v: boolean) => void;
+  smoothing: SmoothingKey;
+  onPickSmoothing: (k: SmoothingKey) => void;
   cropAvailable: boolean;
   cropInfo: { cw: number; ch: number } | null;
   hasDetector: boolean;
+  /** The swing has a stored per-frame outline. False hides the group rather than offering a
+   * toggle that would draw nothing — the case CLAUDE.md calls indistinguishable from a bug. */
+  hasSilhouette: boolean;
+  /** Its (lazy, ~1 MB) fetch is in flight, so the toggle can say so instead of looking dead. */
+  silhouetteLoading: boolean;
+  /** Turn every overlay off in one go. Whole-set, not per-visible-group — see the button. */
+  onClearAll: () => void;
   clubOptions: { key: string; label: string; cov?: Record<string, number> }[];
   clubVar: string;
   onPickClub: (key: string) => void;
@@ -50,13 +60,21 @@ export default function OverlayMenu({
   const club = analysis.club;
   const traceLocked = !!club && !club.trace_enabled;
 
+  const butt = analysis.posture?.butt_line ?? null;
+
   const groups = OVERLAY_GROUPS.filter((g) =>
     g.needs === "club" ? !!club
     : g.needs === "detector" ? hasDetector
     : g.needs === "crop" ? cropAvailable
+    : g.needs === "silhouette" ? hasSilhouette
+    : g.needs === "posture" ? !!butt
     : true);
 
   const nOn = groups.flatMap((g) => g.items).filter((i) => t[i.key]).length;
+  // Over the WHOLE set, not just the groups this swing shows. The toggles are shared across
+  // the workspace, so a swing with no club data can arrive with `trace` still on from the
+  // previous one — invisible here, but real, and "clear all" has to be able to reach it.
+  const anyOn = Object.values(t).some(Boolean);
 
   const Row = ({ k, label, hint, disabled, why }: {
     k: ToggleKey; label: string; hint?: string; disabled?: boolean; why?: string;
@@ -102,6 +120,21 @@ export default function OverlayMenu({
 
       {open && (
         <div className="overlay-menu glass scrollbar" role="menu">
+          {/* Count on the left, reset on the right. The count is the same number as the dot on
+              the trigger, spelled out — the dot says "something is on", this says what to
+              expect from clearing it. */}
+          <div className="overlay-menu-bar">
+            <span className="text-[9px] font-bold uppercase tracking-[.18em] text-neutral-500">
+              {nOn === 0 ? "No overlays on" : `${nOn} overlay${nOn === 1 ? "" : "s"} on`}
+            </span>
+            {/* Enabled on `anyOn`, not on the visible count above — see its comment. */}
+            <button type="button" onClick={onClearAll} disabled={!anyOn}
+              title="Turn every overlay off"
+              className="overlay-menu-clear">
+              Clear all
+            </button>
+          </div>
+
           {groups.map((g) => (
             <div key={g.title}>
               <p className="overlay-menu-head">{g.title}</p>
@@ -112,6 +145,13 @@ export default function OverlayMenu({
                     ? `disabled — swing coverage ${((club?.coverage.swing ?? 0) * 100).toFixed(0)}% is below the 50% quality gate`
                     : i.key === "crop" && cropInfo
                     ? `shows ${(cropInfo.cw * 100).toFixed(0)}% × ${(cropInfo.ch * 100).toFixed(0)}% of the frame, ${(1 / cropInfo.ch).toFixed(2)}× bigger`
+                    : (i.key === "isolate" || i.key === "outline") && silhouetteLoading
+                    ? "loading the outline…"
+                    // Confidence is how still the setup was. A wandering address makes the
+                    // "locked" line a median of several postures, and saying so is the
+                    // difference between a reference and a red line of unknown provenance.
+                    : i.key === "butt" && butt
+                    ? `locked at frame ${butt.frame} · ${butt.conf < 0.7 ? "low confidence — " : ""}the seat moved ${(butt.spread_bh * 100).toFixed(1)}% of body height across the address hold`
                     : undefined} />
               ))}
             </div>
@@ -145,6 +185,41 @@ export default function OverlayMenu({
                 Same frames, same detections — only the solve differs, and switching redraws
                 rather than re-analysing. Lower coverage is usually the <i>more</i> honest
                 number: it counts measured frames, not interpolated ones.
+              </p>
+            </>
+          )}
+
+          {t.trace && !traceLocked && (
+            <>
+              <p className="overlay-menu-head">Trace smoothing — click to compare</p>
+              <div className="flex flex-col gap-1">
+                {SMOOTHING_OPTIONS.map((o) => {
+                  const on = smoothing === o.key;
+                  return (
+                    <button key={o.key} type="button" onClick={() => onPickSmoothing(o.key)}
+                      title="Redraws immediately — nothing is re-analysed"
+                      className={`rounded-xl border px-2.5 py-2 text-left transition ${on
+                        ? "border-acid/40 bg-acid/[.10] text-neutral-100"
+                        : "border-white/[.07] bg-white/[.02] text-neutral-400 hover:border-white/20 hover:text-neutral-100"}`}>
+                      <span className="flex items-baseline gap-2">
+                        <span className="text-[12px] font-semibold leading-tight">{o.label}</span>
+                        <span className={`text-[9px] uppercase tracking-[.08em] ${on ? "text-acid/70" : "text-neutral-600"}`}>
+                          {o.strength}
+                        </span>
+                      </span>
+                      <span className="mt-0.5 block text-[10px] leading-3 text-neutral-500">
+                        {o.hint}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="mt-2 px-1 text-[10px] leading-4 text-neutral-600">
+                Drawing only — no measurement changes, and the ends stay pinned so the head of
+                the line still sits on the club as you scrub. The stronger settings buy fluidity
+                by moving the line off the measured heads; the gaps stay dashed either way, and
+                <code className="px-1">checktrace.py</code> still scores fidelity against the raw
+                samples.
               </p>
             </>
           )}

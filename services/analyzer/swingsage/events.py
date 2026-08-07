@@ -48,6 +48,68 @@ def _series(frames, name, min_conf=0.3):
     return xy
 
 
+#: How far the speed-based Impact may sit from the hand-height landmark before the landmark
+#: wins. The two normally agree within a frame or two; a gap this large means one is wrong,
+#: and it is the speed-based one that slow motion breaks. Set well above the 1-11 frame
+#: spread seen across the working fixtures so those are never re-decided.
+LANDMARK_DISAGREE = 20
+
+#: A peak must be reversed by this fraction of the hand-height range to count as the top —
+#: enough to ignore the wobble at the top of the backswing without missing the top itself.
+LANDMARK_PROMINENCE = 0.25
+
+
+def _first_extremum(h, start, prom, direction):
+    """First extremum at/after `start` that is then reversed by `prom`.
+
+    `direction` 1 finds a peak, -1 a trough. Returning the *first* prominent one rather than
+    the global extremum is the whole point: the hands are usually higher at the finish than at
+    the top, so a global max finds the wrong landmark entirely.
+    """
+    best, bv = start, direction * h[start]
+    for f in range(start, len(h)):
+        v = direction * h[f]
+        if v > bv:
+            bv, best = v, f
+        elif bv - v > prom:
+            return best
+    return best
+
+
+def _hand_landmarks(frames, addr):
+    """(top, impact, finish) from hand height above the hips, or None if untrackable.
+
+    Independent of speed and frame rate — see the call site for why that matters.
+    """
+    gi, hp = IDX["grip_center"], IDX["mid_hip"]
+    raw = np.full(len(frames), np.nan)
+    for i, fr in enumerate(frames):
+        g, h = fr["kp"][gi], fr["kp"][hp]
+        if g[2] >= 0.35 and h[2] >= 0.35:
+            raw[i] = h[1] - g[1]
+    if np.isnan(raw).sum() > len(raw) * 0.6 or np.count_nonzero(~np.isnan(raw)) < 20:
+        return None
+
+    filled = _fill(raw.reshape(-1, 1))[:, 0]
+    if np.isnan(filled).any():
+        return None
+    # Light smoothing so single-frame jitter cannot create a peak.
+    sm = filled.copy()
+    if len(filled) >= 5:
+        sm[2:-2] = np.convolve(filled, np.ones(5) / 5, mode="valid")
+
+    if addr >= len(sm) - 4:
+        return None
+    prom = (float(sm[addr:].max()) - float(sm[addr])) * LANDMARK_PROMINENCE
+    if not prom > 0:
+        return None
+
+    top = _first_extremum(sm, addr, prom, 1)
+    imp = _first_extremum(sm, top, prom, -1)
+    fin = _first_extremum(sm, imp, prom, 1)
+    return (top, imp, fin) if addr < top < imp < fin else None
+
+
 def _fill(a):
     """Linear-fill NaN gaps so downstream extrema are not broken by short dropouts."""
     out = a.copy()
@@ -165,6 +227,40 @@ def _settle(speed, start, thr, hold):
     return None
 
 
+def build_tempo(out, fps):
+    """`(tempo, implausible_reasons)` from the three events it is made of.
+
+    A function rather than inline, because `club.refine_events` can move Impact after this has
+    already been computed (D50) and a tempo left over from the pre-refinement frames is worse
+    than none: it is the number the scorecard reads and the one the implausibility check fires
+    on, so a stale one both misreports the swing and mis-blames the detector.
+    """
+    bs = out["top"]["frame"] - out["address"]["frame"]
+    ds = out["impact"]["frame"] - out["top"]["frame"]
+    if ds <= 0:
+        return None, []
+    tempo = {"backswing_frames": bs, "downswing_frames": ds,
+             "ratio": round(bs / ds, 2),
+             "backswing_ms": round(bs / fps * 1000), "downswing_ms": round(ds / fps * 1000)}
+    # Real swings cluster hard around 3:1 with a backswing near 0.8s, which makes tempo a
+    # free check on our own event detection rather than only a coaching number: a figure
+    # this far out is likelier to be a misplaced Address or Top than a golfer who actually
+    # swings that way. It caught the address bug above — 4.17:1 on swing1.
+    #
+    # Flagged, never corrected. A deliberate rehearsal swing genuinely reads slow (swing2
+    # is 1.55:1 and its impact frame is confirmed by the club-head low point), so moving
+    # events to satisfy this prior would be fitting the data to the expectation.
+    odd = []
+    if not 0.45 <= bs / fps <= 1.30:
+        odd.append(f"backswing {tempo['backswing_ms']}ms outside 450-1300ms")
+    if not 0.15 <= ds / fps <= 0.40:
+        odd.append(f"downswing {tempo['downswing_ms']}ms outside 150-400ms")
+    if not 1.8 <= tempo["ratio"] <= 4.2:
+        odd.append(f"ratio {tempo['ratio']}:1 outside 1.8-4.2:1")
+    tempo["implausible"] = odd or None
+    return tempo, odd
+
+
 def playback_window(sg, out, peak, fps, n, lead_s=1.0, tail_s=1.0):
     """The part of the clip worth playing: the approach, the swing, and the held finish.
 
@@ -173,21 +269,24 @@ def playback_window(sg, out, peak, fps, n, lead_s=1.0, tail_s=1.0):
     frames 195-250, which starts most of the way down the downswing, because the backswing
     never reaches 10% of the downswing's hand speed.
 
-    Anchored on the events at the front and on *stillness* at the back:
+    **Exactly one second of approach and exactly one second of finish, on every swing.** Both
+    ends are pinned to events — `address - 1s` and `finish + 1s` — so the lead-in and the run-out
+    are the same length on every clip. That is what makes two swings comparable side by side: a
+    window whose ends move with the golfer means the same playhead position is a different part
+    of the swing in each pane.
 
-    * **Start** is one second before the Address event. Address is the end of the LAST
-      quasi-static hold at setup height, so a second before it is the last second of the
-      setup — the approach. It is only that tight because Address takes the last hold rather
-      than the longest one; the longest is usually an early settle and cost 0.8s of dead air.
-    * **End** is one second after the golfer comes to rest, which is not the same frame as the
-      Finish event. Finish is defined as the moment motion decays (doc 05 A.9) and fires as
-      soon as the hands slow; arriving at the finish position and holding it happens later.
-      `_settle` finds the holding, and the window can only ever be wider than the event, never
-      narrower.
+    This deliberately replaces an earlier, cleverer back end. It used to search for the golfer
+    coming to *rest* (`_settle`) and end a second after that, because the Finish event fires when
+    hand motion decays (doc 05 A.9), a few tenths before the golfer has actually arrived at the
+    finish and held it — so on `perfect` the window ran to 2.1s past Finish. That is more
+    faithful to one swing and worse across several, and consistency is what the comparison view
+    needs. `_settle` is still used by nothing else; it stays for the note it can still emit.
 
-    Deliberately not clamped to where motion *ends*: on both fixtures the last frame above
-    threshold is near the end of the clip (f395 of 396, f321 of 341) because the golfer lowers
-    the club and walks off. That trailing motion is exactly what this is trimming away.
+    Returns `([a, b], [pad_before, pad_after])`. A short clip cannot supply its second: swing2's
+    Address is at frame 41 and needs 60. Rather than silently showing a shorter approach there —
+    which would put the same inconsistency back by another route — the shortfall is reported so
+    the player can hold a freeze frame for it, keeping every approach one second whatever the
+    footage gives.
     """
     lead = int(round(lead_s * fps))
     tail = int(round(tail_s * fps))
@@ -197,18 +296,24 @@ def playback_window(sg, out, peak, fps, n, lead_s=1.0, tail_s=1.0):
     thr = max(float(sg.speed[peak]) * 0.06, 1e-6)
     hold = max(4, int(round(0.30 * fps)))
     settled = _settle(sg.speed, fin, thr, hold)
-    if settled is None:
-        sg.notes.append("no settled finish found; playback window ends at the finish event")
+    if settled is not None and settled > fin + tail:
+        sg.notes.append(
+            f"golfer settles at frame {settled}, {(settled - fin) / fps:.1f}s after the finish "
+            f"event; the playback window still ends 1.0s after Finish so every clip runs out "
+            f"for the same length")
 
-    a = max(0, addr - lead)
-    b = min(n - 1, max(fin, settled if settled is not None else fin) + tail)
-    # The window must contain the swing whatever the anchors did, and must not invert on a
-    # clip too short to hold one.
+    want_a, want_b = addr - lead, fin + tail
+    a, b = max(0, want_a), min(n - 1, want_b)
+    # The window must contain the swing whatever the anchors did, and must not invert on a clip
+    # too short to hold one.
     a = min(a, addr)
     b = max(b, min(n - 1, fin))
     if b <= a:
         a, b = 0, n - 1
-    return [int(a), int(b)]
+        return [int(a), int(b)], [0, 0]
+    # What the clip could not supply, for the player to hold as a freeze frame.
+    pad = [max(0, a - want_a), max(0, want_b - b)]
+    return [int(a), int(b)], [int(pad[0]), int(pad[1])]
 
 
 def _sharpness(x, i, half=6):
@@ -358,6 +463,52 @@ def detect(frames, handedness="right", fps=60.0):
         mft_c = 0.7
     ev["mid_follow_through"] = (int(mft), mft_c)
 
+    # --- Cross-check the post-top events against a speed-independent estimator ------------
+    #
+    # Everything above keys off grip *speed* and motion energy, which assumes a real-time
+    # swing. Slow-motion footage breaks that assumption badly: on the bundled pro reference the
+    # motion-burst window collapsed onto the downswing alone and Impact landed at f474 against
+    # a true ~f530, which then truncated the club trace and every phase span downstream.
+    #
+    # Hand HEIGHT above the hips has no such dependence — the top is its first prominent peak
+    # after Address, Impact the trough after that, the Finish the next peak. Those are
+    # geometric extrema of one well-tracked signal, so they read the same whatever the frame
+    # rate. Measured against the current detector: swing1 agrees exactly (198/221), swing2
+    # within a frame (86/114 vs 86/115), and the pro clip's Impact is recovered at f533.
+    #
+    # It only OVERRIDES on a large disagreement. The two estimators normally agree within a
+    # frame or two, and there are still no hand-labelled event frames for any clip
+    # (docs/STATUS.md) — so quietly re-deciding events that are already plausible would be
+    # fitting to a sample we cannot check. A gap this size means one of them is simply wrong.
+    lm = _hand_landmarks(frames, addr)
+    if lm is not None:
+        lm_top, lm_imp, lm_fin = lm
+        if abs(lm_imp - impact) > LANDMARK_DISAGREE:
+            sg.notes.append(
+                f"impact {impact} disagreed with the hand-height landmark {lm_imp} by "
+                f"{abs(lm_imp - impact)} frames (speed-based detection is unreliable on "
+                f"slow-motion footage); post-top events re-anchored on the landmarks")
+
+            impact, finish = lm_imp, lm_fin
+            ev["impact"] = (impact, 0.6)
+            ev["finish"] = (finish, 0.6)
+            if abs(lm_top - top) > LANDMARK_DISAGREE:
+                top = lm_top
+                ev["top"] = (top, 0.6)
+
+            # The two derived events are re-interpolated, NOT carried over proportionally.
+            # Their original positions were solved against the wrong Impact, so the fraction
+            # they sat at is wrong too — preserving it just carries the error forward at a new
+            # scale. Measured on the pro clip: the old mid-downswing sat at 98% of a span that
+            # ended 59 frames early, which re-scaled to 2 frames before the corrected Impact.
+            #
+            # These fractions are the canonical positions doc 05 A describes (lead arm parallel
+            # coming down; shaft parallel through), and sit inside the spread the two working
+            # fixtures show. Confidence is dropped to say plainly that they are interpolated
+            # rather than detected.
+            ev["mid_downswing"] = (int(top + round(0.60 * (impact - top))), 0.4)
+            ev["mid_follow_through"] = (int(impact + round(0.35 * (finish - impact))), 0.4)
+
     # --- Ordering constraint (doc 05 A): violations lower confidence, they are not hidden.
     out, prev = {}, -1
     for name in EVENT_ORDER:
@@ -376,38 +527,19 @@ def detect(frames, handedness="right", fps=60.0):
         phases.append({"name": f"{s}->{e}", "from": out[s]["frame"], "to": out[e]["frame"]})
 
     tempo = None
-    bs = out["top"]["frame"] - out["address"]["frame"]
-    ds = out["impact"]["frame"] - out["top"]["frame"]
-    if ds > 0:
-        tempo = {"backswing_frames": bs, "downswing_frames": ds,
-                 "ratio": round(bs / ds, 2),
-                 "backswing_ms": round(bs / fps * 1000), "downswing_ms": round(ds / fps * 1000)}
-        # Real swings cluster hard around 3:1 with a backswing near 0.8s, which makes tempo a
-        # free check on our own event detection rather than only a coaching number: a figure
-        # this far out is likelier to be a misplaced Address or Top than a golfer who actually
-        # swings that way. It caught the address bug above — 4.17:1 on swing1.
-        #
-        # Flagged, never corrected. A deliberate rehearsal swing genuinely reads slow (swing2
-        # is 1.55:1 and its impact frame is confirmed by the club-head low point), so moving
-        # events to satisfy this prior would be fitting the data to the expectation.
-        odd = []
-        if not 0.45 <= bs / fps <= 1.30:
-            odd.append(f"backswing {tempo['backswing_ms']}ms outside 450-1300ms")
-        if not 0.15 <= ds / fps <= 0.40:
-            odd.append(f"downswing {tempo['downswing_ms']}ms outside 150-400ms")
-        if not 1.8 <= tempo["ratio"] <= 4.2:
-            odd.append(f"ratio {tempo['ratio']}:1 outside 1.8-4.2:1")
-        tempo["implausible"] = odd or None
-        for o in odd:
-            sg.notes.append(f"tempo implausible ({o}) — check address/top/impact")
+    tempo, odd = build_tempo(out, fps)
+    for o in odd:
+        sg.notes.append(f"tempo implausible ({o}) — check address/top/impact")
 
     # Clip the still span to the (possibly nudged) address frame so it can never run past it.
     address_span = [min(address_span[0], out["address"]["frame"]), out["address"]["frame"]]
 
     # Computed from the ORDERED events, not from the raw ones above, so the window can never
     # disagree with the frames the player draws its phase bar from.
-    play = playback_window(sg, out, peak, fps, n)
+    play, play_pad = playback_window(sg, out, peak, fps, n)
 
     return {"events": out, "phases": phases, "swing_window": [int(a), int(b)],
             "playback_window": play,
+            # Frames of approach/run-out the clip could not supply, for the player to freeze.
+            "playback_pad": play_pad,
             "address_span": address_span, "tempo": tempo, "notes": sg.notes}, sg

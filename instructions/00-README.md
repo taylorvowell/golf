@@ -19,7 +19,6 @@ file first, then follow the documents in order.
 | `05-SWING-PHASES-AND-SCORING.md` | Swing event detection, metrics, the "Golf Coach" scoring engine | Phase 3 & 5 |
 | `06-SIMULATOR-DATA-INGESTION.md` | Parsing simulator stat screenshots + club face / impact images | Phase 6 |
 | `07-AI-INTEGRATION-CLAUDE-CODE.md` | AI provider abstraction; using Claude Code locally (no API key) | Phase 1 (scaffold), used everywhere |
-| `08-ROADMAP.md` | Development sequence, milestones, acceptance criteria per phase | Before starting; revisit each phase |
 
 ---
 
@@ -105,8 +104,9 @@ swingsage/
 
 ## How to Use This Plan
 
-Work through `08-ROADMAP.md` phase by phase. Before writing code for a phase, re-read the
-referenced spec doc(s) for that phase. When a spec and reality conflict (a model
-underperforms, a library breaks), prefer the spec's *fallback path* — every risky component
-in these docs lists a primary approach and at least one fallback. Log deviations in a
-`docs/DECISIONS.md` file so the plan stays truthful.
+Development sequencing now lives in the `.claude/` feature-track system, not a static phase
+document — see the "Build System" section of the root `CLAUDE.md`. Before writing code for a
+piece of work, re-read the referenced spec doc(s) for that area of the product (the table
+above). When a spec and reality conflict (a model underperforms, a library breaks), prefer the
+spec's *fallback path* — every risky component in these docs lists a primary approach and at
+least one fallback. Log deviations in `docs/DECISIONS.md` so the plan stays truthful.

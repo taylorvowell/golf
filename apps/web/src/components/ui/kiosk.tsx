@@ -12,19 +12,20 @@
  * | Component      | Sample usage            | Fed by today → by                              |
  * |----------------|-------------------------|------------------------------------------------|
  * | `KioskPanel`   | every view panel        | anything                                        |
- * | `ScoreGauge`   | the 0–100 Ideal Score   | `mockScoring` → `scoring_config.json` overall   |
- * | `IndicatorCard`| 8 scored swing moments  | `mockScoring` → per-checkpoint score            |
- * | `FindingBox`   | 6 red/green findings    | `mockScoring` → scorecard strengths/faults      |
- * | `TipCard`      | drill + session focus   | `mockScoring` → AI coach narrative              |
+ * | `ScoreGauge`   | the 0–100 Ideal Score   | `lib/scoring.ts` → `coach_report.json` overall  |
+ * | `IndicatorCard`| 8 scored swing moments  | `lib/scoring.ts` → per-checkpoint score         |
+ * | `FindingBox`   | 6 red/green findings    | `lib/scoring.ts` → scorecard strengths/faults   |
+ * | `TipCard`      | drill + session focus   | `lib/scoring.ts` → deterministic drill/priority |
  * | `MetricRow`    | 54 weighted metrics     | the real angle catalogue → weighted metrics     |
  * | `StatTile`     | measurable/view-limited | real field counts                               |
  * | `DataRow`      | (new) diagnostics lines | real pose/club/face/sync numbers                |
  * | `QualityBar`   | (new) per-joint bars    | real pose coverage                              |
  * | `NotBuilt`     | (new)                   | marks a designed slot with no pipeline behind it |
  *
- * The split that matters: the first four are fed by `lib/mockScoring.ts` and every screen that
- * uses them shows a `DEMO` marker; the rest are fed straight from `analysis.json` and are real.
- * Keep it that way — a card is not the place to decide which kind of number it is holding.
+ * All ten are real as of Stage 8 (doc 05 Part C1, `swingsage/scoring.py`) — every card is fed
+ * from `coach_report.json` or `analysis.json`, never fabricated. The one thing still ahead of
+ * `lib/scoring.ts`'s deterministic narrative is doc 07's AI-generated coaching prose, which
+ * will replace `TipCard`'s copy without changing the card itself.
  */
 
 import type { ReactNode } from "react";
@@ -49,7 +50,7 @@ export function Eyebrow({ tone = "acid", children }: { tone?: "acid" | "violet" 
 
 export function PanelTitle({ children, className = "" }: { children: ReactNode; className?: string }) {
   return (
-    <h2 className={`gradient-text mt-2 text-4xl font-semibold leading-[1.03] tracking-[-.04em] sm:text-5xl ${className}`}>
+    <h2 className={`gradient-text mt-2 text-2xl font-semibold leading-[1.15] tracking-tight sm:text-[1.7rem] ${className}`}>
       {children}
     </h2>
   );
@@ -110,8 +111,17 @@ export function ScoreGauge({
           <circle cx={cx.toFixed(1)} cy={cy.toFixed(1)} r="8" fill="#080a0d" stroke="#5ed0ff" strokeWidth="5" />
         </>
       )}
-      <text x="180" y="154" fill={value === null ? "#5b636e" : "#f7f8f5"} fontSize="72" fontWeight="750"
-            textAnchor="middle" letterSpacing="-5">{value === null ? "—" : value}</text>
+      {/* The score alone, centred under the arc. The `/100` denominator is gone: the caption
+          below already names the reading, and the number is the hero — anything beside it
+          pulled the whole group off the arc's axis.
+          x is 178, not 180: `letterSpacing` also applies after the last glyph, so the measured
+          box is 5 units wider than the ink and a `middle` anchor would sit the visible digits
+          ~2.5 units right of centre. */}
+      <text x={value === null ? 180 : 178} y="154" fill={value === null ? "#5b636e" : "#f7f8f5"}
+            fontSize="72" fontWeight="750"
+            textAnchor="middle" letterSpacing="-5">
+        {value === null ? "—" : value}
+      </text>
       <text x="180" y="180" fill="#7e8691" fontSize="11" fontWeight="700" textAnchor="middle"
             letterSpacing="2.4">{caption}</text>
       <text x="38" y="211" fill="#6f6fa1" fontSize="10">{low}</text>
@@ -181,10 +191,10 @@ export function IndicatorCard({
               style={{ "--ring-value": `${ring}%`, "--ring-color": ringColor } as React.CSSProperties}>
           <span className="indicator-icon-large"><IndicatorIcon name={icon} /></span>
           <span className="relative z-10 text-center">
-            <b className="block text-[2rem] leading-none tracking-[-.05em]">{value}</b>
+            <b className="block text-xl leading-none tracking-[-.04em]">{value}</b>
           </span>
         </span>
-        <b className="px-1 text-center text-base leading-[1.1]">{label}</b>
+        <b className="px-1 text-center text-[13px] leading-[1.15]">{label}</b>
       </div>
     </button>
   );
@@ -200,8 +210,8 @@ export function FindingBox({
     <div className={`finding-box ${tone}`}>
       <span className="finding-icon">{icon}</span>
       <div className="min-w-0">
-        <p className="text-lg font-semibold leading-tight">{title}</p>
-        <p className="mt-1 text-[11px] font-semibold uppercase tracking-[.16em] text-white/55">{detail}</p>
+        <p className="text-sm font-semibold leading-snug">{title}</p>
+        <p className="mt-1 text-[10px] font-semibold uppercase tracking-[.16em] text-white/55">{detail}</p>
       </div>
     </div>
   );
@@ -217,7 +227,7 @@ export function TipCard({
   return (
     <div className={`tip-card${tone === "plain" ? "" : ` ${tone}`}`}>
       {eyebrow && <MicroHead tone={tone === "acid" ? "acid" : tone === "accent" ? "violet" : "muted"}>{eyebrow}</MicroHead>}
-      {title && <h3 className="mt-2 text-xl font-semibold">{title}</h3>}
+      {title && <h3 className="mt-2 text-base font-semibold">{title}</h3>}
       {children}
     </div>
   );
@@ -229,7 +239,7 @@ export function StatTile({
   const c = tone === "acid" ? "text-acid" : tone === "violet" ? "text-violet" : "text-neutral-300";
   return (
     <div className="stat-tile">
-      <span className={`block text-2xl font-bold ${c}`}>{value}</span>
+      <span className={`block text-lg font-bold ${c}`}>{value}</span>
       <span className="text-[8px] uppercase tracking-[.16em] text-neutral-600">{label}</span>
     </div>
   );

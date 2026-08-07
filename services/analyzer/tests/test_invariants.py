@@ -30,17 +30,21 @@ def detected(frozen):
     return res, sg
 
 
-def test_keypoint_block_is_48_and_append_only(frozen):
-    """33 native + 7 derived + 8 measured, and the measured block sits last (D25).
+def test_keypoint_block_is_49_and_append_only(frozen):
+    """33 native + 7 derived + 8 measured + 1 derived-tail, in that published order (D25).
 
-    Reordering would silently change the meaning of published indices 0-39 for every stored
-    artifact, which is why this is asserted rather than trusted.
+    Reordering would silently change the meaning of published indices 0-47 for every stored
+    artifact, which is why this is asserted rather than trusted. The anchors below are one
+    per block boundary, so an insertion anywhere lands on one of them — `chin` in particular
+    is the canary for the tempting mistake of slotting a new derived joint next to its
+    siblings at index 40 instead of appending it at the end.
     """
     names = frozen["pose"]["keypoint_names"]
-    assert len(names) == 48, f"expected 48 keypoints, got {len(names)}"
-    assert all(len(f["kp"]) == 48 for f in frozen["pose"]["frames"]), \
+    assert len(names) == 49, f"expected 49 keypoints, got {len(names)}"
+    assert all(len(f["kp"]) == 49 for f in frozen["pose"]["frames"]), \
         "a frame carries a different number of keypoints than keypoint_names declares"
-    for anchor, i in (("nose", 0), ("neck", 33), ("grip_center", 37)):
+    for anchor, i in (("nose", 0), ("neck", 33), ("grip_center", 37), ("chin", 44),
+                      ("waist", 48)):
         assert names[i] == anchor, f"keypoint {i} is {names[i]!r}, expected {anchor!r}"
         assert IDX[anchor] == i, f"skeleton.IDX disagrees with the artifact for {anchor!r}"
 

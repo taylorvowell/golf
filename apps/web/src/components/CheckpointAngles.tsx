@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { Analysis } from "@/lib/swings";
 import { ANGLE_COLORS } from "@/lib/angleOverlay";
+import { useDragScroll } from "@/lib/useDragScroll";
 
 /**
  * Every angle at each of the ten coaching positions, P1–P10.
@@ -35,6 +36,10 @@ export default function CheckpointAngles({
 }) {
   const [mode, setMode] = useState<"values" | "delta">("values");
   const [showOther, setShowOther] = useState(false);
+  // Ten columns never fit the panel, so this table is always pannable — grab it anywhere,
+  // or use the scrollbar under it. Clicks on the headers and angle names still work; only a
+  // drag past a few pixels stops counting as one (lib/useDragScroll.ts).
+  const { ref: scrollRef, canScroll } = useDragScroll<HTMLDivElement>("x");
 
   const cps = analysis.metrics?.checkpoints ?? null;
   const fields = analysis.metrics?.angle_fields ?? null;
@@ -99,9 +104,10 @@ export default function CheckpointAngles({
           click an <b className="text-neutral-500">angle name</b> to draw it on the video ·
           click a <b className="text-neutral-500">column</b> to jump to that frame
         </span>
+        {canScroll && <span className="drag-hint">↔ drag the table to scroll</span>}
       </div>
 
-      <div className="scrollbar overflow-x-auto">
+      <div ref={scrollRef} className="drag-scroll overflow-x-auto pb-1">
         <table className="angle-table">
           <thead>
             <tr>

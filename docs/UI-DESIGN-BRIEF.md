@@ -46,7 +46,7 @@ capture UI.
 
 ## 2. Reality check — what exists today
 
-Design against this, not against the roadmap. The gap is large.
+Design against this, not against the plan docs. The gap is large.
 
 | Thing | State |
 |---|---|

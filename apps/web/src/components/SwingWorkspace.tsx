@@ -1,12 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Analysis } from "@/lib/swings";
-import { EV_SHORT } from "@/lib/skeleton";
+import type { CheckResult, Scorecard } from "@/lib/scoreDisplay";
+import { DEFAULT_TOGGLES, type Toggles } from "@/lib/overlays";
+import { buildSwingSync } from "@/lib/swingSync";
+import { playbackWindow } from "@/lib/playbackWindow";
 import { usePlayer } from "@/lib/usePlayer";
 import DebugMenu from "./DebugMenu";
+import ReanalyzeProgress from "./ReanalyzeProgress";
+import { useReanalyze } from "@/lib/useReanalyze";
 import SwingStage from "./SwingStage";
+import SwingTransport from "./SwingTransport";
+import ComparisonPane from "./ComparisonPane";
+import { useSwingStages } from "@/lib/useSwingStages";
+import { phaseFrames, phaseNameAt } from "@/lib/swingPhases";
+import { CompareButton, SourcePicker } from "./ComparisonBar";
+import { PRO_SWING_ID, proSwing } from "@/lib/proSwings";
 import OverviewView from "./views/OverviewView";
 import CoachView from "./views/CoachView";
 import AdvancedView from "./views/AdvancedView";
@@ -36,10 +47,12 @@ const TABS: { key: ViewKey; icon: string; label: string }[] = [
  * nothing outside it reads them.
  */
 export default function SwingWorkspace({
-  id, analysis, prevId, nextId, missing, currentSchema,
+  id, analysis, scorecard, prevId, nextId, missing, currentSchema,
 }: {
   id: string;
   analysis: Analysis;
+  /** null when this swing predates Stage 8 or was analysed with `--no-scoring`. */
+  scorecard: Scorecard | null;
   prevId: string | null;
   nextId: string | null;
   missing: string[];
@@ -60,19 +73,188 @@ export default function SwingWorkspace({
       : [...cur, field].slice(-MAX_ANGLES));
   }, []);
 
-  /** What the transport calls the current position — an event name, or the whole swing. */
-  const ev = analysis.events
-    ? Object.entries(analysis.events).find(([, v]) => v.frame === player.frame)
-    : undefined;
-  const cp = analysis.checkpoints?.find((c) => c.frame === player.frame);
-  const moment = ev ? (EV_SHORT[ev[0]] ?? ev[0]) : cp ? cp.label : "Full swing";
+  // The Overview checkpoint-detail check a golfer is hovering/has clicked, if any — Overview
+  // owns pausing and seeking the player (it already holds `player`), this only owns what the
+  // canvas draws. Overrides (not merges with) whatever Advanced's own angle toggles selected,
+  // so inspecting one check is always a focused, single-angle view rather than adding clutter
+  // on top of an unrelated Advanced-tab selection.
+  const [inspecting, setInspecting] = useState<CheckResult | null>(null);
+  const overlayAngles = inspecting ? [inspecting.field] : angles;
+  const targetOverlay = inspecting?.kind === "band" && inspecting.band
+    ? { field: inspecting.field, band: inspecting.band, absValue: inspecting.abs_value }
+    : null;
+
+  // Overlay toggles live here, not in SwingStage, so the comparison video renders the same
+  // overlays as the main one from a single set of controls (see SwingStage's `toggles` prop).
+  const [toggles, setToggles] = useState<Toggles>(DEFAULT_TOGGLES);
+
+  /**
+   * Hand-corrected phase boundaries, and the boundaries themselves once the corrections are
+   * folded into the analyzer's.
+   *
+   * Owned here rather than in SwingStage because three separate things downstream have to agree
+   * about where the swing changes phase — the scrub strip's segments, the word burned into the
+   * picture, and the spans the club trace is coloured by. Each used to derive its own from
+   * `analysis.events`, which is exactly why pinning a keyframe appeared to do nothing: it was
+   * saved, and then nothing read it.
+   */
+  const stages = useSwingStages(id);
+  const phases = useMemo(() => phaseFrames(analysis, player.win, stages.byStage),
+                         [analysis, player.win, stages.byStage]);
+
+  // Head-marker editing is owned by SwingStage (the markers belong to one swing's picture), but
+  // the layout around it is this component's — hence the report up rather than lifting the whole
+  // hook, which would have to be duplicated per pane since each stage edits its own swing.
+  const [editingHeads, setEditingHeads] = useState(false);
+
+  // ---------------------------------------------------------------- comparison
+  const [compareOn, setCompareOn] = useState(false);
+  const [compareId, setCompareId] = useState<string>(PRO_SWING_ID);
+  /**
+   * The fetched reference, tagged with the id it was fetched for.
+   *
+   * Kept as one id-stamped record rather than separate `analysis`/`error` state reset at the
+   * top of the effect: resetting synchronously inside an effect causes a cascading render (and
+   * React's lint rules reject it outright). Tagging instead means a result for a *previous*
+   * selection is simply ignored below rather than briefly rendered.
+   */
+  const [refData, setRefData] = useState<
+    { id: string; analysis: Analysis | null; error: string | null } | null>(null);
+
+  useEffect(() => {
+    if (!compareOn) return;
+    let cancelled = false;
+    fetch(`/api/swings/${compareId}/analysis`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
+      .then((d: Analysis) => {
+        if (!cancelled) setRefData({ id: compareId, analysis: d, error: null });
+      })
+      .catch(() => {
+        if (cancelled) return;
+        const pro = proSwing(compareId);
+        setRefData({
+          id: compareId, analysis: null,
+          error: pro
+            ? `The ${pro.label} reference hasn't been analysed on this machine yet — run `
+              + `burnin.py over ${pro.source}, then \`pnpm db:backfill\`.`
+            : `Couldn't load ${compareId}.`,
+        });
+      });
+    return () => { cancelled = true; };
+  }, [compareOn, compareId]);
+
+  const refCurrent = refData?.id === compareId ? refData : null;
+  const refAnalysis = refCurrent?.analysis ?? null;
+  const refError = refCurrent?.error ?? null;
+
+  /**
+   * Frame mapping between this swing and the reference, anchored on the eight events — which
+   * are themselves club-and-pose defined, so this aligns the two by *club position in the
+   * swing* rather than by elapsed time. See `lib/swingSync.ts`.
+   */
+  const sync = useMemo(() => {
+    if (!refAnalysis) return null;
+    return buildSwingSync(analysis, refAnalysis, player.win, playbackWindow(refAnalysis));
+  }, [analysis, refAnalysis, player.win]);
+
+  const showCompare = compareOn && !!refAnalysis;
+
+  /**
+   * What the transport calls the current position.
+   *
+   * This used to match the playhead against exact event/checkpoint frames, so it read "Full
+   * swing" everywhere except the handful of individual frames that happened to land exactly
+   * on a named one — flashing to that name for a single frame and back. Bucketing by range
+   * instead makes it a stable label for wherever the playhead is. Impact gets its own area on
+   * the scrub strip (see SwingStage's segments) but is deliberately not one of these five —
+   * it folds into Downswing/Follow Through here rather than flashing its own name for one frame.
+   */
+  const moment = phaseNameAt(player.frame, phases);
+
+  /**
+   * Re-analysis, owned at page level. Started from the video's settings menu, reported by the
+   * banner below — the menu closes on the click that begins it, so nothing inside it can be
+   * where a 90-second run lives. One hook, so the two never disagree about the same job.
+   */
+  const reanalyze = useReanalyze(id);
 
   return (
     <main className="relative mx-auto max-w-[1800px] space-y-5 px-3 py-4 sm:px-5 sm:py-5 lg:px-8 lg:py-7">
       <section id="summaryPanel"
-        className="grid items-start gap-5 xl:grid-cols-[minmax(0,480px)_minmax(0,1fr)]
-                   2xl:grid-cols-[minmax(0,560px)_minmax(0,1fr)]">
-        <SwingStage id={id} analysis={analysis} player={player} angles={angles} moment={moment} />
+        // The video column doubles in width when the comparison is showing, sliding the panels
+        // column over rather than squeezing the two videos into the single-video slot.
+        //
+        // Editing head markers inverts the split: the panels shrink to a narrow rail and the
+        // picture takes the rest. Placing a club head is a pixel-accurate pointing task, so
+        // during it the video IS the screen — and the coaching panels are not what you are
+        // looking at. The rail is kept rather than hidden so the layout doesn't reflow out from
+        // under you when the mode ends. It takes precedence over the comparison split, which is
+        // the same trade in the other direction.
+        className={`grid items-start gap-5 transition-[grid-template-columns] duration-200 ${
+          editingHeads
+          ? "xl:grid-cols-[minmax(0,1fr)_minmax(0,300px)] 2xl:grid-cols-[minmax(0,1fr)_minmax(0,340px)]"
+          : showCompare
+          ? "xl:grid-cols-[minmax(0,760px)_minmax(0,1fr)] 2xl:grid-cols-[minmax(0,900px)_minmax(0,1fr)]"
+          : "xl:grid-cols-[minmax(0,480px)_minmax(0,1fr)] 2xl:grid-cols-[minmax(0,560px)_minmax(0,1fr)]"}`}>
+        <div className="min-w-0 space-y-3">
+          <ReanalyzeProgress r={reanalyze} />
+          {refError && (
+            <p className="rounded-xl border border-amber-400/25 bg-amber-400/[.07] px-3 py-2
+                          text-[11px] leading-5 text-amber-200">
+              {refError}
+            </p>
+          )}
+          {compareOn && !refAnalysis && !refError && (
+            <p className="text-[11px] text-neutral-500">Loading comparison swing…</p>
+          )}
+
+          {/* Each pane gets exactly half the column (`1fr 1fr`), so the two videos are the same
+              width and fill the space the comparison widened the column to. Their aspect ratios
+              are near-identical portrait phone video, so equal widths give equal heights without
+              forcing either picture out of shape. One column below xl, where two videos side by
+              side would make both unreadable. */}
+          <div className={showCompare ? "grid grid-cols-2 gap-3" : ""}>
+            <SwingStage id={id} analysis={analysis} player={player} angles={overlayAngles}
+                       moment={moment} targetOverlay={targetOverlay}
+                       toggles={toggles} setToggles={setToggles}
+                       onEditingChange={setEditingHeads}
+                       stages={stages} phases={phases}
+                       reanalyze={reanalyze}
+                       topRight={<CompareButton enabled={compareOn} onToggle={setCompareOn} />} />
+
+            {showCompare && refAnalysis && (
+              <ComparisonPane
+                id={compareId}
+                analysis={refAnalysis}
+                sync={sync}
+                userFrame={player.frame}
+                userPlaying={player.playing}
+                userSpeed={player.speed}
+                toggles={toggles}
+                setToggles={setToggles}
+                sourcePicker={
+                  <SourcePicker sourceId={compareId} onPickSource={setCompareId} currentId={id} />
+                }
+              />
+            )}
+          </div>
+
+          {/* ONE transport for both. The reference has no controls of its own — it is held at
+              the same point in the swing as the video beside it, so a second scrubber (and the
+              lock that used to sit between them) was a relationship to manage rather than a fact. */}
+          <SwingTransport player={player} phases={phases} />
+
+          {showCompare && sync && (
+            <p className="text-[10px] leading-4 text-neutral-600">
+              {sync.method === "landmarks"
+                ? "Matched at address, top and impact, then by how far your hands travel between "
+                  + "them — the reference holds at address until you start and freezes at its "
+                  + "finish. Backswing and downswing track closest."
+                : "Neither swing had enough tracked hand data to anchor on, so the reference is "
+                  + "stretched evenly across yours and will not hold position."}
+            </p>
+          )}
+        </div>
 
         {/* `workspace-panels` is inert above xl; below it, it is the sheet that slides up over
             the sticky video. See globals.css. */}
@@ -137,11 +319,14 @@ export default function SwingWorkspace({
           </div>
 
           {view === "overview" && (
-            <OverviewView analysis={analysis} player={player} currentId={id} />
+            <OverviewView analysis={analysis} scorecard={scorecard} player={player}
+                         inspecting={inspecting} onInspect={setInspecting} />
           )}
-          {view === "coach" && <CoachView analysis={analysis} player={player} currentId={id} />}
+          {view === "coach" && (
+            <CoachView analysis={analysis} scorecard={scorecard} player={player} />
+          )}
           {view === "advanced" && (
-            <AdvancedView analysis={analysis} player={player}
+            <AdvancedView analysis={analysis} scorecard={scorecard} player={player}
                           angles={angles} onToggleAngle={toggleAngle} />
           )}
 
@@ -220,7 +405,7 @@ export default function SwingWorkspace({
       )}
 
       {/* Sticky, bottom right, out of the product's own chrome. */}
-      <DebugMenu id={id} />
+      <DebugMenu id={id} reanalyze={reanalyze} />
     </main>
   );
 }

@@ -1,24 +1,25 @@
 "use client";
 
-import { useMemo } from "react";
 import type { Analysis } from "@/lib/swings";
 import type { Player } from "@/lib/usePlayer";
-import { mockScorecard, scoreColor, SCORING_IS_MOCK } from "@/lib/mockScoring";
-import { Eyebrow, MicroHead, PanelTitle, TipCard } from "../ui/kiosk";
+import type { Scorecard } from "@/lib/scoreDisplay";
+import { scoreColor } from "@/lib/scoreDisplay";
+import { Eyebrow, MicroHead, NotBuilt, PanelTitle, TipCard } from "../ui/kiosk";
 
 /**
  * The Coach panel — the sample's `#viewCoach`, slot for slot.
  *
- * One priority, one feel, one drill. The prose comes from `lib/mockScoring.ts` until doc 07's
- * `AIProvider` exists; every control is real, so each card loops the part of the swing it is
- * talking about.
+ * One priority, one feel, one drill — all real: `swingsage/scoring.py`'s deterministic
+ * narrative (doc 05 Part C1), built from this swing's own weakest measured checks and their
+ * `fix` text from `instructions/criteria.md`, not a canned pool and not an AI call. Doc 07's
+ * `AIProvider` narrative is a later, separate phase that replaces `scoring.py`'s `_narrative()`
+ * without changing this component — see `coach_report.json`'s stable shape.
  */
 export default function CoachView({
-  analysis, player, currentId,
-}: { analysis: Analysis; player: Player; currentId: string }) {
+  analysis, scorecard, player,
+}: { analysis: Analysis; scorecard: Scorecard | null; player: Player }) {
   const { loop, playRange } = player;
   const e = analysis.events;
-  const card = useMemo(() => mockScorecard(analysis, currentId), [analysis, currentId]);
 
   /** Frame span for a checkpoint's phase, so a priority card loops what it names. */
   const spanFor = (p: string): [number, number] => {
@@ -30,23 +31,28 @@ export default function CoachView({
 
   const active = (s: [number, number]) => loop?.[0] === s[0] && loop?.[1] === s[1];
 
+  if (!scorecard || scorecard.overall === null) {
+    return (
+      <section className="view-panel kiosk-panel rounded-[32px] p-5 sm:p-6 lg:p-7">
+        <Eyebrow>Coach view</Eyebrow>
+        <PanelTitle>Not scored yet.</PanelTitle>
+        <div className="mt-4"><NotBuilt what="coach narrative" /></div>
+      </section>
+    );
+  }
+  const card = scorecard;
+
   return (
     <section className="view-panel kiosk-panel rounded-[32px] p-5 sm:p-6 lg:p-7">
       <div className="rise flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
             <Eyebrow>Coach view</Eyebrow>
-            {SCORING_IS_MOCK && (
-              <span className="rounded-full border border-dashed border-white/15 px-2 py-0.5
-                               text-[8px] font-bold uppercase tracking-[.18em] text-neutral-600">
-                Demo
-              </span>
-            )}
           </div>
           <PanelTitle>One priority. One feel. One drill.</PanelTitle>
         </div>
-        <span className="grid h-20 w-20 place-items-center rounded-full border-8 border-acid/20
-                         bg-acid/10 text-3xl font-bold tabular-nums"
+        <span className="grid h-16 w-16 place-items-center rounded-full border-[6px] border-acid/20
+                         bg-acid/10 text-xl font-bold tabular-nums"
               style={{ color: scoreColor(card.primary.score) }}>
           {card.primary.score}
         </span>
@@ -62,7 +68,7 @@ export default function CoachView({
             {e && ` · frame ${e.top.frame}`}
           </span>
         </div>
-        <h3 className="mt-4 text-2xl font-semibold">{card.primary.title}</h3>
+        <h3 className="mt-4 text-lg font-semibold">{card.primary.title}</h3>
         <p className="mt-2 text-sm leading-6 text-neutral-400">{card.primary.copy}</p>
         <div className="mt-4 flex flex-wrap gap-2">
           {e && (
@@ -90,10 +96,10 @@ export default function CoachView({
               className={`coach-priority ${on ? "active " : ""}rounded-[24px] border border-line
                           bg-raised p-4 text-left`}>
               <div className="flex items-center justify-between">
-                <span className="grid h-11 w-11 place-items-center rounded-2xl bg-violet/10 text-xl text-violet">
+                <span className="grid h-10 w-10 place-items-center rounded-2xl bg-violet/10 text-base text-violet">
                   {i + 1}
                 </span>
-                <span className="text-2xl font-bold tabular-nums"
+                <span className="text-lg font-bold tabular-nums"
                       style={{ color: i === 0 ? scoreColor(p.score) : undefined }}>
                   {p.score}
                 </span>
@@ -121,7 +127,7 @@ export default function CoachView({
 
         <div className="rounded-[24px] border border-white/[.07] bg-black/20 p-5">
           <MicroHead>Session focus</MicroHead>
-          <p className="mt-3 text-4xl font-bold tabular-nums text-acid">{card.drill.dose}</p>
+          <p className="mt-3 text-2xl font-bold tabular-nums text-acid">{card.drill.dose}</p>
           <p className="mt-2 text-xs leading-5 text-neutral-500">{card.drill.doseNote}</p>
         </div>
       </div>

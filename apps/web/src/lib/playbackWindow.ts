@@ -14,12 +14,12 @@ const TAIL_S = 1.0;
  * not in `analysis.json` — only its consequences are.
  *
  * What happens here is *arithmetic on published frame numbers*, not detection: an artifact
- * written before schema 5 has no window, and clamping to `address − 1s … finish + 1s` is a
- * strictly better default than playing the whole clip. It is worse than the real thing in one
- * specific way, and it is worth knowing why: the Finish **event** fires when hand motion
- * decays (doc 05 A.9), which is a few tenths of a second before the golfer has actually
- * arrived at the finish position and held it. The analyzer's version searches for that
- * settling; this one cannot, so it ends slightly early. Re-analyse to get the real one.
+ * written before schema 5 has no window, and `address − 1s … finish + 1s` is a strictly better
+ * default than playing the whole clip. Since schema 9 that is also exactly what the analyzer
+ * computes, so the fallback and the real thing now agree — earlier the analyzer additionally
+ * searched for the golfer coming to *rest* and ran on to a second past that, which this could
+ * not reproduce. Both ends are pinned to events now so every clip's approach and run-out are
+ * the same length; `playbackPad` covers the clips too short to supply one.
  */
 export function playbackWindow(a: Analysis): [number, number] {
   const n = a.video.frame_count;
@@ -37,4 +37,28 @@ export function playbackWindow(a: Analysis): [number, number] {
   const from = Math.max(0, e.address.frame - lead);
   const to = Math.min(n - 1, e.finish.frame + tail);
   return to > from ? [from, to] : whole;
+}
+
+/**
+ * Frames of the fixed one-second approach / run-out the clip is too short to supply.
+ *
+ * The window is pinned to `address − 1s … finish + 1s` so every swing's lead-in and follow-out
+ * are the same length — which is what lets two swings sit side by side with the same playhead
+ * meaning the same thing in both. A clip that starts too close to the address cannot give its
+ * second (swing2's Address is frame 41 and needs 60), so the shortfall is held as a freeze frame
+ * instead of quietly showing a shorter approach and putting the inconsistency back.
+ *
+ * Absent before schema 9; derived here for older artifacts, which is exact arithmetic on
+ * published frame numbers rather than a guess.
+ */
+export function playbackPad(a: Analysis): [number, number] {
+  const p = a.playback_pad;
+  if (p && p.length === 2) return [Math.max(0, p[0]), Math.max(0, p[1])];
+  const e = a.events;
+  if (!e) return [0, 0];
+  const lead = Math.round(LEAD_S * a.video.fps);
+  const tail = Math.round(TAIL_S * a.video.fps);
+  const [from, to] = playbackWindow(a);
+  return [Math.max(0, lead - (e.address.frame - from)),
+          Math.max(0, tail - (to - e.finish.frame))];
 }

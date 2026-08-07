@@ -20,6 +20,7 @@ import numpy as np
 from mediapipe.tasks.python import BaseOptions
 from mediapipe.tasks.python import vision
 
+from . import silhouette as sil
 from .skeleton import (NATIVE_NAMES, KEYPOINT_NAMES, TRACKED_NAMES, N_TRACKED,
                        add_derived)
 
@@ -36,13 +37,16 @@ class RawPoseSeries:
     width: int = 0
     height: int = 0
     fps: float = 60.0
+    # Stage 2b: {frame: [ring, ...]} of the golfer's outline, normalized, only when
+    # `estimate(silhouette=True)` asked for it. Empty otherwise — see swingsage/silhouette.py.
+    silhouette: dict = field(default_factory=dict)
 
     @property
     def coverage(self) -> float:
         return (sum(self.detected) / len(self.detected)) if self.detected else 0.0
 
 
-def _make_options(running_mode, model_path=None):
+def _make_options(running_mode, model_path=None, segmentation=False):
     return vision.PoseLandmarkerOptions(
         base_options=BaseOptions(model_asset_path=str(model_path or MODEL_PATH)),
         running_mode=running_mode,
@@ -50,7 +54,10 @@ def _make_options(running_mode, model_path=None):
         min_pose_detection_confidence=0.5,
         min_pose_presence_confidence=0.5,
         min_tracking_confidence=0.5,
-        output_segmentation_masks=False,   # doc 04 Layer A turns this on; costs time, unused here
+        # An extra output head, not an extra pass: measured at +2.0s over 396 frames, against
+        # +20s to segment the same clip with a second model. Landmark output is unaffected —
+        # this changes nothing numerically in the pose, only what else comes back.
+        output_segmentation_masks=segmentation,
     )
 
 
@@ -78,8 +85,14 @@ def _landmarks_to_kp(landmarks):
     return kp
 
 
-def estimate(video_path: str | Path, progress=None) -> RawPoseSeries:
-    """Run pose frame-sequentially over a normalized CFR video."""
+def estimate(video_path: str | Path, progress=None, silhouette: bool = False) -> RawPoseSeries:
+    """Run pose frame-sequentially over a normalized CFR video.
+
+    `silhouette` additionally asks the landmarker for its person segmentation mask and reduces
+    each one to normalized contours (Stage 2b). It rides along on this pass rather than being
+    a stage of its own precisely because this pass always happens — MediaPipe is the fallback
+    estimator and RTMPose's localiser either way.
+    """
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
         raise RuntimeError(f"could not open {video_path}")
@@ -93,7 +106,7 @@ def estimate(video_path: str | Path, progress=None) -> RawPoseSeries:
                            width=w, height=h, fps=fps)
 
     landmarker = vision.PoseLandmarker.create_from_options(
-        _make_options(vision.RunningMode.VIDEO))
+        _make_options(vision.RunningMode.VIDEO, segmentation=silhouette))
     try:
         f = 0
         while True:
@@ -119,6 +132,15 @@ def estimate(video_path: str | Path, progress=None) -> RawPoseSeries:
 
             series.frames.append({"f": f, "kp": kp})
             series.world.append(world)
+
+            # Reduced to contours here and not stored raw: `numpy_view()` is a view into the
+            # result's own buffer, and holding it past this iteration segfaults the
+            # interpreter rather than raising. A mask with no pose behind it is skipped —
+            # it is the tracker's last guess, not a measurement.
+            if silhouette and result.segmentation_masks and result.pose_landmarks:
+                polys = sil.contours(result.segmentation_masks[0].numpy_view(), w, h)
+                if polys:
+                    series.silhouette[f] = polys
 
             f += 1
             if progress and (f % 30 == 0 or f == total):

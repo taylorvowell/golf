@@ -1,19 +1,38 @@
 import Link from "next/link";
 import { listSwings, MEDIA_ROOT } from "@/lib/swings";
+import type { SwingSummary } from "@/lib/swings";
+import { getCurrentUserId } from "@/lib/auth";
 import { Chip, MicroHead, NotBuilt } from "@/components/ui/kiosk";
+import { PRO_SWINGS, proSwing } from "@/lib/proSwings";
 
 export const dynamic = "force-dynamic"; // the analyzer writes new swings while dev runs
 
 /**
- * The swing log.
- *
- * Same design system as the player: `workspace-bar` header, `kiosk-panel` cards. It carries
- * no scores because nothing scores a swing yet — each card shows what was actually measured
- * (frames, view, pose coverage, tempo, whether the club trace passed its gate) plus the
- * contact frame the analyzer already writes.
+ * The swing log — one user's swings, from Postgres (docs/DECISIONS.md D38), not a directory
+ * scan. Same design system as the player: `workspace-bar` header, `kiosk-panel` cards. Cards
+ * show the real scorecard's overall/band once a swing has been scored (Stage 8), alongside what
+ * was actually measured (frames, view, pose coverage, tempo, whether the club trace passed its
+ * gate).
  */
 export default async function Home() {
-  const swings = await listSwings();
+  const userId = await getCurrentUserId();
+  const all = await listSwings(userId);
+
+  // The bundled pro references live in the same table (they need real rows to be fetchable and
+  // comparable) but they are not the golfer's own swings, so they get their own shelf below
+  // rather than being mixed into the log — otherwise "3 analysed swings" counts two swings the
+  // golfer never hit, and an empty log stops looking empty.
+  const swings = all.filter((s) => !proSwing(s.id));
+
+  // Ordered by the catalogue rather than by analysis date, so the shelf reads in the same
+  // fixed order as the comparison picker. A reference with no row yet (never analysed on this
+  // machine, or analysed but not `pnpm db:backfill`ed) simply doesn't appear.
+  const refs = PRO_SWINGS
+    .map((p) => {
+      const row = all.find((s) => s.id === p.id);
+      return row ? { row, label: p.label } : null;
+    })
+    .filter((r) => r !== null);
 
   return (
     <main className="relative mx-auto max-w-[1800px] space-y-5 px-3 py-4 sm:px-5 sm:py-5 lg:px-8 lg:py-7">
@@ -63,58 +82,96 @@ export default async function Home() {
         </section>
       ) : (
         <ul className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-          {swings.map((s) => {
-            const cov = s.poseCoverage * 100;
-            return (
-              <li key={s.id}>
-                {/* The hover shadow is spelled out rather than using the `shadow-acid` theme
-                    token: Tailwind v4 resolves `shadow-<name>` against the colour namespace
-                    first, and `--color-acid` exists, so the token silently becomes a shadow
-                    colour with no shadow to colour. The sample writes its shadows out too. */}
-                <Link href={`/swing/${s.id}`}
-                  className="kiosk-panel group block overflow-hidden rounded-[28px] transition
-                             hover:border-acid/30
-                             hover:shadow-[0_0_0_1px_rgba(94,208,255,.18),0_18px_60px_rgba(94,208,255,.18)]">
-                  <div className="video-surface relative aspect-video overflow-hidden">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={`/api/swings/${s.id}/thumb`} alt=""
-                         className="h-full w-full object-cover opacity-85 transition
-                                    group-hover:scale-[1.03] group-hover:opacity-100" />
-                    <span className="absolute left-3 top-3 rounded-xl border border-white/10 bg-black/55
-                                     px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[.18em] backdrop-blur">
-                      {s.view.toUpperCase()}
-                    </span>
-                  </div>
-                  <div className="p-4">
-                    <p className="truncate text-base font-semibold tracking-[-.02em]">{s.id}</p>
-                    <div className="mt-2 flex items-center gap-3">
-                      <span className="qbar">
-                        <i style={{
-                          width: `${cov}%`,
-                          background: cov > 90 ? "#22C55E" : cov > 50 ? "#FACC15" : "#E5484D",
-                        }} />
-                      </span>
-                      <span className="shrink-0 text-[11px] tabular-nums text-neutral-500">
-                        pose {cov.toFixed(0)}%
-                      </span>
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-1.5">
-                      <Chip>{s.frameCount}f · {s.fps.toFixed(0)}fps</Chip>
-                      {s.tempoRatio !== null && (
-                        <Chip tone={s.tempoRatio < 2.5 || s.tempoRatio > 3.5 ? "warn" : "acid"}>
-                          tempo {s.tempoRatio}:1
-                        </Chip>
-                      )}
-                      {s.traceEnabled && <Chip tone="violet">trace</Chip>}
-                    </div>
-                    <p className="mt-3 truncate text-[10px] text-neutral-600">{s.model}</p>
-                  </div>
-                </Link>
-              </li>
-            );
-          })}
+          {swings.map((s) => <SwingCard key={s.id} s={s} />)}
         </ul>
       )}
+
+      {/* The reference shelf. Below the golfer's own swings and headed, so a card that isn't
+          theirs never reads as one — the score on a pro card is the rubric's opinion of a tour
+          swing, which is the point of having it here, but it is not part of their progress. */}
+      {refs.length > 0 && (
+        <section className="space-y-3 pt-2">
+          <div className="flex items-baseline gap-3">
+            <MicroHead tone="violet">Reference swings</MicroHead>
+            <p className="text-[11px] text-neutral-600">
+              Model swings shipped with the app — also what the player&rsquo;s Compare Swing
+              picker holds up beside yours.
+            </p>
+          </div>
+          <ul className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+            {refs.map(({ row, label }) => (
+              <SwingCard key={row.id} s={row} title={label} reference />
+            ))}
+          </ul>
+        </section>
+      )}
     </main>
+  );
+}
+
+/**
+ * One swing in the log. `title` overrides the folder id for the bundled references, which have
+ * a human name ("Pro 2") the golfer's own swings don't; `reference` swaps the accent so the two
+ * shelves are distinguishable at a glance even once a card is out of its section's context.
+ */
+function SwingCard({ s, title, reference }: {
+  s: SwingSummary; title?: string; reference?: boolean;
+}) {
+  const cov = s.poseCoverage * 100;
+  return (
+    <li>
+      {/* The hover shadow is spelled out rather than using the `shadow-acid` theme
+          token: Tailwind v4 resolves `shadow-<name>` against the colour namespace
+          first, and `--color-acid` exists, so the token silently becomes a shadow
+          colour with no shadow to colour. The sample writes its shadows out too. */}
+      <Link href={`/swing/${s.id}`}
+        className={`kiosk-panel group block overflow-hidden rounded-[28px] transition ${reference
+          ? "hover:border-violet/30 hover:shadow-[0_0_0_1px_rgba(139,123,255,.18),0_18px_60px_rgba(139,123,255,.18)]"
+          : "hover:border-acid/30 hover:shadow-[0_0_0_1px_rgba(94,208,255,.18),0_18px_60px_rgba(94,208,255,.18)]"}`}>
+        <div className="video-surface relative aspect-video overflow-hidden">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={`/api/swings/${s.id}/thumb`} alt=""
+               className="h-full w-full object-cover opacity-85 transition
+                          group-hover:scale-[1.03] group-hover:opacity-100" />
+          <span className="absolute left-3 top-3 rounded-xl border border-white/10 bg-black/55
+                           px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-[.18em] backdrop-blur">
+            {s.view.toUpperCase()}
+          </span>
+          {s.overallScore !== null && (
+            <span className={`absolute right-3 top-3 rounded-xl border bg-black/55 px-2.5 py-1.5
+                              text-[11px] font-bold tabular-nums backdrop-blur ${reference
+                                ? "border-violet/25 text-violet"
+                                : "border-acid/25 text-acid"}`}>
+              {Math.round(s.overallScore)} · {s.band}
+            </span>
+          )}
+        </div>
+        <div className="p-4">
+          <p className="truncate text-base font-semibold tracking-[-.02em]">{title ?? s.id}</p>
+          <div className="mt-2 flex items-center gap-3">
+            <span className="qbar">
+              <i style={{
+                width: `${cov}%`,
+                background: cov > 90 ? "#22C55E" : cov > 50 ? "#FACC15" : "#E5484D",
+              }} />
+            </span>
+            <span className="shrink-0 text-[11px] tabular-nums text-neutral-500">
+              pose {cov.toFixed(0)}%
+            </span>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            {reference && <Chip tone="violet">reference</Chip>}
+            <Chip>{s.frameCount}f · {s.fps.toFixed(0)}fps</Chip>
+            {s.tempoRatio !== null && (
+              <Chip tone={s.tempoRatio < 2.5 || s.tempoRatio > 3.5 ? "warn" : "acid"}>
+                tempo {s.tempoRatio}:1
+              </Chip>
+            )}
+            {s.traceEnabled && <Chip tone="violet">trace</Chip>}
+          </div>
+          <p className="mt-3 truncate text-[10px] text-neutral-600">{s.model}</p>
+        </div>
+      </Link>
+    </li>
   );
 }

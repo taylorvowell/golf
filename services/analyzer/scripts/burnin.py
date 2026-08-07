@@ -27,9 +27,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from swingsage import (checkpoints, club, club_detect, events, face,  # noqa: E402
-                       metrics, pose, pose_rtm, postprocess, render, video)
-from swingsage.skeleton import (DERIVED_NAMES, KEYPOINT_NAMES,  # noqa: E402
-                                MEASURED, N_NATIVE)
+                       metrics, pose, pose_rtm, postprocess, render, scoring,
+                       silhouette, video)
+from swingsage.skeleton import KEYPOINT_NAMES, strip_derived  # noqa: E402
 
 # Bump whenever a field is ADDED to analysis.json, not only on breaking changes.
 #
@@ -51,7 +51,25 @@ from swingsage.skeleton import (DERIVED_NAMES, KEYPOINT_NAMES,  # noqa: E402
 #   5  + playback_window: the span of the clip worth playing (approach, swing, held finish),
 #      so the player can drop the dead footage at both ends. NOT swing_window, which is the
 #      Stage 3 motion-burst gate and is far too tight to play.
-SCHEMA_VERSION = 5
+#   6  + club.trace_frames (and per variant): which frame each trace point was measured on.
+#      The trace is not one point per frame, so without it a player growing the path with the
+#      playhead can only guess by counting — which put the head of the line up to 34 frames
+#      from the club (D43). It is also what identifies the spans nothing was measured in, so
+#      they can be drawn as the fabricated chords they are rather than as measured path.
+#   7  + keypoint 48 `waist`, a derived belt-line torso node (midpoint of spine_mid and
+#      mid_hip). Appended after the measured block, not beside its siblings in the derived
+#      one, because indices 0-47 are published. Nothing renders differently on a v6 artifact
+#      — the joint is skipped when absent and no bone was re-routed through it.
+#   8  + posture.butt_line: the DTL setup reference line, tangent to the rear of the seat and
+#      locked at address. Small and always in analysis.json. The per-frame outline it is
+#      measured from is NOT here — it is `silhouette.json` beside this file, because it is
+#      large and only wanted when the overlay is switched on (swingsage/silhouette.py).
+#   9  + playback_pad: frames of the fixed 1s approach / 1s finish the clip is too short to
+#      supply, which the player holds as a freeze frame so every swing's lead-in and run-out
+#      are the same length. The window itself is now pinned to address-1s .. finish+1s, where
+#      it used to run on to a second past the golfer settling — faithful to one swing, and
+#      inconsistent across the several a comparison puts side by side.
+SCHEMA_VERSION = 9
 
 # What each version added, so the player can say what re-analysing would actually get you
 # rather than just reporting a number mismatch.
@@ -60,6 +78,10 @@ SCHEMA_FEATURES = {
     3: "the ten swing checkpoints and selectable angle overlays",
     4: "trace-only club variants and per-frame from_model provenance",
     5: "an auto-trimmed playback window, so the player drops the dead footage at both ends",
+    6: "a club trace that follows the playhead exactly and shows where it was never measured",
+    7: "a waist joint on the torso, between the sternum and the hips",
+    8: "the setup butt line, the DTL reference the seat should stay against",
+    9: "a fixed one-second approach and finish, freeze-padded when the clip is too short",
 }
 
 
@@ -116,14 +138,46 @@ def _alive(pid: int) -> bool:
     return True
 
 
+def _checked_source(src) -> str:
+    """The original clip's path, verified to still be one.
+
+    `video.source.path` is what `lib/jobs.ts` re-reads to re-analyse a swing, so it is the one
+    string in the artifact whose wrongness is invisible until someone asks for a re-run.
+    """
+    p = Path(src)
+    if not p.is_file():
+        raise SystemExit(
+            f"refusing to write analysis.json: video.source.path is not a readable file "
+            f"({str(src)[:120]!r}). Re-analysis reads this path back, so a bad one would only "
+            f"surface when someone pressed Re-analyze.")
+    return str(p)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("video")
     ap.add_argument("--out", default=None)
     ap.add_argument("--view", default="dtl", choices=["dtl", "face_on"])
     ap.add_argument("--handedness", default="right", choices=["right", "left"])
+    # Club TYPE (driver vs irons) for scoring's club-aware bands (doc 05 C1) — distinct from
+    # the `club`/`club_detect` modules above, which track the physical club object in-frame.
+    # Not part of analysis.json (that contract is versioned and this is scoring-only metadata,
+    # not a CV output); recorded straight into coach_report.json instead. Defaults to unknown
+    # rather than guessing — scoring.py skips club-scoped checks rather than scoring them
+    # against the wrong band, which is worse than not scoring them at all.
+    ap.add_argument("--club-type", default=None, choices=["driver", "irons"],
+                    help="for scoring's club-aware bands; omit if unknown")
+    ap.add_argument("--scoring-config", default="v2",
+                    help="scoring_config/<version>.json to score against (Stage 8)")
+    ap.add_argument("--no-scoring", action="store_true",
+                    help="skip Stage 8 (deterministic scoring, doc 05 C1)")
     ap.add_argument("--no-retry", action="store_true",
                     help="skip the IMAGE-mode re-detection pass over dropout spans")
+    ap.add_argument("--no-silhouette", action="store_true",
+                    help="skip Stage 2b — the golfer's outline (silhouette.json) and the "
+                         "address butt line derived from it. It rides along on the MediaPipe "
+                         "pass that always runs, so it costs ~2s on a 400-frame clip; skip it "
+                         "only when isolating that.")
     # ROI cropping was removed from this pipeline — it measurably hurt on both fixtures
     # (docs/DECISIONS.md D5). video.crop_scale / pose.swing_bbox remain if it needs redoing.
     ap.add_argument("--analysis-short-side", type=int, default=720,
@@ -159,6 +213,17 @@ def main() -> int:
     ap.add_argument("--club-detector-conf", type=float, default=0.15,
                     help="detector confidence floor. Low on purpose — the solver decides, and "
                          "a high floor recreates the candidate starvation of D14")
+    ap.add_argument("--club-ball-anchor", action="store_true",
+                    help="put the club head on the ball at Impact when the tracked path misses "
+                         "it (club.anchor_ball). OFF: it fixes pro_2 and degrades perfect, and "
+                         "the two are indistinguishable without knowing where the ball actually "
+                         "is (D44). Hand-placed markers are the supported fix meanwhile.")
+    ap.add_argument("--club-ball-detect", action="store_true",
+                    help="look for the ball by its disappearance at impact and anchor the club "
+                         "head to it. OFF: on the four fixtures it finds the golfer's shoe "
+                         "twice and nothing twice (D44). Without it the impact anchor uses the "
+                         "club head at Address, doc 04 §3's landmark. "
+                         "`scripts/checkball.py --live` iterates on it without a re-run.")
     ap.add_argument("--club-rigid", action="store_true",
                     help="rebuild the club from a rigid model: hands + one smoothed angle at a "
                          "fixed length (club.rigidify). Fixes the frame-to-frame length jitter "
@@ -233,8 +298,11 @@ def main() -> int:
     # MediaPipe always runs. It is the fallback estimator, and when RTMPose is selected it
     # is also the person localiser that supplies RTMPose's per-frame box (see pose_rtm.py).
     t = time.time()
-    mp_series = pose.estimate(anal.path, progress=prog)
-    print(f"\r  mediapipe          {len(mp_series.frames)} frames in {time.time() - t:.1f}s")
+    mp_series = pose.estimate(anal.path, progress=prog,
+                              silhouette=not args.no_silhouette)
+    print(f"\r  mediapipe          {len(mp_series.frames)} frames in {time.time() - t:.1f}s"
+          + (f" · silhouette on {len(mp_series.silhouette)}/{len(mp_series.frames)}"
+             if mp_series.silhouette else ""))
     if not args.no_retry:
         fixed = pose.retry_gaps(anal.path, mp_series)
         if fixed:
@@ -270,11 +338,11 @@ def main() -> int:
             window = tuple(_pre["swing_window"])
         except Exception:
             window = None
-        # Undo the provisional derived joints, which sit *between* the native block and the
-        # measured extras. Truncating the tail instead would silently discard every
-        # wholebody point (chin, small toes, middle knuckles) before Stage 3 ever saw them.
+        # Undo the provisional derived joints. They live in two non-adjacent blocks, so this
+        # is skeleton's job, not a slice here (see strip_derived). `st` is left alone —
+        # postprocess rewrites it wholesale from its own status matrix.
         for fr in series.frames:
-            del fr["kp"][N_NATIVE:N_NATIVE + len(DERIVED_NAMES)]
+            strip_derived(fr["kp"])
         t = time.time()
         series, rep = postprocess.postprocess(
             series, window=window,
@@ -310,6 +378,9 @@ def main() -> int:
     cl = None
     det = None
     club_variants: dict = {}
+    # Alternative solves, keyed by variant name. Hoisted out of the variants block because
+    # `refine_events` below needs the detector-measured heads one of them carries.
+    solves: dict = {}
     if not args.no_club:
         cfg_club = replace(club.ClubConfig(),
                            use_rigid=args.club_rigid,
@@ -317,7 +388,9 @@ def main() -> int:
                            detector_radius=args.club_detector_radius,
                            detector_head_primary=args.club_head_from_model,
                            detector_smooth=args.club_model_smooth,
-                           detector_traj_gate=args.club_model_traj_gate)
+                           detector_traj_gate=args.club_model_traj_gate,
+                           ball_detect=args.club_ball_detect,
+                           ball_anchor=args.club_ball_anchor)
         if args.club_model_min_conf is not None:
             cfg_club = replace(cfg_club,
                                detector_primary_min_conf=args.club_model_min_conf)
@@ -390,31 +463,61 @@ def main() -> int:
                  dict(detector_inject="both", detector_head_primary=True, use_rigid=False,
                       detector_smooth=True, detector_traj_gate=True,
                       detector_primary_min_conf=0.15)),
+                # Same gate, no smoothing of what it kept. The smoothing in `model_traj` is
+                # applied evenly across the swing, and evenly is wrong: it cost the downswing
+                # ~50px of reach at the ball on swing2, the same failure that made
+                # `trace_win_downswing` 0. Here the measured frames keep their measurements and
+                # the per-segment trace smoothing does the de-noising instead, which already
+                # leaves the downswing alone. Gaps are still interpolated for the per-frame club
+                # and still marked `interp`, so the trace excludes them either way.
+                ("model_traj_raw", "Trajectory gate, measurements unsmoothed",
+                 dict(detector_inject="both", detector_head_primary=True, use_rigid=False,
+                      detector_smooth=True, detector_traj_gate=True,
+                      detector_primary_min_conf=0.15, detector_smooth_win=1,
+                      detector_radius_smooth_win=1)),
                 ("model_rigid", "Model head + rigid length",
                  dict(detector_inject="both", detector_head_primary=True, use_rigid=True)),
             ]
             # Trace-only variants share one solve. They differ purely in how the polyline is
             # rebuilt from an identical set of head positions, so re-solving the club for each
-            # would burn ~20s a piece to produce the same frames. Derived from `model` below.
+            # would burn ~20s a piece to produce the same frames. `from` names the solve.
             TRACE_MODES = [
-                ("model_trace_measured", "Model head + trace: detector frames only", "measured"),
-                ("model_trace_moving", "Model head + trace: moving average", "moving"),
-                ("model_trace_savgol", "Model head + trace: Savitzky-Golay", "savgol"),
+                ("model_trace_measured", "Model head + trace: detector frames only",
+                 "measured", "model", {}),
+                ("model_trace_moving", "Model head + trace: moving average",
+                 "moving", "model", {}),
+                ("model_trace_savgol", "Model head + trace: Savitzky-Golay",
+                 "savgol", "model", {}),
                 # Reject, don't average. A bad detection pulls a smoother off the real club for
                 # frames either side; a consensus fit identifies it and drops it instead, so the
                 # drawn path passes THROUGH measured heads rather than near their mean. Worst
                 # case for smoothing is the bottom of the swing, where the club is fastest.
                 ("model_trace_robust", "Model head + trace: reject outliers, no smoothing",
-                 "robust"),
+                 "robust", "model", {}),
+                # The one the player defaults to. Two changes from the four above, both aimed at
+                # the same complaint — the line leaves the club near the ball:
+                #
+                #  * it is built on `model_traj_raw`, which admits detections down to conf 0.15
+                #    and lets the Hampel gate reject them on trajectory instead. A 0.35 floor threw
+                #    away 31 frames of real club head on `perfect`, and they are not spread
+                #    evenly: the detector is least sure exactly where the head is fastest and
+                #    most blurred, so those frames cluster into the approach to impact. Dropping
+                #    the floor collapses the pre-impact holes there from 24 frames to 10.
+                #  * trace_min_conf 0 rather than 0.30, which would otherwise re-apply the floor
+                #    this variant exists to remove.
+                #
+                # Smoothing is the per-segment kind, which exempts the downswing — the segment
+                # that is best measured and worst served by an even-handed filter, and the one
+                # whose last few points are the strike itself.
+                ("model_traj_measured", "Trajectory-gated head + trace: measured frames only",
+                 "savgol", "model_traj_raw", dict(trace_min_conf=0.0)),
             ]
-            model_solve = None
 
             for key, label, over in VARIANTS:
                 t = time.time()
                 v = club.track(anal.path, series.frames, ev, args.handedness,
                                cfg=replace(cfg_club, **over), detector=det)
-                if key == "model":
-                    model_solve = v
+                solves[key] = (v, replace(cfg_club, **over))
                 club_variants[key] = {
                     "label": label,
                     "coverage": v.coverage,
@@ -428,49 +531,69 @@ def main() -> int:
                                 "butt": [round(x, 5) for x in c.butt] if c.butt else None,
                                 "conf": round(c.conf, 3),
                                 "interp": c.interp,
-                                "from_model": c.from_model}
+                                "from_model": c.from_model,
+                                "from_ball": c.from_ball}
                                for c in v.frames],
                     "trace": v.trace,
+                    "trace_frames": v.trace_frames,
                 }
                 vc = v.coverage
                 print(f"\r  variant    {key:<20} back {vc.get('backswing', 0)*100:3.0f}% / "
                       f"down {vc.get('downswing', 0)*100:3.0f}% / "
                       f"through {vc.get('followthrough', 0)*100:3.0f}%  ({time.time()-t:.1f}s)")
 
-            # --- trace-only variants, from the model solve ------------------------------
+            # --- trace-only variants, rebuilt over an existing solve --------------------
             # The per-frame head is already right; it is the polyline joining the points that
             # is jagged, because `_build_trace` includes frames the detector declined and those
             # carry the solver's head instead. These rebuild the line and touch nothing else.
-            if model_solve is not None:
-                for key, label, mode in TRACE_MODES:
-                    t = time.time()
-                    v = copy0.deepcopy(model_solve)
-                    club.smooth_trace(v, ev, len(series.frames),
-                                      replace(cfg_club, trace_smooth=mode))
-                    pts = {k: len(p) for k, p in v.trace.items()}
-                    club_variants[key] = {
-                        "label": label,
-                        # Coverage and frames are identical to `model` by construction — only
-                        # `trace` differs. Stated rather than implied so the numbers make sense.
-                        "coverage": v.coverage,
-                        "club_len": round(v.club_len, 5),
-                        "butt_len": round(v.butt_len, 5),
-                        "notes": v.notes,
-                        "frames": club_variants["model"]["frames"],
-                        "trace": v.trace,
-                    }
-                    print(f"\r  variant    {key:<20} trace pts back {pts.get('backswing', 0)} / "
-                          f"down {pts.get('downswing', 0)} / "
-                          f"through {pts.get('followthrough', 0)}  ({time.time()-t:.1f}s)")
+            # `base_key`, not `src` — this loop used to bind `src`, which is the *video path*
+            # in the enclosing scope, and Python's for-target leaks. Every artifact written
+            # since then recorded `video.source.path` as "model_traj_raw", the last entry in
+            # TRACE_MODES, so Re-analyze could not find the clip it was meant to re-run.
+            for key, label, mode, base_key, over in TRACE_MODES:
+                if base_key not in solves:
+                    continue
+                t = time.time()
+                base, base_cfg = solves[base_key]
+                v = copy0.deepcopy(base)
+                club.smooth_trace(v, ev, len(series.frames),
+                                  replace(base_cfg, trace_smooth=mode, **over))
+                pts = {k: len(p) for k, p in v.trace.items()}
+                club_variants[key] = {
+                    "label": label,
+                    # Coverage and frames are identical to the source solve by construction —
+                    # only `trace` differs. Stated rather than implied so the numbers make sense.
+                    "coverage": v.coverage,
+                    "club_len": round(v.club_len, 5),
+                    "butt_len": round(v.butt_len, 5),
+                    "notes": v.notes,
+                    "frames": club_variants[base_key]["frames"],
+                    "trace": v.trace,
+                    "trace_frames": v.trace_frames,
+                }
+                print(f"\r  variant    {key:<20} trace pts back {pts.get('backswing', 0)} / "
+                      f"down {pts.get('downswing', 0)} / "
+                      f"through {pts.get('followthrough', 0)}  ({time.time()-t:.1f}s)")
         # Doc 02 quality gate: below 50% across the swing the trace is disabled rather
         # than shown as a fabricated path.
         if cov.get("swing", 0) < 0.5:
             print(f"           ! trace disabled — swing coverage "
                   f"{cov.get('swing', 0) * 100:.0f}% < 50%")
 
-        # Doc 05 promised Phase 4 would refine the two shaft-defined events once club
-        # data existed. It does now, so take it.
-        for msg in club.refine_events(cl, ev):
+        # Doc 05 promised Phase 4 would refine the shaft-defined events once club data existed.
+        # It does now, so take it — and hand over the DETECTOR's heads rather than letting it
+        # read the primary solve's, which are the solver's estimate and the thing Impact and the
+        # address hold are being corrected against. `model_traj_raw` is the solve whose heads are
+        # measurements and nothing else (see its entry in VARIANTS).
+        det_heads = None
+        for key in ("model_traj_raw", "model"):
+            solved = solves.get(key)
+            if solved:
+                det_heads = {c.f: c.head for c in solved[0].frames
+                             if c.head and c.from_model and not c.interp}
+                break
+        for msg in club.refine_events(cl, ev, cfg_club, heads=det_heads,
+                                      fps=norm.fps or 60.0):
             print(f"           refined {msg}")
 
         # --- club head orientation through the swing (doc 04 §6 tier 2) --------------
@@ -551,6 +674,25 @@ def main() -> int:
         print("  D = down-the-line only, F = face-on only, s = setup only; omitted rows are "
               "fields no frame could measure")
 
+    # --- Stage 2b: silhouette + the setup reference lines it supports ----------------
+    # The masks were collected back in Stage 2; only now are the address hold and the body
+    # height known, which is what the butt line needs. Nothing here re-reads the video.
+    sil_doc, butt, butt_notes = None, None, []
+    if mp_series.silhouette:
+        butt, butt_notes = silhouette.butt_line(
+            mp_series.silhouette, series.frames, KEYPOINT_NAMES,
+            ev.get("address_span"), mt["body_height_norm"], args.view)
+        sil_doc = silhouette.payload(
+            mp_series.silhouette, series.frames, KEYPOINT_NAMES, mp_series.model,
+            anal.width, anal.height, len(series.frames))
+        print(f"silhouette {sil_doc['coverage'] * 100:.0f}% of frames, "
+              f"{sum(len(f['p']) for f in sil_doc['frames'])} rings", end="")
+        print(f"  ·  butt line x={butt['x']:.4f} conf {butt['conf']} "
+              f"(spread {butt['spread_bh'] * 100:.1f}% bh over {butt['n']} frames)"
+              if butt else "  ·  no butt line")
+        for n_ in sil_doc["notes"] + butt_notes:
+            print(f"           ! {n_}")
+
     # --- analysis.json (pose portion of the doc 02 contract) ------------------------
     doc = {
         "schema_version": SCHEMA_VERSION,
@@ -559,7 +701,12 @@ def main() -> int:
             "width": norm.width, "height": norm.height,
             "view": args.view, "handedness": args.handedness,
             "source": {
-                "path": str(src), "width": src_info.width, "height": src_info.height,
+                # Checked, not assumed. Re-analysis re-reads exactly this string, so a wrong
+                # one is only discovered when someone presses Re-analyze — and it was: a loop
+                # variable named `src` shadowed this path and every artifact silently recorded
+                # a stringified ClubResult instead. Cheap to verify, and the artifact is the
+                # contract (doc 02), so it fails here rather than writing a broken one.
+                "path": _checked_source(src), "width": src_info.width, "height": src_info.height,
                 "codec": src_info.codec, "rotation": src_info.rotation,
                 "fps": src_info.fps, "is_vfr": src_info.is_vfr,
             },
@@ -600,6 +747,10 @@ def main() -> int:
         # actually coming to REST at the back — the Finish event fires when motion decays,
         # which is a few tenths before the finish position is reached and held.
         "playback_window": ev["playback_window"],
+        # How many frames of the fixed 1s approach / 1s run-out the clip could not supply.
+        # The player holds a freeze frame for these so every swing's lead-in and follow-out are
+        # the same length whatever the footage gives (schema 7).
+        "playback_pad": ev.get("playback_pad") or [0, 0],
         # The quasi-static hold that ends at the address event. Setup measurements are
         # medians over this span rather than samples of its last frame (D28).
         "address_span": ev.get("address_span"),
@@ -636,6 +787,12 @@ def main() -> int:
                 ],
             } if det else None),
             "butt_len": round(cl.butt_len, 5),
+            # Where the ball was, when it could be found — located by disappearing at impact
+            # (club.find_ball), not by a detector. It is what anchors the club head at the
+            # strike on a swing too fast for the head to be detected there, and it is the
+            # landmark doc 04 §3 has always assumed. Null means it was not found, and the
+            # anchor fell back to the club head at Address.
+            "ball": cl.ball,
             "frames": [{"f": c.f,
                         "shaft": ([[round(v, 5) for v in p] for p in c.shaft]
                                   if c.shaft else None),
@@ -648,9 +805,18 @@ def main() -> int:
                         # trace can be rebuilt from the artifact alone — joining a model head to
                         # a solver head is what makes the polyline zigzag, and iterating on that
                         # should not need a 4-minute re-run of pose and club solving.
-                        "from_model": c.from_model}
+                        "from_model": c.from_model,
+                        # Placed on the ball at Impact from the Address landmark rather than
+                        # found in this frame (club.anchor_ball). Never conflated with
+                        # from_model: it is a derived position, and the UI labels it as one.
+                        "from_ball": c.from_ball}
                        for c in cl.frames],
             "trace": cl.trace,
+            # The frame each trace point was measured on. The polyline is not one point per
+            # frame, so a player growing it with the playhead has to be told the mapping —
+            # deriving it from the point count puts the head of the line tens of frames away
+            # from the club (see swingsage/club.py ClubResult.trace_frames).
+            "trace_frames": cl.trace_frames,
             # Alternative solutions over the same frames and the same detections, for
             # side-by-side comparison in the player. There is no ground-truth metric yet to
             # choose between them (D20), so shipping all of them and letting a human look is
@@ -669,6 +835,11 @@ def main() -> int:
                                 "impact requires launch monitor data."),
         } if cl and fc else None),
         "metrics": mt,
+        # Setup reference geometry measured off the silhouette rather than off keypoints —
+        # a coaching line is tangent to the body's outline, which no keypoint knows about.
+        # Small enough to live here; the per-frame outline it came from does not (it is
+        # `silhouette.json`, fetched only when that overlay is turned on).
+        "posture": ({"butt_line": butt, "notes": butt_notes} if mp_series.silhouette else None),
         "quality": q,
         "quality_raw": before,
         "quality_mediapipe": quality_mp if args.pose_model == "rtmpose" else None,
@@ -686,6 +857,34 @@ def main() -> int:
     tmp = out / "analysis.json.tmp"
     tmp.write_text(json.dumps(doc), encoding="utf-8")
     os.replace(tmp, out / "analysis.json")
+
+    # Its own file, and written the same atomic way for the same reason: the web app may be
+    # reading it while a re-analysis rewrites it, and a truncated read is not a partial
+    # silhouette — it throws and the overlay 404s on a swing that has one.
+    if sil_doc:
+        tmp = out / "silhouette.json.tmp"
+        tmp.write_text(json.dumps(sil_doc), encoding="utf-8")
+        os.replace(tmp, out / "silhouette.json")
+
+    # --- Stage 8: deterministic scoring (doc 05 Part C1) -----------------------------
+    # After analysis.json, not before: coach_report.json is a separate artifact (doc 02's data
+    # model already names it, `swings.coach_report_path`) that reads metrics/checkpoints/tempo
+    # rather than being folded into the versioned analysis.json contract. AI is never a hard
+    # dependency for `ready` (CLAUDE.md) — this is the whole scorecard with no AI call at all;
+    # a real AIProvider narrative (doc 07) is a later, separate phase that replaces the
+    # `_narrative()` half of scoring.py without changing this file's shape.
+    if not args.no_scoring:
+        t = time.time()
+        cfg = scoring.load_config(args.scoring_config)
+        report = scoring.write_coach_report(
+            out, cfg, mt["checkpoints"], mt["summary"], mt["glossary"], ev["tempo"],
+            args.view, club_type=args.club_type)
+        print(f"coach      overall {report['overall']} ({report['band']}) — "
+              f"scoring_config {cfg['version']}  ({time.time() - t:.1f}s)")
+        for cat, c in report["categories"].items():
+            if c["score"] is not None:
+                print(f"           {cat:<24} {c['score']:>5.1f}  "
+                      f"({c['n_measurable']}/{c['n_total']} checks measurable)")
 
     # --- Gate 1 renders -------------------------------------------------------------
     t = time.time()

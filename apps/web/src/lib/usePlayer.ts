@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Analysis } from "@/lib/swings";
-import { playbackWindow } from "@/lib/playbackWindow";
+import { playbackPad, playbackWindow } from "@/lib/playbackWindow";
 
 /**
  * Transport and frame-sync for the swing player, lifted out of the old single-file
@@ -31,6 +31,17 @@ export interface Player {
   setLooping: (b: boolean) => void;
   drift: { n: number; sum: number; max: number };
   seek: (f: number) => void;
+  /**
+   * Seek anywhere in the FILE, bounded only by its frame count.
+   *
+   * `seek` is bounded by `win` because that is right for *playing* a swing. Correcting the club
+   * track is not playing it: the frames that need a hand-placed head include the approach
+   * before `playback_window` opens and whatever follows the held finish, and from those frames
+   * `seek` would silently land you somewhere else. Only the head-marker editor uses this — the
+   * transport, stepping, the scrub strip and the end-of-playback wrap all still go through
+   * `seek` and stay inside the window.
+   */
+  seekFile: (f: number) => void;
   /** Pause, drop any loop, and land on `f` — what every "jump to this frame" control wants. */
   jumpTo: (f: number) => void;
   toggle: () => void;
@@ -65,6 +76,20 @@ export function usePlayer(analysis: Analysis): Player {
   const { fps, frame_count: nFrames } = analysis.video;
   const win = useMemo(() => playbackWindow(analysis), [analysis]);
   const [w0, w1] = win;
+  /**
+   * Frames of the fixed 1s approach / 1s run-out the clip could not supply, held as a freeze
+   * frame so every swing's lead-in and follow-out last the same time however short the footage
+   * is. Held rather than skipped because the alternative — a shorter approach on some clips —
+   * is the inconsistency the fixed window exists to remove.
+   */
+  const pad = useMemo(() => playbackPad(analysis), [analysis]);
+  const padRef = useRef(pad);
+  useEffect(() => { padRef.current = pad; }, [pad]);
+  // The freeze is a real pause, so it needs cancelling whenever the viewer takes over.
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearHold = useCallback(() => {
+    if (holdTimer.current !== null) { clearTimeout(holdTimer.current); holdTimer.current = null; }
+  }, []);
 
   // Refs mirror state for use inside the rVFC callback, which is registered once per
   // presented frame and would otherwise close over stale values. Synced in an effect rather
@@ -85,6 +110,24 @@ export function usePlayer(analysis: Analysis): Player {
     (s: number) => Math.min(nFrames - 1, Math.max(0, Math.round(s * fps - 0.5))),
     [fps, nFrames],
   );
+  /**
+   * The frame a `requestVideoFrameCallback` `mediaTime` refers to.
+   *
+   * Deliberately not `timeToFrame`. That one subtracts half a frame because it is built for the
+   * `(f + 0.5) / fps` values we ASSIGN to `currentTime` — mid-frame, so it has half a frame of
+   * slack either side. `mediaTime` is the presented frame's own start timestamp, `f / fps`, and
+   * pushing it through the same subtraction lands it exactly on the rounding boundary: a value a
+   * hair under (3.333333 rather than 3.3333333 for frame 200 at 60fps) then reports the frame
+   * before. Rounding the raw product instead restores the same half-frame of slack.
+   *
+   * Measured before this existed: clicking frame 200 in the head-marker list left the playhead —
+   * and therefore any head placed there — on frame 199. Only some frames tipped, which is what
+   * made it look like a list bug rather than a sync one.
+   */
+  const presentedFrame = useCallback(
+    (s: number) => Math.min(nFrames - 1, Math.max(0, Math.round(s * fps))),
+    [fps, nFrames],
+  );
 
   // A drag emits seeks faster than the element can service them, and assigning currentTime
   // mid-seek discards the in-flight target rather than queueing it — so the picture sits on
@@ -95,6 +138,7 @@ export function usePlayer(analysis: Analysis): Player {
 
   const seek = useCallback((f: number) => {
     const v = videoRef.current;
+    clearHold();
     // Clamped to the window, not to the file. Stepping off the end of the swing should stop
     // at the end of the swing rather than run into the golfer walking out of shot.
     const clamped = Math.max(w0, Math.min(w1, f));
@@ -103,7 +147,20 @@ export function usePlayer(analysis: Analysis): Player {
     if (v.seeking) { pendingSeek.current = clamped; return; }
     pendingSeek.current = null;
     v.currentTime = frameToTime(clamped);
-  }, [frameToTime, w0, w1]);
+  }, [frameToTime, w0, w1, clearHold]);
+
+  // Same mechanism as `seek` — the frame→time contract is identical and non-negotiable (doc 02);
+  // only the bound differs. See the interface for why the editor needs it.
+  const seekFile = useCallback((f: number) => {
+    const v = videoRef.current;
+    clearHold();
+    const clamped = Math.max(0, Math.min(nFrames - 1, Math.round(f)));
+    setFrame(clamped);
+    if (!v) return;
+    if (v.seeking) { pendingSeek.current = clamped; return; }
+    pendingSeek.current = null;
+    v.currentTime = frameToTime(clamped);
+  }, [frameToTime, nFrames, clearHold]);
 
   const onSeeked = useCallback(() => {
     const v = videoRef.current;
@@ -125,8 +182,9 @@ export function usePlayer(analysis: Analysis): Player {
   const toggle = useCallback(() => {
     const v = videoRef.current;
     if (!v) return;
+    clearHold();
     if (v.paused) void v.play(); else v.pause();
-  }, []);
+  }, [clearHold]);
 
   const playRange = useCallback((from: number, to: number) => {
     setLoop([from, to]);
@@ -149,21 +207,51 @@ export function usePlayer(analysis: Analysis): Player {
       // With no explicit loop the window itself is the loop: playback wraps at the end of
       // the swing instead of running on through the dead tail.
       const lp = loopRef.current ?? winRef.current;
-      const f = timeToFrame(meta.mediaTime);
-      if (f < lp[0]) {
-        v.currentTime = frameToTime(lp[0]);
-        setFrame(lp[0]);
-        v.requestVideoFrameCallback(onPresented);
-        return;
-      }
-      if (f >= lp[1]) {
-        // Loop off means the range plays once. Stopping at its end rather than running on
-        // into the rest of the swing is the point of having selected a range at all.
-        if (!loopingRef.current) { v.pause(); setFrame(lp[1]); return; }
-        v.currentTime = frameToTime(lp[0]);
-        setFrame(lp[0]);
-        v.requestVideoFrameCallback(onPresented);
-        return;
+      const f = presentedFrame(meta.mediaTime);
+      // The wrap bounds PLAYBACK, and only playback. This callback also fires for the frame
+      // presented by a seek, and it stays registered across a pause — so without this guard a
+      // deliberate seek outside the window (the head-marker editor's `seekFile`, which has to
+      // reach the approach before `playback_window` opens) is dragged straight back to the
+      // window edge on the next presented frame, making those frames unreachable.
+      if (!v.paused) {
+        if (f < lp[0]) {
+          v.currentTime = frameToTime(lp[0]);
+          setFrame(lp[0]);
+          v.requestVideoFrameCallback(onPresented);
+          return;
+        }
+        if (f >= lp[1]) {
+          // Loop off means the range plays once. Stopping at its end rather than running on
+          // into the rest of the swing is the point of having selected a range at all.
+          if (!loopingRef.current) { v.pause(); setFrame(lp[1]); return; }
+          // Freeze out the second the clip could not supply. Only for the window's own loop —
+          // a range the viewer picked (a phase, from the segment bar) is exactly the frames
+          // they asked for and gains nothing from padding. The holds are in VIDEO time, so
+          // they scale with the playback rate and a 1s approach stays 1s of swing at 0.25x.
+          const [padBefore, padAfter] = padRef.current;
+          const isWindow = lp === winRef.current;
+          if (isWindow && (padBefore || padAfter)) {
+            const rate = v.playbackRate || 1;
+            v.pause();
+            setFrame(lp[1]);
+            clearHold();
+            holdTimer.current = setTimeout(() => {
+              const vid = videoRef.current;
+              if (!vid) return;
+              vid.currentTime = frameToTime(lp[0]);
+              setFrame(lp[0]);
+              holdTimer.current = setTimeout(() => {
+                holdTimer.current = null;
+                void videoRef.current?.play();
+              }, (padBefore / fps / rate) * 1000);
+            }, (padAfter / fps / rate) * 1000);
+            return;
+          }
+          v.currentTime = frameToTime(lp[0]);
+          setFrame(lp[0]);
+          v.requestVideoFrameCallback(onPresented);
+          return;
+        }
       }
       const d = Math.abs(f - frameRef.current);
       setDrift((p) => ({ n: p.n + 1, sum: p.sum + d, max: Math.max(p.max, d) }));
@@ -182,11 +270,12 @@ export function usePlayer(analysis: Analysis): Player {
     v.addEventListener("ended", onPause);
     return () => {
       cancelled = true;
+      clearHold();
       v.removeEventListener("play", onPlay);
       v.removeEventListener("pause", onPause);
       v.removeEventListener("ended", onPause);
     };
-  }, [frameToTime, timeToFrame]);
+  }, [frameToTime, presentedFrame, fps, clearHold]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -204,7 +293,8 @@ export function usePlayer(analysis: Analysis): Player {
   return useMemo(() => ({
     videoRef, canvasRef, stageRef,
     frame, playing, speed, setSpeed, loop, setLoop, looping, setLooping, drift,
-    seek, jumpTo, toggle, playRange, onSeeked, frameToTime, timeToFrame, fps, nFrames, win,
-  }), [frame, playing, speed, loop, looping, drift, seek, jumpTo, toggle, playRange,
+    seek, seekFile, jumpTo, toggle, playRange, onSeeked, frameToTime, timeToFrame,
+    fps, nFrames, win,
+  }), [frame, playing, speed, loop, looping, drift, seek, seekFile, jumpTo, toggle, playRange,
        onSeeked, frameToTime, timeToFrame, fps, nFrames, win]);
 }

@@ -1,9 +1,9 @@
 # SwingSage — Status & Handoff
 
-**Last updated:** 2026-08-04
+**Last updated:** 2026-08-06
 
 Read this first, then [CLAUDE.md](../CLAUDE.md) for commands and architecture, then
-[DECISIONS.md](DECISIONS.md) for *why* things are the way they are (37 entries, every one
+[DECISIONS.md](DECISIONS.md) for *why* things are the way they are (53 entries, every one
 status-marked; several are negative results that will save you repeating the work, and roughly
 a quarter no longer hold — check the `Status:` line before acting on any of them).
 
@@ -11,8 +11,9 @@ a quarter no longer hold — check the `Status:` line before acting on any of th
 
 ## 1. Where we are
 
-A working end-to-end pipeline: **upload a clip → normalized video + `analysis.json` → browser
-player with skeleton, events, club overlay and metrics.** Two real fixture swings analysed.
+A working end-to-end pipeline: **clip → normalized video + `analysis.json` + `coach_report.json`
+→ browser player with skeleton, events, club overlay, metrics and a real scorecard**, indexed
+into Postgres per admin user. Two real fixture swings analysed and scored.
 
 | Stage | State |
 |---|---|
@@ -24,11 +25,12 @@ player with skeleton, events, club overlay and metrics.** Two real fixture swing
 | 6 — metrics (doc 05 Part B) | **Done**, provisional thresholds; full angle catalogue + per-checkpoint deltas |
 | 4 — club tracking | **Weak** — see §3 |
 | 4b — club face | Partial, honest about limits |
-| Web app (Next.js) | Player rebuilt on `instructions/template_sample.html` — three tabs, overlays on the video (D35); **no upload, no DB, no queue** |
-| 8 — coach scoring | Not started (the UI's numbers come from `lib/mockScoring.ts`) |
+| 8 — coach scoring (doc 05 C1) | **Done, deliberately partial** — 38 checks (bucket A + a slice of B) against a versioned `scoring_config/v1.json`; deterministic narrative, no AI. See `services/analyzer/scoring_config/COVERAGE.md` for what's wired vs. deferred |
+| Web app (Next.js) | Player rebuilt on `instructions/template_sample.html` — three tabs, overlays on the video (D35); real scorecard on Overview/Coach/Advanced; swing log backed by Postgres, scoped to one seeded admin user; **still no upload flow or job queue beyond the DB-backed reanalyze job** |
+| Database | **Postgres via Drizzle** (D38) — `users`/`sessions`/`swings`/`jobs`/`scores` tables, migrations in `apps/web/drizzle/`. Not SQLite; doc 02's "v1 SQLite" line is superseded |
 | 6 — simulator ingestion | Not started |
-| 7 — AI provider | Not started |
-| Tests | Golden snapshots + contract invariants over frozen pose/club data — `python -m pytest tests` |
+| 7 — AI provider | Not started — the coach narrative on Overview/Coach is deterministic (Stage 8's own weakest-check logic), not AI-generated |
+| Tests | Golden snapshots + contract invariants over frozen pose/club data, now including Stage 8 scoring — `python -m pytest tests` (40 tests) |
 
 ### Measured quality (both fixtures)
 
@@ -92,6 +94,56 @@ showed the tracker was more accurate than the metric implied (D20a). **Build the
 before tuning further** — doc 04 §7 specifies it: hand-label the club head every 5th frame on
 5 clips, measure position error in pixels.
 
+**Third lesson, 2026-08-06: the drawn trace is not the tracker** (D43). Three reported "the
+club tracking is wrong" symptoms on `perfect` all turned out to be the polyline rather than the
+per-frame head — the line was cut at the event frames 102px short of the ball, grown against a
+point-count index that put its head up to 34 frames from the playhead, and drawing a solid
+straight chord across the frames the detector declined. The heads themselves were right on
+every one of those frames. `scripts/checktrace.py` now measures the polyline specifically
+(reach to the ball, each unmeasured bridge with its chord length, fidelity, growth error);
+`checkclub.py` cannot see any of it. Interpolating across the gaps was tried and lost to a
+straight chord on held-out data — see D43's table before rebuilding it.
+
+**Fourth lesson: the strike is where the detector has nothing, and a constraint beats a
+detector there** (D44). Through impact the head moves ~90px a frame and smears into the turf, so
+on `pro_2` the tracked head never comes within 196px — 35% of body height — of the ball. The
+club head *is* at the ball at impact, so `club.anchor_ball` writes that position when nothing
+found it, guarded to fire only on a miss above 5% of body height. With it, `pro_2` reaches
+18.8px. It is **off by default** (`--club-ball-anchor`): on `perfect` the same guard fires and
+overwrites a real detection with a landmark 48px away, and nothing inside the algorithm
+separates the two clips — both miss the landmark by exactly 47px. Hand-placed markers (below)
+are the supported fix today.
+
+### The next model to train is a ball detector
+
+`club.find_ball` locates the ball by its disappearance at impact. It is **implemented and off**:
+on the four fixtures it finds the golfer's shoe twice and nothing twice, because every
+individually-discriminative property of a golf ball is also a property of a shoe edge, a divot
+or a background range ball. D44 has the table. This is the clearest case in the project for a
+second learned detector — a ball is an easier target than a club head (rigid, high-contrast,
+and *stationary for hundreds of frames*, so consensus over the address hold makes a weak
+per-frame model strong), public datasets exist, and it pays twice: it anchors the club at
+impact, and the frame the ball leaves would pin Impact to ±1 frame, which nothing currently
+does.
+
+Meanwhile the fallback landmark is weaker than doc 04 §3 claims. "The club head at Address is
+the ball" holds only if Address lands on a frame where the club is grounded behind it, and on
+`perfect` it does not — the detected Address frame catches the club still off the turf, 150px
+(18% of body height) away. `scripts/checkball.py` shows it on the pixels. That is an event-
+detection defect nothing else currently surfaces.
+
+### Hand-placed club-head markers
+
+The player has a **"modify head markers"** mode (D45): click the picture to place the club head
+on the current frame, arrow keys to step, delete to clear, one batched save. Markers live in a
+`head_markers` Postgres table, deliberately **not** in `analysis.json` — that file is rewritten
+by every re-analysis, so a correction stored there would be destroyed by the next run. The trace
+merges them by frame, so correcting a frame inside a bridge closes the bridge.
+
+These rows are the project's **first hand-labelled club-head truth**. Doc 08 Phase 3 wants a
+position-error metric and `tests/fixtures.json:hand_labeled` is still null; `GET
+/api/swings/:id/markers` is where that data now comes from.
+
 ---
 
 ## 4. In flight: learned club detector
@@ -150,14 +202,64 @@ either. Datasets re-download in minutes.
 3. **More fixtures.** Everything is tuned on two clips; doc 03 §7 wants ≥15. The phase-based
    detector split especially may be overfit. A face-on and a left-handed clip would test the
    handedness mirroring that has never been exercised.
-4. **Phase 1 properly** — upload flow, job rows, SQLite, staged progress. Currently
-   `burnin.py` is run by hand and the web app reads whatever it finds on disk.
-5. **Then Phase 5 coach scoring**, which needs `scoring_config.json` with versioned bands
-   (doc 05 C1). Metrics exist but thresholds are provisional and flagged as such.
+4. **Phase 1 properly** — the upload flow and staged progress are still missing; `burnin.py` is
+   still run by hand. Job rows and Postgres (D38, not SQLite — that line in doc 02 is
+   superseded) landed as part of building real scoring (§6 below), ahead of the upload flow
+   that was originally going to bring them.
+5. ~~**Then Phase 5 coach scoring.**~~ Built, deliberately partial: `scoring_config/v1.json`
+   (versioned per doc 05 C1) plus `swingsage/scoring.py` (Stage 8) score 38 checks — bucket A
+   from `docs/SCORING-CRITERIA-TRIAGE.md` almost entirely, plus a slice of bucket B. See §6.
+
+## 6. Real scoring + Postgres (landed 2026-08-05)
+
+Doc 05 Part C1's scoring engine is built and wired into `burnin.py` as Stage 8, writing
+`coach_report.json` next to `analysis.json`. `apps/web/src/lib/mockScoring.ts` is deleted —
+Overview, Coach and a new Advanced-tab `CriteriaBreakdown` all read the real scorecard.
+
+- **`scoring_config/v2.json`** (`services/analyzer/scoring_config/build_config.py` generates
+  it; `v1.json` is frozen on disk so v1-stamped reports stay reproducible) — 38 checks against
+  `criteria.md` + the triage's bucket A/B rows, each validated to resolve against the real
+  pipeline output (`scripts/validate_scoring_config.py`, also a pytest test). **Of those 38,
+  28 are scored and 10 are `deferred`** — authored but abstaining on every swing because the
+  metric behind them isn't trustworthy (DECISIONS D42). **Not** the full ~160-row A+B set the
+  triage identifies as buildable — see `scoring_config/COVERAGE.md` for exactly what's wired,
+  scored, deferred and never-wired, and why.
+- **v1 scored, but ~a third of its checks couldn't be right** (D42). Nine rotation checks read
+  `*_turn_from_address`, which DECREASES as a down-the-line golfer turns, so they floored at 0
+  on every swing; `perfect` scored 37.5 (Reset), below amateur `swing1` at 45.0. v2 defers
+  those nine plus ANG-30, fixes TKA-01 (now a `checkpoint_delta` vs address) and the
+  slow-motion duration gate, and weights `overall` by check instead of averaging seven
+  category scores. Current: **perfect 78.9 Pure · swing1 65.4 Solid · swing2 54.2 Building**.
+  The lesson worth carrying: `validate_scoring_config.py` proves a field *exists*, never that
+  it means what the band assumes, and a check scoring 100 is not evidence it works (ROT-06
+  scored 100/100/94.5 off the same broken field, by luck).
+- **`scripts/rescore.py`** re-runs Stage 8 over an existing `analysis.json` — Stage 8 is a pure
+  function of that plus the config, so a scoring change never needs `burnin.py` (and so never
+  risks the club-trace overwrite CLAUDE.md warns about). `--dry-run` to preview.
+- **Persistence is Postgres, not SQLite** (`docs/DECISIONS.md` D38) — `users` / `sessions` /
+  `swings` / `jobs` / `scores` tables via Drizzle, migrations in `apps/web/drizzle/`. Local dev
+  runs the same engine via `docker compose up -d` (port 5433, not 5432 — see
+  `docker-compose.yml`'s comment on why); production is intended to be Railway-managed Postgres,
+  not provisioned yet. `pnpm db:seed` creates the one admin user everything is owned by;
+  `pnpm db:backfill` indexes `out/<id>/` folders that predate the DB (or were analysed by
+  hand via CLI, which still doesn't touch Postgres — only the web app's reanalyze job does).
+- **`lib/jobs.ts`'s in-memory `Map`** (the thing that used to lose a running job's status on
+  every Next.js hot-reload) is now the `jobs` table, with an in-process mirror only for the
+  actively-running job in this process so the per-frame stdout hot path never round-trips the DB.
+- **Known gap, named rather than silently carried:** `burnin.py` run directly from the CLI has
+  no idea Postgres exists. Regenerating a fixture by hand and forgetting `pnpm db:backfill`
+  afterward leaves the swing list showing a stale score. Always re-run `db:backfill` after a
+  manual `burnin.py` run on a fixture already in the DB.
+- **A related, sharper trap already bit this session: see `docs/DECISIONS.md` D39.**
+  Re-running `burnin.py` on a committed fixture for an unrelated reason (there, testing Stage 8
+  itself) without `--club-detector runs/clubhead/weights/best.pt` silently regenerated the club
+  trace on the weaker classical-only path, overwriting the better one already on disk. Fixed;
+  the general lesson (re-running a fixture needs its previous canonical flags, not just the one
+  you're testing) is captured in D39 and above `burnin.py`'s flag list in CLAUDE.md.
 
 ---
 
-## 6. Setting up a new machine
+## 7. Setting up a new machine
 
 ```bash
 # system
@@ -187,7 +289,7 @@ for everything above.
 
 ---
 
-## 7. Known debt
+## 8. Known debt
 
 - `analysis.json` (300–700 KB) is passed to the client as React props. Doc 02's Frame Sync
   section wants a client-side fetch into typed arrays instead.
@@ -205,10 +307,14 @@ for everything above.
   numbers in this file can be trusted again — several of them were measured before it existed.
 - ~~No club-model versioning in `analysis.json`.~~ Closed by D23 — `club.detector` records the
   weights' SHA-256, size, imgsz, conf and class map.
-- Metric thresholds are provisional (`provisional_thresholds: true`) and must move to a
-  versioned `scoring_config.json` before any scoring ships. The angle catalogue
-  (`metrics.angle_fields`, D31) is deliberately band-free for the same reason — the reference
-  bands in GLOSSARY §7 are coaching convention and are read by no code.
+- ~~Metric thresholds are provisional... must move to a versioned `scoring_config.json` before
+  any scoring ships.~~ Closed — `scoring_config/v1.json` exists and Stage 8 reads it (§6).
+  `metrics.angle_fields` itself (D31) stays deliberately band-free regardless: the scoring
+  config is where bands live per CLAUDE.md's non-negotiable, not the angle catalogue that just
+  says what's measured. `provisional_thresholds: true` still means what it always did — the
+  underlying metric bands haven't been calibrated against real (not just these two) fixtures;
+  `scoring_config/COVERAGE.md`'s calibration warning says the same thing about the scoring
+  bands specifically, and for the same reason.
 - **Joint angles are 2D projections and some of them are visibly wrong at the top.** swing2's
   trail elbow reads 172° of flex at P3 and its lead hip hinge reads 179.8° at P4, both because
   the limb points near the camera axis. `lead|trail_arm_in_plane` measures how bad it is for

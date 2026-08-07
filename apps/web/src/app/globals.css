@@ -833,6 +833,45 @@ button {
   width: 100%;
 }
 
+/* The picture may never be taller than the window.
+   A portrait phone clip is ~9:16, so in a wide column the frame's own aspect ratio would run it
+   to two thousand pixels tall and push its transport — and the swing itself — below the fold,
+   which is exactly the state you cannot scrub from.
+
+   Capped through max-WIDTH rather than max-height on purpose: the frame is width-driven
+   (`width: 100%` plus `aspect-ratio`), and constraining its height directly leaves the width
+   alone, so the picture letterboxes instead of scaling. `--frame-aspect` is width ÷ height, so
+   budget × aspect is the width whose natural height is exactly that budget.
+
+   The cap lives on the wrapper rather than on `.video-frame` itself because the corner controls
+   are positioned against this box (`inset-x-0`) — capping the frame alone would leave them
+   spanning the whole column while the picture shrank away from under them.
+
+   Left-anchored, not centred. Once the height cap binds, the picture no longer fills its
+   column, and the column's width changes underneath it — head-marker editing narrows the panel
+   rail, comparison mode widens the video side. Centring would slide the picture sideways on
+   every one of those, which is precisely the wrong behaviour while someone is pointing at a
+   club head a few pixels across. Anchored, the slack lands to the right and the frame never
+   moves.
+
+   `--stage-chrome` is what else has to fit on screen beside it (workspace bar, page padding,
+   transport); `max()` keeps the frame usable on a window too short for any of it, where the
+   budget would otherwise go negative and collapse it to nothing. */
+.video-bounds {
+  width: 100%;
+  max-width: max(200px, calc((100svh - var(--stage-chrome, 220px)) * var(--frame-aspect, 1)));
+}
+
+/* Side-by-side comparison: size from the row's height and let width follow the aspect ratio,
+   so a portrait user clip and a differently-shaped reference clip still line up top and bottom.
+   The `!important` is not decoration — it is what beats `height: auto !important` above, which
+   would otherwise collapse the frame to nothing once its width is no longer the driver. */
+.video-frame.fill-height {
+  height: 100% !important;
+  width: auto;
+  max-width: 100%;
+}
+
 .view-panel[hidden] {
   display: none !important;
 }
@@ -1182,6 +1221,49 @@ button {
   padding: 14px;
 }
 
+/* The menu's own header, holding the count and "clear all". Sticky, because the list is
+   taller than the panel once every group is available and a reset you have to scroll back
+   up to find is a reset you stop using. The negative offsets cancel `.overlay-menu`'s
+   padding so the bar spans the full width while sticking flush to its top edge. */
+.overlay-menu-bar {
+  position: sticky;
+  top: -14px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: -14px -14px 2px;
+  padding: 12px 14px 8px;
+  /* Opaque rather than translucent: the rows scrolling under it are the same size and
+     colour as the bar's own text, and a blurred backdrop still let them read through. */
+  background: rgba(12, 15, 19, .97);
+  border-bottom: 1px solid rgba(255, 255, 255, .06);
+}
+
+.overlay-menu-clear {
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  padding: 4px 9px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: #8b93a3;
+  transition: border-color .16s ease, color .16s ease, background .16s ease;
+}
+
+.overlay-menu-clear:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, .26);
+  background: rgba(255, 255, 255, .05);
+  color: #eef3ff;
+}
+
+.overlay-menu-clear:disabled {
+  opacity: .35;
+  cursor: not-allowed;
+}
+
 .overlay-menu-head {
   font-size: 9px;
   font-weight: 700;
@@ -1366,4 +1448,81 @@ button {
   left: 0;
   z-index: 10;
   background: #12151b;
+}
+
+/* Grab-to-pan scrollers (`lib/useDragScroll.ts`).
+
+   The scrollbar here is deliberately NOT the 7px `.scrollbar` used for the panels' vertical
+   overflow. Chrome on Windows hides an unstyled scrollbar until you are already scrolling,
+   which for a table whose only other mouse gesture is shift+wheel meant the ten columns past
+   the fold read as content that simply wasn't there. This one has a visible track, so the
+   proportion of the table you are looking at is legible before you touch it. It comes after
+   `.indicator-viewport`'s own rule on purpose — equal specificity, later wins, and the rail
+   wants the same visible bar the table does. */
+.drag-scroll {
+  cursor: grab;
+  /* A sideways fling at the end of the table shouldn't then swipe the browser back a page. */
+  overscroll-behavior-x: contain;
+  scrollbar-width: auto;
+  scrollbar-color: rgba(94, 208, 255, .34) rgba(255, 255, 255, .05);
+}
+
+.drag-scroll[data-dragging] {
+  cursor: grabbing;
+  user-select: none;
+  /* Snap points fight a drag — the rail would tug back to a card edge mid-pull. */
+  scroll-snap-type: none;
+  scroll-behavior: auto;
+}
+
+.drag-scroll::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+.drag-scroll::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, .05);
+  border-radius: 999px;
+}
+
+/* Transparent border + padding-box clip is what insets the thumb inside the track without a
+   second element to do it with. */
+.drag-scroll::-webkit-scrollbar-thumb {
+  background: rgba(94, 208, 255, .34);
+  background-clip: padding-box;
+  border: 3px solid transparent;
+  border-radius: 999px;
+}
+
+.drag-scroll::-webkit-scrollbar-thumb:hover,
+.drag-scroll[data-dragging]::-webkit-scrollbar-thumb {
+  background: rgba(94, 208, 255, .58);
+  background-clip: padding-box;
+}
+
+/* The sample's mobile rule (line ~988) forces the hero headline to 2.1rem with `!important`.
+   That was a step DOWN from its 3.55rem desktop size; against the smaller headline the panels
+   carry now it would be a step up, so phones would get the largest title on the site. Same
+   query, same `!important`, later in the file — the sample block itself stays untouched (D35). */
+@media (max-width: 767px) {
+  .hero-title {
+    font-size: 1.5rem !important;
+  }
+}
+
+/* The "there is more this way" label sitting beside a drag scroller. */
+.drag-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  border: 1px solid rgba(94, 208, 255, .22);
+  background: rgba(94, 208, 255, .07);
+  padding: 3px 9px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: rgba(94, 208, 255, .85);
+  white-space: nowrap;
 }

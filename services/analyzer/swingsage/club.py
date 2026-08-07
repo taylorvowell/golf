@@ -23,7 +23,7 @@ import cv2
 import numpy as np
 from scipy.signal import savgol_filter
 
-from . import club_detect
+from . import club_detect, events
 from .skeleton import IDX
 
 
@@ -114,6 +114,14 @@ class ClubConfig:
     # `smooth_detector_path`.
     detector_smooth: bool = False
     detector_smooth_win: int = 5
+    # Radius window. 0 keeps the historical `max(detector_smooth_win + 4, 7)`. Separable from
+    # the angle window because the two are smoothed for different reasons — see
+    # `smooth_detector_path` — and because both need to be able to reach *off*: a window under 3
+    # means "gate and interpolate, but do not smooth what was measured". The downswing is why.
+    # Smoothing the head path uniformly costs it ~50px of reach at the ball on swing2, which is
+    # the same effect that made `trace_win_downswing` 0: an even-handed filter over a tightly
+    # curving arc flattens curvature that is real, worst at the extreme the swing is judged on.
+    detector_radius_smooth_win: int = 0
     # Reject isolated head jumps by trajectory continuity before smoothing (Hampel on the shaft
     # angle). Aimed at the backswing, where the club passes behind the golfer and the detector
     # can misfire for a frame or two — the head jumps a long way and comes straight back, which
@@ -136,6 +144,63 @@ class ClubConfig:
     # phase-dependent gap tolerance and D19 needed a phase-dependent detector.
     trace_win_downswing: int = 0
     trace_min_conf: float = 0.30
+    # How far past an event a segment may reach for one more measured point, so consecutive
+    # segments share a boundary and the line stays continuous through it. 4 frames = 2 source
+    # frames on 30fps footage. Bounded because "the nearest measurement" is not always near: at
+    # Top on `perfect` the closest measured frames are 20 before and 25 after, and joining to
+    # those would make the backswing and the downswing each draw the same long chord across the
+    # transition in its own colour, which is worse than leaving the hole the data really has.
+    trace_join_frames: int = 4
+    # Ball anchoring at Impact (`anchor_ball`). The trigger is a miss larger than this fraction
+    # of body height — 5% is about a club head's width at these framings, so anything above it is
+    # a visible hole rather than a localisation error. Window is how far either side of the
+    # Impact event to look for the frame whose path passes closest to the ball.
+    # OFF by default, and the reason is measured rather than cautious. Anchoring fixes `pro_2`
+    # (the drawn path reaches 18.8px of the ball instead of missing it by 196px) and *degrades*
+    # `perfect`, where it replaces a good detection at the strike with a landmark 48px away. The
+    # two cases are indistinguishable from inside: on both clips the tracked path misses the
+    # Address landmark by 47px, and the only difference is that on `pro_2` that landmark is the
+    # ball and on `perfect` it is not. Making this safe needs the ball itself — see `find_ball`
+    # and DECISIONS D44. Until then it is `--club-ball-anchor`, and hand-placed markers
+    # (D45) are the supported way to put the head on the ball.
+    ball_anchor: bool = False
+    ball_anchor_tol: float = 0.05
+    ball_anchor_window: int = 6
+    # Confidence floor for an anchored frame. High, and deliberately so: the club head being at
+    # the ball at Impact is the most certain thing known about the whole swing. It is still
+    # flagged `from_ball` so nothing mistakes it for a detection.
+    ball_anchor_conf: float = 0.9
+    # Ball detection (`find_ball`). OFF: implemented, measured, and it is not good enough to
+    # write a club position from. On the four fixtures it finds the golfer's shoe twice and
+    # nothing twice — see `find_ball`'s docstring and DECISIONS D44 for what each gate does and
+    # why the remaining failures need a learned detector rather than another threshold. The
+    # anchor falls back to doc 04 §3's Address landmark, which is what it used before this
+    # existed. Turn on with `--club-ball-detect` to iterate; `scripts/checkball.py --live`
+    # iterates without a re-run.
+    ball_detect: bool = False
+    # The ball is found by disappearing at impact, so these are about where and what size to
+    # look for, not how bright a golf ball is in the abstract.
+    ball_after_impact: int = 8      # frames to skip past Impact before the ball counts as gone
+    ball_search_frac: float = 0.40  # search radius around the Address head, in body heights
+    ball_diam_frac: float = 0.030   # a golf ball is ~3% of a golfer's height across
+    ball_min_bright: float = 90.0   # a ball is light against turf; below this it is a shadow
+    # How much brighter the blob has to be than the ring of turf around it. The test that
+    # keeps the search off the golfer's shoe — see `find_ball`.
+    ball_min_contrast: float = 28.0
+    # Event refinement from the club (`refine_events`). Impact snaps to the head's lowest point
+    # within this many frames — a refinement of a working hand-based estimate, not a
+    # re-detection, so the window is small and a far-away "lowest head" is treated as the
+    # detector being wrong rather than the event.
+    impact_snap_frames: int = 10
+    impact_snap_min_frames: int = 6
+    # How much lower the candidate has to be before Impact moves, as a fraction of club length.
+    # Without it a tie moves the event for nothing: pro_2's "lowest" head two frames later was
+    # 0px lower. ~2% is a few pixels — below that the current frame is already the low point.
+    impact_snap_min_drop: float = 0.02
+    # How far the head may drift and still count as "at rest" during the address hold, as a
+    # fraction of club length. The hold is trimmed only when the club moved more than twice
+    # this across it, which leaves a genuinely static setup untouched.
+    address_still_tol: float = 0.08
     # Stop the follow-through at the club's high point, before it goes over the shoulder. Past
     # that the head is behind the golfer and heavily occluded, so the tail of the trace is both
     # the least reliable part of the path and the part that says least about the swing — it
@@ -172,17 +237,31 @@ class ClubFrame:
     # to know: it is a polyline over frames, and joining a model-measured head to a
     # solver-derived one produces a lurch between two different estimators, not a club path.
     from_model: bool = False
+    # True where the head was placed on the ball at Impact from the Address landmark rather than
+    # found in this frame (`anchor_ball`). A third provenance on purpose: it is neither a
+    # detection nor a solver estimate, and the one thing it must never do is pass for a detection.
+    from_ball: bool = False
 
 
 @dataclass
 class ClubResult:
     frames: list = field(default_factory=list)
     trace: dict = field(default_factory=dict)
+    # Which frame each trace point was measured on, parallel to `trace[key]`.
+    #
+    # The polyline is NOT one point per frame — the trace modes keep only the frames the
+    # detector answered — so a renderer growing the path with the playhead cannot recover the
+    # mapping by counting. Published alongside the points rather than folded into them so the
+    # `[[x,y],...]` shape every existing consumer reads stays exactly as it was.
+    trace_frames: dict = field(default_factory=dict)
     club_len: float = 0.0
     butt_len: float = 0.0
     width: int = 0
     height: int = 0
     coverage: dict = field(default_factory=dict)
+    # The ball, when `find_ball` located it: {x, y, r, source}, normalized. None when it could
+    # not be found — never a guess, because `anchor_ball` writes a club position from it.
+    ball: dict | None = None
     notes: list = field(default_factory=list)
 
 
@@ -1269,6 +1348,31 @@ def track(video_path, pose_frames, ev, handedness="right", cfg: ClubConfig | Non
             cf.shaft = [cf.butt, cf.head]
             cf.angle = float(np.degrees(np.arctan2(-d[1], d[0])))
             cf.length = L
+    # The club head is at the ball at Impact. Asserted last, after every estimator has had its
+    # say, so it corrects a miss rather than competing with a measurement — and before the trace
+    # is built, so the drawn line goes through it.
+    if cfg.ball_anchor:
+        addr_head = res.frames[addr_f].head if res.frames[addr_f].head else None
+        ball_xy = None
+        if addr_head is not None and cfg.ball_detect:
+            try:
+                found = find_ball(grays, ev, addr_head, body_h, w, h, cfg)
+            except cv2.error as exc:
+                found, _ = None, res.notes.append(f"ball search failed ({exc})")
+            if found:
+                ball_xy = (found[0], found[1])
+                res.ball = {"x": round(found[0], 5), "y": round(found[1], 5),
+                            "r": round(found[2] / h, 5), "source": "vanished_at_impact"}
+                d_addr = float(np.hypot((found[0] - addr_head[0]) * w,
+                                        (found[1] - addr_head[1]) * h))
+                res.notes.append(
+                    f"ball found at ({found[0]:.3f}, {found[1]:.3f}) by disappearance at impact; "
+                    f"{d_addr:.0f}px from the club head at Address "
+                    f"({100 * d_addr / (body_h * h):.0f}% of body height)")
+            else:
+                res.notes.append("ball not found by disappearance; "
+                                 "falling back to the club head at Address (doc 04 §3)")
+        anchor_ball(res, ev, pose_frames, club_px, butt_px, w, h, body_h, cfg, ball_xy=ball_xy)
     _build_trace(res, ev, n, cfg)
     # Trace-only cleanup, after coverage has been computed from the untouched path so the
     # quality gate still reports what was measured rather than what was drawn.
@@ -1580,11 +1684,15 @@ def smooth_detector_path(res: ClubResult, pose_frames, club_px, butt_px, w, h, c
 
     a_fill = np.interp(idx, idx[ok], unwrapped[ok])
     r_fill = np.interp(idx, idx[ok], rad[ok])
-    a_sm = _smooth1d(a_fill, cfg.detector_smooth_win)
     # Radius is the noisier of the two — a box centre wobbling a couple of pixels moves it
-    # directly — so it gets the longer window. It is NOT clamped to club_px: the measurement is
-    # trusted over the calibration here, which is the whole point of this variant.
-    r_sm = _smooth1d(r_fill, max(cfg.detector_smooth_win + 4, 7))
+    # directly — so it gets the longer window by default. It is NOT clamped to club_px: the
+    # measurement is trusted over the calibration here, which is the whole point of this variant.
+    r_win = cfg.detector_radius_smooth_win or max(cfg.detector_smooth_win + 4, 7)
+    # A window under 3 turns the filter off, leaving the gate and the gap interpolation. The
+    # measured frames then keep exactly what was measured, which is what the trace is drawn
+    # through; `_smooth1d` floors its own window at 3, so this has to be checked here.
+    a_sm = _smooth1d(a_fill, cfg.detector_smooth_win) if cfg.detector_smooth_win >= 3 else a_fill
+    r_sm = _smooth1d(r_fill, r_win) if r_win >= 3 else r_fill
 
     for f, cf in enumerate(res.frames):
         gp = grips[f]
@@ -1870,8 +1978,9 @@ def trace_fidelity(drawn, measured, tol):
     return hit, len(measured)
 
 
-def clip_at_apex(pts):
-    """Cut a follow-through polyline at the club's highest point on screen.
+def apex_cut(pts):
+    """How many leading points of a follow-through polyline to keep: cut it at the club's
+    highest point on screen.
 
     "Where it starts to turn at the top" has a clean definition: the head sweeps up after impact,
     reaches an apex, then travels back over the shoulder. The apex is the minimum y (image y
@@ -1884,14 +1993,17 @@ def clip_at_apex(pts):
 
     Left alone if the apex is at either extreme: that means no turn was captured, and guessing
     would truncate a legitimate path.
+
+    A count rather than the cut list, so the parallel frame-index list can be cut to exactly the
+    same length.
     """
     if len(pts) < 4:
-        return pts
+        return len(pts)
     ys = [p[1] for p in pts]
     i = int(np.argmin(ys))
     if i < 2 or i >= len(pts) - 1:
-        return pts
-    return pts[:i + 1]
+        return len(pts)
+    return i + 1
 
 
 def smooth_trace(res: ClubResult, ev, n, cfg):
@@ -1926,20 +2038,47 @@ def smooth_trace(res: ClubResult, ev, n, cfg):
         "downswing": (e["top"]["frame"], e["impact"]["frame"]),
         "followthrough": (e["impact"]["frame"], min(n - 1, e["finish"]["frame"])),
     }
+
+    def measured(f):
+        """Is frame f a detector measurement this trace should be drawn through?
+
+        `interp` matters as much as `from_model`: once `smooth_detector_path` has run, a frame
+        the detector declined — or one its trajectory gate threw out — still carries a head, but
+        one reconstructed from its neighbours. Drawing through those would make the polyline
+        assert measurements it does not have.
+
+        `from_ball` counts. It is not a detection, but it is not an estimate either: it is the
+        Address landmark asserted at Impact (`anchor_ball`), and on a swing fast enough to have
+        no detection at the strike it is the only thing that puts the line on the ball.
+        """
+        fr = res.frames[f]
+        if not fr.head or any(np.isnan(fr.head)):
+            return False
+        if fr.from_ball:
+            return True
+        return bool(fr.from_model and not fr.interp and fr.conf >= cfg.trace_min_conf)
+
+    swing_lo, swing_hi = max(0, e["address"]["frame"]), min(n - 1, e["finish"]["frame"])
+    meas_fs = [f for f in range(swing_lo, swing_hi + 1) if measured(f)]
+
     dropped, rejected, fidelity = {}, {}, {}
     for key, (a, b) in spans.items():
-        pts, confs, skipped = [], [], 0
-        for f in range(max(0, a), min(n, b + 1)):
-            fr = res.frames[f]
-            if not fr.head or any(np.isnan(fr.head)):
-                continue
-            # Only points the detector actually produced. A solver-derived head is a different
-            # estimate of the same thing; joining the two is what makes the trace zigzag.
-            if not fr.from_model or fr.conf < cfg.trace_min_conf:
-                skipped += 1
-                continue
-            pts.append([fr.head[0], fr.head[1]])
-            confs.append(fr.conf)
+        # One measured point BEYOND each end of the span, so consecutive segments share their
+        # boundary and the drawn path is continuous.
+        #
+        # The events are the frames a phase is named for, not frames the club was measured on,
+        # and cutting the point list at them leaves each segment ending at the last measurement
+        # strictly inside it. Through impact the head moves ~90px a frame, so on `perfect` the
+        # downswing stopped 102px short of the ball and the follow-through began 88px past it —
+        # a hole around the one position in the swing a golfer most wants the line to reach.
+        inside = [f for f in meas_fs if a <= f <= b]
+        before = [f for f in meas_fs if a - cfg.trace_join_frames <= f < a]
+        after = [f for f in meas_fs if b < f <= b + cfg.trace_join_frames]
+        seg_fs = before[-1:] + inside + after[:1]
+        skipped = sum(1 for f in range(max(0, a), min(n, b + 1))
+                      if res.frames[f].head and not measured(f))
+        pts = [[res.frames[f].head[0], res.frames[f].head[1]] for f in seg_fs]
+        confs = [res.frames[f].conf for f in seg_fs]
         dropped[key] = skipped
         raw_pts = [list(p) for p in pts]
 
@@ -1951,6 +2090,7 @@ def smooth_trace(res: ClubResult, ev, n, cfg):
             rejected[key] = len(pts) - len(kept)
             if len(kept) >= 2:
                 pts = kept
+                seg_fs = [f for f, k in zip(seg_fs, keep) if k]
 
         # Per-segment window; 0 means leave this segment's measurements alone.
         want = cfg.trace_win_downswing if key == "downswing" else cfg.trace_win
@@ -1967,16 +2107,25 @@ def smooth_trace(res: ClubResult, ev, n, cfg):
         # Clip AFTER smoothing: the apex of the smoothed path is the one that gets drawn, and
         # clipping first would let the smoother pull points back past the cut.
         if key == "followthrough" and cfg.trace_clip_followthrough:
-            pts = clip_at_apex(pts)
+            cut = apex_cut(pts)
+            pts, seg_fs = pts[:cut], seg_fs[:cut]
         res.trace[key] = [[round(float(x), 5), round(float(y), 5)] for x, y in pts]
+        res.trace_frames[key] = [int(f) for f in seg_fs]
         # Measured against the points that were available BEFORE any rejection or smoothing, so
         # a mode cannot score well by simply discarding what it fails to fit.
         fidelity[key] = trace_fidelity(res.trace[key], raw_pts, cfg.trace_fidelity_tol)
     return dropped, rejected, fidelity
 
 
-def refine_events(res: ClubResult, ev):
-    """Doc 05 A.5/A.8 — replace the pose proxies for Toe-Up and Mid-Follow-Through.
+def refine_events(res: ClubResult, ev, cfg: ClubConfig | None = None, heads=None,
+                  fps: float = 60.0):
+    """Doc 05 A.5/A.8 — replace the pose proxies for the events the club can see better.
+
+    Toe-Up and Mid-Follow-Through were always here. Impact and the address hold joined them
+    because they are the other two things the club measures better than the hands do, and both
+    were measurably wrong: Impact 7 frames early on `perfect`, and its "quasi-static" setup hold
+    spanning 127px of club travel. Top is deliberately NOT refined here — see D49 for the
+    numbers showing the club cannot answer that one.
 
     Both events are defined by the *shaft being horizontal*, which Phase 3 could only
     approximate from wrist height because no club data existed. Now it does, so use the
@@ -1984,6 +2133,7 @@ def refine_events(res: ClubResult, ev):
     candidate span; otherwise the proxy stands, since a confident wrong answer is worse
     than an honestly uncertain one.
     """
+    cfg = cfg or ClubConfig()
     e = ev["events"]
     ang = {c.f: c.angle for c in res.frames if c.angle is not None and c.conf >= 0.35}
     changed = []
@@ -2005,11 +2155,86 @@ def refine_events(res: ClubResult, ev):
         changed.append(f"toe_up {e['toe_up']['frame']} -> {tu} (shaft horizontal)")
         e["toe_up"] = {"frame": int(tu), "conf": 0.8}
 
+    h = res.height or 1
+    club_px = (res.club_len or 0.2) * h
+    # `heads` is where the DETECTOR put the club head, frame -> normalized xy. The caller has to
+    # supply it: this runs on the primary solve, which uses the detector as evidence rather than
+    # as the head (`detector_head_primary` is off), so `from_model` is false on every one of its
+    # frames and the solver's own head is exactly the estimate these refinements exist to correct.
+    if heads:
+        measured = {int(f): np.array(p) * [res.width or 1, h] for f, p in heads.items()}
+    else:
+        measured = {c.f: np.array(c.head) * [res.width or 1, h] for c in res.frames
+                    if c.head and c.from_model and not c.interp and not any(np.isnan(c.head))}
+
+    # --- Impact: the club head's lowest point ------------------------------------------
+    #
+    # Impact is where the head reaches the bottom of its arc, and that is a thing the club can
+    # be *seen* doing — unlike Top, where the detector has nothing (D49). The Stage 5 estimate
+    # comes from hand height and is good but not exact: on `perfect` it lands 7 frames early, so
+    # the drawn trace turns follow-through-white while the club is still coming down.
+    #
+    # Only a small correction is allowed. This is a refinement of a working estimate, not a
+    # re-detection — if the lowest measured head is far from it, the detector is more likely
+    # wrong than the event, and the event stands.
+    imp = e["impact"]["frame"]
+    # Bounded by its neighbours as well as by the window. Events are strictly ordered and the
+    # invariant suite enforces it, so a snap that crossed Mid-Downswing or Mid-Follow-Through
+    # would produce an artifact that fails its own contract rather than a better Impact.
+    lo = max(imp - cfg.impact_snap_frames, e["mid_downswing"]["frame"] + 1)
+    hi = min(imp + cfg.impact_snap_frames, e["mid_follow_through"]["frame"] - 1)
+    near = [f for f in measured if lo <= f <= hi]
+    if len(near) >= cfg.impact_snap_min_frames and imp in measured:
+        # Ties broken toward the CURRENT frame, not toward the end of the window. A 30fps source
+        # normalised to 60fps repeats every frame, so exact ties are common — and taking the
+        # later one moved pro_2's Impact two frames for a head that was 0px lower, which is a
+        # coin toss dressed as a measurement.
+        low = min(near, key=lambda f: (-measured[f][1], abs(f - imp)))
+        drop = float(measured[low][1] - measured[imp][1])
+        if low != imp and drop >= cfg.impact_snap_min_drop * club_px:
+            changed.append(
+                f"impact {imp} -> {low} (club head's lowest point, "
+                f"{drop:.0f}px below the old frame)")
+            e["impact"] = {"frame": int(low), "conf": max(0.7, e["impact"]["conf"])}
+
+    # Mid-Follow-Through is searched from Impact, so it has to be resolved AFTER any correction
+    # to it — off the old frame it would be measuring from a moment the swing was not at.
     mft = horizontal_in(e["impact"]["frame"], e["finish"]["frame"])
     if mft is not None and mft != e["mid_follow_through"]["frame"]:
         changed.append(
             f"mid_follow_through {e['mid_follow_through']['frame']} -> {mft} (shaft horizontal)")
         e["mid_follow_through"] = {"frame": int(mft), "conf": 0.8}
+
+    # --- Address hold: require the CLUB to be still, not just the hands ------------------
+    #
+    # `address_span` is the quasi-static hold setup measurements are medianed over (D28), and it
+    # is found from hand motion. That misses a golfer who walks the club into the ball: on
+    # `perfect` the head travels 127px — 22% of body height — across the detected hold while the
+    # hands move 15px, so the "setup" is measured over a club still sliding into position, and
+    # the ball landmark taken from it (D44) is a median of a moving club.
+    #
+    # Trim the span back from Address to the frames where the head actually sat still. Only when
+    # it is badly wrong: the other three fixtures move 4-23px across their holds and are left
+    # exactly as they are.
+    span = ev.get("address_span")
+    a_f = e["address"]["frame"]
+    if span and a_f in measured:
+        inside = sorted(f for f in measured if span[0] <= f <= span[1])
+        if len(inside) >= 4:
+            travel = float(np.linalg.norm(measured[inside[-1]] - measured[inside[0]]))
+            if travel > cfg.address_still_tol * club_px * 2:
+                tol = cfg.address_still_tol * club_px
+                start = a_f
+                for f in reversed(inside):
+                    if float(np.linalg.norm(measured[f] - measured[a_f])) > tol:
+                        break
+                    start = f
+                if start > span[0]:
+                    changed.append(
+                        f"address_span {span} -> [{start}, {span[1]}] (club head moved "
+                        f"{travel:.0f}px across the old hold; setup is not static before "
+                        f"frame {start})")
+                    ev["address_span"] = [int(start), int(span[1])]
 
     if changed:
         # Phase spans are derived from event frames, so they must be rebuilt in step.
@@ -2017,7 +2242,230 @@ def refine_events(res: ClubResult, ev):
                  "mid_downswing", "impact", "mid_follow_through", "finish"]
         ev["phases"] = [{"name": f"{a}->{b}", "from": e[a]["frame"], "to": e[b]["frame"]}
                         for a, b in zip(order[:-1], order[1:])]
+        # And so is tempo, which is Address->Top->Impact and nothing else. Snapping Impact to
+        # the club's low point moves it, and a tempo left over from before is the number the
+        # scorecard reads and the one the implausibility check fires on — stale, it both
+        # misreports the swing and blames the wrong event for it.
+        if ev.get("tempo") is not None:
+            tempo, odd = events.build_tempo(e, fps)
+            if tempo is not None:
+                before = ev["tempo"].get("ratio")
+                ev["tempo"] = tempo
+                if before is not None and before != tempo["ratio"]:
+                    changed.append(f"tempo {before}:1 -> {tempo['ratio']}:1 (events moved)")
     return changed
+
+
+def find_ball(grays, ev, near_norm, body_h, w, h, cfg):
+    """Locate the ball by the one thing that distinguishes it from every other bright blob:
+    it is there, and then it is not.
+
+    A golf ball is a few pixels of white on grass. So are range balls scattered behind the
+    golfer, a shoe, a yardage marker, a sprinkler head and the reflection off a divot — a
+    brightness-and-roundness search picks a different one of those on every clip (measured: a
+    first-cut Hough search found the ball on 2 of 4 fixtures and something else, or nothing, on
+    the others). Being *struck* is what only the ball does. Median the frames before Impact,
+    median the frames after, and the ball is the small bright thing present in the first and
+    missing from the second.
+
+    Returns `(x, y, radius_px)` normalized, or None. Deliberately conservative: a wrong ball is
+    worse than no ball, because `anchor_ball` writes a club position from it.
+
+    Why bother rather than just using the club head at Address (doc 04 §3): that landmark is
+    only the ball if Address lands on a frame where the club is actually grounded behind it. On
+    `perfect` it does not — the detected Address frame catches the club still off the turf, 150px
+    (18% of body height) from the ball.
+
+    **NEGATIVE RESULT — this is off by default (`ClubConfig.ball_detect`).** Measured on all four
+    fixtures: it finds the golfer's *shoe* on `perfect` and swing2 and nothing on pro_2 and
+    swing1. Each gate below removes a real false positive and none of them is the missing one:
+    every individually-discriminative property of a golf ball (small, round, bright, static,
+    gone after impact) is also a property of a shoe edge, a divot, a background range ball, or a
+    turf speck, and the combination that excludes all of them also excludes the ball. That is
+    the case for a learned detector — the club-head model already in the pipeline had the same
+    shape of problem — not for another threshold. See DECISIONS D44.
+    """
+    e = ev["events"]
+    addr_f, imp_f = e["address"]["frame"], e["impact"]["frame"]
+    n = len(grays)
+    span = ev.get("address_span") or [addr_f, addr_f]
+    pre_fs = [f for f in range(max(0, span[0]), min(n, span[1] + 1))][:30]
+    if len(pre_fs) < 3:
+        pre_fs = [f for f in range(max(0, addr_f - 10), min(n, addr_f + 1))]
+    # Well clear of impact: the club, the divot and the ball's first few frames of flight are
+    # all still in the neighbourhood immediately after the strike.
+    post_fs = [f for f in range(min(n - 1, imp_f + cfg.ball_after_impact),
+                                min(n, imp_f + cfg.ball_after_impact + 20))]
+    if len(pre_fs) < 3 or len(post_fs) < 3:
+        return None
+    pre = np.median(np.stack([grays[f] for f in pre_fs]), axis=0)
+    post = np.median(np.stack([grays[f] for f in post_fs]), axis=0)
+    gone = np.clip(pre - post, 0, 255).astype(np.uint8)
+
+    # Only look where the ball can be: within reach of the hands' low point, and not up in the
+    # golfer. `near_norm` is the club head at Address — the right neighbourhood even on the
+    # clips where it is not the right point.
+    mask = np.zeros(gone.shape, np.uint8)
+    cv2.circle(mask, (int(near_norm[0] * w), int(near_norm[1] * h)),
+               int(cfg.ball_search_frac * body_h * h), 255, -1)
+    gone = cv2.bitwise_and(gone, mask)
+
+    thr = cv2.threshold(gone, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
+    nlab, _, stats, cent = cv2.connectedComponentsWithStats(thr, 8)
+    r_want = cfg.ball_diam_frac * body_h * h / 2.0
+    best = None
+    for i in range(1, nlab):
+        _, _, bw, bh, area = stats[i]
+        if area < 3:
+            continue
+        r = 0.5 * (bw + bh) / 2.0
+        # Ball-shaped: roughly round, roughly the right size, and mostly filled.
+        if not (0.5 <= bw / max(bh, 1) <= 2.0):
+            continue
+        if not (r_want * 0.45 <= r <= r_want * 2.2):
+            continue
+        if area < 0.4 * bw * bh:
+            continue
+        cx, cy = cent[i]
+        ix, iy = int(cx), int(cy)
+        bright = float(pre[iy, ix])
+        drop = float(gone[iy, ix])
+        if bright < cfg.ball_min_bright:
+            continue
+        # Isolated, not part of something bigger. This is the test that separates a ball from
+        # the golfer's shoe — and the shoe is what a disappearance search picks without it,
+        # because the feet move between Address and the finish, so a shoe "vanishes" from its
+        # Address position just as convincingly as a struck ball does. A ball is surrounded by
+        # turf; a fragment of shoe is surrounded by more shoe. Measured in the BEFORE image,
+        # where the ball is still sitting there.
+        ring = np.zeros(pre.shape, np.uint8)
+        cv2.circle(ring, (ix, iy), int(max(3, r) * 4), 255, -1)
+        cv2.circle(ring, (ix, iy), int(max(2, r) + 2), 0, -1)
+        core = np.zeros(pre.shape, np.uint8)
+        cv2.circle(core, (ix, iy), max(1, int(r)), 255, -1)
+        inner = cv2.mean(pre.astype(np.uint8), core)[0]
+        outer = cv2.mean(pre.astype(np.uint8), ring)[0]
+        if inner - outer < cfg.ball_min_contrast:
+            continue
+        # Prefer the biggest drop in brightness, i.e. the thing that most definitely left.
+        if best is None or drop > best[0]:
+            best = (drop, cx, cy, r)
+    if best is None:
+        return None
+    _, cx, cy, r = best
+    return (float(cx) / w, float(cy) / h, float(r))
+
+
+def anchor_ball(res: ClubResult, ev, pose_frames, club_px, butt_px, w, h, body_h, cfg,
+                ball_xy=None):
+    """Put the club head on the ball at Impact when nothing detected it there (doc 04 §3).
+
+    The club head at Address *is* the ball. That is doc 04's own statement and it is already how
+    `calibrate` seeds the solver — but it was only ever used going forwards, and the same
+    landmark says something about Impact: the head returns to that point, because otherwise
+    there is no shot. Nothing in the pipeline was asserting that.
+
+    It matters most exactly where the detector is worst. Through impact the head is moving
+    ~90px/frame and smears across the turf, so the frames either side of the strike are the
+    least likely in the whole swing to carry a confident box — a fast pro swing can have no
+    detection at the ball at all. On `pro_2` the solved head never comes within **196px (35% of
+    body height)** of the ball, so the drawn path swings past the strike and back up; the one
+    position a golfer is looking for is the one the line misses.
+
+    So: if the head never gets near the ball around Impact, place it there. Three guards, because
+    this writes a position rather than measuring one:
+
+      * It only fires when the head misses by more than 5% of body height. Where the detector
+        already reaches the ball (`perfect` 17.7px, swing2 10.4px) nothing happens.
+      * The anchor frame is the one whose path segment passes closest to the ball, searched in a
+        window around Impact — not Impact itself. The event is a detection with its own error,
+        and anchoring the wrong frame would drag the head off the club to fix a hole.
+      * The ball has to be reachable: |ball - hands| must fall inside the same length bounds a
+        detection has to satisfy. If it does not, the Address head was not the ball (or Impact is
+        badly wrong) and this abstains rather than inventing geometry.
+
+    The written frame is marked `from_ball`, never `from_model`. It is a derived landmark, not a
+    detection, and every consumer that distinguishes the two should keep distinguishing them.
+    """
+    e = ev["events"]
+    addr_f, imp_f = e["address"]["frame"], e["impact"]["frame"]
+    n = len(res.frames)
+    if not (0 <= imp_f < n):
+        return None
+
+    # Where the ball is. `find_ball` if it answered — it is a measurement of the ball itself.
+    # Otherwise the club head over the Address hold, medianed so one bad frame in the
+    # quasi-static span cannot move it (the same reason D28 takes setup metrics that way). That
+    # fallback is doc 04 §3's landmark and is right whenever Address caught the club grounded
+    # behind the ball; `find_ball`'s docstring covers the clip where it does not.
+    if ball_xy is not None:
+        ball = np.array([float(ball_xy[0]), float(ball_xy[1])])
+    else:
+        span = ev.get("address_span") or [addr_f, addr_f]
+        heads = [res.frames[f].head for f in range(max(0, span[0]), min(n, span[1] + 1))
+                 if res.frames[f].head and not any(np.isnan(res.frames[f].head))]
+        if not heads:
+            return None
+        ball = np.array([float(np.median([p[0] for p in heads])),
+                         float(np.median([p[1] for p in heads]))])
+    ball_px = ball * [w, h]
+
+    tol = cfg.ball_anchor_tol * body_h * h
+    K = cfg.ball_anchor_window
+    lo, hi = max(0, imp_f - K), min(n - 1, imp_f + K)
+    have = [f for f in range(lo, hi + 1)
+            if res.frames[f].head and not any(np.isnan(res.frames[f].head))]
+    if len(have) < 2:
+        return None
+    near = min(float(np.linalg.norm(np.array(res.frames[f].head) * [w, h] - ball_px))
+               for f in have)
+    if near <= tol:
+        return None
+
+    # Closest approach of the drawn path, not of its samples: between two frames the head can
+    # sweep straight past the ball without either endpoint being near it, which is the whole
+    # failure at 90px/frame. Anchor whichever endpoint the crossing is nearer.
+    best = None
+    for f0, f1 in zip(have[:-1], have[1:]):
+        p0 = np.array(res.frames[f0].head) * [w, h]
+        p1 = np.array(res.frames[f1].head) * [w, h]
+        seg = p1 - p0
+        L2 = float(seg @ seg)
+        t = 0.0 if L2 < 1e-9 else float(np.clip((ball_px - p0) @ seg / L2, 0.0, 1.0))
+        d = float(np.linalg.norm(p0 + seg * t - ball_px))
+        if best is None or d < best[0]:
+            best = (d, f1 if t > 0.5 else f0)
+    if best is None:
+        return None
+    f = best[1]
+
+    grip = _kp(pose_frames, f, "grip_center", 0.15)
+    if grip is None:
+        return None
+    gp = np.array([grip[0] * w, grip[1] * h])
+    v = ball_px - gp
+    L = float(np.hypot(v[0], v[1]))
+    if not (club_px * cfg.min_len <= L <= club_px * cfg.max_len):
+        res.notes.append(
+            f"ball anchor declined at frame {f}: ball sits {L / club_px:.2f} club-lengths from "
+            f"the hands, outside [{cfg.min_len}, {cfg.max_len}] — Address head or Impact is wrong")
+        return None
+
+    d = v / L
+    cf = res.frames[f]
+    cf.head = [float(ball[0]), float(ball[1])]
+    butt = gp - d * butt_px
+    cf.butt = [float(butt[0]) / w, float(butt[1]) / h]
+    cf.shaft = [cf.butt, cf.head]
+    cf.angle = cf.raw_angle = float(np.degrees(np.arctan2(-d[1], d[0])))
+    cf.length = L
+    cf.interp = False
+    cf.from_ball = True
+    cf.conf = max(cf.conf, cfg.ball_anchor_conf)
+    res.notes.append(
+        f"club head anchored to the ball at frame {f} (Impact {imp_f}); the tracked path missed "
+        f"it by {near:.0f}px ({100 * near / (body_h * h):.0f}% of body height)")
+    return f
 
 
 def _wrap180(a):
@@ -2039,18 +2487,22 @@ def _build_trace(res: ClubResult, ev, n, cfg: ClubConfig | None = None):
     # presence-based number defeats it.
     measured = {}
     for key, (a, b) in spans.items():
-        pts, got, tot = [], 0, 0
+        pts, fs, got, tot = [], [], 0, 0
         for f in range(max(0, a), min(n, b + 1)):
             fr = res.frames[f]
             tot += 1
             if fr.head and not any(np.isnan(fr.head)):
                 pts.append([round(fr.head[0], 5), round(fr.head[1], 5)])
+                fs.append(f)
                 if fr.conf >= 0.30 and not fr.interp:
                     got += 1
         # Coverage is computed from the full span above; only the drawn polyline is clipped, so
         # the quality gate still reports every frame that was measured.
-        res.trace[key] = (clip_at_apex(pts)
-                          if key == "followthrough" and cfg.trace_clip_followthrough else pts)
+        if key == "followthrough" and cfg.trace_clip_followthrough:
+            cut = apex_cut(pts)
+            pts, fs = pts[:cut], fs[:cut]
+        res.trace[key] = pts
+        res.trace_frames[key] = fs
         measured[key] = round(got / tot, 3) if tot else 0.0
     res.coverage = measured
     swing = [k for k in ("backswing", "downswing") ]

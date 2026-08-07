@@ -19,7 +19,7 @@ Every entry therefore carries a **`Status:`** line. Read it before acting on the
 | `HISTORICAL` | A measurement from a pipeline generation that no longer exists. Context only. |
 | `OPEN` | A known problem with no resolution yet. |
 
-Current tally: **41 ACTIVE · 5 NEGATIVE RESULT · 3 SUPERSEDED · 2 HISTORICAL · 2 OPEN.**
+Current tally: **44 ACTIVE · 5 NEGATIVE RESULT · 4 SUPERSEDED · 2 HISTORICAL · 2 OPEN.**
 
 Two traps this log has set for readers, both worth knowing before you trust any number in it:
 
@@ -1371,7 +1371,13 @@ disambiguate it rather than guessed.
 
 **Date:** 2026-08-04
 **Affects:** [02-ARCHITECTURE.md](../instructions/02-ARCHITECTURE.md) §API surface, §Job orchestration
-**Status:** ACTIVE — the route and its start-then-poll contract are doc 02's intended shape and are live. **The storage is deliberately provisional**: the job row is a module-level `Map` in the Next process, so it does not survive a restart and cannot serve more than one process. `lib/jobs.ts` is the single file to replace when the SQLite job table lands; the routes and client stay unchanged.
+**Status:** SUPERSEDED IN PART by D38 — the route and its start-then-poll contract described
+below are still exactly doc 02's shape and are still live, unchanged. What's superseded is the
+storage half: `lib/jobs.ts` no longer holds the job row in a module-level `Map`; it's the
+`jobs` Postgres table now (D38), with an in-process mirror only for the actively-running job in
+this process. Not SQLite, despite what this entry and the next paragraph say — that plan
+changed before SQLite was ever built. Read this entry for why the route is shaped the way it
+is; read D38 for what actually stores the row today.
 
 Prompted by "some changes haven't made their way onto the stick figure". The diagnosis is
 worth writing down because it will recur: **editing `swingsage/` does not change a stored
@@ -2085,3 +2091,952 @@ put a gap in exactly the seam the bar exists to close.
 pads 20px back, so the cards line up with every other row in the panel while the scroller still
 has room for the selected card's glow. 20px is the panel's smallest padding step (`p-5`), so the
 bleed never crosses the panel edge — and the glow blur came down to 20px to fit it.
+
+---
+
+## D38 — Postgres (Drizzle), not SQLite, from v1
+
+**Date:** 2026-08-05
+**Affects:** [02-ARCHITECTURE.md](../instructions/02-ARCHITECTURE.md) §Data Model, §Stack Decision
+**Status:** ACTIVE — governs the persistence layer added for real scoring + per-user swing
+logging; see CLAUDE.md's Non-Negotiable Constraints for the standing principle this decision
+is an instance of.
+
+Doc 02 specs the database as "v1: SQLite (via Prisma/Drizzle); v2: Postgres — local-first
+development." Building the scoring engine and a real (DB-backed, not directory-scanned) swing
+log was the first place that v1/v2 split actually had to be decided rather than left open, and
+the user's explicit direction was: build this to production/scale standard, not MVP shortcuts,
+and treat that as standing guidance for infrastructure choices generally — not just this one.
+
+**Decision: skip the SQLite step. Postgres from the first migration, via Drizzle ORM.**
+
+Why SQLite is the wrong choice even for "v1" here, not just eventually:
+- **Single-writer.** SQLite serializes all writes at the file level. That's invisible with one
+  developer running `burnin.py` by hand, but the swing/job/score tables this phase adds are
+  exactly the tables a second concurrent user (or a second app instance) writes to — building on
+  SQLite now means hitting that wall the moment either shows up, not a comfortable margin away.
+- **Doesn't survive multiple app instances.** A file-based DB assumes one process on one disk.
+  Any real deployment (more than a single Next.js process on a single machine) needs a networked
+  database regardless — SQLite would have to be migrated off before that's possible at all.
+- **The migration itself is the debt.** Every table, query and migration written against SQLite
+  now gets rewritten against Postgres later — the exact "build the interim version, then rebuild
+  it" pattern CLAUDE.md's new principle calls out. Building against Postgres from the first
+  migration means there is no rewrite to do.
+- **Railway (already configured in this environment — see the `use-railway` skill and the
+  `railway` MCP server) provisions managed Postgres in one step**, so there is no meaningful
+  setup-cost argument for SQLite even at the very start of local development.
+
+**Why Drizzle over Prisma:** both are legitimate; Drizzle was chosen for a thinner runtime (no
+generated engine binary, no separate query-engine process), first-class Postgres support, typed
+SQL that stays close to what actually runs, and better behavior in serverless/edge deployment
+targets if the web app ever moves there. Prisma's advantages (Prisma Studio's browsable GUI, a
+more batteries-included migration CLI) were judged not worth its extra runtime weight for this
+project's shape. This is a preference call, not a correctness one — revisit if Drizzle's
+migration tooling proves painful in practice.
+
+**What this does *not* change:** `analysis.json` stays the CV artifact of record on disk (the
+architecture doc's "single contract between backend and player" — see CLAUDE.md's Architecture
+section). Postgres is the queryable index and the score/job store on top of it, not a
+replacement for it. File/media storage (video, `analysis.json` itself) stays on local disk for
+now — doc 02's "v2: S3-compatible" migration is tracked as separate, explicitly out-of-scope
+debt (not silently carried forward — see the swing-scoring plan's "Explicitly out of scope"
+section), because `swings.media_path` is named to make that swap a value change later rather
+than a schema change.
+
+**Not verified against production load.** This decision is reasoned from SQLite's documented
+write-concurrency model, not from load-testing either engine against this schema. If Postgres
+turns out to be the wrong call for some reason specific to this app's access patterns, that
+would be a new DECISIONS entry, not a silent reversion.
+
+---
+
+## D39 — `burnin.py` without `--club-detector` silently regenerates the weaker club trace
+
+**Date:** 2026-08-05
+**Affects:** [04-CLUB-TRACKING.md](../instructions/04-CLUB-TRACKING.md), `scripts/burnin.py`
+**Status:** ACTIVE — the flag has no default; every manual re-run of a fixture needs it stated
+explicitly, and CLAUDE.md's Commands section now says so directly above the flag list.
+
+While building Stage 8 (D38's neighboring work), `burnin.py` was re-run on both fixtures to
+smoke-test the new scoring wiring:
+
+```
+python scripts/burnin.py <video> --view dtl --handedness right --club-type irons --pose-model rtmpose
+```
+
+— without `--club-detector runs/clubhead/weights/best.pt`. D23/D23a already established that
+weights as a measurable improvement over the classical-only tracker (fixed swing2's finish,
+halved off-plane deviation) and left it as an opt-in flag, **not the default**, specifically so
+a plain `burnin.py` invocation stays byte-identical to the classical-only path (doc 04 §2's
+"evidence into the solver, not a second path" non-negotiable). That same not-a-default choice
+means omitting the flag is silent: nothing warns that a "vanilla" run just overwrote a fixture
+that had previously been analysed WITH the detector. It was — both `out/swing1` and
+`out/swing2` on disk already reflected D23a's improved trace — and the re-run downgraded both
+back to the classical path. The user caught it by eye on the swing view page ("why did the
+club tracing get reverted") before it was ever verified with `clubdebug.py`/`checkclub.py`,
+which is exactly the failure mode doc 04 §7's non-negotiable exists to catch and which was
+skipped under the assumption that a scoring-code smoke test had no club-tracking side effect.
+
+**Fix applied:** both fixtures re-run with `--club-detector runs/clubhead/weights/best.pt`
+restored; verified via `analysis.json`'s `club.detector.weights` provenance field (both now
+read `best.pt` again) and a `checkclub.py` visual pass (address/toe-up/impact/finish draw
+sensibly; top/mid-downswing show the same already-documented imperfection as before, not new
+breakage).
+
+**Lesson, stated so it doesn't repeat:** any command that regenerates a committed fixture's
+`analysis.json` — even one being run to test something unrelated to club tracking — carries
+every flag that command's *previous* canonical run used, or it silently regresses whatever
+that flag was responsible for. There is no default-flags manifest for "how were the committed
+fixtures actually produced"; until one exists, treat every `burnin.py` invocation against
+`out/swing1` or `out/swing2` as needing `--club-detector runs/clubhead/weights/best.pt`
+explicitly, and run `clubdebug.py`/`checkclub.py` after, per doc 04 §7, regardless of what the
+change being tested was.
+
+---
+
+## D40 — `force_original_aspect_ratio` silently defeats `-2`, and Stage 0 died on the first clip whose height landed odd
+
+**Date:** 2026-08-05
+**Affects:** [02-ARCHITECTURE.md](../instructions/02-ARCHITECTURE.md) §Stage 0, `swingsage/video.py`
+**Status:** ACTIVE — fixed with `force_divisible_by=2`; both existing fixtures re-verified unchanged.
+
+Adding a reference swing (`instructions/swing/perfect.mp4`, 1148x2068 portrait) made Stage 0
+fail outright:
+
+```
+[libx264] height not divisible by 2 (720x1297)
+CalledProcessError: ... returned non-zero exit status 3752568763
+```
+
+`normalize()`'s scale filter asked for `w=720:h=-2`, where `-2` means "derive from the aspect
+ratio and round to an even number" — which is exactly what yuv420p requires. But it also
+passed `force_original_aspect_ratio=decrease`, and **that option recomputes both dimensions
+from the aspect ratio after `-2` has already done its rounding**, so the even constraint is
+silently discarded. 2068/1148 × 720 = 1297, odd, and libx264 refuses it.
+
+This was a latent bug from the beginning, not something the new clip introduced: swing1 and
+swing2 only ever worked because their aspect ratios happen to produce even heights. Any
+portrait clip landing on an odd height would have hit it.
+
+**Fix:** add `force_divisible_by=2`, which ffmpeg provides for precisely this interaction and
+which `force_original_aspect_ratio` respects. One filter option; no change to the intended
+geometry.
+
+**Worth knowing generally:** the two options are not redundant with each other and reading the
+filter as "`-2` guarantees even" is wrong whenever `force_original_aspect_ratio` is also
+present. The failure mode is a hard crash rather than a subtly wrong frame, which is the good
+kind of bug — but the exit status ffmpeg returns for it (a large unsigned number) carries no
+signal, so the real message is only in stderr, which `capture_output=True` was swallowing until
+the command was re-run by hand.
+
+---
+
+## D41 — Hand height as a speed-independent cross-check on the post-top events
+
+**Date:** 2026-08-05
+**Affects:** [05-SWING-PHASES-AND-SCORING.md](../instructions/05-SWING-PHASES-AND-SCORING.md) §A, `swingsage/events.py`
+**Status:** ACTIVE — corrects the pro reference; both existing fixtures verified byte-identical (golden suite green, unchanged).
+
+Stage 5 keys every post-Address event off grip **speed** and motion energy. That silently
+assumes a real-time swing. Pro footage is essentially always slow motion, and on the bundled
+reference (`instructions/swing/perfect.mp4`) the assumption failed hard:
+
+| | detected | true (hand-checked against the contact sheet) |
+|---|---|---|
+| swing window | `[461, 528]` | the swing runs ~219 → ~790 |
+| impact | f474 | ~f530 (club-head low point f529–534) |
+| finish | f519 | ~f790 |
+
+The motion-burst detector had locked onto the *downswing alone* — the fastest 67 frames — and
+everything after Top was squeezed into it. D37's tempo validator flagged the clip
+independently (3267 ms backswing), which is that guard working exactly as designed.
+
+**The visible damage was the club trace**, not the numbers: `club.py` segments the trace by
+event frames, so the downswing trace stopped 56 frames before the ball and the follow-through
+was **7 points** spanning f474–519 where the real one runs to ~f790. Club tracking itself was
+fine — heads on all 829 frames. A coverage figure of 100/100/100% again said nothing about
+whether the thing was right (the fourth time that has happened; see STATUS.md §2).
+
+**Fix: a second estimator that does not depend on speed at all.** Hand height above the hips
+(`grip_center` vs `mid_hip`, body-height normalised) traces one shape through every swing —
+the Top is its first prominent peak after Address, Impact the trough after that, the Finish the
+next peak. Those are geometric extrema, so they read the same at any frame rate.
+
+Measured against the existing detector:
+
+| clip | landmark (top/impact/finish) | detector | verdict |
+|---|---|---|---|
+| swing1 | 198 / 221 / 244 | 198 / 221 / 243 | agree |
+| swing2 | 86 / 114 / 137 | 86 / 115 / 148 | agree within a frame on top/impact |
+| perfect | 417 / **533** / 664 | 415 / **474** / 519 | landmark recovers the true impact |
+
+**It overrides only on a large disagreement (`LANDMARK_DISAGREE = 20` frames), and that gate is
+the important part.** There are still no hand-labelled event frames for any clip
+(docs/STATUS.md), so quietly re-deciding events that are already plausible would be fitting to
+a sample nobody has checked — the exact mistake D37 exists to catch. The threshold sits well
+above the 1–11 frame spread across the working fixtures, so swing1 and swing2 are provably
+untouched: the golden suite passes unchanged. Only a clip where the two estimators disagree by
+more than any plausible measurement error gets re-anchored, and when that happens it is
+recorded in `notes` rather than applied silently.
+
+When it does fire, only the *anchors* move: `mid_downswing` and `mid_follow_through` keep their
+proportional position within the corrected spans, so the shape of the swing is preserved rather
+than re-derived from scratch.
+
+**Two traps worth stating.** The first peak is required, not the global one — the hands are
+usually **higher at the finish than at the top**, so a global maximum finds the wrong landmark
+entirely (measured: global max returned f662 for the pro, in the follow-through). And the
+signal must be hips-*relative*: an absolute hand path counts camera pans as hand travel, which
+on this clip alone was worth ~100 frames of misalignment.
+
+**Not verified against hand labels.** Like everything else in Stage 5, this is one estimator
+cross-checking another. It is better founded than what it corrects — it removes a
+speed assumption rather than adding one — but the ±3-frame criterion in doc 08 Phase 3 stays
+unmet until `tests/fixtures.json:hand_labeled` is filled in by a human.
+
+---
+
+## D42 — Stage 8 was scoring nine rotation checks off a quantity that decreases as the golfer turns; scoring_config v2 defers them rather than re-banding
+
+Status: ACTIVE
+
+**Symptom.** The `perfect` fixture scored **37.5 (Reset)**, below the amateur `swing1` at 45.0,
+and both `takeaway` and `follow_through_balance` reported a confident **0.0** while claiming
+full coverage ("2 of 2 checks measurable"). Scoring was running and the config was real —
+38 checks generated from `criteria.md` — so nothing failed loudly.
+
+**Cause.** Ten of the 33 scored checks could not return a correct value for *any* swing, and
+all of them failed toward 0, acting as a ~25-point constant penalty on every golfer. The
+largest group was the rotation family:
+
+`metrics.per_frame` derives `{shoulder,hip}_facing_est = arccos(width / max_projected_width)`
+— degrees away from the widest this golfer's shoulder line projects **in this clip**, not
+degrees of turn. Down the line the shoulders start near edge-on and *widen* into the backswing,
+so the quantity falls as the golfer turns (54.5 → 13.4 on `perfect`). `*_turn_from_address`
+subtracts address from that, so it is negative across the entire backswing: shoulder turn at
+the top measured −41.1 / −41.8 / −36.7 against a `[75,105]` band.
+
+**Why this is a deferral and not a sign fix.** Two problems survive negating it:
+1. `arccos` is even, so the estimate is V-shaped through square — it cannot distinguish 40°
+   open from 40° closed. `body_facing` is meant to sign it but reads `anterior` at *both*
+   address and the top, only flipping by P9, so the recovered sign isn't stable within a swing.
+   swing1 reads +41.2 at impact where `perfect` reads −6.3.
+2. The magnitude is a projection and it compresses — ~41° recovered where the real shoulder
+   turn is ~90°. `criteria.md`'s bands are anatomical ground truth, so a correctly-signed value
+   is still being scored on the wrong scale. `build_config.py`'s own `unit="deg (2D-projected
+   estimate)"` admitted this while the band did not.
+
+Re-banding against the projection would have meant fitting thresholds to three fixtures with no
+ground truth. Abstaining is the same rule doc 04 §6 applies to face angle: **a check that
+cannot be measured honestly abstains, it does not guess.** Scoring nine checks at 0 was worse
+than not scoring them — it told every golfer to "turn your shoulders more" regardless of what
+they did.
+
+**ROT-06 is the trap worth remembering.** It scored 100 / 100 / 94.5 and looked like the one
+healthy rotation check. Those were the V-shape landing inside `[15,40]` by luck. It reads the
+same broken field and is deferred with the rest. A passing score is not evidence that a check
+works — this is the scoring-layer version of the standing club-coverage warning.
+
+**The other three defects, all fixed rather than deferred:**
+- **ANG-30** banded `shaft_from_vertical` at P2 to `[−35,35]`, but P2 *is* the shaft-parallel
+  checkpoint so that field is ~±90° there by definition — it scored checkpoint detection, not
+  the swing. Deferred; real shaft plane is not observable down the line (`metrics.py` reports
+  `shaft_plane` as `"in-plane angle (lean not visible)"` for dtl).
+- **TKA-01** banded raw `lead_wrist_hinge` at P2 to `[150,180]` while the field runs 13–35° at
+  address and 85–143° at P2. Now a `checkpoint_delta` against P1, which is what its label
+  ("near address value") always described. New `checkpoint_delta` source in `scoring.py`,
+  confidence-gated on the weaker of the two checkpoints.
+- **SEQ-03/04** scored `perfect` 0 for a 3.27s backswing — slow-motion footage, a fact about
+  the camera. Now gated by `_is_slow_motion` (backswing > 2000ms). Deliberately **not** gated
+  on `tempo.implausible`, which would be circular: that flag also fires for a genuinely slow
+  golfer, so it would skip the duration checks exactly when they have something to say. swing2
+  proves the distinction — flagged implausible, but its 750ms backswing is ordinary, so its
+  slow downswing is a real fault and is still scored.
+
+**Two aggregation fixes.** `overall` is now weighted over the individual measured checks rather
+than an unweighted mean of the seven category scores — a 2-check category was moving the
+headline as much as an 8-check one, so one broken check in a thin category swung the total by
+~14 points alone. And `n_total` now excludes deferred checks (counted in `n_deferred`), so a
+category can no longer advertise "2 of 2 measurable" while both are structurally broken.
+`coverage` on the report makes the headline number falsifiable: scored / skipped-this-swing /
+deferred-in-config.
+
+**Result** (rescored from the existing `analysis.json`, no CV re-run):
+
+| | perfect | swing1 | swing2 |
+|---|---|---|---|
+| v1 | 37.5 Reset | 45.0 Building | 37.5 Reset |
+| v2 | 78.9 Pure | 65.4 Solid | 54.2 Building |
+| scored | 21/38 | 23/38 | 22/38 |
+
+**`v1.json` stays on disk, frozen.** Reports store `scoring_model_version`, so v1 reports must
+stay reproducible; the generator is now `build_config.py` with a `VERSION` constant rather than
+a per-version script. `scripts/rescore.py` re-runs Stage 8 over an existing `analysis.json` —
+Stage 8 is a pure function of that plus the config, so a config change never needs `burnin.py`,
+which is also how this avoided the club-trace overwrite CLAUDE.md warns about.
+
+**What this does not fix.** The nine rotation checks are still unscored, which is most of the
+coil/rotation story a golfer wants. Un-deferring them needs a turn estimate genuinely in
+degrees — depth-aware pose or a calibrated shoulder-width model — not another re-band.
+`validate_scoring_config.py` proves a field *exists*; it cannot prove the field means what the
+band assumes, and that is exactly the gap all ten of these fell through.
+
+---
+
+## D43 — The club trace drew a straight line where nothing was measured, and grew by point count instead of by frame
+
+Status: ACTIVE
+
+**Symptom, as reported.** On `perfect`: the trace does not follow the club near the ball, at
+either the bottom of the backswing or the approach to impact; and with "trace follows the
+frame" on, the head of the drawn line lags the club by a frame or two.
+
+**Three separate causes, none of them the club solver.** The per-frame head was fine
+throughout — `scripts/checkclub.py` and the raw-box overlay both agree with it. What was wrong
+was the polyline joining the heads and the rule for how much of it to draw.
+
+**1. The playhead mapping was a fraction, not a frame.** `SwingStage` computed
+`upto = round((frame - a)/(b - a) * pts.length)`. That is only correct if the points are one
+per frame and evenly spaced, and they are neither: the trace modes keep only the frames the
+detector answered, and those are clustered. Measured on `perfect`, the drawn tip sat **up to
+34 frames from the playhead** — over half a second — and even on a 1:1 segment the rounding put
+it one frame behind, which is the lag as reported. `analysis.json` now publishes
+`club.trace_frames` (and per variant), parallel to `trace`, and the renderer draws every point
+with `f <= frame` and interpolates one extra point *onto* the playhead. Point-count growth
+survives only as the fallback for artifacts written before this.
+
+**2. The segments were cut at the event frames, leaving a hole at the ball.** Impact is the
+frame a phase is *named* for, not a frame the club was measured on. On `perfect` the head is
+102px from the ball at the detected impact (533) and 17px at 534 — the source is 30fps, so the
+club crosses the ball between two source frames. Cutting the point list at 533 ended the
+downswing 102px short and started the follow-through 88px past, i.e. a ~200px hole centred on
+the one position in the swing a golfer most wants the line to reach. Segments now take one
+measured point beyond each end (`ClubConfig.trace_join_frames`, default 4 frames) so
+consecutive segments share a boundary. Bounded deliberately: at Top on `perfect` the nearest
+measurements are 20 frames before and 25 after, and joining to those would make the backswing
+and the downswing each draw the same long chord in its own colour.
+
+**3. A 0.35 confidence floor threw away the club exactly where it is hardest to see.** The
+detector is least certain where the head is fastest and most blurred, so the rejected frames
+are not spread evenly — they cluster into the approach to impact. Admitting detections down to
+0.15 and letting the Hampel trajectory gate reject them instead (the existing `model_traj`
+configuration) recovers **31 frames** on `perfect` and collapses the pre-impact holes from 24
+frames to 10. The frames it recovers were checked against the pixels first: at 512, 514, 522
+and 524 the boxes are on the club head at p 0.29–0.31. The player now defaults to a variant
+built on that solve, `model_traj_measured`.
+
+**NEGATIVE RESULT — do not retry: interpolating across a detector gap.** The obvious fix for a
+gap is to reconstruct the head from the hands plus an interpolated shaft angle, which is what
+`smooth_detector_path` already does for the per-frame club. Held out over real gaps (hide a run
+of measured frames, reconstruct, score against what was hidden), **nothing beat the straight
+chord**:
+
+| gap sweeps | n | chord | polar lerp | cubic Hermite |
+|---|---|---|---|---|
+| 0–20° | 990 | 9.5 / 40.5 | 10.1 / 33.9 | 8.8 / 34.1 |
+| 20–60° | 164 | 43.1 / 112.6 | 40.0 / 84.3 | 31.3 / 85.5 |
+| 60–120° | 122 | 31.0 / 72.5 | 67.3 / 115.8 | 29.3 / 68.0 |
+| 120°+ | 74 | 47.8 / 203.3 | 140.5 / 327.5 | 89.4 / 279.3 |
+
+(median / p90 position error in px, `perfect`; on `swing2` the polar methods are worse still.)
+The reason is structural: unwrapping an angle across a long gap cannot recover which way the
+club went round. Over the 43-frame takeaway gap the club sweeps ~186°, the shortest branch is
+~-174°, and the reconstruction confidently loops the head out to the wrong side of the golfer.
+The classical solver cannot arbitrate it either — its net rotation across that same gap is
+**+2°**, so it is not tracking the club there at all.
+
+So the trace does not interpolate. It draws the chord and **says so**: a frame step > 3 is
+rendered dashed at 55% and unsmoothed, which is doc 02's `interp` convention applied to the
+polyline. 3 rather than 1 because 60fps CFR from a 30fps source repeats every frame, so
+measurements on consecutive source frames can land 1–3 frames apart.
+
+**Verification.** `scripts/checktrace.py` is the falsifiable check this needed and D20 asks
+for — reach to the ball, every bridge with its chord length, fidelity, and the growth error a
+point-count renderer would have. On `perfect`, `model_traj_measured`:
+
+| | before | after |
+|---|---|---|
+| backswing reach to ball | 43px | **0.0px** |
+| downswing reach to ball | 102px (18% body h) | **17.7px (3.1%)** |
+| follow-through reach | 88px | **17.3px (3.0%)** |
+| drawn tip vs playhead | up to 34 frames | **0** |
+| fidelity | — | 141/141, 81/81, 81/81 |
+
+What remains is honest and visible: a 27-frame bridge through the takeaway and a 19-frame one
+in the follow-through, where the detector returns nothing at all. Those are a detector problem,
+not a rendering one — the fix is more training data of the head against the body and against
+grass, not a smarter line.
+
+---
+
+## D44 — The club head is at the ball at Impact; asserting that is worth more than detecting the ball
+
+Status: ACTIVE
+
+**Symptom.** On `pro_2` the tracked club head never comes within **196px — 35% of body
+height — of the ball**. The swing is fast enough that there is no confident detection anywhere
+near the strike: through impact the head moves ~90px a frame and smears into the turf, so the
+frames either side of contact are the least likely in the whole swing to carry a box. The drawn
+path therefore swings past the one position a golfer is looking for and back up again.
+
+**The constraint is right; knowing where to apply it is the problem.** The club head is at the
+ball at Impact, or there was no shot. `club.anchor_ball` writes that position when nothing found
+it, with three guards, because it writes a club position rather than measuring one:
+
+  * it fires only when the tracked path misses by more than 5% of body height, so where the
+    detector already reaches the ball (`perfect` 17.7px, swing2 10.4px) nothing happens;
+  * the anchored frame is the one whose *path segment* passes closest to the ball, searched ±6
+    frames around Impact — not Impact itself, which is a detection with its own error, and on
+    `perfect` is one source frame early;
+  * the ball has to be reachable from the hands within the same length bounds a detection has
+    to satisfy, or it abstains and says so in `club.notes`.
+
+The written frame is marked `from_ball`, never `from_model`. Result on `pro_2`: the downswing
+reaches **18.8px (3.4% of body height)** of the ball, from 196px.
+
+**And it is OFF by default (`--club-ball-anchor`), because on `perfect` it makes things worse.**
+There it replaces a real detection at the strike with the Address landmark 48px away. The two
+clips are indistinguishable from inside the algorithm: on *both*, the tracked path misses the
+landmark by 47px and the guard fires. The only difference is that on `pro_2` the landmark is the
+ball and on `perfect` it is not — the club is grounded and still through `perfect`'s whole
+address hold (head MAD 3.6px, so stillness does not separate them either), just not where the
+ball is. Every test available from inside says the same thing about both clips.
+
+Which is the argument, not a caveat: **this constraint cannot be applied safely without knowing
+where the ball is.** Shipping it on would have traded a visible failure on one clip for a
+confident wrong club position on another, and "a confident wrong answer is worse than an
+honestly uncertain one" is already this pipeline's rule (`club.refine_events`). Hand-placed
+markers (D45) are the supported way to put the head on the ball today, and they are exact.
+
+**NEGATIVE RESULT — do not retry without a learned detector: finding the ball classically.**
+`club.find_ball` is implemented and OFF (`ClubConfig.ball_detect=False`). It looks for the ball
+by the one property nothing else in frame shares — being *struck* — by taking the median of the
+frames before Impact, the median of the frames after, and looking for the small bright thing
+present in the first and missing from the second. Measured on all four fixtures it finds the
+golfer's **shoe** on `perfect` and swing2, and nothing on `pro_2` and swing1.
+
+Each gate that was added removed a real false positive, and none of them was the missing one:
+
+| gate | rejects | still wrong |
+|---|---|---|
+| size + roundness + fill | divots, shadow edges | shoe *fragments* pass — a shoe edge is small and round |
+| brightness floor | turf, shade | white shoes, white trousers, yardage paint |
+| local contrast vs the surrounding ring | shoe fragments (a ball sits in turf, a shoe fragment sits in more shoe) | nothing on pro_2/swing1: the real ball fails it too, against dry hardpan |
+
+The reason is structural. Every individually-discriminative property of a golf ball — small,
+round, bright, static, gone after impact — is also a property of a shoe edge, a divot, a
+background range ball or a turf speck; and the conjunction tight enough to exclude all of them
+also excludes the ball on the two clips shot against dry ground. A first-cut Hough search
+before this found the ball on 2 of 4 and something else on the others, which is the same score
+by a different route.
+
+**So: yes, this is worth a learned detector, and it is the second-most valuable model in the
+pipeline after the club head — it is what unlocks the anchor above, not just an accuracy
+improvement to it.** It is a near-identical problem to the one the club-head detector
+already solved here (D23), public datasets exist, and a ball is a far easier target than a
+club head — rigid, high-contrast, and *stationary for hundreds of frames*, which means a weak
+per-frame detector can be made strong by consensus over the address hold. What it buys is not
+only the anchor: the frame the ball *leaves* pins Impact to ±1 frame, and Impact accuracy is
+still unverified across the whole project (`tests/fixtures.json:hand_labeled` is null).
+
+**Until then the anchor falls back to doc 04 §3's landmark — the club head at Address — and
+that landmark is weaker than doc 04 claims.** It is only the ball if Address lands on a frame
+where the club is actually grounded behind it. On `perfect` it does not: the detected Address
+frame catches the club still off the turf, **150px (18% of body height)** from the ball, which
+`scripts/checkball.py` shows on the pixels. The anchor survives that only because its 5% trigger
+does not fire on `perfect`. That is a guard doing its job, not a design — an Address that lands
+early is a real defect in event detection and it is currently invisible to everything.
+
+**`scripts/checkball.py`** renders the ball as found, the Address club head, and the
+disappearance image the search reads, on the real frame; `--live` re-runs the search without a
+5-minute `burnin.py`. Doc 04 §7's rule — judge club work on pixels, not on numbers — applies to
+the ball exactly as it does to the shaft, and this is the script that does it.
+
+---
+
+## D45 — Hand-placed club-head markers live in Postgres, not in `analysis.json`
+
+Status: ACTIVE
+
+The detector is worst where the swing is fastest, and on a tour swing it returns nothing at all
+through the strike (D44). For a reference swing that has to be correctable by hand, so the
+player has a **"modify head markers"** mode: click the picture to place the club head on the
+current frame, arrow keys to step a frame at a time, delete to clear, one batched save.
+
+**Where the markers live is the load-bearing decision.** They are a `head_markers` table
+(`swing_id`, `frame`, `x`, `y`, unique on swing+frame), *not* a field in `analysis.json`. That
+file is the analyzer's output and is rewritten wholesale by every re-analysis — a correction
+stored inside it would be destroyed by the next run, which is the one thing a hand label must
+never do. Keeping them separate means re-analysing improves the automatic path *underneath* the
+corrections while every hand-placed position survives. Coordinates are normalized 0–1 like
+everything else in the artifact.
+
+Three consequences worth stating:
+
+- **The trace merges them by frame.** A marker replaces the analyzer's point on its own frame
+  and is inserted where the analyzer had none, so correcting a frame inside a bridge closes the
+  bridge — which is the reason to correct one. This is only possible because `trace_frames`
+  exists (D43); before it, the trace had no frame to merge *on*.
+- **Saves are batched, not per click.** Placing a head is a fiddly pointing task and you nudge
+  it several times before it is right; a request per nudge makes the stored position depend on
+  which response landed last.
+- **These rows are the project's first hand-labelled club-head truth.** Doc 08 Phase 3 wants a
+  position-error metric and `tests/fixtures.json:hand_labeled` is still null. `GET
+  /api/swings/:id/markers` is where that data now comes from — the editor is a labelling tool
+  that happens to also fix the picture.
+
+---
+
+## D46 — Trace smoothing is a render-time menu of nine methods, and the default is now Savitzky-Golay
+
+Status: ACTIVE
+
+**Why the line crawled.** The trace shipped with Chaikin corner cutting, which *subdivides* but
+does not *filter*: it rounds the joint between two samples and leaves the sample-to-sample noise
+underneath untouched. The samples themselves are honest and jagged — a small, fast, often blurred
+object, sampled at uneven spacing because a 30fps source normalised to 60fps CFR clusters them in
+pairs — so the drawn curve still visibly crawled even where every individual point was right.
+
+**Nine methods, chosen live from the overlay menu** (`lib/traceSmoothing.ts`), grouped by what
+they do to the samples rather than by how strong they are:
+
+| | method | kind |
+|---|---|---|
+| none | off — raw samples | — |
+| light | Chaikin corner cutting *(the previous default)* | interpolating |
+| light | Catmull-Rom spline (centripetal) | interpolating |
+| medium | Corner cutting, heavy (pre-averaged, four passes) | interpolating |
+| medium | Arc-length resample + spline | interpolating |
+| medium | Gaussian along the path | approximating |
+| strong | Gaussian, strong | approximating |
+| strong | Savitzky-Golay | approximating |
+| max | Curve fit (degree-5 least squares over arc length) | fitting |
+
+Render-time only — nothing touches `analysis.json`, the per-frame club, or any measurement, and
+switching redraws instead of re-analysing.
+
+**Two invariants every method keeps**, because the rest of the player depends on them:
+
+1. **Endpoints are exact.** The head of the line is interpolated onto the playhead so it sits on
+   the club (D43); a filter that pulled it off would reintroduce the lag D43 removed. The
+   approximating and fitting methods blend back to the true ends over a ramp. Asserted against
+   five shapes including duplicated, straight and 2-point runs.
+2. **Bridges are never smoothed.** A span with no measurement behind it stays the straight dashed
+   chord it is. Curving it would dress a gap up as data.
+
+**The cost, measured** — distance from every *measured* head to the drawn curve, `perfect` /
+swing2, as median and p90 in px (body height 569 / 395):
+
+| method | perfect med/p90 | swing2 med/p90 |
+|---|---|---|
+| off | 0.0 / 0.0 | 0.0 / 0.0 |
+| catmull | 0.0 / 0.0 | 0.0 / 0.0 |
+| chaikin | 0.1 / 0.4 | 0.1 / 1.1 |
+| arclen | 0.0 / 0.4 | 0.1 / 1.1 |
+| chaikinHeavy | 0.2 / 1.0 | 0.3 / 5.9 |
+| gaussian | 0.2 / 1.3 | 0.3 / 6.9 |
+| **savgol** | **0.3 / 1.6** | **0.2 / 5.0** |
+| gaussianStrong | 0.4 / 3.5 | 0.7 / 13.6 |
+| fit | 1.2 / 8.1 | 0.7 / 8.9 |
+
+Catmull-Rom is exactly 0.0/0.0 by construction — it interpolates — which is why it is in the
+list: it is the fluid option that gives up nothing.
+
+**The default is now `savgol`.** It is the only strong filter that does not cut the corner at
+Top, which is the one place a golf trace has curvature worth keeping, and on swing2 it is
+*better* than the medium Gaussian on both statistics while looking equally smooth. That is the
+same property that put Savitzky-Golay on the pose series (doc 03 §3.5) and on the analyzer-side
+trace modes. Cost of the change from corner cutting: the drawn curve moves a median of 0.3px.
+
+`scripts/checktrace.py` still scores fidelity against the **unsmoothed** points, deliberately —
+so a flattering method cannot hide how far it moved the line by looking good.
+
+**Correction, same day: the path is built once and then revealed, not smoothed per frame.** The
+first version smoothed whatever prefix of the path was currently visible, which is wrong in a way
+that shows: the filter's window grows as frames arrive, so a segment opens barely smoothed —
+there is nothing yet to smooth it against — and the curve already on screen keeps shifting as
+more points land. Measured on `perfect`, an already-drawn part of the line moved by up to
+**9.2px (curve fit), 5.3px (Gaussian strong), 1.9px (Savitzky-Golay)** as the rest of the
+segment arrived. The local methods (corner cutting, Catmull-Rom) showed 0.0 — which is why this
+went unnoticed at first: it is invisible on exactly the settings nobody picks for fluidity.
+
+`buildTracePath` now smooths the whole segment once, in **video-pixel space** so the result
+survives a resize, and `cutAt` reveals it. Revealing is strictly additive: nothing already drawn
+ever moves — asserted per frame across all nine methods, along with endpoint exactness and
+bridge detection. Same drift measurement after the change: **0.00px, every method**.
+
+Putting a frame on each point of the finished curve is the part that needed care. A filter does
+not return one output point per input sample, so no index arithmetic recovers it; `assignFrames`
+matches each sample to the nearest point on the smoothed curve searching *forward only* from the
+previous match, which is what keeps the mapping monotonic across the reversal at Top — a
+free search would match a later sample to an earlier point and run the playhead backwards.
+
+---
+
+## D47 — The waist joint is appended after the measured block, not beside its siblings, and it is a rendering point rather than a measurement
+
+**Status: ACTIVE**
+
+Asked for more tracking on the torso: the hips are there, but nothing sits at the belt line /
+navel, so the spine renders as one long bone from the sternum to the pelvis.
+
+**No pose model in the pipeline can measure that point.** BlazePose 33, Halpe26 and
+COCO-WholeBody 133 all jump the shoulders straight to the hips — WholeBody's body block 0–16 is
+plain COCO, and its other 116 points are feet, face and hands. The abdomen has no skeletal
+landmark under it to label, so keypoint models do not label it. There is no flag or model swap
+that adds one; the honest options were a derived point or a different class of model entirely
+(a dense mesh fit like SMPL/DensePose, or a torso silhouette off a segmentation mask).
+
+Took the derived point, as `waist` = midpoint(`spine_mid`, `mid_hip`), which lands 75% of the
+way down `neck`→`mid_hip`. **Written down deliberately, because the number it produces looks
+like a measurement and is not one:** it is a linear function of the shoulders and hips and
+carries no information they do not already carry. It is constructed to sit exactly on the
+neck→hip line, so it cannot show belly protrusion, spine curvature, or the abdomen moving
+independently of the pelvis. Its value is rendering — a torso node between sternum and hip, and
+an anchor for drawn torso angles.
+
+**Do not build a scoring check on it.** Any band over a waist-derived quantity is an algebraic
+restatement of shoulder and hip positions that are already scored, and it would present as a
+new signal. That is the same failure D42 documents, where nine rotation checks scored a
+quantity that moved the wrong way and one of them (ROT-06) looked healthy by luck.
+
+### Two implementation consequences worth the words
+
+**It goes at index 48, after `MEASURED`, not next to the other derived joints at 40.**
+`KEYPOINT_NAMES` is native(33) → derived(7) → measured(8), and D25 put the measured block last
+precisely so published indices 0–39 keep their meaning. Appending to `DERIVED` would have
+shifted all eight measured points by one — silently, since every consumer resolves by name off
+`keypoint_names` and would simply have read correct-looking data out of a stored artifact whose
+indices no longer matched. So "append only" wins over keeping like with like, and the array now
+has a fourth block, `DERIVED_TAIL`, holding derived joints that arrived after publication.
+
+**The two derived blocks are no longer contiguous**, which breaks the one place that undid them
+with a slice: `burnin.py` deleted `kp[N_NATIVE : N_NATIVE + len(DERIVED_NAMES)]` before Stage 3,
+and that now leaves the tail behind and hands Stage 3 an array one wider than `N_TRACKED` — it
+would smooth a derived joint as if it were measured, with no error. That call site is now
+`skeleton.strip_derived()`, which removes both blocks and raises if handed a frame that is not
+the full width. `DERIVED_NAMES` was left meaning the middle block only, for the same reason.
+
+### No bone was re-routed through it
+
+The obvious move — split `spine_mid → mid_hip` into `spine_mid → waist → mid_hip` in `BONES` —
+was **not** made, on both the Python and TS sides. A midpoint sits exactly on the line it would
+split, so the two segments draw the same pixels as the one; the only thing splitting achieves is
+that every already-stored v6 artifact loses its lower spine, because the renderer skips bones
+whose endpoints it cannot find. The joint dot renders from `keypoint_names` on its own. Old
+artifacts therefore render identically, just without the dot, and no web change was needed at
+all beyond `CURRENT_SCHEMA`.
+
+Schema 6 → **7**. All four `out/` fixtures were re-analysed with `--club-detector`; swing1 and
+swing2 reproduced every golden byte-for-byte, so the re-run cost nothing downstream.
+
+---
+
+## D48 — The golfer's outline comes off the pose pass we already make, and is stored as contours in its own artifact
+
+**Status: ACTIVE**
+
+Asked for two things: a vertical red line at the edge of the golfer's seat, locked at address;
+and a way to isolate the golfer from the background. They turned out to be one feature — the
+line is a tangent to a silhouette, so the silhouette had to exist first.
+
+### Why MediaPipe's mask and not a segmentation model
+
+Three candidates were run on the address, top and impact frames of `perfect` and `swing1`, and
+looked at rather than scored (`scripts/checkbutt.py` is the surviving version of that harness):
+
+| | result |
+|---|---|
+| **MediaPipe PoseLandmarker** `output_segmentation_masks` | clean on every frame tested |
+| **YOLO11s-seg** (COCO `person`, ultralytics + CUDA) | indistinguishable, except at the top of the backswing where it filled in the gap between the arms and MediaPipe kept it open |
+| **median-background absdiff** | **negative result — do not retry.** Useless on both clips, and worst exactly where it is needed: at address the golfer is nearly still, so differencing erases them. It also assumes a static camera, which the broadcast fixture violates outright. |
+
+MediaPipe wins on cost, not quality. The PoseLandmarker **already runs over every frame of every
+clip** — it is the fallback estimator and RTMPose's localiser — so the mask is one more output
+head on a pass we were making anyway: **+2.0s on a 396-frame clip, against +20s for a second
+model's pass**. It changes nothing about the landmarks. Enabling YOLO11-seg would have meant a
+second model, a second 20 MB weights file and a GPU dependency to draw the same outline.
+
+The dismissal of background subtraction is worth keeping, because it is the approach that looks
+obviously right for a tripod clip and is the one the club tracker's motion mask already uses.
+The difference is that the club is the fastest thing in frame and the golfer at address is the
+stillest.
+
+### Contours, not pixels, and not an alpha video
+
+Per-frame masks are megabytes. The outline is stored as simplified polygons — Douglas-Peucker at
+0.002 of each ring's perimeter, ~60 points per frame — which is **0.3–1.1 MB for a whole clip**
+and satisfies doc 02's "renderable with no client-side computation beyond coordinate scaling":
+the player fills the rings and is done. The epsilon was picked by rendering the *stored* polygon
+back over the frame, not by eyeballing a point count: 0.0008 and 0.002 are indistinguishable
+from the raw mask, 0.004 visibly cuts the corners off a shoe.
+
+Rings are stored with **no outer/hole distinction**, deliberately. Filling every ring under an
+even-odd rule puts the holes back for free (the gap between the arms at the top is a hole), so
+nothing downstream has to classify them — and "isolate the golfer" is then the same path plus a
+full-frame rect, which inverts the sense of every ring and turns the fill into a scrim over
+everything the golfer is not. No clip, no compositing mode, no second path.
+
+### `silhouette.json`, not another block in `analysis.json`
+
+It is up to a megabyte, the swing page parses the analysis on every visit, and most visits never
+switch the overlay on. So it is a sibling artifact behind `GET /api/swings/:id/silhouette`,
+fetched by the browser the first time one of its two toggles goes on and kept thereafter. The
+**butt line itself does live in `analysis.json`** (`posture.butt_line`) — it is a handful of
+numbers, and it must draw without a megabyte fetch.
+
+### Why the butt line is measured off the outline and not off a keypoint
+
+The tempting shortcut is `mid_hip` plus a fraction of body height. That would put a confident
+red line at a number nobody measured: pose gives joint *centres*, and the coaching line is
+tangent to the body's outline, which no keypoint knows about. D47 turned down a waist joint for
+the same reason and named a segmentation mask as the alternative; this is that alternative.
+
+Two other properties keep it falsifiable. **Which side is "rear" is observed, not configured** —
+at address the hands hang ball-ward of the hip line, and down the line that offset's sign is the
+ball direction, so the seat is the other way. That is the same signal `metrics.py`'s
+`ball_direction` reads, so the two cannot disagree, and a setup too square to call refuses
+rather than guessing. And it is a **median over the address hold** (D28), with the spread across
+that hold published as `spread_bh` and mapped to `conf` — a golfer still waggling gets a wide
+spread, a dimmed line and a tooltip saying so. Measured: 0.3% of body height on `perfect`, 1.9%
+on `swing2`, which is the only fixture that drops below full confidence.
+
+**Down-the-line only.** Face-on, the rear of the pelvis points at neither edge of frame and the
+tangent would be the golfer's side.
+
+### Consequences
+
+Schema 7 → **8**. `scripts/resegment.py` adds both artifacts to an already-analysed `out/`
+folder without re-running the pipeline — the same reasoning as `rescore.py` (D42), and here it
+also sidesteps CLAUDE.md's standing trap, since a `burnin.py` re-run without `--club-detector`
+would quietly regenerate the club trace on the weaker path. All four fixtures were resegmented
+this way at **100% frame coverage**, and none of the club, pose, events or scoring data was
+touched.
+
+`scripts/checkbutt.py` draws the stored outline and line back over the real frames — doc 04 §7's
+rule that a CV feature ships with the page that shows it working, and the reason coverage
+percentages have overstated club quality three times.
+
+---
+
+## D49 — Top of backswing is a HAND landmark, and the club is still working at the top when it fires
+
+Status: **OPEN** — diagnosed and measured, not fixed. Do not "fix" it from club data; read the
+numbers below first.
+
+**Symptom, as reported.** The phases flip to downswing too early on some swings. Since `events`
+segments the trace, the drawn line turns downswing-coloured while the club is visibly still going
+back — which is how this gets noticed at all.
+
+**What Top is today.** `events.detect()` puts it at the hands' highest point (min grip y) in the
+2s before the hand-speed peak, cross-checked against the first prominent peak of hand-height-
+above-hips and replaced if they disagree by more than 20 frames (D41). Nothing about the club
+enters into it; `refine_events` refines Toe-Up and Mid-Follow-Through from the shaft and leaves
+Top alone.
+
+**The hand landmark is not wrong — it is a different landmark.** On all four fixtures the three
+hand signals agree to the frame: hands highest, hands slowest, and hand travel reversing along
+the backswing direction all land on the same frame. The hands really do reverse there. The club
+does not: on swing2 (91% of the swing measured, the best data we have) the club head does not
+begin its descent until **~f101, fifteen frames after Top at f86** — a quarter of a second, and
+more than half the reported downswing spent with the club still at the top.
+
+**Corroborating, not conclusive: tempo reads low on every fixture.**
+
+| | perfect | pro_2 | swing1 | swing2 |
+|---|---|---|---|---|
+| backswing:downswing | 1.66:1 | 2.47:1 | 2.09:1 | 1.55:1 |
+
+Typical is ~3:1. A systematically early Top shortens every backswing and lengthens every
+downswing, which is exactly this pattern, and swing2's 1.55:1 is the ratio D37 already flagged as
+implausible. But a late Address would do the same thing, and three of these are not tour swings,
+so this is a hint and not a proof.
+
+**NEGATIVE RESULT — the club cannot currently answer this.** Four club-based definitions of Top,
+against the same clips:
+
+| | pro_2 | swing2 |
+|---|---|---|
+| head furthest from the ball | −15 (tempo 0.73:1) | −10 (0.90:1) |
+| head starts down for good | +9 (7.67:1) | +15 (4.29:1) |
+| head highest | −10 (1.08:1) | −9 (0.95:1) |
+| shaft sweep turns | −12 (0.93:1) | +29 (74:1) |
+
+They disagree by **24 frames on pro_2 and 39 on swing2** — longer than the transition itself —
+and the implied tempos straddle the answer on both sides. On `perfect` and swing1 the question
+cannot even be asked: **zero measured club frames within 12 of Top**, because the club at the top
+is slow, small and behind the golfer, which is precisely where the detector is weakest. The shaft
+angle is no better: across swing2's whole transition the solved shaft sweeps 39°, where a real
+backswing-to-downswing sweeps 180°+, so its turning point is measuring the solver.
+
+Picking any one of those columns would be the unfalsifiable tuning D20 exists to warn about, and
+Top feeds tempo, P4, every metric at the top, and the scoring bands built on them — so a wrong
+"fix" propagates into the scorecard rather than staying visual.
+
+**What would settle it.** Hand-labelled frames, which the project has never had
+(`tests/fixtures.json:hand_labeled` is still null, and doc 08 Phase 3's ±3-frame criterion is
+unmet because of it). Labelling the club head through the transition on a few clips turns this
+from an argument into a measurement — and D45's marker editor is the tool that writes exactly
+that data. That is the unlock here, the same way a ball detector is the unlock for D44.
+
+**`scripts/checktop.py`** prints every column above per clip, with the coverage line first so a
+reader can see when the club columns are noise.
+
+---
+
+## D50 — Impact snaps to the club head's lowest point, and the address hold has to hold the CLUB still
+
+Status: ACTIVE
+
+Two event corrections, both in `club.refine_events` — the post-Stage-4 pass doc 05 promised
+would refine events once club data existed. Both were reported as visible symptoms in the drawn
+trace, and both turned out to be real.
+
+**Impact was 7 frames early on `perfect`.** Stage 5 puts Impact at a hand-height landmark, which
+is good but not exact, so the trace turned follow-through-white while the club was still coming
+down. Impact now snaps to the **club head's lowest measured point** within ±10 frames. That
+criterion validates cleanly: it lands on the detected Impact *exactly* on pro_2 and swing2, +1 on
+swing1, and +7 on `perfect` — i.e. it changes the one clip that was wrong and confirms the three
+that were right. On `perfect` the new frame is 170px lower than the old one.
+
+Unlike Top (D49), this is a question the club *can* answer: the bottom of the arc happens in
+front of the golfer, in the open, at the moment of the swing the detector covers best. That is
+the whole difference between the two, and it is why one of them got fixed here and the other got
+a diagnostic.
+
+The refinement is deliberately small — ±10 frames, and at least 6 measured frames in the window.
+This is a correction to a working estimate, not a re-detection: a "lowest head" far from the
+hand-based answer means the detector is wrong more often than the event is.
+
+Note what this is *not*: the closest-to-the-ball frame, which on `perfect` is f534 against the
+low point's f540. For an iron the head keeps descending past the ball into the divot, so the low
+point is legitimately a few frames later. Ball-closest would be the better definition if the ball
+were reliably known — it is not (D44).
+
+**The address hold did not require the club to be still.** `address_span` is the quasi-static
+window setup measurements are medianed over (D28), and it is found from *hand* motion. On
+`perfect` the golfer walks the club into the ball: across the detected hold the head travels
+**127px — 22% of body height — while the hands move 15px**. So "setup" was being measured over a
+club still sliding into position, and the ball landmark taken from that span (D44) was a median
+of a moving club. That also corrects D44's account of why the Address head is not the ball on
+this clip: not that the club was un-grounded, but that the span it was averaged over was not a
+hold at all.
+
+The span is now trimmed back from Address to where the head actually sat still — `perfect` goes
+from [180, 219] to [216, 219]. Guarded to fire only when the club moved more than twice the
+stillness tolerance across the hold: pro_2, swing1 and swing2 move 21px, 23px and 4px across
+theirs and are left untouched.
+
+**Both refinements need the detector's heads passed in.** `refine_events` runs on the *primary*
+solve, which uses the detector as evidence rather than as the head (`detector_head_primary` is
+off), so `from_model` is false on every one of its frames and its heads are the solver estimate —
+exactly the quantity being corrected against. The caller hands over `model_traj_raw`'s measured
+heads instead. Getting this wrong is silent: the first implementation ran, refined nothing, and
+looked like the criteria had simply not triggered.
+
+**Three further things the first cut got wrong, all found by running it:**
+
+- **A tie is not a refinement.** `max()` over the window returns the *last* maximum, and 60fps
+  CFR from a 30fps source makes exact ties routine — so pro_2's Impact moved two frames to a head
+  that was **0px lower**. Ties now break toward the frame already held, and the snap needs a real
+  drop (2% of club length) before it fires at all. That alone takes it from firing on 2 of 4
+  fixtures to firing on the 1 that was wrong.
+- **Impact has neighbours.** A ±10 snap could cross Mid-Downswing or Mid-Follow-Through, and
+  strict event ordering is a published invariant — the artifact would have failed its own
+  contract. The window is now bounded by both.
+- **Mid-Follow-Through is searched *from* Impact**, so it has to be resolved after any correction
+  to it, not before. And **tempo is Address→Top→Impact and nothing else**, so moving Impact makes
+  a stale tempo actively wrong: it is the number the scorecard reads and the one the
+  implausibility check fires on, so leaving it would both misreport the swing and blame the wrong
+  event for it. `events.build_tempo` was extracted so `refine_events` can rebuild it; on `perfect`
+  it goes 1.66:1 → 1.57:1.
+
+---
+
+## D51 — The approach and the finish are exactly one second, freeze-padded when the clip is too short
+
+Status: ACTIVE
+
+`playback_window` used to anchor its front on Address − 1s and its back on the golfer coming to
+*rest* plus 1s (`_settle`), because the Finish event fires when hand motion decays (doc 05 A.9),
+a few tenths before the golfer has actually arrived and held the pose. Faithful to one swing —
+and inconsistent across several: on `perfect` the window ran 2.1s past Finish, on swing1 1.5s.
+
+Both ends are now pinned to events: **`address − 1s … finish + 1s`, every clip.** The reason is
+the comparison view. Two swings side by side with windows whose ends move independently means the
+same playhead position is a different part of the swing in each pane, which is the one thing a
+comparison must not do. `_settle` still runs, only to note when the golfer settles well after the
+window closes.
+
+**A clip too short to supply its second is freeze-padded rather than shortened.** swing2's Address
+is frame 41 and needs 60, so it publishes `playback_pad: [19, 0]`; the player holds the first
+frame for those 19 frames before playing. Shortening the approach there would put back the
+inconsistency the fixed window exists to remove, by another route. The holds are in *video* time,
+so a 1s approach stays 1s of swing at 0.25x playback.
+
+The pad is a real pause on the video element, so it is cancelled by any viewer action — seek,
+play/pause, unmount — and it applies only to the window's own loop. A range the viewer picked
+from the segment bar is exactly the frames they asked for and gets no padding.
+
+---
+
+## D52 — Re-analysis is started from the video's settings menu, and a job settles itself from disk
+
+Status: ACTIVE
+
+Re-analysis moved from a floating "Debug" corner into the video's settings gear, beside
+head-marker editing, with progress reported at the top of the workspace. Two things about the
+shape of it, both found by using it rather than by writing it.
+
+**The job cannot live inside the control that starts it.** It did — `ReanalyzeButton` owned its
+own state and polling — which meant the only representation of a 90-second Python run was inside
+a dropdown that closes on the click that begins it. The job is now `useReanalyze`, owned by the
+page: the settings row starts it, `ReanalyzeProgress` reports it, and the Debug button drives the
+same one. Two independent pollers on one job would otherwise disagree about it.
+
+**A completed analysis could leave its job row "running" forever.** `live` and the child's stdout
+listeners are per-process; a job started in one worker and polled from another finds no `live`
+entry, and if the owning worker never runs `finish()` nothing ever writes `done`. Observed
+exactly that: the artifact was rewritten at 09:42:38 and the row sat at "normalize 22%" until it
+was deleted by hand. The UI polls a finished analysis indefinitely and never reloads — which is
+precisely the failure the progress display exists to prevent.
+
+`getJob` now reconciles from disk, and from facts rather than timeouts:
+
+- `.analysis.lock` is held for the whole run and cleared on exit (`OutputLock`, atexit), so its
+  *absence* means the process is gone. No guessing from elapsed time, and a genuinely running
+  job cannot be marked dead.
+- Whether it succeeded is then a fact about the artifact: `analysis.json` newer than the job's
+  start. If the lock is gone and nothing was written, it failed.
+
+This also unblocks `startReanalysis`, which refuses to start while a job is running — a stale
+"running" row used to make re-analysis permanently impossible for that swing.
+
+---
+
+## D53 — `video.source.path` is verified before `analysis.json` is written
+
+Status: ACTIVE
+
+**NEGATIVE RESULT of the "it's just a loop variable" kind.** A loop added to `burnin.py` for
+D50's event refinement used `src` as its variable:
+
+```python
+for key in ("model_traj_raw", "model"):
+    src = solves.get(key)          # shadows the source-video Path, 300 lines up
+```
+
+`solves[key]` is a `(ClubResult, ClubConfig)` tuple, so every artifact written afterwards
+recorded `video.source.path` as a **2.3 MB stringified ClubResult**. Nothing noticed. The
+analyzer ran green, the tests passed, the player rendered, and all four fixtures were regenerated
+twice with the corruption in place.
+
+It could not be noticed, because `video.source.path` has exactly one reader: `lib/jobs.ts`, which
+re-reads it to re-run the analyzer. **Re-analysis was broken on every swing in the project**, and
+the only thing that would ever have revealed it was pressing Re-analyze — which is how it was
+found, while testing D52's button.
+
+`burnin.py` now checks the path is a readable file before writing the artifact and exits loudly
+if not. The general rule this is an instance of: a field whose only consumer is a rarely-used
+code path is a field that will be silently wrong. Verify it at the point it is written, where the
+truth is still at hand, rather than at the point it is read, where it is a mystery.

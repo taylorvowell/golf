@@ -4,6 +4,12 @@ MediaPipe's 33 native BlazePose landmarks, plus the derived joints the product n
 appended after them. The keypoint order defined here IS the array order in analysis.json —
 `analysis.json.pose.keypoint_names` is generated from KEYPOINT_NAMES, so the contract stays
 self-describing. Never reorder; only append.
+
+Four blocks, in published order: NATIVE (0-32) -> DERIVED (33-39) -> MEASURED (40-47) ->
+DERIVED_TAIL (48-). The last one exists because "only append" outranks keeping like with
+like: anything added after indices 0-47 went out has to go on the end even when it belongs
+beside DERIVED. Use strip_derived() to take the derived joints back off — the two derived
+blocks are not contiguous and a hand-written slice gets it wrong quietly.
 """
 
 # --- MediaPipe BlazePose native landmark order (indices 0-32) ---
@@ -79,13 +85,42 @@ MEASURED = [
     "jaw_left", "jaw_right",
 ]
 
+# --- Derived joints appended AFTER the measured block (D25, append-only) ---------------
+# Same shape as DERIVED — (name, parent_a, parent_b, allow_single), midpoint with
+# confidence = min — but these were added once indices 0-47 were already published, so they
+# cannot be slotted beside their siblings in the derived block without renumbering MEASURED.
+# Append-only means append at the very end, even where that splits a logical group.
+#
+# `waist` is the navel / belt-line torso node. Be blunt about what it is: a linear function
+# of `neck` and `mid_hip` that carries no information those two do not already carry. It is
+# constructed to sit exactly on the neck->hip line, so it can never show belly protrusion,
+# spine curvature, or the abdomen moving independently of the pelvis. No pose model in the
+# pipeline labels the abdomen — BlazePose 33, COCO-WholeBody 133 (body 0-16 is COCO) and
+# Halpe26 all jump shoulders straight to hips, because there is no skeletal landmark under
+# the navel to label. Its value is rendering: a torso node between sternum and hip, and an
+# anchor point for drawn torso angles. **Do not build a scoring check on it and read the
+# result as a new measurement** — it would be an algebraic restatement of shoulder and hip
+# positions that are already scored (see CLAUDE.md on ROT-06).
+#
+# midpoint(spine_mid, mid_hip) lands 75% of the way down neck->mid_hip, about the belt line.
+# Expressed through spine_mid rather than as a weighted neck->mid_hip blend so it keeps the
+# two-parent-midpoint shape and needs no new field on the tuple.
+DERIVED_TAIL = [
+    ("waist", "spine_mid", "mid_hip", False),
+]
+
 # Points Stage 3 tracks and smooths: the native block plus the measured extras. Derived
 # joints are excluded by design — doc 03 §3.6 requires them recomputed *after* smoothing.
 TRACKED_NAMES = NATIVE_NAMES + MEASURED
 N_TRACKED = len(TRACKED_NAMES)
 
-KEYPOINT_NAMES = NATIVE_NAMES + [d[0] for d in DERIVED] + MEASURED
+KEYPOINT_NAMES = (NATIVE_NAMES + [d[0] for d in DERIVED] + MEASURED
+                  + [d[0] for d in DERIVED_TAIL])
+# Mid-block only, deliberately. Callers use its length as the width of the slice sitting
+# between the native and measured blocks; folding the tail in here would silently shift that
+# slice by one and delete a measured point. Use strip_derived() rather than either list.
 DERIVED_NAMES = [d[0] for d in DERIVED]
+DERIVED_TAIL_NAMES = [d[0] for d in DERIVED_TAIL]
 IDX = {name: i for i, name in enumerate(KEYPOINT_NAMES)}
 
 # Hand landmarks 17-22 are unreliable while gripping a club (doc 03 §2) — the club
@@ -255,4 +290,42 @@ def add_derived(kp, st=None, grip=None, hands=None):
     if st is not None:
         m_st += [0] * (len(MEASURED) - len(m_st))
         st.extend(m_st)
+
+    # Tail-derived joints last, once the array is whole: their parents can be measured points
+    # or earlier derived ones, so IDX lookups only resolve correctly from here.
+    for name, a, b, allow_single in DERIVED_TAIL:
+        pa, pb = kp[IDX[a]], kp[IDX[b]]
+        live = [p for p in (pa, pb) if p[2] > 0.0]
+        if len(live) == 2:
+            kp.append([(pa[0] + pb[0]) / 2.0, (pa[1] + pb[1]) / 2.0, min(pa[2], pb[2])])
+        elif len(live) == 1 and allow_single:
+            p = live[0]
+            kp.append([p[0], p[1], min(p[2], 0.6)])
+        else:
+            kp.append([0.0, 0.0, 0.0])
+        if st is not None:
+            st.append(2 if kp[-1][2] >= 0.5 else (1 if kp[-1][2] > 0.0 else 0))
+    return kp
+
+
+def strip_derived(kp, st=None):
+    """Undo add_derived, leaving the N_TRACKED array Stage 3 expects.
+
+    Two blocks have to come off and they are not adjacent (D25): the original derived joints
+    sit *between* the native block and the measured extras, while the append-only tail sits
+    after them. Truncating from N_NATIVE would discard every wholebody point (chin, small
+    toes, middle knuckles) before Stage 3 saw them; removing only the middle block would
+    leave the tail behind and hand Stage 3 an array wider than N_TRACKED, which smooths a
+    derived joint as if it were measured. Both mistakes are silent, so this is a function
+    rather than a slice at the call site.
+    """
+    if len(kp) != len(KEYPOINT_NAMES):
+        raise ValueError(f"strip_derived wants a full {len(KEYPOINT_NAMES)}-point frame, "
+                         f"got {len(kp)}")
+    for seq in (kp, st):
+        if seq is None:
+            continue
+        if DERIVED_TAIL_NAMES:
+            del seq[len(seq) - len(DERIVED_TAIL_NAMES):]
+        del seq[N_NATIVE:N_NATIVE + len(DERIVED_NAMES)]
     return kp

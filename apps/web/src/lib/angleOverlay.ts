@@ -30,7 +30,7 @@ function kp(frame: Keypoint[], idx: Record<string, number>, name: string): Pt | 
   return p && p[2] >= MIN_CONF ? { x: p[0], y: p[1] } : null;
 }
 
-function resolve(
+export function resolve(
   expr: PointExpr | undefined,
   frame: Keypoint[],
   idx: Record<string, number>,
@@ -251,6 +251,96 @@ export function drawAngle(
   ctx.beginPath();
   ctx.arc(O.x, O.y, Math.max(2.5, w / 260), 0, Math.PI * 2);
   ctx.fill();
+  ctx.restore();
+  return true;
+}
+
+/**
+ * Draws the TARGET for a from-vertical angle — a dashed reference ray at the band's centre,
+ * on the same side as the golfer's actual value, so "here's where you are" (the solid ray
+ * `drawAngle` already draws) and "here's where this should be" sit on the same paused frame.
+ *
+ * Scoped to `kind: "vertical"` geoms only for now (spine/arm-hang/shin-from-vertical angles —
+ * a vertex plus a single reference direction, the simplest case to invert). Every other geom
+ * kind (`interior`, `plumb`, `horizontal`, `vectors`) returns `false` rather than drawing
+ * something unverified; extend this once the vertical case has been eyeballed against a real
+ * fixture and the sign convention is trusted (the same discipline `checkangles.py` exists for
+ * — see CLAUDE.md's "run it before trusting a new mapping").
+ *
+ * The inversion: `metrics._from_vertical(v) = degrees(atan2(v.x, -v.y))`. Solving for a unit
+ * vector at signed angle `deg` gives `{x: sin(deg), y: -cos(deg)}` — the exact inverse, so a
+ * target ray at the band centre reads as the same quantity the label already names.
+ */
+export function drawAngleTarget(
+  ctx: CanvasRenderingContext2D,
+  spec: AngleField,
+  analysis: Analysis,
+  frameNo: number,
+  w: number,
+  h: number,
+  band: { min: number; max: number },
+  absValue: boolean,
+  color = "#4ADE80",
+): boolean {
+  const geom = spec.geom;
+  if (!geom || geom.kind !== "vertical") return false;
+  const fr = analysis.pose.frames[frameNo];
+  if (!fr) return false;
+
+  const idx: Record<string, number> = {};
+  analysis.pose.keypoint_names.forEach((n, i) => (idx[n] = i));
+  const series = analysis.metrics?.series?.[frameNo];
+  const value = series?.[spec.field];
+  if (typeof value !== "number") return false;
+
+  const head = analysis.club?.frames?.[frameNo]?.head ?? null;
+  const origin = resolve(geom.from, fr.kp, idx, series, head);
+  if (!origin) return false;
+
+  const O = { x: origin.x * w, y: origin.y * h };
+  const targetMag = (band.min + band.max) / 2;
+  // Same side as the actual value, so this reads as "same direction, different amount" rather
+  // than a mirrored, confusing comparison. Meaningless for a value near zero on an abs_value
+  // band whose min is negative (e.g. SET-05) — there is no real "side" to match — but the ray
+  // still draws at the target magnitude, which is the useful half.
+  const sign = !absValue && value < 0 ? -1 : 1;
+  const rad = (sign * targetMag * Math.PI) / 180;
+  const dir = { x: Math.sin(rad), y: -Math.cos(rad) };
+
+  const scale = Math.min(w, h);
+  const len = scale * 0.17;
+
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.strokeStyle = color;
+  ctx.globalAlpha = 0.85;
+  ctx.lineWidth = Math.max(2, w / 320);
+  ctx.setLineDash([3, 5]);
+  ctx.beginPath();
+  ctx.moveTo(O.x, O.y);
+  ctx.lineTo(O.x + dir.x * len, O.y + dir.y * len);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  const lx = O.x + dir.x * (len + scale * 0.035);
+  const ly = O.y + dir.y * (len + scale * 0.035);
+  const text = `target ${targetMag.toFixed(0)}°`;
+  const fs = Math.max(10, scale * 0.028);
+  ctx.font = `600 ${fs}px ui-sans-serif, system-ui, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const tw = ctx.measureText(text).width;
+  const padX = fs * 0.35, padY = fs * 0.24;
+  ctx.globalAlpha = 0.7;
+  ctx.fillStyle = "#0A0A0A";
+  if (typeof ctx.roundRect === "function") {
+    ctx.beginPath();
+    ctx.roundRect(lx - tw / 2 - padX, ly - fs / 2 - padY, tw + padX * 2, fs + padY * 2, fs * 0.3);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = color;
+  ctx.fillText(text, lx, ly);
   ctx.restore();
   return true;
 }

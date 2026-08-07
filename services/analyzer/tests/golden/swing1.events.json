@@ -75,9 +75,13 @@
       "to": 243
     }
   ],
+  "playback_pad": [
+    0,
+    0
+  ],
   "playback_window": [
     90,
-    331
+    303
   ],
   "swing_window": [
     195,

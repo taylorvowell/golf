@@ -104,10 +104,18 @@ def normalize(src: str | Path, dst: str | Path, short_side: int, fps: int = 60) 
     dst = Path(dst)
     dst.parent.mkdir(parents=True, exist_ok=True)
 
-    # Scale whichever dimension is smaller to short_side, keeping AR; -2 keeps even dims,
-    # which yuv420p requires. Never upscale.
+    # Scale whichever dimension is smaller to short_side, keeping AR. yuv420p requires even
+    # dimensions in both axes.
+    #
+    # `force_divisible_by=2` is load-bearing and NOT redundant with the `-2` below:
+    # `force_original_aspect_ratio` recomputes both dimensions from the aspect ratio *after*
+    # `-2` has done its even-rounding, so the even constraint is silently lost and libx264
+    # rejects the result. Measured: a 1148x2068 portrait clip scaled to 720x1297 and the whole
+    # normalize step died with "height not divisible by 2" — the two fixture clips only ever
+    # worked because their aspect ratios happened to land even.
     vf = (f"scale=w=if(lt(iw\\,ih)\\,{short_side}\\,-2):"
-          f"h=if(lt(iw\\,ih)\\,-2\\,{short_side}):force_original_aspect_ratio=decrease")
+          f"h=if(lt(iw\\,ih)\\,-2\\,{short_side}):"
+          f"force_original_aspect_ratio=decrease:force_divisible_by=2")
 
     subprocess.run(
         [FFMPEG, "-y", "-loglevel", "error", "-i", str(src),
