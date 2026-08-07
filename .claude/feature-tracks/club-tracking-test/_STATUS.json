@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "featureName": "club-tracking-test",
-  "currentStep": "15",
+  "currentStep": "17",
   "phase": "Phase 2 \u2014 Zero-shot visual experts",
-  "lastUpdated": "2026-08-07T22:50:00Z",
+  "lastUpdated": "2026-08-08T00:05:00Z",
   "steps": {
     "01": {
       "status": "complete",
@@ -62,10 +62,12 @@
       "completedAt": "2026-08-07T22:50:00Z"
     },
     "15": {
-      "status": "not-started"
+      "status": "in-progress",
+      "startedAt": "2026-08-07T22:55:00Z"
     },
     "16": {
-      "status": "not-started"
+      "status": "complete",
+      "completedAt": "2026-08-08T00:05:00Z"
     },
     "17": {
       "status": "not-started"

@@ -40,6 +40,30 @@ Phase 7 — Hybrids:
 Phase 8 — Production reduction:
 - **20** Reduce the winning hybrid, freeze versions, lock regression fixtures, final benchmark report (plan §35–36)
 
+## 16 - Test 11: Synthetic Temporal Densification (reordered)
+**Completed:** 2026-08-08 00:05 UTC
+**Phase:** Phase 5 content (10/12 selectable once t7 lands)
+**Summary:** `vfi.py` — flow-warped symmetric mid-frames (RIFE has no maintained package;
+the §20 acceptance rule judges results, not pedigree) with the §3.10 cap law enforced
+structurally: `cap_synthetic_conf` clamps every synthetic detection below its bounding
+real observations minus a 35% penalty. t11 densifies the downswing 2× between genuine
+source observations, runs the SAME Stage-4b YOLO club-head detector on the synthetic
+frames, and re-solves the identical candidate graph — so t11 vs t1 in the menu IS the
+plan's required with/without-VFI ablation, judged visually. Suite 200 passed.
+**Notes:** Real numbers tell the §20 story already: on 60 fps sources VFI contributes
+almost nothing (swing1: 1 synthetic candidate, 0 chosen), on the 30 fps `perfect` it
+contributes 74 candidates / 4 chosen — synthetic densification only matters where real
+temporal density is poor, exactly as predicted.
+
+## 15 - Test 7: Claude Bounded Adjudication (reordered; in flight)
+**Status note:** implemented with triggers/validation/retry/cache/fallback + real CLI
+calls; a delivery bug (cmd.exe truncates argv at the first newline — the model saw ONE
+LINE of the prompt and honestly answered "insufficient_evidence") was found and fixed by
+moving the prompt to stdin, with a hermetic TestCliProvider pinning that. Stale cached
+refusals need clearing and a clean re-run across fixtures before this step closes.
+
+---
+
 ## 14 - Test 8: Phase-Adaptive Multi-Tracker Fusion (reordered)
 **Completed:** 2026-08-07 22:50 UTC
 **Phase:** Phase 7 content executed early (8/12 selectable)

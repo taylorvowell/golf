@@ -48,6 +48,7 @@ export const IMPLEMENTED_TESTS = [
   "t7_claude_adjudicated",
   "t8_phase_fusion",
   "t10_physics_conic",
+  "t11_temporal_densification",
   "t12_av_impact",
 ] as const;
 
