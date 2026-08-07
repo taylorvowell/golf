@@ -33,6 +33,7 @@ TEST_IDS: dict[str, str] = {
     "t18_shaft_line": "Shaft-Line Far End",
     "t19_legacy_isolation_gate": "Legacy Solve Gated by Isolation",
     "t20_raw_head_trace": "Raw Head Trace (red boxes only)",
+    "t21_red_legacy_ball": "Red Boxes + Legacy Fill + Ball Impact",
 }
 
 TESTS: dict[str, type] = {}

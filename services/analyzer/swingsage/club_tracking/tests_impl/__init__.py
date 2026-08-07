@@ -5,4 +5,4 @@ from . import (t1_candidate_graph, t2_temporal_heatmap, t3_point_tracking,  # no
                t11_temporal_densification, t12_av_impact,
                t13_motion_composite, t14_silhouette_subtract, t15_envelope_graph,
                t16_ridge_trace, t17_llm_gap_fill, t18_shaft_line,
-               t19_legacy_isolation_gate, t20_raw_head_trace)
+               t19_legacy_isolation_gate, t20_raw_head_trace, t21_red_ball)
