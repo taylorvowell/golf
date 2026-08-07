@@ -138,8 +138,8 @@ export const VARIANT_LABELS: Record<VariantId, string> = {
 // Plan §2.2: backswing blue, downswing green. Keyed by the artifact's color_role so the
 // renderer maps color from data; the legacy trace palette (skeleton.ts) is untouched.
 export const PHASE_COLORS: Record<string, string> = {
-  backswing: "#2E9BFF",
-  downswing: "#6D59FF",
+  backswing: "#8B7BFF",
+  downswing: "#6FE5FF",
 };
 
 // ---- artifact shapes (experiment_store.py, snake_case) ----

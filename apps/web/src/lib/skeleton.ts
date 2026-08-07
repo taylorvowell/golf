@@ -26,8 +26,8 @@ export const SIDE_COLOR: Record<string, string> = {
  * competing with the backswing and downswing it crosses.
  */
 export const TRACE_COLOR = {
-  backswing: "#2E9BFF",
-  downswing: "#6D59FF",
+  backswing: "#8B7BFF",
+  downswing: "#6FE5FF",
   // Follow-through is drawn at ZERO alpha — hidden, not deleted (user directive
   // 2026-08-08: "change styling to 0 but keep it in case we want it"). Everything that
   // builds and cuts the follow-through path still runs; only the paint is invisible, so
