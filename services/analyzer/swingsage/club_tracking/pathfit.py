@@ -50,6 +50,32 @@ def _odd_window(cap: int, n: int) -> int:
     return w if w % 2 else w - 1
 
 
+_PIN_BLEND = 5   # samples over which a pinned endpoint blends back into the fit
+
+
+def _pin_endpoints(pts: list[dict], first_xy: tuple[float, float],
+                   last_xy: tuple[float, float]) -> list[dict]:
+    """Hard guarantee: every variant STARTS and ENDS exactly on the endpoint
+    observations (the club head at address/impact once anchoring ran — user directive).
+    Endpoint weighting almost achieves this, but methods with their own dynamics (RTS)
+    can roll through it, so the samples are pinned after the fact with a short linear
+    blend to avoid a kink."""
+    if len(pts) < 2:
+        return pts
+    for idx, (tx, ty) in ((0, first_xy), (len(pts) - 1, last_xy)):
+        dx = tx - pts[idx]["x"]
+        dy = ty - pts[idx]["y"]
+        if abs(dx) < 1e-9 and abs(dy) < 1e-9:
+            continue
+        n = min(_PIN_BLEND, len(pts) - 1)
+        for k in range(n + 1):
+            w = 1.0 - k / (n + 1)
+            j = idx + k if idx == 0 else idx - k
+            pts[j]["x"] = float(np.clip(pts[j]["x"] + dx * w, 0.0, 1.0))
+            pts[j]["y"] = float(np.clip(pts[j]["y"] + dy * w, 0.0, 1.0))
+    return pts
+
+
 # ------------------------------------------------------------------ shared plumbing
 
 
@@ -247,9 +273,10 @@ def fit_variants(observations: list[ClubObservation], fps: float,
     ts = np.clip(ts, t[0], t[-1])  # endpoints pinned: never extrapolate past the anchors
     conf_raw = np.array([o.confidence for o in obs])
     modes, confs = _modes_and_conf(ts, t, conf_raw, fps)
+    first_xy, last_xy = (obs[0].x, obs[0].y), (obs[-1].x, obs[-1].y)
 
     def emit(xs, ys):
-        return _emit(frames, xs, ys, modes, confs)
+        return _pin_endpoints(_emit(frames, xs, ys, modes, confs), first_xy, last_xy)
 
     out: dict[str, list[dict]] = {}
 

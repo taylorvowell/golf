@@ -3,7 +3,7 @@
   "featureName": "club-tracking-test",
   "currentStep": "17",
   "phase": "Phase 2 \u2014 Zero-shot visual experts",
-  "lastUpdated": "2026-08-08T00:05:00Z",
+  "lastUpdated": "2026-08-08T00:10:00Z",
   "steps": {
     "01": {
       "status": "complete",
@@ -70,7 +70,8 @@
       "completedAt": "2026-08-08T00:05:00Z"
     },
     "17": {
-      "status": "not-started"
+      "status": "in-progress",
+      "startedAt": "2026-08-08T00:10:00Z"
     },
     "18": {
       "status": "not-started"

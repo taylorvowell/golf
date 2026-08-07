@@ -21,6 +21,7 @@ sys.path.insert(0, str(ROOT))
 
 from swingsage.club_tracking import (ClubTrackingContext, TEST_IDS,  # noqa: E402
                                      available, get_test)
+from swingsage.club_tracking.anchors import apply_endpoint_anchors  # noqa: E402
 from swingsage.club_tracking.experiment_store import (build_experiment,  # noqa: E402
                                                       merge_experiment)
 from swingsage.club_tracking.pathfit import fit_variants  # noqa: E402
@@ -52,6 +53,12 @@ def run(out_dir: Path, test_id: str) -> int:
 
     t0 = time.time()
     result = test.run(ctx)
+    # Endpoint anchoring — EVERY algorithm's trace starts on the club head at address
+    # and ends on it at impact (user directive; see anchors.py). Runner-level so no
+    # tracker can forget it.
+    anchored, anchor_diag = apply_endpoint_anchors(result.observations, ctx)
+    result.observations = anchored
+    result.diagnostics.update(anchor_diag)
     frame_range = (ctx.events["address"], ctx.events["impact"])
     variants = fit_variants(result.observations, ctx.fps, frame_range,
                             top_frame=ctx.events.get("top"))
