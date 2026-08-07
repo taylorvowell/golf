@@ -19,6 +19,9 @@ import type { SwingStages } from "@/lib/useSwingStages";
 import type { PhaseFrames } from "@/lib/swingPhases";
 import SettingsMenu from "./SettingsMenu";
 
+/** How much heavier the downswing draws than the backswing (user directive). */
+const DOWNSWING_WEIGHT = 1.25;
+
 /**
  * The video stage: picture and overlay canvas.
  *
@@ -575,11 +578,14 @@ export default function SwingStage({
       const peak = Math.max(2.5, w / 300) * 2.1;
       for (const { color, dashed, pieces } of experimentPieces) {
         ctx.strokeStyle = color;
+        // The downswing carries slightly more weight than the backswing — it is the part
+        // a coach reads, and the solid line can afford the emphasis the dashed one cannot.
+        const wgt = dashed ? peak : peak * DOWNSWING_WEIGHT;
         for (const piece of pieces) {
           const P = growing ? cutAt(piece, frame) : piece.pts;
           if (!P) continue;
           // Full opacity always: the line never dims to report confidence.
-          stroke(P, { alpha: 1, peak, dashed, dash: [peak * 1.25, peak * 2.1] });
+          stroke(P, { alpha: 1, peak: wgt, dashed, dash: [peak * 1.25, peak * 2.1] });
         }
       }
     }
@@ -605,13 +611,14 @@ export default function SwingStage({
         // draw dashed + dimmed, which made the styling a confidence readout; that is
         // exactly what is no longer wanted, so `piece.bridge` is not consulted here.
         const dashed = key === "backswing";
+        const wgt = key === "downswing" ? peak * DOWNSWING_WEIGHT : peak;
         for (const piece of pieces) {
           // Reveal the finished curve up to the playhead. The tip is interpolated onto the exact
           // frame, so it still sits on the club as you scrub (D43) — the difference from before
           // is only that the curve it is cutting was smoothed as a whole.
           const P = growing ? cutAt(piece, frame) : piece.pts;
           if (!P) continue;
-          stroke(P, { alpha: 1, peak, dashed, dash: [peak * 1.25, peak * 2.1] });
+          stroke(P, { alpha: 1, peak: wgt, dashed, dash: [peak * 1.25, peak * 2.1] });
         }
       });
     }
