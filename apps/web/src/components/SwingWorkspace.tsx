@@ -11,13 +11,9 @@ import { usePlayer } from "@/lib/usePlayer";
 import DebugMenu from "./DebugMenu";
 import ReanalyzeProgress from "./ReanalyzeProgress";
 import { useReanalyze } from "@/lib/useReanalyze";
-import { useClubTest } from "@/lib/useClubTest";
-import type { TrackingTestId, VariantId } from "@/lib/clubTests";
 import { DEFAULT_SMOOTHING, type SmoothingKey } from "@/lib/traceSmoothing";
 import { clubVariantOptions, defaultClubVar } from "@/lib/clubVariants";
-import { useRawModels } from "@/lib/useRawModels";
 import { persistKey, usePersistentState } from "@/lib/usePersistentState";
-import { TRACKING_TEST_IDS, VARIANT_IDS } from "@/lib/clubTests";
 import { SMOOTHING_OPTIONS } from "@/lib/traceSmoothing";
 import SwingStage from "./SwingStage";
 import SwingTransport from "./SwingTransport";
@@ -194,27 +190,6 @@ export default function SwingWorkspace({
    */
   const reanalyze = useReanalyze(id);
 
-  /**
-   * Club-tracking experiment selection (12-test plan, D55). The job is owned here for the
-   * same reason `reanalyze` is: the Debug Menu closes on the click that starts a tracker
-   * run, so nothing inside it can be where the run lives. The selection pair drives
-   * SwingStage's experiment trace; null means the legacy trace.
-   */
-  const clubTest = useClubTest(id);
-  const [expTest, setExpTest] = usePersistentState<TrackingTestId | null>(
-    persistKey("expTest"), null,
-    (v) => (v === null || (TRACKING_TEST_IDS as readonly string[]).includes(v as string)
-      ? (v as TrackingTestId | null) : null));
-  const [expVariant, setExpVariant] = usePersistentState<VariantId>(
-    persistKey("expVariant"), "default",
-    (v) => ((VARIANT_IDS as readonly string[]).includes(v as string)
-      ? (v as VariantId) : null));
-  const cachedTests = useMemo(
-    () => Object.keys(analysis.club_tracking?.experiments ?? {}) as TrackingTestId[],
-    [analysis]);
-  const experimentSel = useMemo(
-    () => (expTest ? { test: expTest, variant: expVariant } : null),
-    [expTest, expVariant]);
   /** Legacy-trace smoothing, lifted so the Debug Menu drives the primary stage's
    * selection (the comparison pane keeps its own, D46). */
   const [traceSmoothing, setTraceSmoothing] = usePersistentState<SmoothingKey>(
@@ -227,15 +202,6 @@ export default function SwingWorkspace({
   const [clubVar, setClubVar] = usePersistentState<string>(
     persistKey("clubVar"), defaultClubVar(analysis),
     (v) => (typeof v === "string" && clubOptions.some((o) => o.key === v) ? v : null));
-  /** Candidate raw-detection models (scripts/rawmodels.py). Picking one turns the raw
-   * overlay on — comparing model output with the overlay off would show nothing. */
-  const rawModels = useRawModels(id, true);
-  const [rawModelSel, setRawModelSel] = usePersistentState<string>(
-    persistKey("rawModel"), "builtin");
-  const pickRawModel = useCallback((k: string) => {
-    setRawModelSel(k);
-    setToggles((cur) => ({ ...cur, rawDet: true }));
-  }, [setToggles, setRawModelSel]);
   const pickClubVar = useCallback((key: string) => {
     setClubVar(key);
     setToggles((cur) => ({ ...cur, club: true, trace: true }));
@@ -285,12 +251,8 @@ export default function SwingWorkspace({
                        onEditingChange={setEditingHeads}
                        stages={stages} phases={phases}
                        reanalyze={reanalyze}
-                       experiment={experimentSel}
                        smoothing={traceSmoothing} onSmoothing={setTraceSmoothing}
                        clubVar={clubVar}
-                       rawOverride={rawModelSel !== "builtin"
-                         ? rawModels.byModel.get(rawModelSel) ?? null : null}
-                       hasRawModels={rawModels.models.length > 0}
                        topRight={<CompareButton enabled={compareOn} onToggle={setCompareOn} />} />
 
             {showCompare && refAnalysis && (
@@ -476,13 +438,9 @@ export default function SwingWorkspace({
       )}
 
       {/* Sticky, bottom right, out of the product's own chrome. */}
-      <DebugMenu id={id} reanalyze={reanalyze} clubTest={clubTest}
-                 cached={cachedTests} sel={experimentSel}
-                 onPickTest={setExpTest} onPickVariant={setExpVariant}
+      <DebugMenu id={id} reanalyze={reanalyze}
                  smoothing={traceSmoothing} onPickSmoothing={setTraceSmoothing}
-                 clubOptions={clubOptions} clubVar={clubVar} onPickClub={pickClubVar}
-                 rawModels={rawModels.models} rawModelSel={rawModelSel}
-                 onPickRawModel={pickRawModel} />
+                 clubOptions={clubOptions} clubVar={clubVar} onPickClub={pickClubVar} />
     </main>
   );
 }

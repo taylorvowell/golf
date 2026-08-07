@@ -1,15 +1,19 @@
 {
   "schemaVersion": 1,
   "phases": [
-    { "id": "club-tracking-rnd", "label": "Club Tracking R&D (12-test evaluation)", "order": 1 }
+    {
+      "id": "club-tracking-rnd",
+      "label": "Club Tracking R&D (12-test evaluation)",
+      "order": 1
+    }
   ],
   "tracks": [
     {
       "id": "club-tracking-test",
-      "spine": true,
-      "lifecycle": "active",
+      "spine": false,
+      "lifecycle": "complete",
       "phase": "club-tracking-rnd",
-      "goal": "Implement and evaluate the 12 club-head tracking tests from docs/SwingSage_Club_Tracking_Comprehensive_12_Test_Plan.md: shared source-time/audio infrastructure, ground truth, evaluation harness, path-fit registry, the 12 selectable tests, and production reduction of the winner.",
+      "goal": "Club-head tracking evaluation (31 trackers) \u2014 COMPLETE. Shipped: legacy trajectory-gated head + moving-average trace, Savitzky-Golay smoothed (D56). Experiment framework removed.",
       "statusFile": ".claude/feature-tracks/club-tracking-test/_STATUS.json",
       "specRefs": [
         "docs/SwingSage_Club_Tracking_Comprehensive_12_Test_Plan.md",

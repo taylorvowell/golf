@@ -4,11 +4,11 @@ Trace-only variants differ from their base solve ONLY in how the polyline is reb
 an identical set of head positions (see burnin.py's TRACE_MODES), so a new one does not
 need the pipeline: reconstruct the base solve's `ClubResult` from the stored artifact,
 re-run `club.smooth_trace` with the wanted mode, and patch the result in. Same
-non-destructive contract as resegment/rescore/retiming — and critically it preserves the
-`club_tracking` experiment block, which a burnin.py re-run would discard.
+non-destructive contract as resegment/rescore/retiming.
 
-Default target is the combination the player wanted and no stored variant provided:
-trajectory-gated head (`model_traj_raw`) + moving-average trace.
+This is how `model_traj_moving` — the shipped solution, trajectory-gated head with a
+moving-average trace — was back-filled into artifacts analysed before burnin.py produced
+it. Kept for the same job on any other pre-existing artifact.
 
 Usage:
     .venv/Scripts/python.exe scripts/addvariant.py                 # every out/<stem>/

@@ -1,3 +1,27 @@
+## TRACK COMPLETE — production reduction (steps 17–19)
+**Completed:** 2026-08-08 18:55 UTC
+**Phase:** Phase 8 — Production reduction
+
+**The winner, chosen visually by the user (no automated metric — the standing directive):**
+club solution `model_traj_moving` (trajectory-gated head + moving-average trace) rendered
+with Savitzky-Golay smoothing, on the LEGACY trace with no experiment selected. It is a
+solve the evaluation *created* — the artifact had trajectory-gated-head-with-measured-trace
+and moving-average-trace-over-ungated-head, never both — now produced natively by burnin.py
+and back-filled by `scripts/addvariant.py`. `defaultClubVar` selects it.
+
+**Everything built only for the evaluation was removed** (D56): the `club_tracking` package
+(31 trackers + candidate graph, physics/conic, momentum, motion envelope, SAM2/CoTracker3/
+RAFT adapters, temporal net, LLM adjudication + gap fill, ball departure, forensic ROI,
+path-fit registry, experiment store), 4 scripts, ~230 tests, the trained weights, the web
+experiment plumbing (pickers, club-test API + job type, artifact block), and 147 MB of
+stored results. Suite went 301 → 67 tests, all passing; tsc and eslint clean.
+
+**Kept on merit:** source timing (D54), the three isolation overlays, the all-heads
+constellation, `addvariant.py`. Steps 17–19 closed together — the last experiments (T2/T9)
+and the reduction landed in the same decision.
+
+---
+
 # club-tracking-test — Progress Log
 
 Track scaffolded 2026-08-07 from `docs/SwingSage_Club_Tracking_Comprehensive_12_Test_Plan.md`

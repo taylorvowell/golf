@@ -11,7 +11,6 @@ import { useHeadMarkers } from "@/lib/useHeadMarkers";
 import { useSilhouette } from "@/lib/useSilhouette";
 import { buildTracePath, cutAt, DEFAULT_SMOOTHING, type SmoothingKey,
          type TracePiece } from "@/lib/traceSmoothing";
-import { PHASE_COLORS, type TrackingTestId, type VariantId } from "@/lib/clubTests";
 import { defaultClubVar } from "@/lib/clubVariants";
 import OverlayMenu from "./OverlayMenu";
 import HeadMarkerBar, { type HeadPoint } from "./HeadMarkerBar";
@@ -33,8 +32,7 @@ export default function SwingStage({
   id, analysis, player, angles, moment, targetOverlay,
   toggles, setToggles, variant = "primary",
   autoStart = true, onReady, topLeft, topRight, onEditingChange, stages, phases, reanalyze,
-  experiment, smoothing: smoothingProp, onSmoothing, clubVar: clubVarProp,
-  rawOverride, hasRawModels,
+  smoothing: smoothingProp, onSmoothing, clubVar: clubVarProp,
 }: {
   id: string;
   analysis: Analysis;
@@ -84,10 +82,6 @@ export default function SwingStage({
   /** The page's shared re-analysis job, surfaced in the settings menu. The job itself is owned
    * by the workspace so it outlives this dropdown — see `useReanalyze`. */
   reanalyze?: { busy: boolean; pct: number; start: () => void };
-  /** A club-tracking experiment selection from the Debug Menu (D55). While set, its
-   * precomputed trace REPLACES the legacy trace: analyzer-fitted points drawn as-is with
-   * plan §2.2's phase colors — no client smoothing, no follow-through samples. */
-  experiment?: { test: TrackingTestId; variant: VariantId } | null;
   /** Optional controlled legacy-trace smoothing. The workspace passes these for the
    * PRIMARY stage so the Debug Menu can drive the selection; the comparison pane omits
    * them and keeps its own per-stage choice (D46). */
@@ -96,12 +90,6 @@ export default function SwingStage({
   /** Optional controlled legacy club solution — Debug Menu drives it for the primary
    * stage; the comparison pane falls back to `defaultClubVar`. */
   clubVar?: string;
-  /** A candidate model's raw boxes (Debug menu's model picker) replacing the built-in
-   * detector's in the raw overlay and the all-heads constellation. */
-  rawOverride?: Map<number, import("@/lib/swings").RawBox[]> | null;
-  /** raw_models.json exists — the Detector overlay group shows even when the artifact
-   * itself stored no boxes (a swing analysed without --club-detector, e.g. swing2). */
-  hasRawModels?: boolean;
 }) {
   const { videoRef, canvasRef, stageRef, frame, playing,
           seek, seekFile, toggle, onSeeked, win, nFrames } = player;
@@ -129,8 +117,6 @@ export default function SwingStage({
 
   // Raw detector boxes, indexed by frame. Absent on any swing analysed without
   // --club-detector, which is why the toggle is hidden rather than dead in that case.
-  // `rawOverride` (a candidate model from raw_models.json) swaps what the raw overlay
-  // and the all-heads constellation DRAW; capability checks stay on the built-in.
   const rawBoxes = useMemo(() => {
     const b = analysis.club?.detector?.boxes;
     if (!b?.length) return null;
@@ -138,7 +124,6 @@ export default function SwingStage({
     for (const row of b) m.set(row.f, row.d);
     return m;
   }, [analysis]);
-  const rawShown = rawOverride ?? rawBoxes;
 
   // Which club solution to draw. "primary" is whatever the analyzer chose; the rest are the
   // stored alternatives. Switching is a render change only — no re-analysis — which is the
@@ -323,46 +308,6 @@ export default function SwingStage({
     }
     return out;
   }, [club, spans, marks, smoothing, analysis]);
-
-  /**
-   * The selected club-tracking experiment's trace, cut into strokeable pieces (D55).
-   *
-   * The analyzer already fitted and sampled these points (pathfit.py), so this memo does NO
-   * smoothing — it only scales to video pixels and splits each phase span into runs of
-   * measured (solid) versus bridged (dashed) segments, reusing the legacy `TracePiece`
-   * shape so `cutAt` gives playhead growth for free. `display_mode: "split_at_top"` needs
-   * no special handling here: the spans are separate pieces already and nothing joins them.
-   */
-  const experimentPieces = useMemo(() => {
-    if (!experiment) return null;
-    const exp = analysis.club_tracking?.experiments?.[experiment.test];
-    const pts = exp?.trace.variants?.[experiment.variant];
-    if (!exp || !pts?.length) return null;
-    const vw = analysis.video.width, vh = analysis.video.height;
-
-    /**
-     * ONE piece per phase span, and the PHASE decides the line style: backswing dashed,
-     * downswing solid (user directive 2026-08-08). Deliberately no longer split by
-     * `mode` — dashing used to mean "the analyzer inferred this", which made the dash
-     * pattern a confidence readout. Confidence is not shown at all now, so a span draws
-     * as one uninterrupted line whatever the solver measured.
-     */
-    const out: { color: string; dashed: boolean; pieces: TracePiece[] }[] = [];
-    for (const span of Object.values(exp.trace.phase_spans)) {
-      const inSpan = pts.filter((p) => p.frame >= span.start_frame && p.frame <= span.end_frame);
-      if (inSpan.length < 2) continue;
-      out.push({
-        color: PHASE_COLORS[span.color_role] ?? "#F1F5F9",
-        dashed: span.color_role === "backswing",
-        pieces: [{
-          pts: inSpan.map((p) => [p.x * vw, p.y * vh] as [number, number]),
-          frames: inSpan.map((p) => p.frame),
-          bridge: false,
-        }],
-      });
-    }
-    return out.length ? out : null;
-  }, [experiment, analysis]);
 
   /**
    * The club head this frame is currently showing — the hand-placed one if there is one, else
@@ -570,28 +515,8 @@ export default function SwingStage({
       ctx.globalAlpha = 1;
     };
 
-    // An experiment trace (Debug Menu, D55) REPLACES the legacy trace while selected —
-    // analyzer-fitted points drawn as-is: backswing blue, downswing green, nothing after
-    // impact, bridges dashed. No client smoothing touches these (plan §37).
-    if (experimentPieces && t.trace) {
-      const growing = t.grow;
-      const peak = Math.max(2.5, w / 300) * 2.1;
-      for (const { color, dashed, pieces } of experimentPieces) {
-        ctx.strokeStyle = color;
-        // The downswing carries slightly more weight than the backswing — it is the part
-        // a coach reads, and the solid line can afford the emphasis the dashed one cannot.
-        const wgt = dashed ? peak : peak * DOWNSWING_WEIGHT;
-        for (const piece of pieces) {
-          const P = growing ? cutAt(piece, frame) : piece.pts;
-          if (!P) continue;
-          // Full opacity always: the line never dims to report confidence.
-          stroke(P, { alpha: 1, peak: wgt, dashed, dash: [peak * 1.25, peak * 2.1] });
-        }
-      }
-    }
-
     // `club` here is the selected variant (or the primary solution) — see the memo above.
-    else if (club && t.trace && club.trace_enabled && spans) {
+    if (club && t.trace && club.trace_enabled && spans) {
       // Growth follows the FRAME, not playback. Gating it on `playing` meant scrubbing always
       // drew the finished path, so the one interaction where you are studying a position gave
       // you the least information — and the toggle looked broken while paused.
@@ -634,10 +559,10 @@ export default function SwingStage({
       const topF = ev?.top.frame ?? Number.MAX_SAFE_INTEGER;
       const impF = ev?.impact.frame ?? Number.MAX_SAFE_INTEGER;
       const r = Math.max(2, w / 340);
-      if (rawShown) {
+      if (rawBoxes) {
         ctx.globalAlpha = 0.35;
         ctx.fillStyle = "#FB7185";
-        for (const [, dets] of rawShown) {
+        for (const [, dets] of rawBoxes) {
           for (const d of dets) {
             if (d.c !== 0) continue;
             ctx.beginPath();
@@ -650,7 +575,7 @@ export default function SwingStage({
       for (const cf of club.frames) {
         if (!cf?.head) continue;
         ctx.fillStyle = cf.f <= topF ? TRACE_COLOR.backswing
-          : cf.f <= impF ? PHASE_COLORS.downswing : "rgba(255,255,255,.35)";
+          : cf.f <= impF ? TRACE_COLOR.downswing : "rgba(255,255,255,.35)";
         ctx.beginPath();
         ctx.arc(cf.head[0] * w, cf.head[1] * h, r, 0, Math.PI * 2);
         ctx.fill();
@@ -742,8 +667,8 @@ export default function SwingStage({
     // Raw model output, drawn last so nothing occludes it, and gated only on the toggle —
     // no confidence floor, no size filter, no dependence on the solved club. Every box the
     // model returned for this frame, exactly as it returned it.
-    if (t.rawDet && rawShown) {
-      const boxes = rawShown.get(frame);
+    if (t.rawDet && rawBoxes) {
+      const boxes = rawBoxes.get(frame);
       if (boxes) {
         ctx.lineWidth = 2;
         ctx.font = `${Math.max(10, Math.round(w / 46))}px ui-monospace, monospace`;
@@ -821,10 +746,9 @@ export default function SwingStage({
           targetOverlay.band, targetOverlay.absValue);
       }
     }
-  }, [analysis, frame, idx, spans, t, rawShown, club, angles, angleFields, view,
+  }, [analysis, frame, idx, spans, t, rawBoxes, club, angles, angleFields, view,
       canvasRef, stageRef, targetOverlay, marks, markers.editing, handle, tracePath,
-      experimentPieces, silhouette.byFrame, isolation.byFrame, clubOnly.byFrame,
-      buttLine]);
+      silhouette.byFrame, isolation.byFrame, clubOnly.byFrame, buttLine]);
 
   /**
    * Screen point -> normalized frame coordinate, inverting exactly the transform `draw` applies.
@@ -1047,7 +971,7 @@ export default function SwingStage({
                 analysis={analysis} t={t} setT={setT}
                 cropAvailable={!autoView.identity}
                 cropInfo={autoView.identity ? null : { cw: autoView.cw, ch: autoView.ch }}
-                hasDetector={!!rawBoxes || !!hasRawModels}
+                hasDetector={!!rawBoxes}
                 hasSilhouette={hasSil} silhouetteLoading={silhouette.loading}
                 // Replaces the set rather than mapping over the current one: `CLEARED_TOGGLES`
                 // is derived from the defaults, so it cannot miss a key that some older stored

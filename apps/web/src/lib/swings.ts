@@ -145,12 +145,6 @@ export type RawBox = {
 
 export interface Analysis {
   schema_version: number;
-  /**
-   * Club-tracking experiment results (12-test plan, D55). Optional and append-only: the
-   * block appears the first time `scripts/club_test.py` merges an experiment; legacy
-   * artifacts simply lack it. Not part of `CURRENT_SCHEMA` on purpose.
-   */
-  club_tracking?: import("@/lib/clubTests").ClubTrackingBlock | null;
   video: {
     fps: number; frame_count: number; width: number; height: number;
     view: "dtl" | "face_on"; handedness: "right" | "left";
@@ -499,23 +493,6 @@ export async function getClubOnly(id: string): Promise<Silhouette | null> {
   }
 }
 
-export interface RawModelsDoc {
-  schema: number;
-  models: Record<string, {
-    label: string;
-    stride: number;
-    frames: { f: number; d: (RawBox & { label?: string })[] }[];
-  }>;
-}
-
-/** Multi-model raw detections (scripts/rawmodels.py) — the model-comparison sidecar. */
-export async function getRawModels(id: string): Promise<RawModelsDoc | null> {
-  try {
-    return JSON.parse(await fs.readFile(swingFile(id, "raw_models.json"), "utf8"));
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Whether the silhouette artifact exists, without reading a megabyte to find out.

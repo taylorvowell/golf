@@ -3083,7 +3083,9 @@ frames dropped — a >60 fps stretch), all seven with 48 kHz AAC audio. Every fi
 
 ## D55 — The `club_tracking` experiment block: snake_case, append-only, atomically merged
 
-Status: ACTIVE
+Status: SUPERSEDED by D56 — the experiment framework it describes was removed once the
+evaluation picked a winner. Retained for the reasoning about append-only artifact blocks
+and single-writer merges, which the next experiment framework should reuse.
 
 Experiment results from the 12-test club-tracking evaluation live in `analysis.json` under
 an optional top-level `club_tracking` block (plan §25), merged per test id by
@@ -3106,3 +3108,45 @@ proceed):
 - **Single writer per swing** (plan §29.7): `.experiment.lock` beside the artifact
   (stale-broken after 300 s), tmp write, `os.replace`. A re-merge replaces only its own
   `experiments[test_id]` entry.
+
+
+## D56 — The club trace ships as trajectory-gated head + moving-average trace, savgol-smoothed
+
+Status: ACTIVE
+
+The 31-tracker evaluation (D55's framework, built from
+`docs/SwingSage_Club_Tracking_Comprehensive_12_Test_Plan.md` plus three waves of ideas
+from the user) ended with a judgment, made visually per the user's standing directive that
+no automated accuracy metric decides this. The winner is not one of the 31 experiments —
+it is a LEGACY club solve the experiments made it possible to see clearly:
+
+    club solution : model_traj_moving — trajectory-gated head + trace: moving average
+    smoothing     : Savitzky-Golay (the render-time default, D46)
+    experiment    : none. The legacy trace is what ships.
+
+`model_traj_moving` did not exist before the evaluation: the artifact carried a
+trajectory-gated head with a measured-only trace, and a moving-average trace over the
+UNGATED head, but never both. It is now produced natively by `burnin.py`'s TRACE_MODES and
+back-filled into older artifacts by `scripts/addvariant.py` (trace-only variants are a pure
+function of a stored solve, so they never need a re-run). `defaultClubVar` selects it.
+
+**Everything built only to run the evaluation was deleted in the same commit** — the
+`swingsage/club_tracking/` package (31 trackers plus the candidate graph, physics/conic
+solver, momentum corridor, motion-envelope family, SAM2/CoTracker/RAFT adapters, temporal
+net, LLM adjudication and gap-fill, ball-departure, forensic ROI, path-fit registry and
+experiment store), its four scripts, its ~230 tests, the trained temporal weights, the web
+experiment plumbing (test/path-fit/model pickers, club-test API + job type, the
+`club_tracking` artifact block), and 147 MB of stored experiment results across the seven
+fixtures. Git history holds all of it; the plan document is retained as the record of what
+was tried and why.
+
+Kept deliberately, because each stands on its own without the framework: **source timing**
+(D54 — a real Stage 0 capability, and the plan itself argued it outlives the tests),
+**the isolation overlays** (golfer / golfer+club / club-only, which the user found valuable
+for seeing what evidence exists at all), **the all-heads constellation** (reads the
+artifact's own detector boxes), and **`scripts/addvariant.py`** (how any pre-existing
+artifact gains a new trace variant).
+
+The lesson worth carrying: the evaluation's value was not the 31 candidates. It was that
+comparing them on real pixels showed which *existing* solve was right, and named the one
+combination of head-gating and trace-smoothing nobody had built yet.
