@@ -68,7 +68,7 @@ class TestRegistryShape:
 
     def test_linear_default_is_straight_chords(self):
         obs = _make_obs(noise=0.0, conf=1.0)
-        v = fit_variants(obs, FPS, FRAME_RANGE, linear_default=True)
+        v = fit_variants(obs, FPS, FRAME_RANGE, default_style="linear")
         by = {o.frame: o for o in obs}
         for p in v["default"]:
             if p["frame"] in by:

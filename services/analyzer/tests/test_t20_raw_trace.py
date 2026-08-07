@@ -73,7 +73,7 @@ def test_t23_registered_with_linear_default():
     from swingsage.club_tracking.tests_impl.t23_red_connected import (
         RedConnectedTracker)
     assert "t23_red_connected" in available()
-    assert RedConnectedTracker.linear_default is True
+    assert RedConnectedTracker.default_style == "linear"
     res = RedConnectedTracker().run(ClubTrackingContext.from_artifacts(_make_doc()))
     assert res.diagnostics["default_is"] == "straight_chords"
     assert res.observations

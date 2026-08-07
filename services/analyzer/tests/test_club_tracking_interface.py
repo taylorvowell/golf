@@ -131,7 +131,7 @@ class TestContext:
 
 class TestRegistry:
     def test_catalogue_declares_plan_plus_second_wave(self):
-        assert len(TEST_IDS) == 23
+        assert len(TEST_IDS) == 24
         assert list(TEST_IDS) == [
             "t1_candidate_graph", "t2_temporal_heatmap", "t3_point_tracking",
             "t4_video_segmentation", "t5_blur_flow", "t6_grip_kinematic",
@@ -141,6 +141,7 @@ class TestRegistry:
             "t16_ridge_trace", "t17_llm_gap_fill", "t18_shaft_line",
             "t19_legacy_isolation_gate", "t20_raw_head_trace",
             "t21_red_legacy_ball", "t22_red_dedup", "t23_red_connected",
+            "t24_momentum",
         ]
 
     def test_declared_but_unimplemented_raises_not_implemented(self):

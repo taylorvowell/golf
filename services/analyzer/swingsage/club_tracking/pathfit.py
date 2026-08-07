@@ -329,12 +329,13 @@ def _tv_denoise(t, v, ts, lam=0.08, iters=120):
 def fit_variants(observations: list[ClubObservation], fps: float,
                  frame_range: tuple[int, int],
                  top_frame: int | None = None,
-                 linear_default: bool = False) -> dict[str, list[dict]]:
+                 default_style: str | None = None) -> dict[str, list[dict]]:
     """Fit all §22.2 variants over the same sample grid. Returns JSON-ready dicts.
 
-    `linear_default=True` replaces the Default with PURE straight-chord connection of the
-    observations (no fitting whatsoever) — for tests whose whole point is showing the raw
-    dots joined (t23), with the lettered variants still offering every smoothing on top."""
+    `default_style` overrides what the Default variant is, per test:
+      "linear"  — pure straight-chord connection, no fitting (t23);
+      "catmull" — the centripetal Catmull-Rom result (t24 Momentum's chosen look);
+      None      — the standard robust global fit."""
     if not observations:
         return {}
     obs, t, x, y, w = _prepare(observations, fps)
@@ -427,7 +428,9 @@ def fit_variants(observations: list[ClubObservation], fps: float,
     out["k"] = emit(_fourier_lowpass(t, x, ts), _fourier_lowpass(t, y, ts))
     out["l"] = emit(_tv_denoise(t, x, ts), _tv_denoise(t, y, ts))
 
-    if linear_default:
+    if default_style == "linear":
         out["default"] = emit(*_linear_fallback(t, x, y, w, ts))
+    elif default_style == "catmull":
+        out["default"] = [dict(p) for p in out["g"]]
 
     return out
