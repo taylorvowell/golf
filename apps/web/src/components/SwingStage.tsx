@@ -11,8 +11,7 @@ import { useHeadMarkers } from "@/lib/useHeadMarkers";
 import { useSilhouette } from "@/lib/useSilhouette";
 import { buildTracePath, cutAt, DEFAULT_SMOOTHING, type SmoothingKey,
          type TracePiece } from "@/lib/traceSmoothing";
-import { PHASE_COLORS, type ExperimentTracePoint, type TrackingTestId,
-         type VariantId } from "@/lib/clubTests";
+import { PHASE_COLORS, type TrackingTestId, type VariantId } from "@/lib/clubTests";
 import { defaultClubVar } from "@/lib/clubVariants";
 import OverlayMenu from "./OverlayMenu";
 import HeadMarkerBar, { type HeadPoint } from "./HeadMarkerBar";
@@ -338,31 +337,26 @@ export default function SwingStage({
     if (!exp || !pts?.length) return null;
     const vw = analysis.video.width, vh = analysis.video.height;
 
-    const segBridge = (a: ExperimentTracePoint, b: ExperimentTracePoint) =>
-      a.mode !== "observed" || b.mode !== "observed";
-    const mk = (run: ExperimentTracePoint[], bridge: boolean): TracePiece => ({
-      pts: run.map((p) => [p.x * vw, p.y * vh] as [number, number]),
-      frames: run.map((p) => p.frame),
-      bridge,
-    });
-
-    const out: { color: string; pieces: TracePiece[] }[] = [];
+    /**
+     * ONE piece per phase span, and the PHASE decides the line style: backswing dashed,
+     * downswing solid (user directive 2026-08-08). Deliberately no longer split by
+     * `mode` — dashing used to mean "the analyzer inferred this", which made the dash
+     * pattern a confidence readout. Confidence is not shown at all now, so a span draws
+     * as one uninterrupted line whatever the solver measured.
+     */
+    const out: { color: string; dashed: boolean; pieces: TracePiece[] }[] = [];
     for (const span of Object.values(exp.trace.phase_spans)) {
       const inSpan = pts.filter((p) => p.frame >= span.start_frame && p.frame <= span.end_frame);
       if (inSpan.length < 2) continue;
-      const pieces: TracePiece[] = [];
-      let runStart = 0;
-      let runBridge = segBridge(inSpan[0], inSpan[1]);
-      for (let i = 1; i < inSpan.length - 1; i++) {
-        const br = segBridge(inSpan[i], inSpan[i + 1]);
-        if (br !== runBridge) {
-          pieces.push(mk(inSpan.slice(runStart, i + 1), runBridge));
-          runStart = i;
-          runBridge = br;
-        }
-      }
-      pieces.push(mk(inSpan.slice(runStart), runBridge));
-      out.push({ color: PHASE_COLORS[span.color_role] ?? "#F1F5F9", pieces });
+      out.push({
+        color: PHASE_COLORS[span.color_role] ?? "#F1F5F9",
+        dashed: span.color_role === "backswing",
+        pieces: [{
+          pts: inSpan.map((p) => [p.x * vw, p.y * vh] as [number, number]),
+          frames: inSpan.map((p) => p.frame),
+          bridge: false,
+        }],
+      });
     }
     return out.length ? out : null;
   }, [experiment, analysis]);
@@ -552,14 +546,19 @@ export default function SwingStage({
      * canvas here, so the curve is identical at every window size.
      */
     const stroke = (P: [number, number][],
-                    { alpha, peak, dashed }: { alpha: number; peak: number; dashed?: boolean }) => {
+                    { alpha, peak, dashed, dash }:
+                    { alpha: number; peak: number; dashed?: boolean;
+                      dash?: [number, number] }) => {
       if (P.length < 2) return;
       const sx = w / analysis.video.width, sy = h / analysis.video.height;
       ctx.globalAlpha = alpha;
       ctx.lineWidth = peak;
       ctx.lineJoin = "round";
       ctx.lineCap = "round";
-      if (dashed) ctx.setLineDash([peak * 0.9, peak * 1.6]);
+      // Default is the legacy BRIDGE dash — sparse and airy, so a gap reads as absence.
+      // `dash` overrides it where dashing is a deliberate style (the experiment
+      // backswing), which wants a tighter, more regular pattern.
+      if (dashed) ctx.setLineDash(dash ?? [peak * 0.9, peak * 1.6]);
       ctx.beginPath();
       ctx.moveTo(P[0][0] * sx, P[0][1] * sy);
       for (let i = 1; i < P.length; i++) ctx.lineTo(P[i][0] * sx, P[i][1] * sy);
@@ -574,13 +573,13 @@ export default function SwingStage({
     if (experimentPieces && t.trace) {
       const growing = t.grow;
       const peak = Math.max(2.5, w / 300) * 3.6;
-      for (const { color, pieces } of experimentPieces) {
+      for (const { color, dashed, pieces } of experimentPieces) {
         ctx.strokeStyle = color;
         for (const piece of pieces) {
           const P = growing ? cutAt(piece, frame) : piece.pts;
           if (!P) continue;
-          if (piece.bridge) stroke(P, { alpha: 0.55, peak, dashed: true });
-          else stroke(P, { alpha: 1, peak });
+          // Full opacity always: the line never dims to report confidence.
+          stroke(P, { alpha: 1, peak, dashed, dash: [peak * 1.35, peak * 0.95] });
         }
       }
     }
