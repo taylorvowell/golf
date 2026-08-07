@@ -600,16 +600,18 @@ export default function SwingStage({
         ctx.strokeStyle = TRACE_COLOR[key];
         const peak = Math.max(2.5, w / 300) * 3.6;
 
+        // PHASE decides the style, not measurement (user directive 2026-08-08): the
+        // backswing is dashed, the downswing solid, and nothing dims. Bridges used to
+        // draw dashed + dimmed, which made the styling a confidence readout; that is
+        // exactly what is no longer wanted, so `piece.bridge` is not consulted here.
+        const dashed = key === "backswing";
         for (const piece of pieces) {
           // Reveal the finished curve up to the playhead. The tip is interpolated onto the exact
           // frame, so it still sits on the club as you scrub (D43) — the difference from before
           // is only that the curve it is cutting was smoothed as a whole.
           const P = growing ? cutAt(piece, frame) : piece.pts;
           if (!P) continue;
-          // A bridge spans frames nothing measured. Dashed and dimmed to doc 02's interpolated
-          // styling, and never curved: curving a gap dresses it up as data.
-          if (piece.bridge) stroke(P, { alpha: 0.55, peak, dashed: true });
-          else stroke(P, { alpha: 1, peak });
+          stroke(P, { alpha: 1, peak, dashed, dash: [peak * 1.35, peak * 0.95] });
         }
       });
     }

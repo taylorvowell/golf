@@ -27,7 +27,7 @@ export const SIDE_COLOR: Record<string, string> = {
  */
 export const TRACE_COLOR = {
   backswing: "#2E9BFF",
-  downswing: "#B44BFF",
+  downswing: "#22C55E",   // green — matches the experiment traces (user directive)
   followthrough: "rgba(255,255,255,.34)",
 } as const;
 
