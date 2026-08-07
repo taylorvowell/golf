@@ -27,8 +27,12 @@ export const SIDE_COLOR: Record<string, string> = {
  */
 export const TRACE_COLOR = {
   backswing: "#2E9BFF",
-  downswing: "#22C55E",   // green — matches the experiment traces (user directive)
-  followthrough: "rgba(255,255,255,.34)",
+  downswing: "#6D59FF",
+  // Follow-through is drawn at ZERO alpha — hidden, not deleted (user directive
+  // 2026-08-08: "change styling to 0 but keep it in case we want it"). Everything that
+  // builds and cuts the follow-through path still runs; only the paint is invisible, so
+  // restoring it is this one value. The legend hides its swatch to match.
+  followthrough: "rgba(255,255,255,0)",
 } as const;
 
 export const BONES: [string, string, string][] = [

@@ -163,7 +163,11 @@ export default function OverlayMenu({
                 with the overlay is worse than no legend. */}
             <Dot c={TRACE_COLOR.backswing} l="backswing" />
             <Dot c={TRACE_COLOR.downswing} l="downswing" />
-            <Dot c={TRACE_COLOR.followthrough} l="through" />
+            {/* Hidden while the follow-through paints at zero alpha — a label beside an
+                invisible dot reads as a broken legend, not as an intentionally off phase. */}
+            {!/,\s*0\)$/.test(TRACE_COLOR.followthrough) && (
+              <Dot c={TRACE_COLOR.followthrough} l="through" />
+            )}
           </div>
           {hasDetector && t.rawDet && (
             <p className="mt-1 px-1 text-[10px] leading-4 text-neutral-600">
