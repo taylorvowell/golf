@@ -15,6 +15,7 @@ import { useClubTest } from "@/lib/useClubTest";
 import type { TrackingTestId, VariantId } from "@/lib/clubTests";
 import { DEFAULT_SMOOTHING, type SmoothingKey } from "@/lib/traceSmoothing";
 import { clubVariantOptions, defaultClubVar } from "@/lib/clubVariants";
+import { useRawModels } from "@/lib/useRawModels";
 import SwingStage from "./SwingStage";
 import SwingTransport from "./SwingTransport";
 import ComparisonPane from "./ComparisonPane";
@@ -205,6 +206,14 @@ export default function SwingWorkspace({
    * turns the club+trace overlays on and loops the swing (comparing on a still frame
    * reads as a broken control). */
   const [clubVar, setClubVar] = useState(() => defaultClubVar(analysis));
+  /** Candidate raw-detection models (scripts/rawmodels.py). Picking one turns the raw
+   * overlay on — comparing model output with the overlay off would show nothing. */
+  const rawModels = useRawModels(id, true);
+  const [rawModelSel, setRawModelSel] = useState("builtin");
+  const pickRawModel = useCallback((k: string) => {
+    setRawModelSel(k);
+    setToggles((cur) => ({ ...cur, rawDet: true }));
+  }, [setToggles]);
   const clubOptions = useMemo(() => clubVariantOptions(analysis), [analysis]);
   const pickClubVar = useCallback((key: string) => {
     setClubVar(key);
@@ -258,6 +267,9 @@ export default function SwingWorkspace({
                        experiment={experimentSel}
                        smoothing={traceSmoothing} onSmoothing={setTraceSmoothing}
                        clubVar={clubVar}
+                       rawOverride={rawModelSel !== "builtin"
+                         ? rawModels.byModel.get(rawModelSel) ?? null : null}
+                       hasRawModels={rawModels.models.length > 0}
                        topRight={<CompareButton enabled={compareOn} onToggle={setCompareOn} />} />
 
             {showCompare && refAnalysis && (
@@ -447,7 +459,9 @@ export default function SwingWorkspace({
                  cached={cachedTests} sel={experimentSel}
                  onPickTest={setExpTest} onPickVariant={setExpVariant}
                  smoothing={traceSmoothing} onPickSmoothing={setTraceSmoothing}
-                 clubOptions={clubOptions} clubVar={clubVar} onPickClub={pickClubVar} />
+                 clubOptions={clubOptions} clubVar={clubVar} onPickClub={pickClubVar}
+                 rawModels={rawModels.models} rawModelSel={rawModelSel}
+                 onPickRawModel={pickRawModel} />
     </main>
   );
 }

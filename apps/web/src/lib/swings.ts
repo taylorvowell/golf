@@ -499,6 +499,24 @@ export async function getClubOnly(id: string): Promise<Silhouette | null> {
   }
 }
 
+export interface RawModelsDoc {
+  schema: number;
+  models: Record<string, {
+    label: string;
+    stride: number;
+    frames: { f: number; d: (RawBox & { label?: string })[] }[];
+  }>;
+}
+
+/** Multi-model raw detections (scripts/rawmodels.py) — the model-comparison sidecar. */
+export async function getRawModels(id: string): Promise<RawModelsDoc | null> {
+  try {
+    return JSON.parse(await fs.readFile(swingFile(id, "raw_models.json"), "utf8"));
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Whether the silhouette artifact exists, without reading a megabyte to find out.
  *

@@ -25,7 +25,8 @@ import type { ClubVariantOption } from "@/lib/clubVariants";
  */
 export default function DebugMenu({ id, reanalyze, clubTest, cached, sel, onPickTest,
                                     onPickVariant, smoothing, onPickSmoothing,
-                                    clubOptions, clubVar, onPickClub }: {
+                                    clubOptions, clubVar, onPickClub,
+                                    rawModels, rawModelSel, onPickRawModel }: {
   id: string;
   /** The page's shared re-analysis job — the same one the video's settings menu starts. */
   reanalyze: Reanalyze;
@@ -46,6 +47,11 @@ export default function DebugMenu({ id, reanalyze, clubTest, cached, sel, onPick
   clubOptions: ClubVariantOption[];
   clubVar: string;
   onPickClub: (key: string) => void;
+  /** Candidate raw-detection models (scripts/rawmodels.py). Picking one turns the raw
+   * overlay on and swaps whose boxes it draws. */
+  rawModels: [string, string][];
+  rawModelSel: string;
+  onPickRawModel: (key: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
@@ -191,6 +197,32 @@ export default function DebugMenu({ id, reanalyze, clubTest, cached, sel, onPick
                 ))}
               </div>
             </>
+          )}
+
+          {/* ---- Raw model output (scripts/rawmodels.py) ---- */}
+          <p className="mt-3 text-[9px] font-bold uppercase tracking-[.18em] text-neutral-600">
+            Raw model output
+          </p>
+          {rawModels.length === 0 ? (
+            <p className="mt-1 text-[10px] leading-4 text-neutral-600">
+              No candidate models for this swing yet — generate with{" "}
+              <code className="text-neutral-500">scripts/rawmodels.py</code>. The
+              built-in detector still draws via the raw overlay where the artifact
+              stored boxes.
+            </p>
+          ) : (
+            <div className="mt-2 space-y-1">
+              <button type="button" onClick={() => onPickRawModel("builtin")}
+                      className={pickBtn(rawModelSel === "builtin")}>
+                Built-in detector (from the artifact)
+              </button>
+              {rawModels.map(([key, label]) => (
+                <button key={key} type="button" onClick={() => onPickRawModel(key)}
+                        className={pickBtn(rawModelSel === key)}>
+                  <span className="truncate">{label}</span>
+                </button>
+              ))}
+            </div>
           )}
 
           <div className="mt-3 border-t border-white/[.06] pt-3">

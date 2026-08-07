@@ -32,6 +32,7 @@ export default function SwingStage({
   toggles, setToggles, variant = "primary",
   autoStart = true, onReady, topLeft, topRight, onEditingChange, stages, phases, reanalyze,
   experiment, smoothing: smoothingProp, onSmoothing, clubVar: clubVarProp,
+  rawOverride, hasRawModels,
 }: {
   id: string;
   analysis: Analysis;
@@ -93,6 +94,12 @@ export default function SwingStage({
   /** Optional controlled legacy club solution — Debug Menu drives it for the primary
    * stage; the comparison pane falls back to `defaultClubVar`. */
   clubVar?: string;
+  /** A candidate model's raw boxes (Debug menu's model picker) replacing the built-in
+   * detector's in the raw overlay and the all-heads constellation. */
+  rawOverride?: Map<number, import("@/lib/swings").RawBox[]> | null;
+  /** raw_models.json exists — the Detector overlay group shows even when the artifact
+   * itself stored no boxes (a swing analysed without --club-detector, e.g. swing2). */
+  hasRawModels?: boolean;
 }) {
   const { videoRef, canvasRef, stageRef, frame, playing,
           seek, seekFile, toggle, onSeeked, win, nFrames } = player;
@@ -120,6 +127,8 @@ export default function SwingStage({
 
   // Raw detector boxes, indexed by frame. Absent on any swing analysed without
   // --club-detector, which is why the toggle is hidden rather than dead in that case.
+  // `rawOverride` (a candidate model from raw_models.json) swaps what the raw overlay
+  // and the all-heads constellation DRAW; capability checks stay on the built-in.
   const rawBoxes = useMemo(() => {
     const b = analysis.club?.detector?.boxes;
     if (!b?.length) return null;
@@ -127,6 +136,7 @@ export default function SwingStage({
     for (const row of b) m.set(row.f, row.d);
     return m;
   }, [analysis]);
+  const rawShown = rawOverride ?? rawBoxes;
 
   // Which club solution to draw. "primary" is whatever the analyzer chose; the rest are the
   // stored alternatives. Switching is a render change only — no re-analysis — which is the
@@ -616,10 +626,10 @@ export default function SwingStage({
       const topF = ev?.top.frame ?? Number.MAX_SAFE_INTEGER;
       const impF = ev?.impact.frame ?? Number.MAX_SAFE_INTEGER;
       const r = Math.max(2, w / 340);
-      if (rawBoxes) {
+      if (rawShown) {
         ctx.globalAlpha = 0.35;
         ctx.fillStyle = "#FB7185";
-        for (const [, dets] of rawBoxes) {
+        for (const [, dets] of rawShown) {
           for (const d of dets) {
             if (d.c !== 0) continue;
             ctx.beginPath();
@@ -724,8 +734,8 @@ export default function SwingStage({
     // Raw model output, drawn last so nothing occludes it, and gated only on the toggle —
     // no confidence floor, no size filter, no dependence on the solved club. Every box the
     // model returned for this frame, exactly as it returned it.
-    if (t.rawDet && rawBoxes) {
-      const boxes = rawBoxes.get(frame);
+    if (t.rawDet && rawShown) {
+      const boxes = rawShown.get(frame);
       if (boxes) {
         ctx.lineWidth = 2;
         ctx.font = `${Math.max(10, Math.round(w / 46))}px ui-monospace, monospace`;
@@ -803,7 +813,7 @@ export default function SwingStage({
           targetOverlay.band, targetOverlay.absValue);
       }
     }
-  }, [analysis, frame, idx, spans, t, rawBoxes, club, angles, angleFields, view,
+  }, [analysis, frame, idx, spans, t, rawShown, club, angles, angleFields, view,
       canvasRef, stageRef, targetOverlay, marks, markers.editing, handle, tracePath,
       experimentPieces, silhouette.byFrame, isolation.byFrame, clubOnly.byFrame,
       buttLine]);
@@ -1029,7 +1039,7 @@ export default function SwingStage({
                 analysis={analysis} t={t} setT={setT}
                 cropAvailable={!autoView.identity}
                 cropInfo={autoView.identity ? null : { cw: autoView.cw, ch: autoView.ch }}
-                hasDetector={!!rawBoxes}
+                hasDetector={!!rawBoxes || !!hasRawModels}
                 hasSilhouette={hasSil} silhouetteLoading={silhouette.loading}
                 // Replaces the set rather than mapping over the current one: `CLEARED_TOGGLES`
                 // is derived from the defaults, so it cannot miss a key that some older stored
