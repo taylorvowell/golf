@@ -41,6 +41,7 @@ export const TEST_LABELS: Record<TrackingTestId, string> = {
 // render disabled — the registry's NotImplementedError, surfaced honestly in the menu.
 export const IMPLEMENTED_TESTS = [
   "t1_candidate_graph",
+  "t3_point_tracking",
   "t6_grip_kinematic",
   "t10_physics_conic",
 ] as const;

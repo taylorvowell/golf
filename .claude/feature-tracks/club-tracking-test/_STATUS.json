@@ -1,29 +1,77 @@
 {
   "schemaVersion": 1,
   "featureName": "club-tracking-test",
-  "currentStep": "10",
-  "phase": "Phase 2 — Zero-shot visual experts",
-  "lastUpdated": "2026-08-07T20:10:00Z",
+  "currentStep": "11",
+  "phase": "Phase 2 \u2014 Zero-shot visual experts",
+  "lastUpdated": "2026-08-07T20:55:00Z",
   "steps": {
-    "01": { "status": "complete", "completedAt": "2026-08-07T17:07:38Z" },
-    "02": { "status": "complete", "completedAt": "2026-08-07T17:14:00Z" },
-    "03": { "status": "complete", "completedAt": "2026-08-07T17:28:00Z" },
-    "04": { "status": "complete", "completedAt": "2026-08-07T17:52:00Z" },
-    "05": { "status": "complete", "completedAt": "2026-08-07T18:10:00Z" },
-    "06": { "status": "complete", "completedAt": "2026-08-07T18:26:00Z" },
-    "07": { "status": "complete", "completedAt": "2026-08-07T19:05:00Z" },
-    "08": { "status": "complete", "completedAt": "2026-08-07T19:38:00Z" },
-    "09": { "status": "complete", "completedAt": "2026-08-07T20:10:00Z" },
-    "10": { "status": "not-started" },
-    "11": { "status": "not-started" },
-    "12": { "status": "not-started" },
-    "13": { "status": "not-started" },
-    "14": { "status": "not-started" },
-    "15": { "status": "not-started" },
-    "16": { "status": "not-started" },
-    "17": { "status": "not-started" },
-    "18": { "status": "not-started" },
-    "19": { "status": "not-started" }
+    "01": {
+      "status": "complete",
+      "completedAt": "2026-08-07T17:07:38Z"
+    },
+    "02": {
+      "status": "complete",
+      "completedAt": "2026-08-07T17:14:00Z"
+    },
+    "03": {
+      "status": "complete",
+      "completedAt": "2026-08-07T17:28:00Z"
+    },
+    "04": {
+      "status": "complete",
+      "completedAt": "2026-08-07T17:52:00Z"
+    },
+    "05": {
+      "status": "complete",
+      "completedAt": "2026-08-07T18:10:00Z"
+    },
+    "06": {
+      "status": "complete",
+      "completedAt": "2026-08-07T18:26:00Z"
+    },
+    "07": {
+      "status": "complete",
+      "completedAt": "2026-08-07T19:05:00Z"
+    },
+    "08": {
+      "status": "complete",
+      "completedAt": "2026-08-07T19:38:00Z"
+    },
+    "09": {
+      "status": "complete",
+      "completedAt": "2026-08-07T20:10:00Z"
+    },
+    "10": {
+      "status": "complete",
+      "completedAt": "2026-08-07T20:55:00Z"
+    },
+    "11": {
+      "status": "not-started"
+    },
+    "12": {
+      "status": "not-started"
+    },
+    "13": {
+      "status": "not-started"
+    },
+    "14": {
+      "status": "not-started"
+    },
+    "15": {
+      "status": "not-started"
+    },
+    "16": {
+      "status": "not-started"
+    },
+    "17": {
+      "status": "not-started"
+    },
+    "18": {
+      "status": "not-started"
+    },
+    "19": {
+      "status": "not-started"
+    }
   },
   "blockers": [],
   "skipped": []

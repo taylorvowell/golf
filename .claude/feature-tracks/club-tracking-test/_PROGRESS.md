@@ -40,6 +40,25 @@ Phase 7 — Hybrids:
 Phase 8 — Production reduction:
 - **20** Reduce the winning hybrid, freeze versions, lock regression fixtures, final benchmark report (plan §35–36)
 
+## 10 - Test 3: Modern Point Tracking
+**Completed:** 2026-08-07 20:55 UTC
+**Phase:** Phase 2 — Zero-shot visual experts
+**Summary:** CoTracker3 offline (torch.hub, 97 MB cached user-globally, GTX 1080) behind
+the §12 adapter seam (`point_trackers/base.py` defines the tracker-callable interface so
+TAPIR/LocoTrack can drop in later). Seeds = 4 most-confident classical anchors spread
+across address→impact, each with 4 support offsets; bidirectional offline tracking; merge
+= visibility-gated weighted median with multi-seed agreement deciding observed vs mixed.
+Tracker + loader are constructor-injected — pytest runs on fakes (no GPU/network). All 7
+fixtures merged (12–16 s each; `perfect` 185 s — 30 fps source means double frames).
+Suite 143 passed; tsc/lint clean; mirror 4/12.
+**Notes:** Real-data findings: (1) multi-seed agreement rarely clears the 2% gate during
+the fast phases — most t3 output is honestly `mixed`; (2) `6iron-1` kept only 23
+observations and correctly triggered `split_at_top` (§2.4 gate's first real firing);
+(3) fixed a genuine pathfit crash — the odd-window formula overshot on even-length phase
+segments (savgol `window_length > x`), regression-tested now.
+
+---
+
 ## 09 - Test 10: Physics-Conic + Event Refiner
 **Completed:** 2026-08-07 20:10 UTC
 **Phase:** Phase 1 — Deterministic baselines (completes Phase 1)

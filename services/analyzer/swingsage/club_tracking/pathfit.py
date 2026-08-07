@@ -43,6 +43,13 @@ _ENDPOINT_WEIGHT = 1e3   # endpoint pinning (D43) via anchor weight, not post-ho
 _MIN_OBS = 4             # below this every variant falls back to piecewise linear
 
 
+def _odd_window(cap: int, n: int) -> int:
+    """Largest odd window <= min(cap, n). `n // 2 * 2 + 1` overshoots for even n — that
+    exact off-by-one crashed savgol on a 6-observation phase segment (6iron-1, t3)."""
+    w = min(cap, n)
+    return w if w % 2 else w - 1
+
+
 # ------------------------------------------------------------------ shared plumbing
 
 
@@ -269,7 +276,9 @@ def fit_variants(observations: list[ClubObservation], fps: float,
         cut = int(np.searchsorted(t, t_top))
         cut = int(np.clip(cut, 2, len(t) - 2))
         def hermite(ti, vi):
-            dv = np.gradient(savgol_filter(vi, min(7, len(vi) // 2 * 2 + 1), 2), ti)
+            win = _odd_window(7, len(vi))
+            sm = savgol_filter(vi, win, 2) if win >= 5 else vi
+            dv = np.gradient(sm, ti)
             return CubicHermiteSpline(ti, vi, dv)
         segs = []
         for sl in (slice(0, cut + 1), slice(cut, None)):
@@ -308,7 +317,7 @@ def fit_variants(observations: list[ClubObservation], fps: float,
     out["h"] = emit(*_catmull_rom(t, hx, hy, ts))
 
     # i — Savitzky-Golay pre-filter, then centripetal Catmull-Rom through the filtered anchors
-    win = min(9, len(t) // 2 * 2 + 1)
+    win = _odd_window(9, len(t))
     if win >= 5:
         ix = savgol_filter(x, win, 2)
         iy = savgol_filter(y, win, 2)

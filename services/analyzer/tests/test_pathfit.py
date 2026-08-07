@@ -66,6 +66,13 @@ class TestRegistryShape:
         v = fit_variants(few, FPS, (100, 102))
         assert set(v) == set(VARIANT_IDS)  # linear fallback, no crash
 
+    def test_even_length_phase_segment_does_not_crash(self):
+        # 6 observations before top, even count — the savgol odd-window off-by-one
+        # regression (6iron-1 via t3).
+        obs = _make_obs(n=14)
+        v = fit_variants(obs, FPS, (100, 113), top_frame=106)
+        assert set(v) == set(VARIANT_IDS)
+
 
 class TestFitQuality:
     def test_approximators_suppress_noise(self):
