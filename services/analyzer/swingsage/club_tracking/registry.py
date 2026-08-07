@@ -38,6 +38,7 @@ TEST_IDS: dict[str, str] = {
     "t23_red_connected": "Frame Red Box Connected",
     "t24_momentum": "Momentum",
     "t25_gated_red_legacy_ball": "Gated, Red, Legacy, Ball",
+    "t26_gated_dedup": "Gated, Red, Legacy, Ball, Deduped",
 }
 
 TESTS: dict[str, type] = {}
