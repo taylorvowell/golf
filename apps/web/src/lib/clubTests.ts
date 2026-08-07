@@ -40,6 +40,7 @@ export const TEST_LABELS: Record<TrackingTestId, string> = {
 // Tests with a registered implementation in the analyzer TODAY. Rows outside this set
 // render disabled — the registry's NotImplementedError, surfaced honestly in the menu.
 export const IMPLEMENTED_TESTS = [
+  "t1_candidate_graph",
   "t6_grip_kinematic",
 ] as const;
 

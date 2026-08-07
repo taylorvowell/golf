@@ -40,6 +40,27 @@ Phase 7 — Hybrids:
 Phase 8 — Production reduction:
 - **20** Reduce the winning hybrid, freeze versions, lock regression fixtures, final benchmark report (plan §35–36)
 
+## 08 - Test 1: Global Candidate Graph
+**Completed:** 2026-08-07 19:38 UTC
+**Phase:** Phase 1 — Deterministic baselines
+**Summary:** `candidates.py` harvests the artifact's raw low-threshold detector stream
+(class looked up from `detector.names`, never a hardcoded index) plus classical heads at
+0.6 weight; `graph.py` is a pure Viterbi-style DP with skip edges (§10 edge costs:
+speed-beyond-plausible, velocity-CHANGE, skip penalty, grip-band prior, low-weight
+confidence per §3.4). The t1 tracker builds one evidence slot per genuine SOURCE
+observation (D54 dedup — `perfect` correctly yields 162 observations from its 30 fps
+stream, not 322). All seven fixtures merged; suite 126 passed; tsc/lint clean; TS mirror
+updated (2/12 implemented).
+**Notes:** Two DP bugs found by the hermetic tests, both instructive: (1) SKIP_PENALTY must
+exceed max node cost or the min-cost "chain" is one node; (2) a direction-only turn penalty
+gates off at v=0, letting a high-confidence decoy be entered slowly via skip edges and
+camped on for free — the fix is plan §10's literal "velocity change" term (W_DVEL), which
+prices teleport-in/stop/teleport-out symmetrically. Motion-blob candidate generation
+deliberately not built (raw stream is dense on these fixtures); revisit if a fixture shows
+starved slots.
+
+---
+
 ## 07 - Debug Menu, Club-Test API, and Experiment Trace Rendering
 **Completed:** 2026-08-07 19:05 UTC
 **Phase:** Phase 0/1 boundary — the user's visual-judgment surface

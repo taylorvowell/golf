@@ -169,7 +169,7 @@ class TestRegistry:
                     diagnostics={"anchors": 0},
                 )
         try:
-            assert available() == ["t6_grip_kinematic"]
+            assert "t6_grip_kinematic" in available()
             inst = get_test("t6_grip_kinematic")
             assert isinstance(inst, ClubTrackingTest)
             res = inst.run(ClubTrackingContext.from_artifacts(_make_doc()))
