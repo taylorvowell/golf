@@ -1,9 +1,10 @@
 """Adds the golfer+club isolation sidecar to an already-analysed swing.
 
-Writes `isolation.json` beside `analysis.json`: per-frame rings of the BODY SILHOUETTE
-UNION the moving components attached to it (the club, and anything it drags through the
-frame). The player's "Isolate golfer + club" overlay fetches it lazily and renders it with
-the same even-odd fill as the body-only isolate — see swingsage/isolation.py.
+Writes TWO sidecars beside `analysis.json` in one pass: `isolation.json` (body UNION
+attached motion — "Isolate golfer + club") and `club_only.json` (the SUBTRACTIVE view —
+attached motion MINUS the body, i.e. just the club). Both share silhouette.json's frame
+shape so the player renders them through the same even-odd fill — see
+swingsage/isolation.py.
 
 Needs `silhouette.json` (run scripts/resegment.py first if missing) and `analysis.mp4`.
 Touches nothing else — same non-destructive contract as resegment/rescore/retiming.
@@ -56,6 +57,7 @@ def isolate_one(out_dir: Path, dry_run: bool = False) -> bool:
     t0 = time.time()
     cap = cv2.VideoCapture(str(video_p))
     frames_out = []
+    club_out = []
     prev = None
     f = 0
     n_total = doc["video"]["frame_count"]
@@ -68,9 +70,10 @@ def isolate_one(out_dir: Path, dry_run: bool = False) -> bool:
         if w is None:
             h, w = gray.shape
         if prev is not None:
-            rings = isolation.union_rings(prev, gray, sil_by_frame.get(f),
-                                          grip_by_frame.get(f))
-            frames_out.append({"f": f, "p": rings})
+            union, club = isolation.frame_rings(prev, gray, sil_by_frame.get(f),
+                                                grip_by_frame.get(f))
+            frames_out.append({"f": f, "p": union})
+            club_out.append({"f": f, "p": club})
         prev = gray
         f += 1
         if f % 100 == 0:
@@ -78,14 +81,19 @@ def isolate_one(out_dir: Path, dry_run: bool = False) -> bool:
     cap.release()
 
     doc_out = isolation.payload(frames_out, w or 0, h or 0, n_total)
+    club_doc = isolation.payload(club_out, w or 0, h or 0, n_total)
     blob = json.dumps(doc_out)
-    print(f"\r  {out_dir.name}: {doc_out['coverage'] * 100:.0f}% coverage, "
-          f"{len(blob) / 1024:.0f} KB, {time.time() - t0:.1f}s")
+    club_blob = json.dumps(club_doc)
+    print(f"\r  {out_dir.name}: union {doc_out['coverage'] * 100:.0f}% / "
+          f"club {club_doc['coverage'] * 100:.0f}% coverage, "
+          f"{len(blob) / 1024:.0f}+{len(club_blob) / 1024:.0f} KB, "
+          f"{time.time() - t0:.1f}s")
     if dry_run:
         return True
-    tmp = out_dir / "isolation.json.tmp"
-    tmp.write_text(blob, encoding="utf-8")
-    os.replace(tmp, out_dir / "isolation.json")
+    for name, data in (("isolation.json", blob), ("club_only.json", club_blob)):
+        tmp = out_dir / (name + ".tmp")
+        tmp.write_text(data, encoding="utf-8")
+        os.replace(tmp, out_dir / name)
     return True
 
 

@@ -1,9 +1,9 @@
-"""Golfer+club isolation rings (scripts/isolate.py) — hermetic union logic."""
+"""Golfer+club isolation rings (scripts/isolate.py) — hermetic union + subtract logic."""
 from __future__ import annotations
 
 import numpy as np
 
-from swingsage.isolation import payload, union_rings
+from swingsage.isolation import frame_rings, payload, union_rings
 
 W, H = 360, 640
 
@@ -48,6 +48,23 @@ class TestUnionRings:
     def test_no_body_no_grip_still_safe(self):
         rings = union_rings(_gray(), _gray(), None, None)
         assert rings == []
+
+
+class TestClubOnly:
+    def test_subtractive_view_keeps_club_drops_body(self):
+        union, club = frame_rings(_gray(club_at=(260, 250)),
+                                  _gray(club_at=(280, 240)),
+                                  BODY_RINGS, grip=(200 / W, 320 / H))
+        assert club, "club-only rings empty"
+        assert _inside(club, 280, 240), "club missing from subtractive view"
+        assert not _inside(club, 180, 360), "body leaked into the club-only view"
+        # and the union still contains both
+        assert _inside(union, 280, 240) and _inside(union, 180, 360)
+
+    def test_static_scene_club_empty(self):
+        union, club = frame_rings(_gray(), _gray(), BODY_RINGS,
+                                  grip=(200 / W, 320 / H))
+        assert club == []
 
     def test_payload_coverage(self):
         frames = [{"f": 0, "p": [[[0, 0], [0.1, 0], [0.1, 0.1]]]},

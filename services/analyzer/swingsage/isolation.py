@@ -33,10 +33,35 @@ def _rasterize(rings: list, w: int, h: int) -> np.ndarray:
     return m
 
 
-def union_rings(gray_prev: np.ndarray, gray_cur: np.ndarray,
+def _mask_to_rings(mask: np.ndarray, kernel: np.ndarray, w: int, h: int) -> list:
+    import cv2
+    if not mask.any():
+        return []
+    closed = cv2.morphologyEx(mask.astype(np.uint8), cv2.MORPH_CLOSE, kernel)
+    contours, _ = cv2.findContours(closed, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+    eps = APPROX_EPS * float(max(h, w))
+    rings = []
+    for c in contours:
+        if cv2.contourArea(c) < MIN_BLOB_PX:
+            continue
+        approx = cv2.approxPolyDP(c, eps, True)
+        if len(approx) < 3:
+            continue
+        pts = approx.reshape(-1, 2).astype(np.float64)
+        rings.append([[round(float(x) / w, 4), round(float(y) / h, 4)]
+                      for x, y in pts])
+    return rings
+
+
+def frame_rings(gray_prev: np.ndarray, gray_cur: np.ndarray,
                 body_rings: list | None,
-                grip: tuple[float, float] | None) -> list:
-    """One frame's golfer+club rings (normalized), or [] when nothing is known."""
+                grip: tuple[float, float] | None) -> tuple[list, list]:
+    """One frame's (golfer+club union rings, CLUB-ONLY rings), both normalized.
+
+    Club-only is the SUBTRACTIVE view (user request 2026-08-08): the kept moving
+    components minus the body mask — the shaft/head poking out of the golfer survives
+    because the subtraction uses the raw body, while attachment testing uses the dilated
+    one. One pass computes both; the generator is too slow to run twice."""
     import cv2
     from scipy import ndimage
 
@@ -66,24 +91,15 @@ def union_rings(gray_prev: np.ndarray, gray_cur: np.ndarray,
         if touches or near_grip:
             keep |= comp
 
-    union = ((body > 0) | (keep > 0)).astype(np.uint8)
-    if not union.any():
-        return []
-    # close small gaps so club+body merge into clean rings
-    union = cv2.morphologyEx(union, cv2.MORPH_CLOSE, kernel)
-    contours, _ = cv2.findContours(union, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-    eps = APPROX_EPS * scale
-    rings = []
-    for c in contours:
-        if cv2.contourArea(c) < MIN_BLOB_PX:
-            continue
-        approx = cv2.approxPolyDP(c, eps, True)
-        if len(approx) < 3:
-            continue
-        pts = approx.reshape(-1, 2).astype(np.float64)
-        rings.append([[round(float(x) / w, 4), round(float(y) / h, 4)]
-                      for x, y in pts])
-    return rings
+    union = ((body > 0) | (keep > 0))
+    club = (keep > 0) & ~(body > 0)
+    return (_mask_to_rings(union, kernel, w, h),
+            _mask_to_rings(club, kernel, w, h))
+
+
+def union_rings(gray_prev, gray_cur, body_rings, grip) -> list:
+    """Back-compat: the union view alone."""
+    return frame_rings(gray_prev, gray_cur, body_rings, grip)[0]
 
 
 def payload(frames: list[dict], w: int, h: int, frame_count: int) -> dict:

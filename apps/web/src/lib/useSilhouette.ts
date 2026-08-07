@@ -31,7 +31,7 @@ const EMPTY: SilhouetteData = {
  * reports empty.
  */
 export function useSilhouette(swingId: string, enabled: boolean,
-                              kind: "silhouette" | "isolation" = "silhouette"): SilhouetteData {
+                              kind: "silhouette" | "isolation" | "club-only" = "silhouette"): SilhouetteData {
   const [raw, setRaw] = useState<Silhouette | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

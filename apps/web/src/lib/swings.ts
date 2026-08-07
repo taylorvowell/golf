@@ -490,6 +490,15 @@ export async function getIsolation(id: string): Promise<Silhouette | null> {
   }
 }
 
+/** Club-only rings — the subtractive view (attached motion minus the body). */
+export async function getClubOnly(id: string): Promise<Silhouette | null> {
+  try {
+    return JSON.parse(await fs.readFile(swingFile(id, "club_only.json"), "utf8"));
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Whether the silhouette artifact exists, without reading a megabyte to find out.
  *

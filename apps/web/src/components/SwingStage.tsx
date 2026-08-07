@@ -175,6 +175,8 @@ export default function SwingStage({
   /** Golfer+club rings (scripts/isolate.py) — fetched only when its toggle goes on; a
    * 404 simply draws nothing, and the menu hint says how to generate it. */
   const isolation = useSilhouette(id, toggles.isolateClub, "isolation");
+  /** The subtractive view: attached motion minus the body — the club by elimination. */
+  const clubOnly = useSilhouette(id, toggles.clubOnly, "club-only");
   const buttLine = analysis.posture?.butt_line ?? null;
 
   /**
@@ -457,6 +459,8 @@ export default function SwingStage({
     const rings = (t.isolate || t.outline) ? silhouette.byFrame.get(frame) : undefined;
     // Golfer+club rings replace the body-only scrim when their toggle is on — the union
     // artifact shares silhouette.json's exact shape, so the same fill path renders both.
+    // The subtractive club-only view outranks both isolations: it is the narrowest cut.
+    const clubOnlyRings = t.clubOnly ? clubOnly.byFrame.get(frame) : undefined;
     const isoRings = t.isolateClub ? isolation.byFrame.get(frame) : undefined;
     const ringsToPath = (rr: [number, number][][]) => {
       const p = new Path2D();
@@ -467,7 +471,9 @@ export default function SwingStage({
       }
       return p;
     };
-    const scrimRings = isoRings?.length ? isoRings : (t.isolate ? rings : undefined);
+    const scrimRings = clubOnlyRings?.length ? clubOnlyRings
+      : isoRings?.length ? isoRings
+      : (t.isolate ? rings : undefined);
     if (scrimRings?.length) {
       const scrim = new Path2D();
       // The whole frame at this zoom, not the visible crop — a rect stopping at the crop
@@ -750,7 +756,8 @@ export default function SwingStage({
     }
   }, [analysis, frame, idx, spans, t, rawBoxes, club, angles, angleFields, view,
       canvasRef, stageRef, targetOverlay, marks, markers.editing, handle, tracePath,
-      experimentPieces, silhouette.byFrame, isolation.byFrame, buttLine]);
+      experimentPieces, silhouette.byFrame, isolation.byFrame, clubOnly.byFrame,
+      buttLine]);
 
   /**
    * Screen point -> normalized frame coordinate, inverting exactly the transform `draw` applies.
