@@ -33,7 +33,8 @@ REASON_CODES = ("motion_consistent", "closer_to_club_visually", "smoother_plausi
                 "impact_position_correct", "insufficient_evidence")
 
 PROMPT_VERSION = "club_adjudication_v1"
-TIMEOUT_S = 120
+TIMEOUT_S = 300   # 5-image verify calls need real reading time — 120s
+                  # produced timeout->retry->timeout fallbacks (t28/t29)
 
 
 def hypothesis_divergence(hypos: dict[str, list[dict]],
