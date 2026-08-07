@@ -40,6 +40,22 @@ Phase 7 — Hybrids:
 Phase 8 — Production reduction:
 - **20** Reduce the winning hybrid, freeze versions, lock regression fixtures, final benchmark report (plan §35–36)
 
+## 14 - Test 8: Phase-Adaptive Multi-Tracker Fusion (reordered)
+**Completed:** 2026-08-07 22:50 UTC
+**Phase:** Phase 7 content executed early (8/12 selectable)
+**Summary:** `fusion.py` (pure): per-frame IRLS weighted mean over the six cached expert
+experiments' default variants, weighted by the §17 phase table × confidence × mode honesty
+(observed 1.0 / mixed 0.6 / inferred 0.25), outlier gate ejects parked experts,
+disagreement is a first-class diagnostic. Event evidence inherits the best non-artifact
+refinement across experiments (t12's audio impact, t10's top). All 7 fused (45–80%
+observed-consensus). Suite 179 passed.
+**Notes:** §17's empirical reliability calibration (confidence → observed error per phase)
+deliberately replaced by the v1 prior table — it requires truth data this project doesn't
+collect; the table is module data so menu-driven A/B can vary it. t8 requires cached
+expert runs (plan §28) and says so honestly when they're missing.
+
+---
+
 ## 13 - Test 12: Audio-Visual Impact Anchor (reordered ahead of T2)
 **Completed:** 2026-08-07 22:20 UTC
 **Phase:** Phase 4 content executed early per the fill-the-menu reorder (7/12 selectable)
