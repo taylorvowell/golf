@@ -559,10 +559,22 @@ export default function SwingStage({
       // `dash` overrides it where dashing is a deliberate style (the experiment
       // backswing), which wants a tighter, more regular pattern.
       if (dashed) ctx.setLineDash(dash ?? [peak * 0.9, peak * 1.6]);
+      // A subtle drop shadow lifts the line off the turf and the golfer's shirt, where a
+      // flat stroke of either colour can vanish. Kept soft and close — offset far enough
+      // to read as depth, not far enough to look like a second, misaligned trace.
+      ctx.shadowColor = "rgba(0,0,0,.5)";
+      ctx.shadowBlur = peak * 0.7;
+      ctx.shadowOffsetX = peak * 0.12;
+      ctx.shadowOffsetY = peak * 0.22;
       ctx.beginPath();
       ctx.moveTo(P[0][0] * sx, P[0][1] * sy);
       for (let i = 1; i < P.length; i++) ctx.lineTo(P[i][0] * sx, P[i][1] * sy);
       ctx.stroke();
+      // Reset, or every later overlay (skeleton, angles, markers) inherits the shadow.
+      ctx.shadowColor = "transparent";
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
       ctx.setLineDash([]);
       ctx.globalAlpha = 1;
     };
@@ -579,7 +591,7 @@ export default function SwingStage({
           const P = growing ? cutAt(piece, frame) : piece.pts;
           if (!P) continue;
           // Full opacity always: the line never dims to report confidence.
-          stroke(P, { alpha: 1, peak, dashed, dash: [peak * 1.35, peak * 0.95] });
+          stroke(P, { alpha: 1, peak, dashed, dash: [peak * 1.25, peak * 2.1] });
         }
       }
     }
@@ -611,7 +623,7 @@ export default function SwingStage({
           // is only that the curve it is cutting was smoothed as a whole.
           const P = growing ? cutAt(piece, frame) : piece.pts;
           if (!P) continue;
-          stroke(P, { alpha: 1, peak, dashed, dash: [peak * 1.35, peak * 0.95] });
+          stroke(P, { alpha: 1, peak, dashed, dash: [peak * 1.25, peak * 2.1] });
         }
       });
     }
