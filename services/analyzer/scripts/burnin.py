@@ -525,6 +525,12 @@ def main() -> int:
                 # whose last few points are the strike itself.
                 ("model_traj_measured", "Trajectory-gated head + trace: measured frames only",
                  "savgol", "model_traj_raw", dict(trace_min_conf=0.0)),
+                # Same trajectory-gated solve, moving-average trace instead of savgol —
+                # the player's chosen legacy solution (user directive 2026-08-08).
+                # `scripts/addvariant.py` back-fills it into artifacts analysed before
+                # this entry existed, without a re-run.
+                ("model_traj_moving", "Trajectory-gated head + trace: moving average",
+                 "moving", "model_traj_raw", dict(trace_min_conf=0.0)),
             ]
 
             for key, label, over in VARIANTS:

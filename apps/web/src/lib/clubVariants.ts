@@ -34,6 +34,9 @@ export function defaultClubVar(analysis: Analysis): string {
     const span = Math.max(1, e.impact.frame - e.address.frame + 1);
     return ((tf.backswing?.length ?? 0) + (tf.downswing?.length ?? 0)) / span;
   };
+  // The player's chosen solution (user directive 2026-08-08): trajectory-gated head with
+  // a moving-average trace. Falls through the older preferences on any swing that lacks it.
+  if (v?.model_traj_moving) return "model_traj_moving";
   if (v?.model_traj_measured && measuredFrac("model_traj_measured") >= 0.5) {
     return "model_traj_measured";
   }
