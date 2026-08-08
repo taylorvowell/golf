@@ -1,10 +1,9 @@
 # scoring_config/v2.json coverage
 
-`build_config.py` wires **38 checks** across all 7 doc 05 Part C1 scoring categories, generated
-from `instructions/criteria.md` + `docs/SCORING-CRITERIA-TRIAGE.md`'s bucket A/B rows. This is
-a deliberate first cut, not the full ~160-row A+B set the triage identifies as buildable —
-named here rather than silently short of it, per CLAUDE.md's infra principle ("name what's
-deferred, don't silently carry debt").
+`build_config.py` wires **38 checks** across all 7 scoring categories, generated from the rows
+of `scoring_config/criteria.md` that the pipeline can actually measure today. This is a
+deliberate first cut, not the full ~160 measurable rows — named here rather than silently
+short of it, per CLAUDE.md's principle: name what's deferred, don't silently carry debt.
 
 **Of those 38, only 28 are scored — 10 are `deferred` in the config and abstain on every
 swing.** That distinction is the whole point of v2 and is explained below. `v1.json` stays on
@@ -98,7 +97,7 @@ SET-03/04 (secondary axis tilt — FO-gated, and neither fixture is face-on), BA
 flare — the raw heel->toe angle's flare-direction convention hasn't been checked against a
 visibly-flared stance), TOP-01/IMP-01's *direction* of bow-vs-cup (the two are wired with a
 symmetric band around "straight" rather than a directional one — see the `fix` text on those
-two entries in `build_config.py`). Doc 04 §7 / CLAUDE.md's own standing rule — run
+two entries in `build_config.py`). The club-tracking spec / CLAUDE.md's own standing rule — run
 `checkclub.py`/`checkangles.py` before trusting a convention — applies here too; tightening
 these needs a face-on fixture and a visual pass with `checkangles.py`, not just more code.
 
@@ -110,9 +109,9 @@ needed. Also ALN-01/02/03 (needs a target line — no alignment-stick detection 
 SET-09/IMP-02/03 (need a ball-position reference — `DAT-18/19`'s address-frame-club-head proxy
 is itself unbuilt).
 
-**Unchanged from the original triage** (buckets C/D/E/F/G — AI-judgment, simulator/impact-image,
-pressure-plate, impossible-from-video, or coaching-hint-only): still out of reach for the
-reasons `docs/SCORING-CRITERIA-TRIAGE.md` already gives; nothing in this phase changes that.
+**Out of reach from video alone** — rows needing AI judgment, a simulator/impact image, a
+pressure plate, or that are simply not observable in a 2D clip, plus rows that are coaching
+hints rather than measurements. Nothing in this phase changes that.
 
 ## Updating this file
 

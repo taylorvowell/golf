@@ -23,7 +23,7 @@ export default function DebugMenu({ id, reanalyze, smoothing, onPickSmoothing,
   id: string;
   /** The page's shared re-analysis job — the same one the video's settings menu starts. */
   reanalyze: Reanalyze;
-  /** Trace smoothing (D46) — render-time only, nothing is re-analysed. */
+  /** Trace smoothing — render-time only, nothing is re-analysed. */
   smoothing: SmoothingKey;
   onPickSmoothing: (k: SmoothingKey) => void;
   /** Club solutions stored in the artifact. Picking one also turns the club+trace overlays

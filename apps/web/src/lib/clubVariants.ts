@@ -21,8 +21,8 @@ export function clubVariantOptions(analysis: Analysis): ClubVariantOption[] {
 
 /**
  * Default solution: `model_traj_measured` only when it measured at least half the swing
- * (doc 02's own bar for showing a trace), else the savgol model trace, else primary.
- * See D20/D32/D43 — which solve reads best on a detector-starved clip is unanswerable
+ * (the architecture spec's own bar for showing a trace), else the savgol model trace, else primary.
+ * Which solve reads best on a detector-starved clip is unanswerable
  * today, so the default is chosen from the artifact, never assumed.
  */
 export function defaultClubVar(analysis: Analysis): string {

@@ -1,4 +1,4 @@
-"""Club head orientation through the swing (doc 04 §6, tier 2).
+"""Club head orientation through the swing (the club-tracking spec, tier 2).
 
 What this measures, and what it deliberately does not:
 
@@ -9,8 +9,8 @@ What this measures, and what it deliberately does not:
 
   NOT        Face angle in degrees at impact (open/closed to the target line). That is a 3D
              quantity about the face *normal*, and at 60fps the head near impact is a blur
-             streak crossing 15-30% of the frame between exposures. Doc 04 §6 forbids
-             displaying a fabricated number for it; the simulator impact image (doc 06) is
+             streak crossing 15-30% of the frame between exposures. The club-tracking spec forbids
+             displaying a fabricated number for it; the simulator impact image (the simulator spec) is
              the authoritative source and the UI must prefer it.
 
 So the output here is an orientation time series plus checkpoint classifications with
@@ -194,7 +194,7 @@ def analyse(video_path, club_frames, club_len_norm, ev, cfg: FaceConfig | None =
 
 
 def _checkpoints(res: FaceResult, ev):
-    """Classify head orientation at the slow checkpoints doc 04 §6 permits.
+    """Classify head orientation at the slow checkpoints the club-tracking spec permits.
 
     Only address, toe-up and top are attempted. Impact is deliberately absent: it is the
     frame the golfer most wants and the one video cannot honestly answer.
@@ -234,5 +234,5 @@ def _checkpoints(res: FaceResult, ev):
         "conf": 0.0,
         "reason": ("Face angle at impact is not measurable from 60fps video — the head is a "
                    "blur streak. Upload a simulator impact image for the authoritative value "
-                   "(doc 04 §6, doc 06 §2)."),
+                   "(the club-tracking spec, the simulator spec)."),
     }

@@ -2,18 +2,17 @@
 
 Stage 0 resamples every upload to CFR 60 fps for the player's frame-sync contract, which
 rewrites the source's real presentation timestamps: a 30 fps upload becomes 60 fps with every
-frame shown twice, and none of those duplicates is a new observation of the club. The club
-tracking test plan (docs/SwingSage_Club_Tracking_Comprehensive_12_Test_Plan.md §3.1, §6)
-needs the distinction back: a normalized output sample is not a genuine camera observation.
+frame shown twice, and none of those duplicates is a new observation of the club. Club
+tracking needs the distinction back: a normalized output sample is not a genuine camera
+observation.
 
 This module reads per-packet PTS from the ORIGINAL upload (demux only — no decode), maps each
 source frame to the normalized 60 fps frames that display it, and persists the result as a
 sidecar artifact `out/<stem>/source_timing.json`. `analysis.json` is untouched: the player is
-not required to consume source timing at all (plan §6), so this stays out of the contract
-until the clubTracking experiment schema lands (D54).
+not required to consume source timing at all, so this stays out of the contract.
 
-PTS-from-packets is the primary method by design; duplicate-image detection is a legacy
-fallback the plan reserves for containers that lie, and is deliberately not built here.
+PTS-from-packets is the primary method by design; duplicate-image detection is a fallback for
+containers that lie about their timestamps, and is deliberately not built here.
 """
 from __future__ import annotations
 

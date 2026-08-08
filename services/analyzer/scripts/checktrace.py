@@ -1,13 +1,13 @@
-"""Is the drawn club-head trace where the club actually was? (doc 04 §5, §7)
+"""Is the drawn club-head trace where the club actually was? (the club-tracking spec, §7)
 
     python scripts/checktrace.py out/<stem> [--variant model_traj_measured] [--all]
 
 Coverage percentages have overstated club quality three separate times (STATUS.md §2), and
-smoothness is not evidence of correctness (D20). This reports the four things about the
+smoothness is not evidence of correctness. This reports the four things about the
 *polyline* that a coverage number cannot:
 
   reach        how close the line gets to the ball. The club head at Address IS the ball
-               (doc 04 §3), so the distance from it to the nearest point of each segment says
+               (the club-tracking spec), so the distance from it to the nearest point of each segment says
                whether the trace makes it down to the strike. Cutting the point list at the
                event frames left the downswing 102px short of the ball on `perfect`, because
                Impact is the frame the phase is named for, not a frame the club was measured on.
@@ -77,7 +77,7 @@ def report(out: Path, variant: str | None) -> int:
     tframes = c.get("trace_frames") or {}
     heads = {f["f"]: f["head"] for f in (c.get("frames") or []) if f.get("head")}
     # Where the ball is, by the same rule `club.anchor_ball` uses — `club.ball` when the search
-    # found it, otherwise the club head medianed over the Address hold (doc 04 §3). Taking a
+    # found it, otherwise the club head medianed over the Address hold (the club-tracking spec). Taking a
     # different definition here would make this report a number the pipeline is not aiming at.
     found = c.get("ball")
     if found:
@@ -94,8 +94,8 @@ def report(out: Path, variant: str | None) -> int:
     anchored = [f["f"] for f in (c.get("frames") or []) if f.get("from_ball")]
     # Say where the reference point came from. `reach` is only a statement about the trace when
     # the ball is actually known; against the Address-hold estimate it is partly a statement
-    # about that estimate, which on `perfect` is 150px from the real ball (D44).
-    src = found.get("source") if found else "estimated from the Address hold - UNVERIFIED (D44)"
+    # about that estimate, which on `perfect` is 150px from the real ball.
+    src = found.get("source") if found else "estimated from the Address hold - UNVERIFIED"
     print(f"{out.name}  variant={variant or 'primary'}  body={body:.0f}px"
           + (f"  ball-anchored at frame {anchored[0]}" if anchored else ""))
     print(f"  ball {ball} [{src}]")

@@ -1,4 +1,4 @@
-"""Where is the top of the backswing, really? (doc 05 A.4)
+"""Where is the top of the backswing, really? (the scoring spec)
 
     python scripts/checktop.py out/<stem> [out/<stem> ...]
 
@@ -15,8 +15,8 @@ has nothing near the top at all. Read the coverage line first — where it is lo
 column below it is noise.
 
 What would settle it is hand-labelled truth, which the project has never had
-(`tests/fixtures.json:hand_labeled` is null). The player's head-marker editor (D45) writes
-exactly that. Full diagnosis and the numbers: DECISIONS D49.
+(`tests/fixtures.json:hand_labeled` is null). The player's head-marker editor writes
+exactly that.
 """
 from __future__ import annotations
 

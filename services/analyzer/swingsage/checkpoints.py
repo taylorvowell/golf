@@ -1,6 +1,6 @@
 """Stage 5b — the ten swing checkpoints (the P-system, P1–P10).
 
-Doc 05 Part A detects the eight canonical GolfDB events, and those stay exactly as they are:
+The scoring spec's Part A detects the eight canonical GolfDB events, and those stay exactly as they are:
 `analysis.json.events` is a published contract keyed to a labelled dataset, and nothing here
 touches it. But coaches do not talk in eight positions, they talk in ten — the P-system —
 and the ten are the eight events plus two positions GolfDB does not label:

@@ -6,7 +6,7 @@ import type { NextConfig } from "next";
  * dev server by LAN IP therefore serves the server-rendered HTML but silently drops the
  * client bundle: the page looks right, nothing hydrates, and no canvas ever draws.
  *
- * Videos are filmed on phones and reviewed on them (doc 01 UX notes), so LAN access is a
+ * Videos are filmed on phones and reviewed on them (the product spec UX notes), so LAN access is a
  * normal part of working on this. Enumerate this machine's own IPv4 addresses rather than
  * hardcoding one — the address is DHCP-assigned and changes on router reboots.
  */

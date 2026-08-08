@@ -1,6 +1,6 @@
-"""Stage 4 — club shaft and head tracking (doc 04). The hardest CV problem in the app.
+"""Stage 4 — club shaft and head tracking (the club-tracking spec). The hardest CV problem in the app.
 
-Layered hybrid per doc 04 §2, anchored by the pose skeleton:
+Layered hybrid per the club-tracking spec, anchored by the pose skeleton:
 
   A  motion mask   three-frame differencing, ANDed, morphologically closed to heal the
                    thin shaft, with the golfer's own body suppressed
@@ -11,7 +11,7 @@ Layered hybrid per doc 04 §2, anchored by the pose skeleton:
                    reverses sharply at Top, so one spline across the whole swing would cut
                    the corner)
 
-Designed for graceful degradation throughout: doc 02's quality gate disables the trace below
+Designed for graceful degradation throughout: the architecture spec's quality gate disables the trace below
 50% coverage rather than drawing a fabricated path, and every frame carries its own
 confidence so the renderer can show what was actually measured.
 """
@@ -65,21 +65,21 @@ class ClubConfig:
     # smoothness and the plane gate already removes outliers, so a third smoothing mostly
     # fights them, and excluding the transition leaves a seam that costs more than the
     # outliers it removes. Kept behind the flag because the underlying constraint is sound
-    # and would matter more with a noisier detector. See DECISIONS D20.
+    # and would matter more with a noisier detector.
     use_path_curve: bool = False
     curve_degree: int = 3
     # Learned head detector (Stage 4b, swingsage/club_detect.py). Evidence only — it is added
     # to the same angular profile the two hand-built detectors write, never used on its own
-    # (doc 04 §2). With no weights supplied every value below is inert.
+    # (the club-tracking spec). With no weights supplied every value below is inert.
     #
     # `detector_gain` is on the same 0-1 scale as motion support, so 1.0 makes a
     # full-confidence detection worth about as much as a fully-supported motion ray. Starting
-    # deliberately below that: until doc 04 §7's position-error metric exists there is no
-    # falsifiable basis for trusting it *more* than the measurements already there (D20).
+    # deliberately below that: until the club-tracking spec's position-error metric exists there is no
+    # falsifiable basis for trusting it *more* than the measurements already there.
     detector_gain: float = 0.8
     detector_spread_bins: float = 1.5   # angular uncertainty of a box centre, in bins (~6 deg)
-    # `stick` is the model's strong class — mAP50 0.976 against clubhead's 0.686 (D23a) — and
-    # the solver's state IS shaft angle (D17), so a shaft box is direct evidence about the
+    # `stick` is the model's strong class — mAP50 0.976 against clubhead's 0.686 — and
+    # the solver's state IS shaft angle, so a shaft box is direct evidence about the
     # quantity being solved. Weighted above the head accordingly.
     detector_stick_gain: float = 1.2
     detector_stick_spread_bins: float = 2.0
@@ -88,25 +88,25 @@ class ClubConfig:
     # does not let them touch the solve. That is the honest baseline for judging the model.
     detector_inject: str = "heads"
     # Assert the detected distance into `reach`. OFF: an earlier version wrote each frame's raw
-    # radius straight in, bypassing D17's radius smoothing, and the drawn club length at the
+    # radius straight in, bypassing the solver's radius smoothing, and the drawn club length at the
     # address hold — where the club is not moving — went from stdev 18.8px to 29.4px.
     detector_radius: bool = False
     # Rebuild every frame's club from hands + one smoothed angle at a fixed length
     # (`rigidify`). The function was written, documented and never called — `_build_club` ran
     # instead and re-derived length per frame, which is the length jitter. OFF by default only
-    # so the two can be A/B'd; see DECISIONS D32.
+    # so the two can be A/B'd;.
     use_rigid: bool = False
     # Take the head straight from the model where it is confident, instead of only nudging the
     # solver's profile. Measured justification: with injection alone the solved head still sat a
     # median 60px from the model's head and only 30% of frames landed within 20px — evidence
     # weighting cannot outvote the motion profile, shaft lines, plane prior and angle-travel
-    # cost combined, while the model's raw boxes are visibly on the club head (D32).
+    # cost combined, while the model's raw boxes are visibly on the club head.
     #
     # This sets raw_angle/length per frame; `use_rigid` then smooths them and holds the length
     # rigid. That ordering is the point — trace first, smooth second.
     #
     # Frames with no confident detection fall back to the solver's answer, so this is never
-    # detector-only and stays within doc 04 §2.
+    # detector-only and stays within the club-tracking spec.
     detector_head_primary: bool = False
     detector_primary_min_conf: float = 0.35
     # Smooth the measured head path in polar coordinates about the hands, keeping the measured
@@ -140,8 +140,8 @@ class ClubConfig:
     # accurate of the three. It is also the shortest (25 points against the backswing's 43 on
     # swing2), so a fixed window covers 28% of it versus 16% of the backswing: the segment that
     # needs smoothing least was getting the most, and an order-2 fit over a tightly curving arc
-    # flattens curvature that is real. Phase-dependent windows for the same reason D17 needed
-    # phase-dependent gap tolerance and D19 needed a phase-dependent detector.
+    # flattens curvature that is real. Phase-dependent windows for the same reason the solver
+    # needs a phase-dependent gap tolerance and the classical stage needs a phase-split detector.
     trace_win_downswing: int = 0
     trace_min_conf: float = 0.30
     # How far past an event a segment may reach for one more measured point, so consecutive
@@ -161,8 +161,8 @@ class ClubConfig:
     # two cases are indistinguishable from inside: on both clips the tracked path misses the
     # Address landmark by 47px, and the only difference is that on `pro_2` that landmark is the
     # ball and on `perfect` it is not. Making this safe needs the ball itself — see `find_ball`
-    # and DECISIONS D44. Until then it is `--club-ball-anchor`, and hand-placed markers
-    # (D45) are the supported way to put the head on the ball.
+    # below. Until then it is `--club-ball-anchor`, and hand-placed markers
+    # are the supported way to put the head on the ball.
     ball_anchor: bool = False
     ball_anchor_tol: float = 0.05
     ball_anchor_window: int = 6
@@ -172,9 +172,9 @@ class ClubConfig:
     ball_anchor_conf: float = 0.9
     # Ball detection (`find_ball`). OFF: implemented, measured, and it is not good enough to
     # write a club position from. On the four fixtures it finds the golfer's shoe twice and
-    # nothing twice — see `find_ball`'s docstring and DECISIONS D44 for what each gate does and
+    # nothing twice — see `find_ball`'s docstring for what each gate does and
     # why the remaining failures need a learned detector rather than another threshold. The
-    # anchor falls back to doc 04 §3's Address landmark, which is what it used before this
+    # anchor falls back to the club-tracking spec's Address landmark, which is what it used before this
     # existed. Turn on with `--club-ball-detect` to iterate; `scripts/checkball.py --live`
     # iterates without a re-run.
     ball_detect: bool = False
@@ -201,6 +201,29 @@ class ClubConfig:
     # fraction of club length. The hold is trimmed only when the club moved more than twice
     # this across it, which leaves a genuinely static setup untouched.
     address_still_tol: float = 0.08
+    # --- Backswing start: the club leaves before the hands do -----------------------------
+    # Address is the end of the last quasi-static hold of the HANDS, and the takeaway starts at
+    # the CLUB. The head is at the far end of a ~1m lever, so it has travelled a visible distance
+    # by the time the grip has moved enough to break Stage 5's stillness test. Look back this far
+    # from the hand-based Address for the frame the head actually left its rest position, and
+    # never further — beyond it a candidate is more likely the golfer still grounding the club.
+    # 12 frames is 0.20s; Stage 0 normalises every clip to CFR 60 (the architecture spec) so the two are fixed.
+    takeaway_refine: bool = True
+    takeaway_lookback: int = 12
+    # Head travel over `takeaway_span` frames, as a fraction of club length, that counts as the
+    # club moving rather than the detector jittering. Over several frames rather than one because
+    # a 30fps source normalised to 60 repeats every other frame, so per-frame steps alternate
+    # zero / double and a single-frame test reads "still" on half the swing.
+    takeaway_span: int = 3
+    takeaway_move_tol: float = 0.005
+    # ...and how still the club has to have been JUST BEFORE that candidate. This is the guard
+    # that separates a takeaway from a golfer still walking the club into the ball, and it is the
+    # whole reason this is safe to run on every swing — see `takeaway_start`.
+    takeaway_rest_frames: int = 4
+    takeaway_rest_tol: float = 0.010
+    # Total head travel between the new start and the old Address, below which the move is noise
+    # dressed as a measurement and the hand-based frame stands.
+    takeaway_min_travel: float = 0.010
     # Stop the follow-through at the club's high point, before it goes over the shoulder. Past
     # that the head is behind the golfer and heavily occluded, so the tail of the trace is both
     # the least reliable part of the path and the part that says least about the swing — it
@@ -307,7 +330,7 @@ def _body_mask(shape, frames, f, body_h, cfg):
 
 
 def _motion(prev, cur, nxt, cfg, bg=None):
-    """Doc 04 Layer A — pixels moving *at* time f, isolated by ANDing both differences.
+    """The club-tracking spec's Layer A — pixels moving *at* time f, isolated by ANDing both differences.
 
     Optionally intersected with a background-model foreground mask. Three-frame differencing
     alone produced 46k-77k white pixels per frame on swing1 against a club worth a few
@@ -350,7 +373,7 @@ def background_masks(grays, history=None):
 
 
 def _score_candidate(p0, p1, grip_px, club_px, prev_angle, cfg):
-    """Rank a Hough segment as a shaft hypothesis (doc 04 Layer B)."""
+    """Rank a Hough segment as a shaft hypothesis (the club-tracking spec's Layer B)."""
     a, b = np.array(p0, float), np.array(p1, float)
     da, db = np.linalg.norm(a - grip_px), np.linalg.norm(b - grip_px)
     near, far = (a, b) if da <= db else (b, a)
@@ -561,7 +584,7 @@ def angular_profile(motion, gp, club_px, cfg, n_bins=90, gap_frac=0.09):
     # Slow phases: the shaft is continuous, so a long hole means the ray has jumped past the
     # head onto background motion — wind in the foliage behind swing1's golfer made the club
     # read near-full length at the top, where it is actually heavily foreshortened.
-    # Downswing: the shaft genuinely breaks into blur streaks (doc 04 §4), so the same tight
+    # Downswing: the shaft genuinely breaks into blur streaks (the club-tracking spec), so the same tight
     # tolerance truncates the real club. Tightening it globally fixed the backswing and broke
     # the downswing; it has to vary.
     gap_limit = club_px * gap_frac
@@ -943,7 +966,7 @@ def _track_head_dp(res: ClubResult, addr_f, seed, club_px, cfg, ball=None, impac
 
 
 def _track_head(res: ClubResult, addr_f, seed, club_px, cfg, ball=None, impact_f=None):
-    """Choose one head per frame so the path stays smooth (doc 04 Layer D).
+    """Choose one head per frame so the path stays smooth (the club-tracking spec's Layer D).
 
     Walks outward from Address in both time directions. Each step predicts where the head
     should be by constant-velocity extrapolation and takes the candidate that best balances
@@ -1054,7 +1077,7 @@ def _extend_to_head(motion, near, direction, club_px, tol=7.0):
 
 
 def calibrate(gray_frames, pose_frames, addr_f, body_h, cfg):
-    """Doc 04 §3 — measure club length at Address, where everything is static.
+    """The club-tracking spec — measure club length at Address, where everything is static.
 
     Sets the search radius and length bounds for every later frame, so getting it right
     once removes most of the ambiguity from the rest of the swing.
@@ -1097,7 +1120,7 @@ def track(video_path, pose_frames, ev, handedness="right", cfg: ClubConfig | Non
     """`detector` is an optional pre-computed club_detect.DetectorResult over this same video.
 
     It contributes evidence into the per-frame angular profile and nothing else, so passing
-    None reproduces the classical path exactly (doc 04 §2 — never detector-only).
+    None reproduces the classical path exactly (the club-tracking spec — never detector-only).
     """
     cfg = cfg or ClubConfig()
     res = ClubResult()
@@ -1169,7 +1192,7 @@ def track(video_path, pose_frames, ev, handedness="right", cfg: ClubConfig | Non
         motion = cv2.bitwise_and(motion, cv2.bitwise_not(
             _body_mask((h, w), pose_frames, f, body_h, cfg)))
 
-        # Restrict to an annulus around the hands (doc 04 Layer B).
+        # Restrict to an annulus around the hands (the club-tracking spec's Layer B).
         ring = np.zeros_like(motion)
         cv2.circle(ring, tuple(gp.astype(int)), int(club_px * cfg.search_scale), 255, -1)
         motion = cv2.bitwise_and(motion, ring)
@@ -1177,7 +1200,7 @@ def track(video_path, pose_frames, ev, handedness="right", cfg: ClubConfig | Non
         # One unknown per frame: where the head is. The shaft is then just the line from the
         # hands to it. No line detection means no undirected-segment ambiguity to resolve.
         # NOTE: the hand-pair direction prior is computed but deliberately NOT used to
-        # restrict the search — see DECISIONS D15. The two hands overlap on the grip, only
+        # restrict the search. The two hands overlap on the grip, only
         # ~12-50px apart, so the vector between them is dominated by keypoint noise rather
         # than shaft geometry. Narrowing the sweep around it cut coverage from 67/96/64% to
         # 40/32/15%. Kept here because the same hand data supports a longer, better
@@ -1208,10 +1231,10 @@ def track(video_path, pose_frames, ev, handedness="right", cfg: ClubConfig | Non
             cf.profile = angular_profile(motion, gp, club_px, cfg,
                                          n_bins=N_BINS, gap_frac=0.09)
         # Stage 4b: fold in the learned detector as a further evidence source. Deliberately
-        # phase-independent, unlike the D19 motion/lines split — a learned detector has no
+        # phase-independent, unlike the classical motion/lines split — a learned detector has no
         # reason to fail specifically in the downswing the way ray-marching does, and asserting
         # a phase preference before the position-error metric exists would be exactly the
-        # unfalsifiable tuning D20 warns against.
+        # unfalsifiable tuning that no position-error metric exists to falsify.
         #
         # `detector_inject="none"` skips this entirely while the detector still runs and still
         # publishes its raw boxes, so the model can be judged without the solver in the way.
@@ -1257,7 +1280,7 @@ def track(video_path, pose_frames, ev, handedness="right", cfg: ClubConfig | Non
                                     club_px * 0.05, club_px * 0.25))
     res.butt_len = float(butt_px / h)
 
-    # The club head at address IS the ball position (doc 04 §3) — the single most useful
+    # The club head at address IS the ball position (the club-tracking spec) — the single most useful
     # landmark we get for free, and the anchor for resolving impact.
     seed = np.array(cal[2]) * [w, h] if cal is not None else None
     imp_f = ev["events"]["impact"]["frame"]
@@ -1306,7 +1329,7 @@ def track(video_path, pose_frames, ev, handedness="right", cfg: ClubConfig | Non
             f"head taken from the model on {took}/{n} frames "
             f"(confident detections on {saw}; min conf {cfg.detector_primary_min_conf})")
         # Then de-noise what was measured. Order matters and is the same principle as
-        # `use_rigid`: measure first, smooth second (D32). `measured=took_frames` is what stops
+        # `use_rigid`: measure first, smooth second. `measured=took_frames` is what stops
         # the smoother averaging the model's answer together with the solver's on the frames
         # the model declined — the source of the visible jumps.
         if cfg.detector_smooth or cfg.detector_traj_gate:
@@ -1322,7 +1345,7 @@ def track(video_path, pose_frames, ev, handedness="right", cfg: ClubConfig | Non
         # `_build_club` re-derives length per frame and clamps only the upper bound, so the
         # drawn club changes length frame to frame even at the address hold where the club is
         # physically stationary (measured stdev 18.8px). rigidify() was written for exactly
-        # this and was never called. See DECISIONS D32.
+        # this and was never called.
         before = [c.length for c in res.frames if c.length is not None]
         rigidify(res, pose_frames, club_px, butt_px, w, h, cfg)
         after = [c.length for c in res.frames if c.length is not None]
@@ -1371,7 +1394,7 @@ def track(video_path, pose_frames, ev, handedness="right", cfg: ClubConfig | Non
                     f"({100 * d_addr / (body_h * h):.0f}% of body height)")
             else:
                 res.notes.append("ball not found by disappearance; "
-                                 "falling back to the club head at Address (doc 04 §3)")
+                                 "falling back to the club head at Address (the club-tracking spec)")
         anchor_ball(res, ev, pose_frames, club_px, butt_px, w, h, body_h, cfg, ball_xy=ball_xy)
     _build_trace(res, ev, n, cfg)
     # Trace-only cleanup, after coverage has been computed from the untouched path so the
@@ -1390,7 +1413,7 @@ def track(video_path, pose_frames, ev, handedness="right", cfg: ClubConfig | Non
                 f"(back {rejected.get('backswing', 0)}, down {rejected.get('downswing', 0)}, "
                 f"through {rejected.get('followthrough', 0)})")
         # The falsifiable number: does the drawn line actually go through the measured heads?
-        # Smoothness cannot answer that, which is the whole D20 lesson.
+        # Smoothness cannot answer that, which is the whole lesson.
         hits = sum(h for h, _ in fid.values())
         tots = sum(t for _, t in fid.values())
         per = "  ".join(f"{k[:4]} {h}/{t}" for k, (h, t) in fid.items())
@@ -1401,7 +1424,7 @@ def track(video_path, pose_frames, ev, handedness="right", cfg: ClubConfig | Non
 
 
 def _smooth_segments(res: ClubResult, ev, n):
-    """Doc 04 Layer D — smooth per swing segment; the path reverses sharply at Top."""
+    """The club-tracking spec's Layer D — smooth per swing segment; the path reverses sharply at Top."""
     e = ev["events"]
     bounds = [e["address"]["frame"], e["top"]["frame"], e["impact"]["frame"],
               min(n - 1, e["finish"]["frame"])]
@@ -1441,7 +1464,7 @@ def _resolve_direction(res: ClubResult, addr_f, cal, club_px, w, h):
     the opposite side of the hands between two frames at 60fps. So we seed at Address, where
     the static calibration gives a known-good direction, then walk outward in both
     directions in time, each step choosing the candidate closest to where constant-velocity
-    extrapolation says the head should be. This is doc 04 Layer D's gating idea applied to
+    extrapolation says the head should be. This is the club-tracking spec's Layer D's gating idea applied to
     the sign rather than to the position.
     """
     n = len(res.frames)
@@ -1546,7 +1569,7 @@ def apply_detector_heads(res: ClubResult, detector, pose_frames, club_px, butt_p
 
     The solver is very good at *continuity* and poor at agreeing with a detector that is
     visibly right: injecting detections as profile evidence left the solved head a median 60px
-    away with only 30% of frames within 20px (D32). Where the model has a confident box on the
+    away with only 30% of frames within 20px. Where the model has a confident box on the
     club head, that box is a better answer than a cost minimum, so take it.
 
     What this deliberately does NOT do is smooth or interpolate. It writes `raw_angle` and
@@ -1607,7 +1630,7 @@ def smooth_detector_path(res: ClubResult, pose_frames, club_px, butt_px, w, h, c
     as interpolated — which is why its coverage reads low and honest. That is the right model
     when the angle is all you trust. But the detector gives a genuinely good head position, and
     forcing it onto a calibrated length throws that away — especially since the calibration
-    looks ~1.5x too long (D32).
+    looks ~1.5x too long.
 
     So this keeps the measured radius and only removes noise from it. Polar about the hands
     rather than raw x/y because the head rides an arc: smoothing x and y independently cuts the
@@ -1711,7 +1734,7 @@ def smooth_detector_path(res: ClubResult, pose_frames, club_px, butt_px, w, h, c
         cf.angle = float(np.degrees(np.arctan2(-d[1], d[0])))
         if not ok[f]:
             # Reconstructed from neighbours rather than measured — say so, and cap the
-            # confidence so the UI dashes it (doc 02's interp styling).
+            # confidence so the UI dashes it (the architecture spec's interp styling).
             cf.interp = True
             cf.conf = min(cf.conf, 0.35)
     return rejected
@@ -1905,7 +1928,7 @@ def robust_inliers(pts, confs, degree=3, tol_mult=2.5, iters=5):
     So reject rather than average. This is RANSAC's idea run as IRLS: fit a cubic in normalised
     time to x and y, measure each point's residual, keep the consensus and refit without the rest.
     Degree 3 because a club-head path within one segment is a straight line, a smooth curve, or a
-    curve with at most one direction change — never jagged (the same constraint D20b tested).
+    curve with at most one direction change — never jagged (the same constraint the smoothness probe tested).
 
     Two details that matter:
       * The tolerance is **scaled by the median residual**, not fixed. Fixed pixels cannot work
@@ -1913,7 +1936,7 @@ def robust_inliers(pts, confs, degree=3, tol_mult=2.5, iters=5):
         impact.
       * Detector confidence seeds the weights, so a point the model itself was unsure about has
         to agree with its neighbours to survive, while a confident one is given the benefit of
-        the doubt. Confidence alone was not enough (D32 showed a 0.35 threshold silently
+        the doubt. Confidence alone was not enough (a 0.35 threshold silently
         discarding good frames) but as a prior on a consensus fit it is exactly right.
 
     Returns a boolean mask over `pts`.
@@ -1951,7 +1974,7 @@ def trace_fidelity(drawn, measured, tol):
 
     The metric this whole exercise was missing. Smoothness says nothing about whether the line
     follows the club — a path can be beautifully smooth and nowhere near the detections, which is
-    the D20 complaint in miniature. This asks the falsifiable question instead: of the heads the
+    the unfalsifiable-tuning complaint in miniature. This asks the falsifiable question instead: of the heads the
     model measured, how many does the rendered polyline pass within `tol` of?
 
     Point-to-segment, not point-to-vertex: after filtering, the polyline's vertices are sparse, so
@@ -2024,7 +2047,7 @@ def smooth_trace(res: ClubResult, ev, n, cfg):
       "moving"    + a box filter. Cheap, and it shortens the path through tight curvature.
       "savgol"    + Savitzky-Golay, which fits a local polynomial instead of averaging, so it
                   preserves the curvature at Top where a box filter cuts the corner. Same
-                  reason doc 03 §3.5 chose it for the pose series.
+                  reason the pose spec chose it for the pose series.
 
     Smoothing is per segment. The path reverses sharply at Top, so one pass across the whole
     swing would round off the corner that defines the transition.
@@ -2117,14 +2140,98 @@ def smooth_trace(res: ClubResult, ev, n, cfg):
     return dropped, rejected, fidelity
 
 
+def takeaway_start(measured, a_f: int, club_px: float, cfg: ClubConfig):
+    """`(frame, why)` — the frame the club head left its rest position, at or before Address.
+
+    `measured` is frame -> head position in PIXELS, and must be the detector's own heads: the
+    solver's head is constrained by `grip_center`, so it inherits exactly the hand motion this
+    is trying to be independent of.
+
+    Address is detected from the hands (`events.detect`), as the end of the last quasi-static
+    hold at setup height. The takeaway does not start at the hands — the head sits at the far end
+    of the lever, so it has already travelled a centimetre or two by the time the grip moves
+    enough to break a stillness threshold. Walk back from Address for as long as the head kept
+    moving, and the frame it stopped moving at is where the backswing actually began.
+
+    **The rest guard is the load-bearing part, not the walk-back.** A golfer who *sets up* by
+    walking the club into the ball produces exactly the same signal read forwards — a head
+    moving right up to Address — and dragging Address back into that is worse than leaving it
+    late, because everything from `address_span` to the ball landmark is measured
+    over the setup. So a candidate is only accepted when the head is demonstrably STILL in the
+    frames immediately before it. Measured across the fixtures, the two cases separate cleanly:
+    the three 6-iron clips sit 0.6-2.7px from rest before their candidate, while `perfect`
+    (20.0px), `pro_2` (6.5px) and swing1 (no detections at all there) do not, and all three of
+    those are the walk-in case. There is deliberately no fallback for them — the hand-based frame
+    stands and says so in the notes.
+
+    Returns `(a_f, reason)` unchanged whenever the evidence is not there. Never returns a frame
+    later than Address, and never more than `cfg.takeaway_lookback` before it.
+    """
+    if not cfg.takeaway_refine or a_f not in measured:
+        return a_f, "no detector head at the Address frame"
+    move_tol = cfg.takeaway_move_tol * club_px
+    span = max(1, cfg.takeaway_span)
+
+    def moving(f):
+        """Did the head travel more than `move_tol` over the `span` frames ending at f?
+
+        `None` when nothing was measured near enough behind `f` to tell — which is not the same
+        as "still", and must stop the walk rather than end it.
+        """
+        prev = [g for g in measured if f - span - 2 <= g <= f - 1]
+        if not prev:
+            return None
+        g = min(prev, key=lambda x: abs(x - (f - span)))
+        return float(np.linalg.norm(measured[f] - measured[g])) * span / (f - g) > move_tol
+
+    edge = max(0, a_f - cfg.takeaway_lookback)
+    f0 = a_f
+    for f in range(a_f, edge - 1, -1):
+        if f not in measured:
+            continue
+        m = moving(f)
+        if m is None:
+            return a_f, f"no detector head behind frame {f} to measure motion against"
+        if not m:
+            f0 = f
+            break
+        f0 = f
+    else:
+        return a_f, (f"the club head was still moving {cfg.takeaway_lookback} frames before "
+                     f"Address, so where it started cannot be told from this window")
+    if f0 >= a_f:
+        return a_f, "the club head was already at rest at Address"
+
+    # Was it at rest before that? Greatest separation between any two measured heads in the few
+    # frames leading in — a max rather than an endpoint distance, so a head that wanders out and
+    # back cannot read as static.
+    rest_fs = sorted(f for f in measured
+                     if f0 - cfg.takeaway_rest_frames <= f <= f0)
+    if len(rest_fs) < 2:
+        return a_f, f"no detector heads before frame {f0} to prove the club was at rest"
+    rest = max(float(np.linalg.norm(measured[i] - measured[j]))
+               for i in rest_fs for j in rest_fs)
+    if rest > cfg.takeaway_rest_tol * club_px:
+        return a_f, (f"the club head moved {rest:.0f}px in the {cfg.takeaway_rest_frames} frames "
+                     f"before frame {f0}, so it was being walked into the ball rather than "
+                     f"taken away")
+
+    travel = float(np.linalg.norm(measured[a_f] - measured[f0]))
+    if travel < cfg.takeaway_min_travel * club_px:
+        return a_f, (f"the club head only moved {travel:.0f}px between frames {f0} and {a_f}, "
+                     f"which is within the detector's own noise")
+    return f0, (f"the club head left its rest position at frame {f0} and had travelled "
+                f"{travel:.0f}px by the hand-based Address at {a_f}")
+
+
 def refine_events(res: ClubResult, ev, cfg: ClubConfig | None = None, heads=None,
                   fps: float = 60.0):
-    """Doc 05 A.5/A.8 — replace the pose proxies for the events the club can see better.
+    """The scoring spec/A.8 — replace the pose proxies for the events the club can see better.
 
     Toe-Up and Mid-Follow-Through were always here. Impact and the address hold joined them
     because they are the other two things the club measures better than the hands do, and both
     were measurably wrong: Impact 7 frames early on `perfect`, and its "quasi-static" setup hold
-    spanning 127px of club travel. Top is deliberately NOT refined here — see D49 for the
+    spanning 127px of club travel. Top is deliberately NOT refined here for the
     numbers showing the club cannot answer that one.
 
     Both events are defined by the *shaft being horizontal*, which Phase 3 could only
@@ -2132,6 +2239,9 @@ def refine_events(res: ClubResult, ev, cfg: ClubConfig | None = None, heads=None
     real criterion. Only accept it when the shaft was tracked confidently through the
     candidate span; otherwise the proxy stands, since a confident wrong answer is worse
     than an honestly uncertain one.
+
+    Address is refined FIRST, because it is the anchor the rest of this function measures from:
+    Toe-Up's plausibility window is a fraction of Address->Top, and the address hold ends at it.
     """
     cfg = cfg or ClubConfig()
     e = ev["events"]
@@ -2145,16 +2255,6 @@ def refine_events(res: ClubResult, ev, cfg: ClubConfig | None = None, heads=None
         best = min(cands)
         return best[1] if best[0] <= 18.0 else None
 
-    # Same plausibility window as the Phase 3 proxy: Toe-Up sits roughly a third of the way
-    # into the backswing. A "shaft horizontal" hit a few frames after Address is the club
-    # still sitting at the ball, not the takeaway checkpoint.
-    a0, t0 = e["address"]["frame"], e["top"]["frame"]
-    span = max(1, t0 - a0)
-    tu = horizontal_in(a0 + int(0.15 * span), a0 + int(0.60 * span))
-    if tu is not None and tu != e["toe_up"]["frame"]:
-        changed.append(f"toe_up {e['toe_up']['frame']} -> {tu} (shaft horizontal)")
-        e["toe_up"] = {"frame": int(tu), "conf": 0.8}
-
     h = res.height or 1
     club_px = (res.club_len or 0.2) * h
     # `heads` is where the DETECTOR put the club head, frame -> normalized xy. The caller has to
@@ -2167,10 +2267,42 @@ def refine_events(res: ClubResult, ev, cfg: ClubConfig | None = None, heads=None
         measured = {c.f: np.array(c.head) * [res.width or 1, h] for c in res.frames
                     if c.head and c.from_model and not c.interp and not any(np.isnan(c.head))}
 
+    # --- Address: the frame the club head left the ball ----------------------------------
+    #
+    # Stage 5 ends the approach where the HANDS stop being still, and the player calls that mark
+    # "the frame the club first moves away from the ball" (`swingPhases.ts`) — two different
+    # things, and the club one comes first. `takeaway_start` says how much first, or says it
+    # cannot tell; the reason is kept either way, because "why did this swing not move" is the
+    # question anyone tuning `takeaway_move_tol` is actually asking.
+    a_addr = e["address"]["frame"]
+    new_addr, why = takeaway_start(measured, a_addr, club_px, cfg)
+    if new_addr < a_addr:
+        changed.append(f"address {a_addr} -> {new_addr} ({why})")
+        e["address"] = {"frame": int(new_addr), "conf": max(0.75, e["address"]["conf"])}
+        # The hold the setup is medianed over ends where the backswing starts, and the invariant
+        # suite enforces exactly that. Only ever shortened: the frames between the new Address
+        # and the old one are takeaway, not setup, and the frames before the hold began were
+        # already rejected as non-static by the hand test that found it.
+        hold = ev.get("address_span")
+        if hold:
+            ev["address_span"] = [int(min(hold[0], new_addr)), int(new_addr)]
+    elif cfg.takeaway_refine:
+        res.notes.append(f"address stayed at frame {a_addr}: {why}")
+
+    # Same plausibility window as the Phase 3 proxy: Toe-Up sits roughly a third of the way
+    # into the backswing. A "shaft horizontal" hit a few frames after Address is the club
+    # still sitting at the ball, not the takeaway checkpoint.
+    a0, t0 = e["address"]["frame"], e["top"]["frame"]
+    span = max(1, t0 - a0)
+    tu = horizontal_in(a0 + int(0.15 * span), a0 + int(0.60 * span))
+    if tu is not None and tu != e["toe_up"]["frame"]:
+        changed.append(f"toe_up {e['toe_up']['frame']} -> {tu} (shaft horizontal)")
+        e["toe_up"] = {"frame": int(tu), "conf": 0.8}
+
     # --- Impact: the club head's lowest point ------------------------------------------
     #
     # Impact is where the head reaches the bottom of its arc, and that is a thing the club can
-    # be *seen* doing — unlike Top, where the detector has nothing (D49). The Stage 5 estimate
+    # be *seen* doing — unlike Top, where the detector has nothing. The Stage 5 estimate
     # comes from hand height and is good but not exact: on `perfect` it lands 7 frames early, so
     # the drawn trace turns follow-through-white while the club is still coming down.
     #
@@ -2207,11 +2339,11 @@ def refine_events(res: ClubResult, ev, cfg: ClubConfig | None = None, heads=None
 
     # --- Address hold: require the CLUB to be still, not just the hands ------------------
     #
-    # `address_span` is the quasi-static hold setup measurements are medianed over (D28), and it
+    # `address_span` is the quasi-static hold setup measurements are medianed over, and it
     # is found from hand motion. That misses a golfer who walks the club into the ball: on
     # `perfect` the head travels 127px — 22% of body height — across the detected hold while the
     # hands move 15px, so the "setup" is measured over a club still sliding into position, and
-    # the ball landmark taken from it (D44) is a median of a moving club.
+    # the ball landmark taken from it is a median of a moving club.
     #
     # Trim the span back from Address to the frames where the head actually sat still. Only when
     # it is badly wrong: the other three fixtures move 4-23px across their holds and are left
@@ -2242,6 +2374,16 @@ def refine_events(res: ClubResult, ev, cfg: ClubConfig | None = None, heads=None
                  "mid_downswing", "impact", "mid_follow_through", "finish"]
         ev["phases"] = [{"name": f"{a}->{b}", "from": e[a]["frame"], "to": e[b]["frame"]}
                         for a, b in zip(order[:-1], order[1:])]
+        # So is the playback window, whose front edge is pinned to exactly one second before
+        # Address. Left alone after Address moves it would show 1.0s + however far the
+        # takeaway refinement reached, which is the per-clip variation the fixed playback window exists to remove.
+        if ev.get("playback_window") and e["address"]["frame"] != a_addr:
+            win, pad = events.playback_span(e["address"]["frame"], e["finish"]["frame"],
+                                            len(res.frames), fps)
+            if win != ev["playback_window"]:
+                changed.append(f"playback_window {ev['playback_window']} -> {win} "
+                               f"(the approach stays exactly 1.0s)")
+            ev["playback_window"], ev["playback_pad"] = win, pad
         # And so is tempo, which is Address->Top->Impact and nothing else. Snapping Impact to
         # the club's low point moves it, and a tempo left over from before is the number the
         # scorecard reads and the one the implausibility check fires on — stale, it both
@@ -2271,7 +2413,7 @@ def find_ball(grays, ev, near_norm, body_h, w, h, cfg):
     Returns `(x, y, radius_px)` normalized, or None. Deliberately conservative: a wrong ball is
     worse than no ball, because `anchor_ball` writes a club position from it.
 
-    Why bother rather than just using the club head at Address (doc 04 §3): that landmark is
+    Why bother rather than just using the club head at Address (the club-tracking spec): that landmark is
     only the ball if Address lands on a frame where the club is actually grounded behind it. On
     `perfect` it does not — the detected Address frame catches the club still off the turf, 150px
     (18% of body height) from the ball.
@@ -2283,7 +2425,7 @@ def find_ball(grays, ev, near_norm, body_h, w, h, cfg):
     gone after impact) is also a property of a shoe edge, a divot, a background range ball, or a
     turf speck, and the combination that excludes all of them also excludes the ball. That is
     the case for a learned detector — the club-head model already in the pipeline had the same
-    shape of problem — not for another threshold. See DECISIONS D44.
+    shape of problem — not for another threshold.
     """
     e = ev["events"]
     addr_f, imp_f = e["address"]["frame"], e["impact"]["frame"]
@@ -2358,9 +2500,9 @@ def find_ball(grays, ev, near_norm, body_h, w, h, cfg):
 
 def anchor_ball(res: ClubResult, ev, pose_frames, club_px, butt_px, w, h, body_h, cfg,
                 ball_xy=None):
-    """Put the club head on the ball at Impact when nothing detected it there (doc 04 §3).
+    """Put the club head on the ball at Impact when nothing detected it there (the club-tracking spec).
 
-    The club head at Address *is* the ball. That is doc 04's own statement and it is already how
+    The club head at Address *is* the ball. That is the club-tracking spec's own statement and it is already how
     `calibrate` seeds the solver — but it was only ever used going forwards, and the same
     landmark says something about Impact: the head returns to that point, because otherwise
     there is no shot. Nothing in the pipeline was asserting that.
@@ -2395,8 +2537,8 @@ def anchor_ball(res: ClubResult, ev, pose_frames, club_px, butt_px, w, h, body_h
 
     # Where the ball is. `find_ball` if it answered — it is a measurement of the ball itself.
     # Otherwise the club head over the Address hold, medianed so one bad frame in the
-    # quasi-static span cannot move it (the same reason D28 takes setup metrics that way). That
-    # fallback is doc 04 §3's landmark and is right whenever Address caught the club grounded
+    # quasi-static span cannot move it (the same reason setup metrics are taken that way). That
+    # fallback is the club-tracking spec's landmark and is right whenever Address caught the club grounded
     # behind the ball; `find_ball`'s docstring covers the clip where it does not.
     if ball_xy is not None:
         ball = np.array([float(ball_xy[0]), float(ball_xy[1])])
@@ -2473,7 +2615,7 @@ def _wrap180(a):
 
 
 def _build_trace(res: ClubResult, ev, n, cfg: ClubConfig | None = None):
-    """Segment the head path into the three polylines the renderer draws (doc 04 §5)."""
+    """Segment the head path into the three polylines the renderer draws (the club-tracking spec)."""
     cfg = cfg or ClubConfig()
     e = ev["events"]
     spans = {
@@ -2483,7 +2625,7 @@ def _build_trace(res: ClubResult, ev, n, cfg: ClubConfig | None = None):
     }
     # Coverage counts frames whose head was *measured with reasonable confidence*, not
     # merely present. Counting presence reported 97% on a downswing whose trace is visibly
-    # wrong — the gate in doc 02 is meant to stop exactly that from reaching the UI, and a
+    # wrong — the gate in the architecture spec is meant to stop exactly that from reaching the UI, and a
     # presence-based number defeats it.
     measured = {}
     for key, (a, b) in spans.items():

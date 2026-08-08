@@ -38,7 +38,7 @@ The blocker is something you can resolve right now with code or shell commands, 
 - Anything requiring a design choice (which package to add, where to put a file, which pattern to use).
 - Anything touching credentials, env vars, or secrets.
 - Anything that requires modifying a step file's Steps or Verification.
-- Fixes that require changing CLAUDE.md, `instructions/`, or `docs/DECISIONS.md`.
+- Fixes that require changing CLAUDE.md, `.claude/ai-instructions/PROJECT_MAIN.md`, or `docs/DECISIONS.md`.
 
 **Attempt cap:** Two attempts. If the same command fails twice with the same root cause after AUTONOMOUS-FIX intervention, reclassify — usually to ARCHITECTURAL-DECISION (the "obvious" fix isn't, and there's a real ambiguity hiding) or USER-ACTION-NEEDED.
 
@@ -68,14 +68,14 @@ The blocker is a STRATEGIC choice the project docs don't cover, and picking wron
 - Anything touching money, security, or PII (how long uploaded swing video is retained, whether a new field stores anything identifying).
 - Cross-system ownership or a rule the CLAUDE.md constraints don't already settle (most ownership questions here ARE already settled — e.g. "CV lives in Python, not Node" is non-negotiable, not architectural; reread before escalating).
 - Whether to break `analysis.json`'s schema for already-stored artifacts, whether to bump `scoring_model_version`, whether to migrate historic swings vs. leave old reports as-is.
-- Which AI provider serves production traffic (`ClaudeCodeProvider` vs `AnthropicAPIProvider`, doc 07) if a step reaches that decision without the docs already having settled it.
+- Which AI provider serves production traffic (`ClaudeCodeProvider` vs `AnthropicAPIProvider`, the AI-provider spec) if a step reaches that decision without the docs already having settled it.
 - Anything the `/architect` skill would own, or a domain the user has explicitly flagged for review.
 
 **Hard rule (strategic only):** Do NOT pick. Even if you have a strong opinion, even if "industry standard" suggests one answer, this is the user's call.
 
 **Handling:** Present 2-3 options with tradeoffs. Use `AskUserQuestion` for clean disambiguation. Log the blocker as `ARCHITECTURAL-DECISION`. Stop.
 
-The exception: if `instructions/00-README.md` through `instructions/08-ROADMAP.md`, or a CLAUDE.md file, *does* speak to this decision and you missed it, that's not architectural — it's just a documented requirement you need to follow. Reread the relevant doc before escalating.
+The exception: if `.claude/ai-instructions/PROJECT_MAIN.md`, or a CLAUDE.md file, *does* speak to this decision and you missed it, that's not architectural — it's just a documented requirement you need to follow. Reread the relevant doc before escalating.
 
 ### EXTERNAL-DEPENDENCY
 

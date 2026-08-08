@@ -48,7 +48,7 @@ or agent) with zero chat context. Steps:
    - 1–3 **user stories** ("As a `<role>`, I want `<capability>` so that `<benefit>`").
    - **Why it matters**, tied to what actually makes it valuable here — better pose/club tracking accuracy,
      coaching/scorecard quality, player UX (frame sync, overlays), or production readiness (see CLAUDE.md's
-     Non-Negotiable Constraints and `instructions/08-ROADMAP.md` for phase priorities).
+     Non-Negotiable Constraints and `.claude/ROADMAP.json` for phase priorities).
    - A **first-pass sketch** of the likely shape + where it'd live in code — clearly marked *sketch, not a
      commitment*. Reuse existing primitives/tracks where you can name them (e.g. `lib/overlays.ts`'s overlay
      catalogue, `metrics.angle_fields`, the `scoring_config/<version>.json` pattern).

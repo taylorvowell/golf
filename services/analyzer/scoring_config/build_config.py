@@ -7,8 +7,8 @@ This table is the source of truth; `v1.json` is its committed, versioned output 
 this and `validate_scoring_config.py` after any edit; bump VERSION for a material band/weight
 change per CLAUDE.md's non-negotiable ("every coach report stores scoring_model_version").
 
-Each row maps one `instructions/criteria.md` row (bucket A or B per
-`docs/SCORING-CRITERIA-TRIAGE.md`) onto a field the analyzer already computes
+Each row maps one `scoring_config/criteria.md` row (bucket A or B per
+the scoring triage) onto a field the analyzer already computes
 (`swingsage/metrics.py`, `checkpoints.py`, `events.py`). Coverage is intentionally NOT
 exhaustive over all 207 criteria.md rows — see COVERAGE.md in this directory for exactly which
 ids are wired here versus deferred, and why. Silently dropping a row was the thing to avoid,
@@ -44,7 +44,7 @@ coverage it does not have. This exists because the alternative is worse: v1 scor
 rotation checks off `*_turn_from_address`, a quantity that DECREASES as a down-the-line golfer
 turns (see the ROT block below), so every swing floored those nine at 0 and every golfer was
 told to "turn your shoulders more" regardless of what they did. A check that cannot be measured
-honestly has to abstain, not guess — the same rule doc 04 §6 applies to face angle. Un-defer a
+honestly has to abstain, not guess — the same rule the club-tracking spec applies to face angle. Un-defer a
 row by deleting the argument once its metric is trustworthy; nothing else needs to change.
 """
 import json
@@ -55,7 +55,7 @@ from pathlib import Path
 # v1.json stays frozen on disk so reports stamped `v1` remain reproducible (CLAUDE.md).
 VERSION = "v2"
 
-# category slugs match doc 05 Part C1's seven scoring categories
+# category slugs match the scoring spec's Part C1's seven scoring categories
 SETUP = "setup_posture"
 TAKEAWAY = "takeaway"
 BACKSWING = "backswing_top"

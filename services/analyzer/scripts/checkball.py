@@ -8,7 +8,7 @@
 Why this script exists at all: the ball is the anchor for the club head at Impact
 (`club.anchor_ball`), and on a tour swing that is the *only* thing putting the drawn path on the
 strike — nothing detects a club head moving 90px a frame through the turf. A wrong ball is
-therefore a wrong club, confidently drawn. Doc 04 §7's rule about judging club work on pixels
+therefore a wrong club, confidently drawn. The club-tracking spec's rule about judging club work on pixels
 rather than on numbers applies to it exactly as it does to the shaft.
 
 The panel shows three things: the ball as found (green), the club head at Address (magenta), and

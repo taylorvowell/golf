@@ -34,7 +34,7 @@ Copy the structure below into the new audit's `00-overview.md`, replacing `<brac
 **Docs consulted:**
 - `.claude/rules/nextjs.md` / `tailwind-v4.md` / `typescript.md` / `testing.md` (whichever apply)
 - `apps/web/src/components/ui/kiosk.tsx`
-- `instructions/0N-*.md` (whichever spec doc the target lives under)
+- `.claude/ai-instructions/PROJECT_MAIN.md` (whichever section the target lives under)
 - ...
 
 **`docs/DECISIONS.md` entries referenced:**
@@ -73,7 +73,7 @@ Listed by severity. Each finding has a stable ID (C1, H1, M1, L1, ...) that phas
 #### C1 — <short title>
 
 - **Axis:** <#5 Scoring-config correctness>
-- **Source of truth:** <a docs/DECISIONS.md D-number / .claude/rules/*.md / kiosk.tsx export / instructions/0N-*.md>
+- **Source of truth:** <a docs/DECISIONS.md entry / .claude/rules/*.md / kiosk.tsx export / PROJECT_MAIN.md section>
 - **Evidence:**
   - [path/to/file.py:42-58](path/to/file.py#L42-L58) — <what is there>
   - [path/to/other.ts:120](path/to/other.ts#L120) — <what is there>

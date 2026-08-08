@@ -1,4 +1,4 @@
-"""Product skeleton definition (doc 03 §2).
+"""Product skeleton definition (the pose spec).
 
 MediaPipe's 33 native BlazePose landmarks, plus the derived joints the product needs
 appended after them. The keypoint order defined here IS the array order in analysis.json —
@@ -33,7 +33,7 @@ NATIVE_NAMES = [
 ]
 N_NATIVE = len(NATIVE_NAMES)
 
-# --- Derived joints, appended after the native 33 (doc 03 §2) ---
+# --- Derived joints, appended after the native 33 (the pose spec) ---
 # (name, parent_a, parent_b, allow_single). Each is the midpoint of two keypoints, with
 # confidence = min of its parents.
 #
@@ -41,7 +41,7 @@ N_NATIVE = len(NATIVE_NAMES)
 # single-parent answer is anatomically close to the midpoint: the ears sit either side of a
 # narrow head, and both hands share one grip. It is false for neck/mid_hip, where one
 # shoulder or hip would place the joint half a body-width off. This matters most for
-# grip_center — it anchors club detection (doc 04 Layer B), and on our fixtures the far
+# grip_center — it anchors club detection (the club-tracking spec's Layer B), and on our fixtures the far
 # wrist is the least reliable joint in the skeleton, so requiring both would leave the
 # anchor undefined for most of the swing.
 DERIVED = [
@@ -58,13 +58,13 @@ DERIVED = [
     ("right_hand",  "right_wrist",   "right_wrist",    True),
 ]
 
-# --- Measured points, appended after the derived block (D25) --------------------------
+# --- Measured points, appended after the derived block --------------------------
 # Direct model outputs with no MediaPipe-era native slot. Unlike DERIVED these are not
 # computed from other keypoints, and unlike NATIVE they only exist when a wholebody model
 # ran — the Halpe26 path leaves them missing, which every consumer already handles.
 #
 # They are appended *after* the derived joints rather than slotted next to the native 33,
-# because doc 02 fixes the array order and indices 0-39 are already published. Append only.
+# because the architecture spec fixes the array order and indices 0-39 are already published. Append only.
 MEASURED = [
     # Third-metacarpal knuckle. Wrist flexion/extension is defined along this bone, so it
     # is the hand's real axis; the four-MCP centroid used before blends roll into the
@@ -85,7 +85,7 @@ MEASURED = [
     "jaw_left", "jaw_right",
 ]
 
-# --- Derived joints appended AFTER the measured block (D25, append-only) ---------------
+# --- Derived joints appended AFTER the measured block (append-only) ---------------
 # Same shape as DERIVED — (name, parent_a, parent_b, allow_single), midpoint with
 # confidence = min — but these were added once indices 0-47 were already published, so they
 # cannot be slotted beside their siblings in the derived block without renumbering MEASURED.
@@ -110,7 +110,7 @@ DERIVED_TAIL = [
 ]
 
 # Points Stage 3 tracks and smooths: the native block plus the measured extras. Derived
-# joints are excluded by design — doc 03 §3.6 requires them recomputed *after* smoothing.
+# joints are excluded by design — the pose spec requires them recomputed *after* smoothing.
 TRACKED_NAMES = NATIVE_NAMES + MEASURED
 N_TRACKED = len(TRACKED_NAMES)
 
@@ -123,19 +123,19 @@ DERIVED_NAMES = [d[0] for d in DERIVED]
 DERIVED_TAIL_NAMES = [d[0] for d in DERIVED_TAIL]
 IDX = {name: i for i, name in enumerate(KEYPOINT_NAMES)}
 
-# Hand landmarks 17-22 are unreliable while gripping a club (doc 03 §2) — the club
+# Hand landmarks 17-22 are unreliable while gripping a club (the pose spec) — the club
 # pipeline owns that region. Excluded from rendering and from sanity checks.
 #
 # That verdict is about MediaPipe, which infers these from the body model and cannot see a
 # closed fist. A wholebody model measures the hand directly and fills the same three slots
 # with real index/pinky/thumb MCP joints, so Stage 3 takes `trust_hands` and skips this
-# blanket rejection on that path (D25).
+# blanket rejection on that path.
 UNRELIABLE = {"left_pinky", "right_pinky", "left_index", "right_index",
               "left_thumb", "right_thumb"}
 
 SIDE_LEFT, SIDE_RIGHT, SIDE_MID = "L", "R", "M"
 
-# (a, b, side) — side drives the render hue (doc 03 §6)
+# (a, b, side) — side drives the render hue (the pose spec)
 BONES = [
     ("head_center", "neck", SIDE_MID),
     ("neck", "spine_mid", SIDE_MID),
@@ -190,7 +190,7 @@ def add_derived(kp, st=None, grip=None, hands=None):
         followed by the measured extras (mutated in place, then returned).
     st: optional parallel status list, extended in step so provenance survives.
 
-    The published order is native -> derived -> measured (doc 02 fixes indices 0-39), but
+    The published order is native -> derived -> measured (the architecture spec fixes indices 0-39), but
     Stage 3 hands back native -> measured because those are the points it smooths. So the
     measured tail is lifted off, the derived block appended, and the tail put back.
 
@@ -311,7 +311,7 @@ def add_derived(kp, st=None, grip=None, hands=None):
 def strip_derived(kp, st=None):
     """Undo add_derived, leaving the N_TRACKED array Stage 3 expects.
 
-    Two blocks have to come off and they are not adjacent (D25): the original derived joints
+    Two blocks have to come off and they are not adjacent: the original derived joints
     sit *between* the native block and the measured extras, while the append-only tail sits
     after them. Truncating from N_NATIVE would discard every wholebody point (chin, small
     toes, middle knuckles) before Stage 3 saw them; removing only the middle block would

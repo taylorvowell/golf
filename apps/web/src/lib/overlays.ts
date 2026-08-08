@@ -5,7 +5,7 @@
  * the dropdown renders itself, and so adding an overlay is one entry rather than a checkbox
  * plus a label plus a caveat paragraph in three places.
  *
- * The canvas stack order is fixed and lives in the draw function, not here (doc 02):
+ * The canvas stack order is fixed and lives in the draw function, not here (the architecture spec):
  * `video → trace → club → raw boxes → skeleton → angles`.
  */
 

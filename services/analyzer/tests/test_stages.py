@@ -31,7 +31,7 @@ def test_events(request, fx, frozen):
 def test_checkpoints(request, fx, frozen):
     """The 10 P-system positions. Club is passed as None here on purpose.
 
-    `checkpoints.build` takes club data to resolve the three shaft-defined positions (D31), and
+    `checkpoints.build` takes club data to resolve the three shaft-defined positions, and
     the frozen input carries per-frame heads but not shafts. Pinning the club-free path is still
     worth doing — it is the path every clip takes when coverage fails the quality gate, and P6's
     proxy fallback is exactly the kind of code that rots unnoticed.

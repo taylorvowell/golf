@@ -4,8 +4,8 @@ This is the half of the suite that keeps working as fixtures are added. A snapsh
 recorded answer per clip; an invariant needs nothing, so dropping a tenth fixture into the
 manifest immediately buys ten clips' worth of contract checking.
 
-Everything asserted here is a promise `analysis.json` makes to the player (doc 02) or a rule
-doc 05 states about event ordering. A violation is a bug in the analyzer, never a
+Everything asserted here is a promise `analysis.json` makes to the player (the architecture spec) or a rule
+the scoring spec states about event ordering. A violation is a bug in the analyzer, never a
 fixture-specific quirk.
 """
 from __future__ import annotations
@@ -31,7 +31,7 @@ def detected(frozen):
 
 
 def test_keypoint_block_is_49_and_append_only(frozen):
-    """33 native + 7 derived + 8 measured + 1 derived-tail, in that published order (D25).
+    """33 native + 7 derived + 8 measured + 1 derived-tail, in that published order.
 
     Reordering would silently change the meaning of published indices 0-47 for every stored
     artifact, which is why this is asserted rather than trusted. The anchors below are one
@@ -50,7 +50,7 @@ def test_keypoint_block_is_49_and_append_only(frozen):
 
 
 def test_coordinates_are_normalized(frozen):
-    """x right, y down, both 0-1, so the client only ever scales (doc 02).
+    """x right, y down, both 0-1, so the client only ever scales (the architecture spec).
 
     A small overshoot is legitimate: a joint can be estimated just outside frame. A large one
     means an un-normalized pixel value leaked through, which is the failure this catches.
@@ -64,7 +64,7 @@ def test_coordinates_are_normalized(frozen):
 
 
 def test_confidence_is_truncated_not_rounded(frozen):
-    """D33: every consumer re-applies the same MIN_CONF gate, so a value rounding *up* onto the
+    """Every consumer re-applies the same MIN_CONF gate, so a value rounding *up* onto the
     threshold makes the client include a point the analyzer dropped. Truncation can only ever
     move a value away from the gate. Verified structurally — 5 decimals, never a 6th."""
     for fr in frozen["pose"]["frames"]:
@@ -75,7 +75,7 @@ def test_confidence_is_truncated_not_rounded(frozen):
 
 
 def test_event_ordering_is_strict(detected):
-    """A < TU < MB < T < MD < I < MFT < F (doc 05 A), strictly increasing."""
+    """A < TU < MB < T < MD < I < MFT < F (the scoring spec), strictly increasing."""
     ev = detected[0]["events"]
     frames = [ev[n]["frame"] for n in EVENT_ORDER]
     assert frames == sorted(frames) and len(set(frames)) == len(frames), \
@@ -108,7 +108,7 @@ def test_phases_tile_the_events_without_gaps(detected):
 
 
 def test_playback_window_contains_the_swing(detected, frozen):
-    """D36's core promise: the window can be wider than address..finish but never narrower, or
+    """The window's core promise: it can be wider than address..finish but never narrower, or
     the player would refuse to seek to a frame it is drawing events for."""
     res = detected[0]
     n = len(frozen["pose"]["frames"])

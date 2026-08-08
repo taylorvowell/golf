@@ -14,7 +14,7 @@ Rules:
 - For the Python CV stack (MediaPipe Tasks API, OpenCV, Ultralytics/YOLO, PyTorch) context7's corpus is thinner — check it first, but don't hesitate to go straight to `WebSearch`/`WebFetch` against the official docs (`ai.google.dev/edge/mediapipe`, `docs.ultralytics.com`, `docs.opencv.org`, `pytorch.org/docs`) when context7 comes back empty or stale.
 - Web search only when the docs tools can't answer (changelogs, GitHub issues, version-specific breaking changes).
 - Check the installed version before answering version-sensitive questions: `apps/web/package.json` for the JS side; `services/analyzer/requirements*.txt` / `pip show <pkg>` inside the venv (`services/analyzer/.venv/Scripts/python.exe -m pip show <pkg>`) for the Python side. Also check the toolchain table in root `CLAUDE.md` — versions are deliberately unpinned across the two dev machines, so "current" here means "current for the version actually installed," not the latest release.
-- The MediaPipe Tasks API replaced the legacy `mp.solutions.pose` API (see `docs/DECISIONS.md` D1) — if a source describes `mp.solutions`, flag it as outdated before using it.
+- The MediaPipe Tasks API replaced the legacy `mp.solutions.pose` API — if a source describes `mp.solutions`, flag it as outdated before using it.
 
 Return format (your final text IS the deliverable):
 

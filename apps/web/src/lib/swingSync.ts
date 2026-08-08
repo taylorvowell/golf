@@ -12,7 +12,7 @@ import type { Analysis } from "@/lib/swings";
  *
  * **The eight detected events** work only as well as the detector does, and on heavily
  * slow-motion footage it does not work at all — the bundled reference has its impact detected
- * ~55 frames early (docs/STATUS.md).
+ * ~55 frames early.
  *
  * **Raw hand position, frame-to-frame (DTW)** is ambiguous: the hands pass through nearly the
  * same place going up and coming down, so position alone cannot say which half of the swing

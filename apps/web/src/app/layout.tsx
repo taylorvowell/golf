@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description: "AI golf swing analysis",
 };
 
-// Videos are filmed on phones and reviewed on them; doc 01 asks for mobile-first.
+// Videos are filmed on phones and reviewed on them; the product spec asks for mobile-first.
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,

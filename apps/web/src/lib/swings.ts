@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 
 /**
- * The web app never runs CV — it reads what the Python analyzer wrote (doc 00 principle 2).
+ * The web app never runs CV — it reads what the Python analyzer wrote (the master plan principle 2).
  * Until the v1 job queue and SQLite land, "the database" is the analyzer's output folder:
  * one directory per swing, each containing analysis.json plus its normalized video.
  */
@@ -19,14 +19,14 @@ export const MEDIA_ROOT =
  *   3  + checkpoints (P1–P10), + metrics.checkpoints / angle_fields (the angle catalogue
  *      and each angle's drawing geometry). Also where keypoint confidence began being
  *      truncated rather than rounded, so a v2 artifact's overlay can disagree with its own
- *      label by ~2° where a confidence rounded up onto the MIN_CONF gate (DECISIONS D33).
+ *      label by ~2° where a confidence rounded up onto the MIN_CONF gate.
  *   4  + club.frames[].from_model and the trace-only club variants.
  *   5  + playback_window — the span of the clip worth playing. The player derives a fallback
  *      from the events on older artifacts, so this one degrades rather than breaking.
  *   6  + club.trace_frames — which frame each trace point was measured on. Without it the
  *      trace can only be grown by point count, which put the head of the line up to 34 frames
  *      from the club, and the spans nothing was measured in cannot be told apart from measured
- *      path (D43). Older artifacts fall back to the even spread, so this degrades too.
+ *      path. Older artifacts fall back to the even spread, so this degrades too.
  *   7  + keypoint 48 `waist`, a derived belt-line torso node (the midpoint of `spine_mid`
  *      and `mid_hip`). Nothing here reads it by index and no bone was re-routed through it —
  *      the renderer skips joints an artifact does not carry — so a v6 artifact renders
@@ -235,7 +235,7 @@ export interface Analysis {
      * Alternative club solutions over the same frames and the same detections. Render-only —
      * metrics, face and event refinement all read the primary block. Present so the player can
      * switch between them without re-running the analyzer, because there is no ground-truth
-     * position metric yet to choose a winner (DECISIONS D20/D32).
+     * position metric yet to choose a winner.
      */
     variants?: Record<string, {
       label: string;
@@ -257,7 +257,7 @@ export interface Analysis {
     per_joint: Record<string, { coverage: number; mean_conf: number }>;
   };
   /**
-   * Club head orientation only — never an impact face angle (doc 04 §6). `checkpoints`
+   * Club head orientation only — never an impact face angle (the club-tracking spec). `checkpoints`
    * entries either carry a classification or say why they are not measurable; the impact
    * entry always defers to launch monitor data.
    */
@@ -270,7 +270,7 @@ export interface Analysis {
     capability_note: string;
   } | null;
   /**
-   * Stage 6 metrics (doc 05 Part B). Nulls mean "not measurable in this view", not zero.
+   * Stage 6 metrics (the scoring spec's Part B). Nulls mean "not measurable in this view", not zero.
    *
    * Side-keyed fields are `lead_`/`trail_`, never `left_`/`right_` — lead is the side
    * closest to the target (docs/GLOSSARY.md). Keypoint names stay anatomical.
@@ -374,8 +374,7 @@ export interface SwingSummary {
   // CLAUDE.md's Architecture section) rather than denormalized onto the `swings` row. Cheap at
   // today's swing counts; if the log grows large enough for N-file-reads-per-page-load to
   // matter, promote these to columns written at analysis time the same way frameCount/fps/
-  // width/height already are — an additive migration, not a rearchitecture (docs/DECISIONS.md
-  // D38's "what this does not change" already anticipates exactly this kind of follow-up).
+  // width/height already are — an additive migration, not a rearchitecture.
   model: string | null;
   tempoRatio: number | null;
   traceEnabled: boolean;
@@ -393,10 +392,9 @@ export function swingFile(id: string, name: string) {
 }
 
 /**
- * The swing log, scoped to one user (`docs/SCORING-CRITERIA-TRIAGE.md`-adjacent: "log swings by
- * user" — the seeded admin user today, a real session's user id once auth exists). Replaces the
- * directory scan this used to be: identity, ownership and sort order now come from Postgres
- * (`docs/DECISIONS.md` D38), not from listing `MEDIA_ROOT` and hoping every folder has a
+ * The swing log, scoped to one user — the seeded admin user today, a real session's user id
+ * once auth exists. Replaces the directory scan this used to be: identity, ownership and sort
+ * order now come from Postgres, not from listing `MEDIA_ROOT` and hoping every folder has a
  * readable `analysis.json`.
  */
 export async function listSwings(userId: string): Promise<SwingSummary[]> {

@@ -8,7 +8,7 @@ import { playbackPad, playbackWindow } from "@/lib/playbackWindow";
  * Transport and frame-sync for the swing player, lifted out of the old single-file
  * `SwingPlayer` so the video stage and the Advanced tab can drive the same playhead.
  *
- * The mechanism is doc 02's Frame Sync contract and none of it is negotiable: Stage 0
+ * The mechanism is the architecture spec's Frame Sync contract and none of it is negotiable: Stage 0
  * normalises to CFR 60fps so `frame = round(t·fps)` is exact, seeks target
  * `(frame + 0.5) / fps` to dodge boundary rounding, and playback tracks
  * `requestVideoFrameCallback`'s reported `mediaTime` rather than a timer. Overlay drift
@@ -149,7 +149,7 @@ export function usePlayer(analysis: Analysis): Player {
     v.currentTime = frameToTime(clamped);
   }, [frameToTime, w0, w1, clearHold]);
 
-  // Same mechanism as `seek` — the frame→time contract is identical and non-negotiable (doc 02);
+  // Same mechanism as `seek` — the frame→time contract is identical and non-negotiable (the architecture spec);
   // only the bound differs. See the interface for why the editor needs it.
   const seekFile = useCallback((f: number) => {
     const v = videoRef.current;

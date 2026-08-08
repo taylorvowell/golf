@@ -84,7 +84,7 @@ export default function SwingStage({
   reanalyze?: { busy: boolean; pct: number; start: () => void };
   /** Optional controlled legacy-trace smoothing. The workspace passes these for the
    * PRIMARY stage so the Debug Menu can drive the selection; the comparison pane omits
-   * them and keeps its own per-stage choice (D46). */
+   * them and keeps its own per-stage choice. */
   smoothing?: SmoothingKey;
   onSmoothing?: (k: SmoothingKey) => void;
   /** Optional controlled legacy club solution — Debug Menu drives it for the primary
@@ -128,17 +128,17 @@ export default function SwingStage({
   // Which club solution to draw. "primary" is whatever the analyzer chose; the rest are the
   // stored alternatives. Switching is a render change only — no re-analysis — which is the
   // point: comparing them on real pixels is the only way to judge them until a position-error
-  // metric exists (D20/D32). Defaults to the solution that actually reads correctly rather
+  // metric exists. Defaults to the solution that actually reads correctly rather
   // than to "primary", the deliberately conservative classical solve.
   //
   // `model_traj_measured` is drawn only through frames the detector actually measured, which is
-  // what lets it reach the ball at both ends instead of stopping ~100px short (D43) — but that
+  // what lets it reach the ball at both ends instead of stopping ~100px short — but that
   // also means it has nothing to draw on a clip where the detector rarely fires. On swing1 it
   // covers 26% of address→impact and its downswing is empty, so the choice is made from the
   // artifact rather than assumed: take it only when it covers at least half the swing, which is
-  // the same bar doc 02 sets before showing a trace at all. Otherwise leave the default where it
+  // the same bar the architecture spec sets before showing a trace at all. Otherwise leave the default where it
   // was; which solve reads best on a detector-starved clip is not something we can currently
-  // answer, and picking one would be the unfalsifiable guess D20 warns about.
+  // answer, and picking one would be an unfalsifiable guess.
   const [localClubVar] = useState(() => defaultClubVar(analysis));
   const clubVar = clubVarProp ?? localClubVar;
 
@@ -539,7 +539,7 @@ export default function SwingStage({
         const wgt = key === "downswing" ? peak * DOWNSWING_WEIGHT : peak;
         for (const piece of pieces) {
           // Reveal the finished curve up to the playhead. The tip is interpolated onto the exact
-          // frame, so it still sits on the club as you scrub (D43) — the difference from before
+          // frame, so it still sits on the club as you scrub — the difference from before
           // is only that the curve it is cutting was smoothed as a whole.
           const P = growing ? cutAt(piece, frame) : piece.pts;
           if (!P) continue;

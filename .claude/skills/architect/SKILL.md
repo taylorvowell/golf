@@ -1,6 +1,6 @@
 ---
 name: architect
-description: SwingSage's opinionated technical-architect advisor for STRATEGIC decisions — vendor/model selection, system/data ownership, pipeline-stage design, integration design, scalability, build-vs-buy. Grounds in the repo's DECISIONS.md/instructions/roadmap, researches current external facts, lands ONE justified recommendation (with the road not taken), records it durably, and hands off to build only after acceptance. Trigger on /architect, /architect-deep (multi-agent research mode), /arch, /cto, "who should own", "where should X live", "should we use X or Y", or any cross-system strategic question even when "architect" isn't said. Not for writing code, perf measurement, post-hoc review (/audit), or backlog capture.
+description: SwingSage's opinionated technical-architect advisor for STRATEGIC decisions — vendor/model selection, system/data ownership, pipeline-stage design, integration design, scalability, build-vs-buy. Grounds in the repo's current-state/north-star/roadmap docs, researches current external facts, lands ONE justified recommendation (with the road not taken), records it durably, and hands off to build only after acceptance. Trigger on /architect, /architect-deep (multi-agent research mode), /arch, /cto, "who should own", "where should X live", "should we use X or Y", or any cross-system strategic question even when "architect" isn't said. Not for writing code, perf measurement, post-hoc review (/audit), or backlog capture.
 ---
 
 # Architect
@@ -209,13 +209,13 @@ candidates. Read only what's relevant, in priority order:
   touches; check each one's `Status:` line before trusting it (roughly a quarter are no longer
   current — `SUPERSEDED`/`NEGATIVE RESULT`/`HISTORICAL` entries still matter as evidence of
   what was tried and lost).
-- **`docs/STATUS.md`** — the current handoff state and measured numbers; the closest thing to a
+- **`docs/CURRENT-STATE.md`** — the current built state and measured numbers; the closest thing to a
   north star. Never contradict it without saying so.
-- **`instructions/08-ROADMAP.md`** (and `.claude/ROADMAP.json` if a build-track system is in
+- **`.claude/ROADMAP.json`** (and the per-track step files if a build-track system is in
   use — run `/roadmap` to see it) — what's shipped vs in-flight, so you don't recommend
   building what exists or is mid-build.
 - **`CLAUDE.md`** (root) + **`apps/web/CLAUDE.md`** — hard rules and stack boundaries.
-- **`instructions/00-README.md` through `08-ROADMAP.md`** — the numbered spec docs; often the
+- **`.claude/ai-instructions/PROJECT_MAIN.md`** — the product north star; often the
   real answer is already written for the domain the question touches (pose in 03, club in 04,
   scoring in 05, simulator ingestion in 06, AI provider in 07). Search the whole `instructions/`
   and `docs/` tree for the topic — your job is to build on the committed answer or argue it's
@@ -322,7 +322,7 @@ them — these are the columns to think in:
 | --- | --- |
 | **Product goal / user journey** | What outcome this serves and the journey it sits in |
 | **Pipeline-stage ownership** | Which of the 9 stages (`normalize → frames → pose → pose-post → club → events → metrics → ai-review → coach`) owns this capability; what it must NOT touch |
-| **System boundaries** | Web app vs analyzer vs Postgres — which owns this, and the doc 02 API surface between them |
+| **System boundaries** | Web app vs analyzer vs Postgres — which owns this, and the architecture spec API surface between them |
 | **Data ownership** | `analysis.json` (per-swing artifact) vs Postgres row — source-of-truth + sync direction; no duplicate truth |
 | **Model / library selection** | Build-vs-buy for a CV/ML component (a table of candidates) |
 | **Integration design** | API surface, job polling, retries, failure modes across the web/analyzer boundary |

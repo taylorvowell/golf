@@ -10,7 +10,7 @@ const TAIL_S = 1.0;
  * The analyzer decides this (`playback_window`, schema 5) because it is a property of the
  * swing, not of the viewer: the burn-in, a future keyframe extractor and the coach report all
  * need the same answer, and the client renders a stored artifact rather than re-deriving one
- * (doc 02, UI brief §6.2). The detection also needs the per-frame hand-speed signal, which is
+ * (the architecture spec, UI brief §6.2). The detection also needs the per-frame hand-speed signal, which is
  * not in `analysis.json` — only its consequences are.
  *
  * What happens here is *arithmetic on published frame numbers*, not detection: an artifact

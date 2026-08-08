@@ -1,6 +1,6 @@
-"""Doc 04 §7 CV debug view — motion mask, Hough candidates, chosen shaft, per frame.
+"""The club-tracking spec CV debug view — motion mask, Hough candidates, chosen shaft, per frame.
 
-Tuning club tracking blind is not viable; doc 04 calls this non-negotiable for week 1 of
+Tuning club tracking blind is not viable; the club-tracking spec calls this non-negotiable for week 1 of
 Phase 4. Each tile shows one frame as four panels:
 
     grey source | motion mask (after body suppression + annulus) | all Hough candidates |

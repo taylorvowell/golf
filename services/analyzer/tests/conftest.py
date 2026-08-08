@@ -2,7 +2,7 @@
 
 Two rules shape this file:
 
-* **Snapshots are updated deliberately, never blindly** (doc 00). `--update-golden` is an
+* **Snapshots are updated deliberately, never blindly** (the master plan). `--update-golden` is an
   explicit flag, it prints what it rewrote, and it fails the run afterwards so an update can
   never be mistaken for a pass.
 * **A snapshot proves nothing has *changed*, not that anything is *right*.** Correctness against

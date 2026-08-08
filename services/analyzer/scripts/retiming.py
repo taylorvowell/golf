@@ -1,12 +1,12 @@
 """Adds the source-timing sidecar to an already-analysed swing.
 
-Writes `source_timing.json` beside the existing `analysis.json` (D54): per-source-frame PTS
+Writes `source_timing.json` beside the existing `analysis.json`: per-source-frame PTS
 from the ORIGINAL upload, the mapping onto the normalized CFR-60 timeline, and audio
 metadata. Nothing else is touched — `analysis.json` is read for the source path and never
 rewritten, so this is safe on fixtures with a good club solve (same reasoning as
 `resegment.py` / `rescore.py`: never re-run burnin.py just to gain one artifact).
 
-The source file must still exist at `video.source.path` (verified at write time, D53).
+The source file must still exist at `video.source.path` (verified at write time).
 A moved/deleted source warns and skips — timing is never fabricated from the normalized
 derivative, which is exactly the information the resample destroyed.
 

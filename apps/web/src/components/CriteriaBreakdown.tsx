@@ -5,7 +5,7 @@ import { CATEGORY_LABELS, CATEGORY_ORDER, describeCheck } from "@/lib/scoreDispl
 import { Chip, DataRow, KioskPanel, MicroHead, QualityBar } from "./ui/kiosk";
 
 /**
- * Every check the real scoring engine (`swingsage/scoring.py`, doc 05 Part C1) evaluated for
+ * Every check the real scoring engine (`swingsage/scoring.py`, the scoring spec's Part C1) evaluated for
  * this swing — the Advanced tab's measurements-only promise extended to scores: every number
  * here is read straight from `coach_report.json`, same as the angle table reads straight from
  * `analysis.json`. Composed entirely from existing `kiosk.tsx` primitives (`KioskPanel`,
@@ -28,14 +28,14 @@ export default function CriteriaBreakdown({ scorecard }: { scorecard: Scorecard 
   return (
     <KioskPanel className="p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <MicroHead tone="acid">Scoring · doc 05 Part C1</MicroHead>
+        <MicroHead tone="acid">Scoring</MicroHead>
         <Chip tone="violet">
           {scorecard.scoring_model_version}
           {scorecard.club_type ? ` · ${scorecard.club_type}` : " · club type unknown"}
         </Chip>
       </div>
       <p className="mt-2 text-[11px] leading-5 text-neutral-500">
-        Every check below is a row from <code className="text-neutral-400">instructions/criteria.md</code>,
+        Every check below is a row from <code className="text-neutral-400">scoring_config/criteria.md</code>,
         scored against <code className="text-neutral-400">scoring_config/{scorecard.scoring_model_version}.json</code> —
         see <code className="text-neutral-400">services/analyzer/scoring_config/COVERAGE.md</code> for
         exactly which criteria rows are wired versus deferred. A check reads

@@ -10,7 +10,7 @@ import type { Reanalyze } from "@/lib/useReanalyze";
  * the menu closes and the job does not: a 90-second Python run needs somewhere to live that
  * survives the click that began it. The nine pipeline stages are named in the artifact's own
  * vocabulary (`normalize`, `pose`, `club`, …) so a stall is diagnosable — which stage it stopped
- * on is the first question, and doc 02 made every stage report itself for exactly this.
+ * on is the first question, and the architecture spec made every stage report itself for exactly this.
  *
  * Renders nothing when idle. On failure it stays until dismissed and offers the stage log,
  * because a failed analysis that vanishes takes the only account of what went wrong with it.
@@ -73,7 +73,7 @@ export default function ReanalyzeProgress({ r }: { r: Reanalyze }) {
           {pct.toFixed(0)}%
         </span>
       </div>
-      {/* A determinate bar, because the analyzer reports real per-stage progress (doc 02) and a
+      {/* A determinate bar, because the analyzer reports real per-stage progress (the architecture spec) and a
           spinner alone would throw that away — the slow stages are 2-4 and knowing you are 60%
           through pose is the difference between waiting and wondering. */}
       <div className="mt-2 h-[3px] overflow-hidden rounded-full bg-white/10">

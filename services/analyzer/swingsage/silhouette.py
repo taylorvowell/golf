@@ -224,7 +224,7 @@ def butt_line(sil: dict[int, list], frames, keypoint_names, address_span, body_h
       the ball, so the hands sit ball-ward of the hip line; down the line that offset is
       horizontal in frame and its sign is the ball direction. The seat is the other way. This
       is the same signal `metrics.py`'s `ball_direction` reads, so the two cannot disagree.
-    * **It is a median over the whole address hold, not one frame** (D28), and the spread
+    * **It is a median over the whole address hold, not one frame**, and the spread
       across that hold is published as the confidence — a golfer still waggling gives a wide
       spread and says so.
 

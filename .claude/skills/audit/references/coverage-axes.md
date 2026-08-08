@@ -49,7 +49,7 @@ Root `CLAUDE.md` calls frame sync "the #1 perceived-quality feature" — overlay
 - `burnin.py` invoked on a committed fixture without `--club-detector runs/clubhead/weights/best.pt` — silently regenerates the weaker classical-only club trace and overwrites the better one already on disk.
 - Code that treats the drawn club **trace** and the per-frame club **detection** as the same product — they fail differently (D43); a straight chord across an undetected gap is intentional, not a bug to "fix" with interpolation (that was tried and is a documented negative result).
 - Trace-smoothing logic added to the pipeline (Python) instead of kept as a render-time choice (`lib/traceSmoothing.ts`, D46) — smoothing belongs in the player, not baked into stored data.
-- New CV code that doesn't route through the debug pages doc 04 §7 calls non-negotiable before trusting club output (`clubdebug.py`, `checkclub.py`, `checktrace.py`) — a PR/finding that claims "club tracking improved" with no debug-page evidence is a red flag, not a pass.
+- New CV code that doesn't route through the debug pages the club-tracking spec calls non-negotiable before trusting club output (`clubdebug.py`, `checkclub.py`, `checktrace.py`) — a PR/finding that claims "club tracking improved" with no debug-page evidence is a red flag, not a pass.
 - Confidence numbers compared or reported without accounting for D26 (pre-2026-08-04 confidence was clamped to 1.00 by a SimCC-peak clamp, not the model's opinion — old and new confidence figures are not comparable).
 
 **Source of truth:** root `CLAUDE.md` ("The 9-stage pipeline," "Verification strategy"), `docs/DECISIONS.md` D26, D43, D46, D48, D49, D50.
@@ -216,7 +216,7 @@ Root `CLAUDE.md` calls frame sync "the #1 perceived-quality feature" — overlay
 - `unstable_cache` usage that could become `'use cache'` under Next.js 16 Cache Components — this project has no recorded decision either way; flag the opportunity, don't push a migration.
 - Edge runtime used where it isn't needed.
 
-**Skip entirely:** AI-SDK/provider-routing findings, BotID, or anything assuming an AI provider is wired up — doc 07's `AIProvider` abstraction isn't built yet (scoring's coach narrative is deterministic today, not AI-generated). There is nothing to route or gateway yet; recommending one is inventing infrastructure that doesn't exist.
+**Skip entirely:** AI-SDK/provider-routing findings, BotID, or anything assuming an AI provider is wired up — the AI-provider spec's `AIProvider` abstraction isn't built yet (scoring's coach narrative is deterministic today, not AI-generated). There is nothing to route or gateway yet; recommending one is inventing infrastructure that doesn't exist.
 
 **Additional architectural suggestions (catch-all).** Use sparingly. Examples of what belongs here:
 - "This `swingsage/` module is growing fast — consider splitting `metrics.py`'s angle geometry out from its scoring-facing accessors."

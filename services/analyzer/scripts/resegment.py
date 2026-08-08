@@ -8,7 +8,7 @@ Use this rather than re-running `burnin.py` on a fixture that already has a good
 CLAUDE.md's standing warning applies — `burnin.py` without
 `--club-detector runs/clubhead/weights/best.pt` silently regenerates the club trace on the
 weaker classical-only path and overwrites the better one already on disk. This script cannot
-do that, because it never runs Stage 4. Same reasoning as `rescore.py` (D42).
+do that, because it never runs Stage 4. Same reasoning as `rescore.py`.
 
 It re-reads `analysis.mp4` and makes its own MediaPipe pass (~20s for 400 frames), which is
 the one thing `burnin.py` does NOT have to do — there the masks ride along on the pose pass

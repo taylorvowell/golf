@@ -4,7 +4,7 @@
  * The analyzer says *where* each angle lives (which keypoints, which reference direction);
  * this file only resolves those points and strokes them. **No angle is computed here** — the
  * label is read from `metrics.series[frame][field]`, so what is drawn and what is printed
- * come from the same measurement (doc 02: the player renders the artifact, it does not
+ * come from the same measurement (the architecture spec: the player renders the artifact, it does not
  * recompute it).
  *
  * That the arc matches the label is not luck. The analyzer measures in aspect-corrected

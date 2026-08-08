@@ -8,7 +8,7 @@ import { PRO_SWINGS, proSwing } from "@/lib/proSwings";
 export const dynamic = "force-dynamic"; // the analyzer writes new swings while dev runs
 
 /**
- * The swing log — one user's swings, from Postgres (docs/DECISIONS.md D38), not a directory
+ * The swing log — one user's swings, from Postgres, not a directory
  * scan. Same design system as the player: `workspace-bar` header, `kiosk-panel` cards. Cards
  * show the real scorecard's overall/band once a swing has been scored (Stage 8), alongside what
  * was actually measured (frames, view, pose coverage, tempo, whether the club trace passed its

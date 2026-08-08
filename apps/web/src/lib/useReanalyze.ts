@@ -30,8 +30,8 @@ export interface Reanalyze {
  * Python run had no representation on the page at all. Two buttons would also have meant two
  * independent pollers disagreeing about the same job.
  *
- * The protocol is doc 02's and unchanged: POST starts, GET polls stage/progress/message. Job
- * state lives in the `jobs` Postgres table (D38), so a reload mid-run rejoins the run rather
+ * The protocol is the architecture spec's and unchanged: POST starts, GET polls stage/progress/message. Job
+ * state lives in the `jobs` Postgres table, so a reload mid-run rejoins the run rather
  * than showing an idle button next to a process that is still working.
  */
 export function useReanalyze(id: string): Reanalyze {

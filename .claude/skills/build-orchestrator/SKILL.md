@@ -235,7 +235,7 @@ read all of it.
   context."
 - Read the previous step's file *only* to run its Verification commands. You don't need the
   whole file — extract the Verification section and run it.
-- Reference the relevant `instructions/NN-*.md` spec doc or `docs/STATUS.md` **only when the
+- Reference the relevant `PROJECT_MAIN.md` section or `docs/CURRENT-STATE.md` **only when the
   step file explicitly says to**. Don't open it speculatively.
 - Skip loading skills that don't apply. Match the skill to the step's domain instead of loading
   everything — check the skills list for one whose description matches (e.g. a

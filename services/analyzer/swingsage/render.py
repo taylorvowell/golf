@@ -1,4 +1,4 @@
-"""Gate 1 — burn the skeleton into the pixels (doc 03 §6 render spec).
+"""Gate 1 — burn the skeleton into the pixels (the pose spec render spec).
 
 The point of this renderer is diagnostic, not cosmetic. Frame N's skeleton is drawn onto
 frame N's pixels by the same process that computed it, so frame-sync is definitionally not
@@ -22,7 +22,7 @@ from .skeleton import BONES, IDX, RENDER_JOINTS, SIDE_LEFT, SIDE_MID, SIDE_RIGHT
 
 FFMPEG = shutil.which("ffmpeg") or "ffmpeg"
 
-# BGR. High-contrast green/yellow per doc 01 UX notes; spine in a third hue (doc 03 §6).
+# BGR. High-contrast green/yellow per the product spec UX notes; spine in a third hue (the pose spec).
 COLOR = {
     SIDE_LEFT:  (94, 197, 34),    # #22C55E green
     SIDE_RIGHT: (21, 204, 250),   # #FACC15 yellow
@@ -52,7 +52,7 @@ def _dashed(img, p1, p2, color, thickness, dash=9, gap=6):
 
 
 def draw_skeleton(img, kp, joint_r=5, bone_w=3):
-    """Draw one frame's skeleton. Low confidence => hollow joint + dashed bone (doc 03 §6)."""
+    """Draw one frame's skeleton. Low confidence => hollow joint + dashed bone (the pose spec)."""
     h, w = img.shape[:2]
 
     for a, b, side in BONES:

@@ -6,7 +6,7 @@ analysed fixtures on disk (`6iron-1`, `6iron2`, `6iron3`, `perfect`, `pro_2`, `s
 
 This is a description of **what exists today**, not what the specs plan. Every entry below is a
 number the pipeline actually emits and the player actually renders. Anything in
-`instructions/criteria.md` that isn't wired yet is out of scope here — see
+`scoring_config/criteria.md` that isn't wired yet is out of scope here — see
 [services/analyzer/scoring_config/COVERAGE.md](../services/analyzer/scoring_config/COVERAGE.md)
 for that gap.
 
@@ -515,7 +515,7 @@ has an authored band yet, so none moves the score. Ordered by how much a coach w
   which is perpendicular to the forearm's long axis. Published only as a **delta against this
   golfer's own address frame** — the absolute is camera-dependent and meaningless. Wrapped to
   −180…180 so the branch-cut crossing mid-swing doesn't report a 360° jump.
-- **⚠ This is never a face angle in degrees.** Doc 04 §6 reserves that number for the
+- **⚠ This is never a face angle in degrees.** The club-tracking spec reserves that number for the
   simulator impact image. Nothing in the pipeline is allowed to fabricate it from video.
 - **On the fixtures at impact:** −13.0 / −16.3 / −46.9 / −21.2 / n-a / **−114.6** / n-a.
 
@@ -764,12 +764,12 @@ turn at top (w68), `ROT-04` hip turn at top (w62), `ROT-05` hip turn at impact (
 
 ### 56. Face angle in degrees
 - **Category:** Impact
-- **Status:** **deliberately never computed from video, and never will be.** Doc 04 §6 is a
+- **Status:** **deliberately never computed from video, and never will be.** The club-tracking spec is a
   non-negotiable project constraint: at 60 fps the clubhead at impact is a blur streak. What
   *is* published is `analysis.face.checkpoints[event]` — a **classification**
   (square/open/closed) with its own confidence and, where the silhouette resolves, a
   `head_to_shaft_deg`. The authoritative degrees source is the simulator impact image
-  (doc 06, unbuilt). The Advanced face panel says this on screen.
+  (the simulator spec, unbuilt). The Advanced face panel says this on screen.
 
 ---
 

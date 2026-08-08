@@ -1,17 +1,17 @@
-"""Stage 3 — pose post-processing (doc 03 §3). "This is where quality is won."
+"""Stage 3 — pose post-processing (the pose spec). "This is where quality is won."
 
 Runs in the documented order: confidence handling, anatomical sanity, side-swap repair,
 temporal outlier rejection, gap interpolation, smoothing. Three deliberate refinements to
-the spec, each measured on the fixtures and recorded in docs/DECISIONS.md:
+the original spec, each measured on the fixtures:
 
-  D6  Low confidence means *unverified*, not *wrong*. Doc 03 §3.1 sends visibility < 0.3
+  1.  Low confidence means *unverified*, not *wrong*. The pose spec sends visibility < 0.3
       straight to missing; on fixture swing2 that discards a correctly-placed grip. Instead
       low-confidence joints enter as PROVISIONAL and are demoted only when a positive check
       fails, so evidence removes a joint rather than a threshold.
-  D7  Bone-length sanity is upper-bound only. A 2D bone can look arbitrarily short through
+  2.  Bone-length sanity is upper-bound only. A 2D bone can look arbitrarily short through
       foreshortening (routine for arms in DTL) but can never look longer than it is, so a
       symmetric +/-35% band flags legitimate geometry. We flag only over-long bones.
-  D8  One-Euro is applied forward and backward and averaged. The filter is causal and lags;
+  3.  One-Euro is applied forward and backward and averaged. The filter is causal and lags;
       the whole point of choosing it over a moving average was to not corrupt the fast
       downswing, and offline we can cancel its phase lag outright.
 """
@@ -26,13 +26,13 @@ from scipy.signal import savgol_filter
 from .skeleton import TRACKED_NAMES, UNRELIABLE
 
 MISSING, PROVISIONAL, OK, INTERP = 0, 1, 2, 3
-# Stage 3 runs over the native block *and* the measured extras (D25). Derived joints are
-# deliberately absent — doc 03 §3.6 recomputes those from smoothed parents afterwards.
+# Stage 3 runs over the native block *and* the measured extras. Derived joints are
+# deliberately absent — the pose spec recomputes those from smoothed parents afterwards.
 N = len(TRACKED_NAMES)
 NAME_IDX = {n: i for i, n in enumerate(TRACKED_NAMES)}
 
 # Bones checked for length plausibility. Arms are included but only ever flagged for being
-# too long (see D7) — the same rule applies to every bone, so nothing needs excluding.
+# too long () — the same rule applies to every bone, so nothing needs excluding.
 CHECK_BONES = [
     ("left_shoulder", "right_shoulder"), ("left_hip", "right_hip"),
     ("left_shoulder", "left_hip"), ("right_shoulder", "right_hip"),
@@ -63,7 +63,7 @@ class PostConfig:
     conf_ok: float = 0.5
     bone_tol: float = 0.30        # allowed overshoot above a bone's p95 observed length
     swap_max_run: int = 5
-    max_gap: int = 8              # doc 03 §3.4 — ~130ms at 60fps
+    max_gap: int = 8              # the pose spec — ~130ms at 60fps
     grip_max_sep: float = 0.20    # wrist separation ceiling, fraction of golfer height
     min_cutoff: float = 1.0
     beta: float = 0.3
@@ -104,7 +104,7 @@ def _accel_limit(name):
 def body_height(xy, status):
     """Median head-to-ankle distance — the scale every threshold is expressed against.
 
-    Normalizing by the golfer's own pixel height (doc 03 §5) makes thresholds independent
+    Normalizing by the golfer's own pixel height (the pose spec) makes thresholds independent
     of camera distance, which matters because our two fixtures differ by 40% in subject size.
     """
     ears = [NAME_IDX["left_ear"], NAME_IDX["right_ear"]]
@@ -121,11 +121,11 @@ def body_height(xy, status):
 # ---------------------------------------------------------------- stages
 
 def gate(conf, cfg, trust_hands=False):
-    """D6: nothing is discarded on confidence alone; sub-threshold points are PROVISIONAL.
+    """Refinement 1: nothing is discarded on confidence alone; sub-threshold points are PROVISIONAL.
 
     `trust_hands` keeps the index/pinky/thumb slots. They are rejected outright for
     MediaPipe, which infers them from a body model that cannot see a closed fist, but a
-    wholebody model measures those knuckles directly and they carry the grip's roll (D25).
+    wholebody model measures those knuckles directly and they carry the grip's roll.
     """
     status = np.full(conf.shape, MISSING, np.int8)
     status[conf > 0.0] = PROVISIONAL
@@ -137,7 +137,7 @@ def gate(conf, cfg, trust_hands=False):
 
 
 def fix_side_swaps(xy, conf, status, cfg, rep):
-    """Doc 03 §3.2 — brief left/right inversions are a known detector glitch, not motion."""
+    """The pose spec — brief left/right inversions are a known detector glitch, not motion."""
     pairs = [(NAME_IDX[n], NAME_IDX["right_" + n[5:]])
              for n in TRACKED_NAMES if n.startswith("left_")
              and "right_" + n[5:] in NAME_IDX]
@@ -168,7 +168,7 @@ def fix_side_swaps(xy, conf, status, cfg, rep):
 
 
 def check_bones(xy, status, conf, cfg, rep):
-    """D7 — flag only implausibly LONG bones; shortness is foreshortening, not error."""
+    """Refinement 2 — flag only implausibly LONG bones; shortness is foreshortening, not error."""
     for a_name, b_name in CHECK_BONES:
         a, b = NAME_IDX[a_name], NAME_IDX[b_name]
         both = (status[:, a] >= PROVISIONAL) & (status[:, b] >= PROVISIONAL)
@@ -186,12 +186,12 @@ def check_bones(xy, status, conf, cfg, rep):
 
 
 def grip_prior(xy, conf, status, bh, cfg, rep, window=None):
-    """Golf-specific prior (D4b): both hands are on the club, so the wrists travel together.
+    """Golf-specific prior: both hands are on the club, so the wrists travel together.
 
     Measured on the fixtures, confident wrists sit 0.03-0.13 of body height apart. A pair
     further apart than `grip_max_sep` means one is wrong — drop the less-confident one and
     let grip_center derive from the survivor, rather than averaging a good wrist with a bad
-    one and poisoning the club-search anchor (doc 04 Layer B).
+    one and poisoning the club-search anchor (the club-tracking spec's Layer B).
     """
     lw, rw = NAME_IDX["left_wrist"], NAME_IDX["right_wrist"]
     limit = cfg.grip_max_sep * bh
@@ -212,7 +212,7 @@ def grip_prior(xy, conf, status, bh, cfg, rep, window=None):
         rep.grip_rejects += 1
 
     # A provisional wrist that agrees with a confident partner is corroborated, so promote
-    # it — this is the check that rescues correctly-placed but low-confidence grips (D6).
+    # it — this is the check that rescues correctly-placed but low-confidence grips.
     # Confidence is raised alongside status: the third element of a keypoint is *our*
     # post-validation confidence, not the model's raw opinion, because that is what the UI
     # renders and what later stages act on. Leaving conf untouched here silently discards
@@ -226,7 +226,7 @@ def grip_prior(xy, conf, status, bh, cfg, rep, window=None):
 
 
 def promote_consistent(xy, conf, status, bh, rep, radius=4):
-    """D6, general case: a provisional point that lands where confident neighbours predict.
+    """Refinement 1, general case: a provisional point that lands where confident neighbours predict.
 
     This is positive evidence, not merely absence of rejection — a spurious detection has no
     reason to fall on the trajectory interpolated between two confirmed observations. Only
@@ -255,7 +255,7 @@ def promote_consistent(xy, conf, status, bh, rep, radius=4):
 
 
 def reject_outliers(xy, status, bh, rep):
-    """Doc 03 §3.3 — a point that cannot be reached from its neighbours is a detection error.
+    """The pose spec — a point that cannot be reached from its neighbours is a detection error.
 
     Uses the second difference (acceleration) rather than raw velocity: fast joints are
     legitimate in a golf swing, but a joint that teleports away and back in one frame is not.
@@ -274,7 +274,7 @@ def reject_outliers(xy, status, bh, rep):
 
 
 def interpolate_gaps(xy, status, cfg, rep):
-    """Doc 03 §3.4 — cubic-spline fill for gaps <= max_gap; longer gaps stay honestly missing."""
+    """The pose spec — cubic-spline fill for gaps <= max_gap; longer gaps stay honestly missing."""
     n = xy.shape[0]
     for j in range(N):
         valid = status[:, j] >= PROVISIONAL
@@ -321,7 +321,7 @@ def one_euro(x, fps, min_cutoff, beta):
 
 
 def smooth(xy, status, fps, cfg):
-    """D8 — zero-phase One-Euro (forward+backward averaged), then optional Savitzky-Golay."""
+    """Refinement 3 — zero-phase One-Euro (forward+backward averaged), then optional Savitzky-Golay."""
     for j in range(N):
         present = status[:, j] >= PROVISIONAL
         if present.sum() < 5:

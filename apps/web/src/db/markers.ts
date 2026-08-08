@@ -35,7 +35,7 @@ export async function listMarkers(swingId: string): Promise<HeadMarker[]> {
  *
  * `userId` is checked against the swing rather than stored on the marker: markers belong to the
  * swing, and the swing already carries the owner. Passing it here is what stops one user's save
- * landing on another user's swing once real auth exists (D38).
+ * landing on another user's swing once real auth exists.
  */
 export async function saveMarkers(
   swingId: string,

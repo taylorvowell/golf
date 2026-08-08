@@ -1,4 +1,4 @@
-"""Source-timing invariants (D54) — pure functions only, no ffprobe, no video.
+"""Source-timing invariants — pure functions only, no ffprobe, no video.
 
 `map_observations` is the single place mapping logic lives; these tests pin its contract:
 the union of normalized_frames is exactly [0, out_frame_count), each index once, in order,

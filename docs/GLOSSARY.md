@@ -180,7 +180,7 @@ Three shapes of angle, and the convention differs by shape:
 ### What each angle is, and what a good one looks like
 
 Reference bands below are **documentation, not a rubric** — they are the coaching
-conventions doc 05 C1 cites, not thresholds tuned on our fixtures. Nothing in the code reads
+conventions the scoring spec cites, not thresholds tuned on our fixtures. Nothing in the code reads
 them; when they become scoring inputs they move to `scoring_config.json` with a version.
 
 **Setup (read at P1).**
@@ -205,7 +205,7 @@ them; when they become scoring inputs they move to `scoring_config.json` with a 
 |---|---|---|
 | Lead wrist hinge | `lead_wrist_hinge` | Lead forearm against the **club shaft** — the lag/casting signal. Needs club data. |
 | Wrist cup / bow | `lead\|trail_wrist_deviation` | Hand against the forearm along the third metacarpal. **180° = straight**, not 0 — an older convention this field keeps. |
-| Elbow flex | `lead\|trail_elbow_flex` | Lead arm straight through the backswing, trail elbow folded near 90° at the top, are two of doc 05 C1's checks. **Read with `lead\|trail_arm_in_plane`** (below). |
+| Elbow flex | `lead\|trail_elbow_flex` | Lead arm straight through the backswing, trail elbow folded near 90° at the top, are two of the scoring spec's checks. **Read with `lead\|trail_arm_in_plane`** (below). |
 | Shoulder / hip turn, X-factor | `shoulder\|hip_turn_from_address`, `xfactor_rotation_est` | See §4 — magnitudes, already measured from address. |
 | Shaft angle | `shaft_from_vertical` | Grip→head off the downward plumb: 0° = head hanging directly below the hands, ±180° = head above them. Face-on this is shaft lean; **down the line lean points at the lens and is invisible**, and what is left is the in-plane angle. `shaft_plane` says which. Aspect-corrected, unlike `club.frames[].shaft_angle_deg`. |
 | Spine retention | `summary.spine_change_at_impact` | How much of the setup spine angle survived to impact. Losing it is standing up; gaining it is diving. |
@@ -246,7 +246,7 @@ Where `ball_direction` is null both stay null rather than guessing a sign, the s
 
 ## 8. Terms that are deliberately absent
 
-- **Face angle in degrees from video.** Doc 04 §6 reserves that for the simulator impact
+- **Face angle in degrees from video.** The club-tracking spec reserves that for the simulator impact
   image. Video gives checkpoint classifications (square / open / closed) and
   `lead_forearm_roll_delta`, which is the body-measured half of the same story.
 - **Any 3D angle.** Everything here is a single-view 2D projection. Fields whose reading

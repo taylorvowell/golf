@@ -2420,7 +2420,7 @@
     "early_extension_note": "positive = pelvis moved toward the ball, resolved from where the hands sit at address (see ball_direction)",
     "hip_hinge_at_address": 158.1,
     "neck_angle_at_address": 143.2,
-    "posture_note": "one curvature value; cannot separate thoracic from lumbar, and the scale is unvalidated \u2014 see DECISIONS D27",
+    "posture_note": "one curvature value; cannot separate thoracic from lumbar, and the scale is unvalidated",
     "posture_type": "neutral",
     "posture_value": 0.021,
     "primary_tilt": 14.2,

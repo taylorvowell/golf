@@ -1,18 +1,18 @@
-"""Stage 6 — swing metrics (doc 05 Part B).
+"""Stage 6 — swing metrics (the scoring spec's Part B).
 
 Time series per frame plus a snapshot at each of the 8 events, all normalised by the
-golfer's own pixel height so they are comparable across camera distances (doc 03 §5).
+golfer's own pixel height so they are comparable across camera distances (the pose spec).
 
 Two things are newly measurable now that the wholebody model gives real hand keypoints:
 
-  * **Wrist hinge** — doc 03 §5 lists this as a *proxy* needing club data. With knuckles it
+  * **Wrist hinge** — the pose spec lists this as a *proxy* needing club data. With knuckles it
     is direct: the angle between the forearm (elbow→wrist) and the hand (wrist→knuckles).
     That is the lag/casting signal, and it needs no club at all.
   * **Foot flare** — heel→toe gives each foot's axis, feeding stance width and flare, which
-    doc 05 scores under Setup & Posture.
+    the scoring spec scores under Setup & Posture.
 
 Every metric carries the confidence of the keypoints it derives from, so the scoring engine
-can skip checks whose inputs are unreliable rather than quietly grading noise (doc 05 C1).
+can skip checks whose inputs are unreliable rather than quietly grading noise (the scoring spec).
 
 Angles come in three shapes here, and mixing them up is the easiest way to misread this file:
 
@@ -54,7 +54,7 @@ FOOT_REF = {"midfoot": 0.5, "ball_of_foot": 0.75}
 #           top the lead arm is above the shoulder, so "hang from vertical" reads 140 deg
 #           and is arithmetically correct and coaching-meaningless.
 #
-# Reference *bands* are deliberately absent. Doc 05 puts thresholds in a versioned
+# Reference *bands* are deliberately absent. The scoring spec puts thresholds in a versioned
 # scoring_config.json and nowhere else; what a good number looks like is documented in
 # docs/GLOSSARY.md until that file exists. This list says what is measured, not what is good.
 def _af(field, label, view="both", delta=True, when="swing"):
@@ -130,7 +130,7 @@ _STACK_CHAIN = ["chin", "nose_bridge", "head_center"]
 def _angle_geometry(lead, trail):
     """field -> geometry spec, with lead/trail already resolved to anatomical keypoints.
 
-    Resolved here rather than on the client because handedness is decided here (D29) and a
+    Resolved here rather than on the client because handedness is decided here and a
     consumer re-deriving it is exactly how a left-handed swing gets drawn on the wrong limb.
     Fields with no entry — the rotation estimates, which come from projected widths rather
     than from any two bones — are simply not drawable, and the player greys them out.
@@ -295,7 +295,7 @@ def per_frame(frames, view="dtl", handedness="right", aspect=1.0, club_frames=No
         # give exactly one curvature value. It cannot separate thoracic rounding from
         # lumbar flexion, and it is only meaningful in a down-the-line view, where the
         # sagittal plane lies in the image. A real spine profile needs the back edge of a
-        # silhouette, not keypoints — see docs/DECISIONS.md D27.
+        # silhouette, not keypoints.
         #
         # And it is only clean at ADDRESS. Once the torso rotates, the shoulder midpoint
         # moves relative to the hip->head chord for reasons that have nothing to do with
@@ -353,7 +353,7 @@ def per_frame(frames, view="dtl", handedness="right", aspect=1.0, club_frames=No
         m["hip_tilt"] = round(float(np.degrees(np.arctan2(hip[1], hip[0]))), 1) \
             if hip is not None else None
         # Apparent shoulder-vs-hip separation. Labelled estimated: real X-factor is 3D and a
-        # single 2D view cannot resolve it (doc 03 §5 rotation caveat).
+        # single 2D view cannot resolve it (the pose spec rotation caveat).
         if sh is not None and hip is not None:
             m["xfactor_estimated"] = round(m["shoulder_tilt"] - m["hip_tilt"], 1)
         else:
@@ -379,7 +379,7 @@ def per_frame(frames, view="dtl", handedness="right", aspect=1.0, club_frames=No
                 if a is not None and b is not None else None
 
             # Elbow: shoulder-elbow-wrist. Lead elbow straight through the backswing, trail
-            # elbow folded to about a right angle at the top, are two of the checks doc 05 C1
+            # elbow folded to about a right angle at the top, are two of the checks the scoring spec
             # names. Both are published for every frame; which one matters depends on where
             # in the swing you are reading.
             a = vec(f"{side}_elbow", f"{side}_shoulder")
@@ -430,7 +430,7 @@ def per_frame(frames, view="dtl", handedness="right", aspect=1.0, club_frames=No
                 if shin is not None else None
 
             # Arm hang: wrist->shoulder from vertical, so 0 means the hands hang directly
-            # under the shoulder socket (doc 03 §5's "arm hang at address"). Signed, and the
+            # under the shoulder socket (the pose spec's "arm hang at address"). Signed, and the
             # sign flips with camera side like every from-vertical angle here.
             hang = vec(f"{side}_wrist", f"{side}_shoulder")
             m[f"{role}_arm_hang"] = round(_from_vertical(hang), 1) \
@@ -441,7 +441,7 @@ def per_frame(frames, view="dtl", handedness="right", aspect=1.0, club_frames=No
         # head. 180 = head carried in line with the spine; smaller = head off that line, which
         # at address is chin-into-chest and through the swing is the head dropping.
         #
-        # Anchored on nose_bridge in preference to head_center for coverage (D25) — but the
+        # Anchored on nose_bridge in preference to head_center for coverage — but the
         # two are NOT interchangeable, so the source is published per frame and `compute`
         # refuses to difference frames whose anchors disagree.
         head_p, head_src = first_pt("nose_bridge", "head_center", "chin", "nose")
@@ -460,7 +460,7 @@ def per_frame(frames, view="dtl", handedness="right", aspect=1.0, club_frames=No
         face_axis = vec("chin", "nose_bridge")
         m["head_pitch"] = round(_from_vertical(face_axis), 1) if face_axis is not None else None
 
-        # --- wrist hinge: lead forearm vs the CLUB SHAFT (doc 03 §5) ------------------
+        # --- wrist hinge: lead forearm vs the CLUB SHAFT (the pose spec) ------------------
         # Not forearm-vs-hand. In golf the hand stays roughly in line with the forearm; it
         # is the *shaft* that angles away from it, which is what "hinge"/"cock" means.
         # Measured against the hand this read 170-178 deg at every event — no hinge, which
@@ -502,13 +502,13 @@ def per_frame(frames, view="dtl", handedness="right", aspect=1.0, club_frames=No
             m[f"{role}_wrist_deviation"] = round(180.0 - _angle_between(fo, hd), 1) \
                 if fo is not None and hd is not None else None
 
-        # --- forearm roll: orientation of the knuckle line (doc 04 §6) ------------------
+        # --- forearm roll: orientation of the knuckle line (the club-tracking spec) ------------------
         # Pinky knuckle -> index knuckle, i.e. across the back of the hand. That line is
         # perpendicular to the forearm's long axis, so its rotation *is* supination /
         # pronation — the motion that opens and closes the clubface. Reported as a raw
         # image-plane angle: it is only meaningful as a delta against this golfer's own
         # address frame, which `compute` takes below. Never a face angle in degrees
-        # (doc 04 §6) — video does not get to claim that number.
+        # (the club-tracking spec) — video does not get to claim that number.
         for side, role in SIDES:
             kn = vec(f"{side}_pinky", f"{side}_index")
             m[f"{role}_forearm_roll"] = round(
@@ -519,7 +519,7 @@ def per_frame(frames, view="dtl", handedness="right", aspect=1.0, club_frames=No
         # plane it foreshortens and reads bent even when it is straight. On swing1 it runs
         # 174 deg at address, down to a smooth 59 deg at mid-backswing, back to 171 deg at
         # impact — all at confidence 1.00, so that dip is geometry, not tracking. Trust it
-        # only where the arm lies near the image plane (address, impact); doc 05 C1's
+        # only where the arm lies near the image plane (address, impact); the scoring spec's
         # "lead arm straight at Top" check would be actively misled by it otherwise.
         a = vec(f"{lead}_elbow", f"{lead}_shoulder")
         b = vec(f"{lead}_elbow", f"{lead}_wrist")
@@ -530,7 +530,7 @@ def per_frame(frames, view="dtl", handedness="right", aspect=1.0, club_frames=No
         # both arms in the joint-angle block above.
 
         # --- stance and feet ---------------------------------------------------------
-        # Face-on only (doc 05 C1 marks it FO). Down-the-line looks along the stance line,
+        # Face-on only (the scoring spec marks it FO). Down-the-line looks along the stance line,
         # so both ankles foreshorten onto each other and the ratio is meaningless — swing2
         # reported 0.59x against a real-world 1.0-1.4x. Report None rather than a number
         # the scoring engine would grade.
@@ -639,7 +639,7 @@ def per_frame(frames, view="dtl", handedness="right", aspect=1.0, club_frames=No
         #
         # Deliberately NOT reported in degrees. The mapping from this ratio to a real yaw
         # angle depends on face geometry and camera intrinsics we do not have; a signed
-        # -1..1 asymmetry is what was actually measured (cf. doc 04 §6).
+        # -1..1 asymmetry is what was actually measured (cf. the club-tracking spec).
         jl = vec("jaw_left", "chin")
         jr = vec("jaw_right", "chin")
         if jl is not None and jr is not None:
@@ -702,7 +702,7 @@ def compute(frames, ev, view="dtl", handedness="right", aspect=1.0, fps=60.0,
     # It is observable rather than configured: at address the golfer bends from the hips and
     # the arms hang out over the ball, so the hands sit toward the ball of the hip line. Down
     # the line that offset is horizontal in frame, so its sign IS the ball direction. Taken
-    # as a median over the whole address hold, not one frame (D28).
+    # as a median over the whole address hold, not one frame.
     #
     # Face-on this signal does not exist — the hands sit near the body's centre line there
     # and the offset that survives is lead/trail, not toward/away — so it returns null rather
@@ -824,7 +824,7 @@ def compute(frames, ev, view="dtl", handedness="right", aspect=1.0, fps=60.0,
         snapshots[name] = {k: v for k, v in series[f].items() if k != "f"}
         snapshots[name]["frame"] = f
 
-    # Excursion flags — the thresholds doc 05 Part B wants in scoring_config.json, kept here
+    # Excursion flags — the thresholds the scoring spec's Part B wants in scoring_config.json, kept here
     # provisionally and clearly marked so they are not mistaken for a tuned rubric.
     swing = [m for m in series
              if ev["events"]["address"]["frame"] <= m["f"] <= ev["events"]["finish"]["frame"]]
@@ -842,7 +842,7 @@ def compute(frames, ev, view="dtl", handedness="right", aspect=1.0, fps=60.0,
         """Median of a static measurement across the whole address hold, not one frame of it.
 
         The address *event* is the last frame of the quasi-static span before the takeaway
-        (doc 05 A), so the frames behind it are the golfer holding their setup. Sampling
+        (the scoring spec), so the frames behind it are the golfer holding their setup. Sampling
         only the final one inherits that frame's keypoint jitter for a quantity that is not
         changing; the median over the hold is the same number with the noise averaged out,
         and it rejects the odd bad frame rather than being dragged by it.
@@ -865,11 +865,11 @@ def compute(frames, ev, view="dtl", handedness="right", aspect=1.0, fps=60.0,
 
     # --- the ten checkpoints (Stage 5b) -------------------------------------------------
     # Every angle sampled at each of the ten positions a coach talks about, plus its change
-    # from address — doc 05 Part B asks for exactly that ("every metric sampled at each
+    # from address — the scoring spec's Part B asks for exactly that ("every metric sampled at each
     # event + deltas vs. Address") and until now only the raw snapshots existed.
     #
     # Two deliberate differences from `event_snapshots`, which stays as it was:
-    #  * P1's angles are medians over the address hold, not that one frame (D28). It is the
+    #  * P1's angles are medians over the address hold, not that one frame. It is the
     #    checkpoint whose numbers every delta is measured against, so it is the one place
     #    where sampling a single frame's jitter would contaminate the whole table.
     #  * Deltas are only taken for fields ANGLE_FIELDS marks as differenceable. Turn angles
@@ -922,14 +922,14 @@ def compute(frames, ev, view="dtl", handedness="right", aspect=1.0, fps=60.0,
     if dtl and curve_addr is not None:
         # C-posture is a rounded upper back, S-posture an arched lower back — opposite signs
         # of the same sagitta. The threshold is a placeholder, NOT a tuned rubric: nothing
-        # has validated this scale against a known-good posture assessment yet (D27), and it
+        # has validated this scale against a known-good posture assessment yet, and it
         # belongs in scoring_config.json once something has.
         if abs(curve_addr) < 0.03:
             posture_type = "neutral"
         else:
             posture_type = "C-posture" if curve_addr > 0 else "S-posture"
         posture_note = ("one curvature value; cannot separate thoracic from lumbar, and the "
-                        "scale is unvalidated — see DECISIONS D27")
+                        "scale is unvalidated")
 
     glossary = {
         "address_frame": addr_f,
@@ -1015,11 +1015,11 @@ def compute(frames, ev, view="dtl", handedness="right", aspect=1.0, fps=60.0,
             # hold is strictly better than sampling one frame of it.
             "spine_at_address": spine_addr,
             # Static back shape at setup. DTL only, and the scale is not yet validated
-            # against any known-good posture assessment — see D27 before scoring it.
+            # against any known-good posture assessment before scoring it.
             "spine_curvature_at_address": curve_addr if view == "dtl" else None,
             "address_hold_frames": curve_n,
             # Kept, but it is the confounded half: once the torso turns, the shoulder
-            # midpoint moves for reasons unrelated to the spine's shape (D27).
+            # midpoint moves for reasons unrelated to the spine's shape.
             "max_spine_curvature_change": peak("spine_curvature_delta") if view == "dtl" else None,
             "stance_width_ratio": stance_addr,
             "lead_wrist_hinge_at_top": snapshots.get("top", {}).get("lead_wrist_hinge"),
@@ -1034,7 +1034,7 @@ def compute(frames, ev, view="dtl", handedness="right", aspect=1.0, fps=60.0,
             "chin_over_ball_of_foot_at_address": (
                 at_address("chin_over_ball_of_foot_deg", nd=1)[0] if view == "dtl" else None),
             # Trail elbow folded at the top and lead elbow straight are the two arm checks
-            # doc 05 C1 names; both are projection-sensitive, so read `lead_arm_in_plane`
+            # the scoring spec names; both are projection-sensitive, so read `lead_arm_in_plane`
             # from the same snapshot before trusting either.
             "trail_elbow_flex_at_top": snapshots.get("top", {}).get("trail_elbow_flex"),
             "lead_elbow_flex_at_top": snapshots.get("top", {}).get("lead_elbow_flex"),
@@ -1055,7 +1055,7 @@ def compute(frames, ev, view="dtl", handedness="right", aspect=1.0, fps=60.0,
             "shoulder_turn_at_top": snapshots.get("top", {}).get("shoulder_turn_from_address"),
             "hip_turn_at_top": snapshots.get("top", {}).get("hip_turn_from_address"),
             # Forearm roll from address to impact — the body-measured half of the face
-            # story. Not a face angle: doc 04 §6 reserves degrees for the impact image.
+            # story. Not a face angle: the club-tracking spec reserves degrees for the impact image.
             # The series is already keyed lead_/trail_, so these no longer re-derive the
             # side from handedness — one place decides it, in per_frame.
             "lead_forearm_roll_at_impact": snapshots.get("impact", {}).get(

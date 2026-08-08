@@ -87,8 +87,8 @@ What this step accomplishes and why.
 - Step YY must be complete
 
 ## Architectural Context
-Key decisions. References to the relevant `instructions/NN-*.md` spec doc(s) and/or
-`docs/DECISIONS.md` entries.
+Key decisions. References to the relevant section of
+`.claude/ai-instructions/PROJECT_MAIN.md` and/or `docs/DECISIONS.md` entries.
 
 ## Files & Areas Touched
 Specific paths that will be created or modified.
@@ -197,7 +197,7 @@ Non-resolvable blockers (escalate to user):
    `pytest tests` return clean pass/fail
 4. **Status is JSON** — fast parse, no full-file read needed
 5. **No mass file reads** — orchestrator opens only what's needed
-6. **Deep context lives in `instructions/` and `docs/`** — referenced, not repeated
+6. **Deep context lives in `.claude/ai-instructions/` and `docs/`** — referenced, not repeated
 
 ## Modifying The Plan
 
@@ -213,7 +213,7 @@ If a step needs adjustment:
 
 Some steps explicitly require human review before completion — for example:
 - A `scoring_config.json` threshold change that affects real swing scores
-- A change to the `analysis.json` contract (doc 02's backend/player interface)
+- A change to the `analysis.json` contract (the architecture spec's backend/player interface)
 - A production deployment
 
 These steps have a `human-review-required: true` flag in the file. The orchestrator surfaces
@@ -221,9 +221,9 @@ them, presents the artifacts, and waits for explicit approval before marking com
 
 ## Important References
 
-- `instructions/` — the numbered spec docs (00 README through 08 ROADMAP); source of truth
-  for the domain
-- `docs/STATUS.md` — current handoff state
+- `.claude/ai-instructions/PROJECT_MAIN.md` — the product north star; source of truth for
+  what the product must do
+- `docs/CURRENT-STATE.md` — what is actually built right now
 - `docs/DECISIONS.md` — append-only decisions log (never renumbered, never deleted)
 - `CLAUDE.md` — always-loaded rules
 - `.claude/skills/` — loaded contextually per task

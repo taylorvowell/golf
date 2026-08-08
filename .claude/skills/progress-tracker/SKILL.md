@@ -269,4 +269,4 @@ If you need a timestamp and can't run a command (e.g., responding inline), use t
 
 - **Reading step file contents.** That's not state — it's instruction data. Read step files with the `Read` tool directly.
 - **Modifying the step files themselves.** Numbered files in a track directory are source-of-truth instructions, not state. If a step file needs editing, do it directly with `Edit` or `Write`.
-- **Other markdown logs.** This skill is specific to `_STATUS.json` and `_PROGRESS.md`. Other progress logs (`docs/DECISIONS.md`, `docs/STATUS.md`, `docs/icebox/` entries) have their own conventions.
+- **Other markdown logs.** This skill is specific to `_STATUS.json` and `_PROGRESS.md`. Other progress logs (`docs/DECISIONS.md`, `docs/icebox/` entries) have their own conventions.

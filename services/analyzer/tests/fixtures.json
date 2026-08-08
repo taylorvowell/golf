@@ -17,7 +17,7 @@
   "fixtures": [
     {
       "stem": "swing1",
-      "source": "instructions/swing/swing1.mp4",
+      "source": "fixtures/swing1.mp4",
       "view": "dtl",
       "handedness": "right",
       "notes": "oblique/adult. Detector is weak here — contributes on 114/396 frames (29%). Address sits behind two decoy still-holds, which is what caught the D37 tempo bug.",
@@ -25,7 +25,7 @@
     },
     {
       "stem": "swing2",
-      "source": "instructions/swing/swing2.mp4",
+      "source": "fixtures/swing2.mp4",
       "view": "dtl",
       "handedness": "right",
       "notes": "DTL/junior. Detector strong — 298/341 frames (87%). Tempo legitimately reads 1.55:1; its Impact frame is independently confirmed by the club-head low point, so the D37 flag here is expected and is NOT a defect.",

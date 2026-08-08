@@ -1,5 +1,5 @@
 /**
- * The `Scorecard` shape (doc 05 Part C1) plus pure, client-safe display helpers.
+ * The `Scorecard` shape (the scoring spec's Part C1) plus pure, client-safe display helpers.
  *
  * Deliberately separate from `lib/scoring.ts`: that file reads `coach_report.json` off disk
  * (`node:fs`), which is server-only. This file has no I/O at all, so client components
@@ -144,7 +144,7 @@ export interface Scorecard {
   overall: number | null;
   band: string | null;
   /** No deterministic basis yet — see services/analyzer/scoring_config/COVERAGE.md. Always
-   * null today; kept typed as nullable rather than dropped so a future real signal (or doc 07's
+   * null today; kept typed as nullable rather than dropped so a future real signal (or the AI-provider spec's
    * AI narrative) doesn't need a shape change to add it back. */
   arc_shift: number | null;
   /** How much of the config produced a number for this swing, split by why the rest didn't.
@@ -159,7 +159,7 @@ export interface Scorecard {
   drill: Drill;
 }
 
-/** doc 05 Part C1's category slugs, in scoring-engine order, mapped onto display labels. */
+/** the scoring spec's Part C1's category slugs, in scoring-engine order, mapped onto display labels. */
 export const CATEGORY_LABELS: Record<string, string> = {
   setup_posture: "Setup & Posture",
   takeaway: "Takeaway",

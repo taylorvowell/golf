@@ -7,7 +7,7 @@ import type { Analysis } from "./swings";
  * This is a *display* crop only — a CSS offset on the <video> plus a coordinate remap on the
  * overlay canvas. No pixels are re-encoded and no CV is re-run, so it is safe to retune
  * without re-analysing a swing, and it works on every already-stored analysis.json. It is
- * emphatically NOT the ROI crop of DECISIONS D5: that one fed cropped pixels to the landmark
+ * emphatically NOT the earlier ROI-crop experiment: that one fed cropped pixels to the landmark
  * model and measurably hurt pose accuracy. Nothing here reaches the estimator.
  *
  * One static box for the whole clip, never per-frame. `head_sway` and `hip_sway` are measured
@@ -25,14 +25,14 @@ export interface ViewBox {
   identity: boolean;
 }
 
-/** Keypoints below this are unverified (D6) and must not be allowed to define the framing. */
+/** Keypoints below this are unverified and must not be allowed to define the framing. */
 const POSE_CONF = 0.3;
 
 /**
  * Percentile clipping, not min/max. Matches pose.swing_bbox: one wild misdetection would
  * otherwise inflate the box and undo the whole gain. The club gets a tighter band because
  * its solver emits a shaft on every frame at 100% coverage — including frames where the
- * solution is wrong (D12/D14) — so its outliers are more common than the pose's.
+ * solution is wrong — so its outliers are more common than the pose's.
  */
 const POSE_LO = 0.5, POSE_HI = 99.5;
 const CLUB_LO = 1, CLUB_HI = 99;

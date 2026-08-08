@@ -1,10 +1,9 @@
 /**
- * The card vocabulary of the design, lifted out of `instructions/template_sample.html`.
+ * The card vocabulary of the design, lifted out of the original visual template.
  *
- * The sample draws every piece of content as one of about eight card shapes, each filled
+ * That template drew every piece of content as one of about eight card shapes, each filled
  * with mock numbers. Naming them here means the shapes are the reusable thing and the data
- * is the variable — so when the scoring engine (doc 05), the coach report (doc 07) or
- * simulator ingestion (doc 06) lands, each drops into a card that already exists rather than
+ * is the variable — so a new surface drops into a card that already exists rather than
  * inventing its own styling.
  *
  * What each shape is for, and what will eventually fill it:
@@ -22,9 +21,9 @@
  * | `QualityBar`   | (new) per-joint bars    | real pose coverage                              |
  * | `NotBuilt`     | (new)                   | marks a designed slot with no pipeline behind it |
  *
- * All ten are real as of Stage 8 (doc 05 Part C1, `swingsage/scoring.py`) — every card is fed
+ * All ten are real as of Stage 8 (the scoring spec's Part C1, `swingsage/scoring.py`) — every card is fed
  * from `coach_report.json` or `analysis.json`, never fabricated. The one thing still ahead of
- * `lib/scoring.ts`'s deterministic narrative is doc 07's AI-generated coaching prose, which
+ * `lib/scoring.ts`'s deterministic narrative is the AI-provider spec's AI-generated coaching prose, which
  * will replace `TipCard`'s copy without changing the card itself.
  */
 
@@ -202,7 +201,7 @@ export function IndicatorCard({
 
 /* ------------------------------------------------------------------ content */
 
-/** Red/green headline card. Fills from the scorecard's strengths and faults (doc 05 C). */
+/** Red/green headline card. Fills from the scorecard's strengths and faults (the scoring spec). */
 export function FindingBox({
   tone, icon, title, detail,
 }: { tone: "positive" | "negative"; icon: string; title: string; detail: string }) {

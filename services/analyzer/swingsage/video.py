@@ -1,4 +1,4 @@
-"""Stage 0 — probe + normalize (doc 02).
+"""Stage 0 — probe + normalize (the architecture spec).
 
 Why normalization is mandatory, demonstrated by the first real fixture:
   * rotation=-90 metadata (phone portrait) — must be baked into pixels or MediaPipe sees a
@@ -9,7 +9,7 @@ Why normalization is mandatory, demonstrated by the first real fixture:
 
 We emit two derivatives, both CFR:
   normalized.mp4  short side 1080 — what the player loads and the burn-in renders onto
-  analysis.mp4    short side  720 — what the CV pipeline consumes (doc 02: analyze small,
+  analysis.mp4    short side  720 — what the CV pipeline consumes (the architecture spec: analyze small,
                                     render scaled; normalized coords make it free)
 """
 from __future__ import annotations
@@ -95,11 +95,11 @@ def normalize(src: str | Path, dst: str | Path, short_side: int, fps: int = 60) 
 
     ffmpeg applies the display matrix during decode, so the scale filter sees the upright
     frame; we then strip the rotation metadata so nothing double-applies it downstream.
-    `-fps_mode cfr` replaces the deprecated `-vsync cfr` (ffmpeg 8.x) — see DECISIONS.md D3.
+    `-fps_mode cfr` replaces the deprecated `-vsync cfr` (ffmpeg 8.x).
 
     The GOP is forced to 10 frames. libx264's default 250 put two keyframes in a whole
     6s clip, which made every browser seek decode up to 250 frames of 1080p and froze the
-    picture during a scrub. 10 caps that at 9 frames for ~2x the bytes (D24).
+    picture during a scrub. 10 caps that at 9 frames for ~2x the bytes.
     """
     dst = Path(dst)
     dst.parent.mkdir(parents=True, exist_ok=True)

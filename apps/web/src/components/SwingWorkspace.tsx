@@ -191,7 +191,7 @@ export default function SwingWorkspace({
   const reanalyze = useReanalyze(id);
 
   /** Legacy-trace smoothing, lifted so the Debug Menu drives the primary stage's
-   * selection (the comparison pane keeps its own, D46). */
+   * selection (the comparison pane keeps its own). */
   const [traceSmoothing, setTraceSmoothing] = usePersistentState<SmoothingKey>(
     persistKey("smoothing"), DEFAULT_SMOOTHING,
     (v) => (SMOOTHING_OPTIONS.some((o) => o.key === v) ? (v as SmoothingKey) : null));
@@ -365,7 +365,7 @@ export default function SwingWorkspace({
 
           {/* Staleness, stated rather than implied. Controls whose data is absent used to just
           vanish, which reads as a broken UI instead of an out-of-date artifact — the artifact
-          is the contract (doc 02), so editing the analyzer never updates what is already on
+          is the contract (the architecture spec), so editing the analyzer never updates what is already on
           disk, and that needs saying out loud.
 
           Only on Advanced: it is a fact about the pipeline that produced the file, not about

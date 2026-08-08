@@ -67,7 +67,7 @@ export const PHASE_SPANS = [
  *
  * `address` is the start of the backswing and `top` the start of the downswing: the events name
  * the *position* the golfer is in, the marks name the *transition* out of it, and they are the
- * same frame. The approach has no event — it starts where the playback window does (D51 pins
+ * same frame. The approach has no event — it starts where the playback window does (pinned
  * that to one second before address).
  */
 export function defaultPhaseFrames(analysis: Analysis, win: [number, number]): PhaseFrames | null {

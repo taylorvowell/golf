@@ -1,6 +1,6 @@
 import { getAnalysis } from "@/lib/swings";
 
-/** doc 02 API surface: GET /api/swings/:id/analysis.json */
+/** the architecture spec API surface: GET /api/swings/:id/analysis.json */
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },

@@ -14,10 +14,10 @@ export const SIDE_COLOR: Record<string, string> = {
 /**
  * Club-head trace colours, one per segment.
  *
- * **Deliberate deviation from doc 04 §5 / the UI brief's "locked" palette**, which specified
+ * **Deliberate deviation from the club-tracking spec / the UI brief's "locked" palette**, which specified
  * red backswing and blue downswing. Red-back / blue-down is a golf-instruction convention, so
  * a coach reading this trace will not get the pairing they expect — that cost is real and was
- * accepted knowingly. See docs/DECISIONS.md D34.
+ * accepted knowingly.
  *
  * Follow-through carries its alpha in the colour rather than being drawn at a lower opacity,
  * so it stays translucent regardless of how the renderer sets globalAlpha. It is also drawn
@@ -73,7 +73,7 @@ export const BONES: [string, string, string][] = [
 ];
 
 /**
- * Face detail adds clutter without coaching value (doc 03 §2). The hand landmarks are
+ * Face detail adds clutter without coaching value (the pose spec). The hand landmarks are
  * hidden as *joints* but their connecting bone is drawn above — on the wholebody path
  * these are real measured knuckles, and the line reads as roll where three dots read as
  * noise. Points absent from an analysis are skipped by the renderer anyway, so this stays

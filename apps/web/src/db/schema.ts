@@ -3,8 +3,8 @@ import {
 } from "drizzle-orm/pg-core";
 
 /**
- * The persistence layer (docs/DECISIONS.md D38): Postgres from the first migration, not the
- * SQLite doc 02 lists as a "v1" shortcut. `analysis.json` on disk stays the CV artifact of
+ * The persistence layer: Postgres from the first migration, not the
+ * SQLite the architecture spec lists as a "v1" shortcut. `analysis.json` on disk stays the CV artifact of
  * record (CLAUDE.md's Architecture section) — these tables are the queryable index and the
  * score/job store on top of it, not a replacement for it.
  *
@@ -51,7 +51,7 @@ export const swings = pgTable("swings", {
 
   // Backend-agnostic on purpose: today this is `out/<id>` under SWINGSAGE_MEDIA_ROOT (local
   // disk). Swapping to an S3-compatible object key later is a value change here, not a schema
-  // migration — see docs/DECISIONS.md D38's "what this does not change" section.
+  // migration's "what this does not change" section.
   mediaPath: text("media_path").notNull(),
 
   fps: integer("fps"),
@@ -75,7 +75,7 @@ export const swings = pgTable("swings", {
 });
 
 /**
- * Replaces the in-memory `Map<string, Job>` in `lib/jobs.ts` — same doc 02 protocol (POST
+ * Replaces the in-memory `Map<string, Job>` in `lib/jobs.ts` — same the architecture spec protocol (POST
  * starts, GET polls stage/progress/message), now durable across a Next.js hot-reload instead
  * of losing a running job's status (the exact failure mode `jobs.ts`'s own comments call out).
  */
@@ -94,7 +94,7 @@ export const jobs = pgTable("jobs", {
 });
 
 /**
- * The real scorecard (doc 05 Part C1), one row per swing's latest scoring run. `categories` /
+ * The real scorecard (the scoring spec's Part C1), one row per swing's latest scoring run. `categories` /
  * `checkpoints` / `findings` / `priorities` / `primaryFix` / `drill` mirror the `Scorecard`
  * shape `apps/web/src/lib/scoring.ts` reads `coach_report.json` into — kept as `jsonb` because
  * the UI always reads the whole nested structure at once, never a single field of it (unlike

@@ -16,7 +16,7 @@
  *
  *  1. **Endpoints are exact.** The last drawn point is the head of the line, and with "trace
  *     follows the frame" on it has been interpolated onto the playhead so it sits on the club
- *     (DECISIONS D43). A filter that pulled it off would put the lag back that D43 removed, so
+ *. A filter that pulled it off would put back the lag the endpoint-exact rule removed, so
  *     the approximating methods below blend back to the true ends.
  *  2. **Bridges are never smoothed.** A span with no measurement behind it is drawn as the
  *     straight dashed chord it is; curving it would dress a gap up as data.
@@ -49,7 +49,7 @@ export type SmoothingKey =
  * curve a median of 0.3px and 1.6px at p90 — 0.3% of body height — for a visibly continuous
  * path. It is also the one strong filter that does not cut the corner at Top, which is the one
  * place a golf trace has real curvature worth keeping, and it is what the analyzer already uses
- * on the pose series for exactly that reason (doc 03 §3.5).
+ * on the pose series for exactly that reason (the pose spec).
  *
  * `gaussianStrong` and `fit` are smoother still and are one click away.
  */
@@ -226,7 +226,7 @@ function gaussianKernel(sigma: number): number[] {
 /**
  * Savitzky-Golay smoothing coefficients for a quadratic fit over a window of `m = 2h+1`.
  * Closed form rather than solving the normal equations per call — it is the standard result,
- * and the analyzer uses the same filter on the pose series for the same reason (doc 03 §3.5):
+ * and the analyzer uses the same filter on the pose series for the same reason (the pose spec):
  * it removes noise without flattening a real peak, which here is the corner at Top.
  */
 function savgolKernel(m: number): number[] {

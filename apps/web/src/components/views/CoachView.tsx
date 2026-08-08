@@ -10,8 +10,8 @@ import { Eyebrow, MicroHead, NotBuilt, PanelTitle, TipCard } from "../ui/kiosk";
  * The Coach panel — the sample's `#viewCoach`, slot for slot.
  *
  * One priority, one feel, one drill — all real: `swingsage/scoring.py`'s deterministic
- * narrative (doc 05 Part C1), built from this swing's own weakest measured checks and their
- * `fix` text from `instructions/criteria.md`, not a canned pool and not an AI call. Doc 07's
+ * narrative (the scoring spec's Part C1), built from this swing's own weakest measured checks and their
+ * `fix` text from `scoring_config/criteria.md`, not a canned pool and not an AI call. The AI-provider spec's
  * `AIProvider` narrative is a later, separate phase that replaces `scoring.py`'s `_narrative()`
  * without changing this component — see `coach_report.json`'s stable shape.
  */

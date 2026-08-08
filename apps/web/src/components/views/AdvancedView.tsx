@@ -349,20 +349,20 @@ export default function AdvancedView({
       <KioskPanel className="p-5">
         <div className="flex flex-wrap items-center gap-3">
           <MicroHead>Not built yet</MicroHead>
-          <NotBuilt what="AI coach narrative · doc 07" />
-          <NotBuilt what="simulator ingestion · doc 06" />
+          <NotBuilt what="AI coach narrative · the AI-provider spec" />
+          <NotBuilt what="simulator ingestion · the simulator spec" />
           <NotBuilt what="upload flow" />
           <NotBuilt what="trends & compare" />
         </div>
         <p className="mt-2 text-[11px] leading-5 text-neutral-500">
-          Scoring is real as of Stage 8 (<code className="text-neutral-400">swingsage/scoring.py</code>,
-          doc 05 Part C1) — the Overview and Coach tabs read <code className="text-neutral-400">
+          Scoring is real as of Stage 8 (<code className="text-neutral-400">swingsage/scoring.py</code>)
+          — the Overview and Coach tabs read <code className="text-neutral-400">
           coach_report.json</code>, not placeholder data. Coverage is deliberately partial; see{" "}
           <code className="text-neutral-400">services/analyzer/scoring_config/COVERAGE.md</code> for
           exactly which <code className="text-neutral-400">criteria.md</code> rows are wired versus
           deferred, and why. The narrative (<i>primary fix</i>, <i>drill</i>, <i>priorities</i>) is
           deterministic — built from this swing&apos;s own weakest measured checks, not an AI call;
-          doc 07&apos;s real <code className="text-neutral-400">AIProvider</code> narrative is a
+          the AI-provider spec&apos;s real <code className="text-neutral-400">AIProvider</code> narrative is a
           later, separate phase. Every number on <i>this</i> tab is still read straight from{" "}
           <code className="text-neutral-400">analysis.json</code>, and{" "}
           {analysis.metrics?.provisional_thresholds
@@ -455,7 +455,7 @@ function ClubPanel({ analysis }: { analysis: Analysis }) {
       </p>
       <p className="mt-2 text-[10px] leading-4 text-amber-400/90">
         Direction is correct at all checkpoints, but angle accuracy through the fast downswing is
-        still approximate (D12/D14). Coverage has overstated club quality three separate times —
+        still approximate. Coverage has overstated club quality three separate times —
         judge it on the picture, not on this number.
       </p>
       {!!c.notes?.length && (
@@ -527,7 +527,7 @@ function PosePanel({ analysis }: { analysis: Analysis }) {
       {mp && <p className="mt-1 text-[10px] text-neutral-600">grey = MediaPipe · coloured = RTMPose</p>}
       <p className="mt-2 text-[10px] leading-4 text-neutral-600">
         Confidence numbers recorded before 2026-08-04 are not comparable to these: they measured a
-        clamp on SimCC peak magnitudes rather than the model&apos;s opinion (D26).
+        clamp on SimCC peak magnitudes rather than the model&apos;s opinion.
       </p>
     </div>
   );

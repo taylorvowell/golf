@@ -1,21 +1,21 @@
-"""Stage 8 — the deterministic scoring engine (doc 05 Part C1).
+"""Stage 8 — the deterministic scoring engine (the scoring spec's Part C1).
 
 Reads `scoring_config/<version>.json` (never a hardcoded threshold — CLAUDE.md's non-negotiable)
 plus this swing's own `metrics.checkpoints` / `metrics.summary` / `metrics.glossary` /
 `tempo`, and produces a scorecard: a 0-100 per check, aggregated into category scores and into
 the ten-checkpoint (P1-P10) rail the player already renders, plus a deterministic narrative
 (no AI — CLAUDE.md: "AI is an enhancement, never a hard dependency for a swing reaching
-`ready`"). Writes `coach_report.json` next to `analysis.json` (doc 02's data model already
+`ready`"). Writes `coach_report.json` next to `analysis.json` (the architecture spec's data model already
 names this file; this closes the gap).
 
-Every check's evaluation follows doc 05 Part C1 exactly:
+Every check's evaluation follows the scoring spec's Part C1 exactly:
   1. **Distance-from-band, soft falloff** — 100 inside the band, decaying linearly to 0 over
      `falloff` units past the nearer edge. Not a hard pass/fail: a value 1 degree outside a
      band should not read the same as one 20 degrees outside it.
   2. **Confidence gating** — a check with an untracked field, or a checkpoint whose own
      detection confidence is below its `min_checkpoint_conf`, is *skipped*, not scored 0.
      Category weights renormalize over what was actually measurable, and the category result
-     says "n of m checks measurable" (doc 05's literal phrasing) rather than hiding the gap.
+     says "n of m checks measurable" (the scoring spec's literal phrasing) rather than hiding the gap.
   3. **Club/view gating** — a check scoped to `driver`/`irons` is skipped when the swing's club
      type is unknown or doesn't match; a check scoped to one camera view is skipped in the
      other, the same pattern `missingCapabilities()` in the web app already uses.
@@ -32,7 +32,7 @@ CONFIG_DIR = Path(__file__).resolve().parent.parent / "scoring_config"
 # `checkpoints.py`'s own ordering-violation clamp caps a suspect frame's confidence at exactly
 # 0.35 (the same value as metrics.py's MIN_CONF) — that is this codebase's established "no
 # longer reliable" floor, not 0.5. Both fixtures read the Top checkpoint at exactly 0.35 on
-# the frozen test snapshot, which is event-timing uncertainty (doc 05 A's known-open item, not
+# the frozen test snapshot, which is event-timing uncertainty (the scoring spec's known-open item, not
 # a scoring.py bug) — gating at 0.5 would silently exclude every backswing-top check on every
 # swing. Set just below the floor so a checkpoint AT it still scores, and only genuinely
 # lower (ordering-violation-clamped or worse) confidence gets skipped.
@@ -256,7 +256,7 @@ def _category_result(cat: str, checks: list[dict]) -> dict:
     score = round(sum(c["score"] * c["weight"] for c in measurable) / total_w, 1) if total_w else None
     return {
         "category": cat, "score": score,
-        # `n_total` counts only checks this config is actually TRYING to score, so doc 05's
+        # `n_total` counts only checks this config is actually TRYING to score, so the scoring spec's
         # "n of m checks measurable" reads as coverage of a real target. Deferred checks are
         # reported separately — folding them into m made `takeaway` claim "2 of 2 measurable"
         # while both of its checks were structurally broken, i.e. full confidence in a 0.0.
@@ -289,7 +289,7 @@ def _narrative(checks: list[dict]) -> dict:
     """Deterministic — never AI. Built directly from the weakest measured checks and their own
     directional `advice` (see `score_check`), not a canned pool, ranked by Leverage rather than
     raw score — the single highest-Leverage check is the one this swing most rewards fixing,
-    not just the one that happened to measure worst. Doc 07's real `AIProvider` narrative is a
+    not just the one that happened to measure worst. The AI-provider spec's real `AIProvider` narrative is a
     later, separate phase (see the plan's "Explicitly out of scope"); this dict's shape is
     stable so that swap changes nothing downstream.
     """

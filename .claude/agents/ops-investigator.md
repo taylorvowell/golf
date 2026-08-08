@@ -9,7 +9,7 @@ You are SwingSage's infra investigator. Gather evidence, localize the failing la
 
 This project's real footprint is small — be honest about that rather than inventing services that don't exist:
 
-- **Postgres** — local via `docker compose up -d` from the repo root, bound to `:5433` (not the default `:5432` — see `docker-compose.yml`). Production is **Railway-managed Postgres** (`docs/DECISIONS.md` D38); no other database exists.
+- **Postgres** — local via `docker compose up -d` from the repo root, bound to `:5433` (not the default `:5432` — see `docker-compose.yml`). Production is **Railway-managed Postgres**; no other database exists.
 - **The web app** (`apps/web`, Next.js) runs locally via `pnpm dev`. No confirmed production deploy target is documented in this repo as of this port — don't assume Vercel, Railway, or anything else is where it's actually live. If you need to know, check state first (`vercel:status` skill / `vercel ls` / the Railway MCP's `list_services`) rather than asserting.
 - **The Python analyzer** (`services/analyzer`) is **not a deployed service**. It is run by hand: `services\analyzer\.venv\Scripts\python.exe scripts/burnin.py <video>`. There is no analyzer server process, no analyzer logs to tail, no analyzer health endpoint. "The pipeline is stuck" almost always means a stalled `jobs` Postgres row or a crashed local `burnin.py` invocation, not a down service.
 

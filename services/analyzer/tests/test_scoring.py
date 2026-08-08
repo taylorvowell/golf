@@ -1,4 +1,4 @@
-"""Tests for Stage 8 (doc 05 Part C1) — the deterministic scoring engine.
+"""Tests for Stage 8 (the scoring spec's Part C1) — the deterministic scoring engine.
 
 Same golden-snapshot + invariant split as `test_stages.py`, plus a structural test that reuses
 `scripts/validate_scoring_config.py`'s `validate()` directly so a config edit that breaks a
@@ -110,7 +110,7 @@ def test_scoring_is_deterministic(frozen):
 
 def test_club_type_gating(frozen):
     """A club-scoped check (e.g. ANG-56, irons-only) must be skipped, not scored, when the
-    swing's club type is unknown — doc 05 C1's "club-type aware targets" requirement."""
+    swing's club type is unknown — the scoring spec's "club-type aware targets" requirement."""
     v = frozen["video"]
     res, sg = events.detect(frozen["pose"]["frames"], v["handedness"], v["fps"])
     cps = checkpoints.build(res, sg, frozen["pose"]["frames"], v["handedness"], club=None,

@@ -7,7 +7,7 @@ import type { Reanalyze } from "@/lib/useReanalyze";
  * reported by `ReanalyzeProgress`, so this and the settings-menu row drive one run rather than
  * two independent pollers with two opinions about it.
  *
- * The point of `analysis.json` being a stored artifact (doc 02) is that an improved model can be
+ * The point of `analysis.json` being a stored artifact (the architecture spec) is that an improved model can be
  * re-run over swings already filmed. Editing `swingsage/` does not change a stored analysis —
  * the player keeps drawing the old artifact until something re-runs the analyzer, which is the
  * usual reason a pipeline change "doesn't show up".

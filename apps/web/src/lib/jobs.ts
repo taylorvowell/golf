@@ -9,8 +9,8 @@ import { syncSwingScore } from "@/db/scores";
 import { MEDIA_ROOT, getAnalysis } from "@/lib/swings";
 
 /**
- * Re-analysis jobs, persisted in Postgres (docs/DECISIONS.md D38) — replacing the
- * `Map<string, Job>` this used to be. Same doc 02 protocol (POST starts, GET polls
+ * Re-analysis jobs, persisted in Postgres — replacing the
+ * `Map<string, Job>` this used to be. Same the architecture spec protocol (POST starts, GET polls
  * stage/progress/message); only the storage changed, which was the whole point: a Next
  * hot-reload used to silently lose a running job's status while the Python process kept going
  * (this module's previous comment called that out by name). Now the DB row survives the

@@ -1,6 +1,6 @@
-"""RTMPose estimator — doc 03 §1's documented escalation path from MediaPipe.
+"""RTMPose estimator — the pose spec's documented escalation path from MediaPipe.
 
-Doc 03 names RTMPose (the RTMDet->RTMPose top-down stack, as used by Swing Catalyst for
+The pose spec names RTMPose (the RTMDet->RTMPose top-down stack, as used by Swing Catalyst for
 golf) as the upgrade to take when MediaPipe underperforms on occlusion. Measured on our
 fixtures it does exactly that: on swing2 frame 30, where MediaPipe scores the far-side
 wrist/elbow/knee/ankle all below 0.5, RTMPose scores them 0.70/0.71/0.77/0.88.
@@ -13,7 +13,7 @@ Two design choices worth stating:
   fixtures), so its skeleton supplies the per-frame box. MediaPipe localises, RTMPose
   measures — each does what it is good at.
 * **Halpe26, not COCO17.** Halpe26 adds neck, head, mid-hip, heels and toes; COCO17 has no
-  foot detail at all, and doc 03 §2 needs feet for stance width, flare and balance.
+  foot detail at all, and the pose spec needs feet for stance width, flare and balance.
 """
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ from .skeleton import N_NATIVE, N_TRACKED, TRACKED_NAMES
 
 # rtmlib caches these under ~/.cache/rtmlib. 384x288 is the large-input variant — we are
 # offline, and input size is where top-down models buy their accuracy back (contrast
-# MediaPipe, whose fixed ROI made resolution a dead end; see DECISIONS.md D5).
+# MediaPipe, whose fixed ROI made resolution a dead end;).
 POSE_MODELS = {
     "performance": (
         "https://download.openmmlab.com/mmpose/v1/projects/rtmposev1/onnx_sdk/"
@@ -67,7 +67,7 @@ WHOLEBODY_TO_NATIVE = {
     17: "left_foot_index", 19: "left_heel", 20: "right_foot_index", 22: "right_heel",
     # BlazePose calls slots 17-22 the pinky/index/thumb *knuckles*, which is exactly what
     # these are — so the wholebody hand fills them in place rather than needing new names.
-    # They sat empty on this path because MediaPipe could not see a closed fist (D25).
+    # They sat empty on this path because MediaPipe could not see a closed fist.
     96: "left_index", 108: "left_pinky", 93: "left_thumb",
     117: "right_index", 129: "right_pinky", 114: "right_thumb",
 }
@@ -83,7 +83,7 @@ WHOLEBODY_TO_MEASURED = {
     100: "left_middle_mcp", 121: "right_middle_mcp",
 }
 
-# --- confidence scale (D26) -----------------------------------------------------------
+# --- confidence scale -----------------------------------------------------------
 # RTMW returns SimCC peak magnitudes, not probabilities: across both fixtures the points
 # this pipeline consumes run p01 2.87, median 5.04, p99 7.84, with ~100% of them above 1.0
 # on a typical frame. Clamping that to [0,1] — which is what this code used to do, on the
@@ -154,7 +154,7 @@ def _hand_grip(pts, sc, w, h, conf_of, min_conf=0.25):
     still far better than the wrist midpoint.
 
     `min_conf` gates on the *rescaled* confidence, so it means the same thing here as
-    everywhere else downstream (D26) — against raw SimCC scores it admitted everything.
+    everywhere else downstream — against raw SimCC scores it admitted everything.
     """
     hand_pts, confs, per_side = [], [], {}
     for side, base in HAND_BASE.items():
@@ -195,7 +195,7 @@ def estimate(video_path, boxes, mode: str = "performance", progress=None,
     slot = {name: i for i, name in enumerate(TRACKED_NAMES)}
 
     def conf_of(raw):
-        """Model score -> [0,1]. See WHOLEBODY_CONF_LO/HI (D26)."""
+        """Model score -> [0,1]. See WHOLEBODY_CONF_LO/HI."""
         if not wholebody:
             return float(min(max(raw, 0.0), 1.0))
         span = WHOLEBODY_CONF_HI - WHOLEBODY_CONF_LO

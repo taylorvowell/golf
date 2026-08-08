@@ -57,10 +57,10 @@ Only load skills/docs actually relevant to the target. Don't preload everything 
 **Domain-match (load 1–3 maximum):**
 - TS/Next.js client-server boundary questions → `.claude/rules/nextjs.md`, `.claude/rules/typescript.md`
 - Styling, theme tokens → `.claude/rules/tailwind-v4.md`
-- Pose/keypoints, angle math → `instructions/03-POSE-TRACKING.md`
-- Club tracking, trace rendering → `instructions/04-CLUB-TRACKING.md`
-- Event detection, metrics, scoring, coach narrative → `instructions/05-SWING-PHASES-AND-SCORING.md`, `services/analyzer/scoring_config/COVERAGE.md`
-- `analysis.json` shape, frame sync, pipeline stage order → `instructions/02-ARCHITECTURE.md`
+- Pose/keypoints, angle math → `docs/CURRENT-STATE.md`, `docs/GLOSSARY.md`
+- Club tracking, trace rendering → `docs/CURRENT-STATE.md`
+- Event detection, metrics, scoring, coach narrative → `docs/METRICS.md`, `services/analyzer/scoring_config/COVERAGE.md`
+- `analysis.json` shape, frame sync, pipeline stage order → `docs/CURRENT-STATE.md`, root `CLAUDE.md`
 - Test suite shape (golden vs invariant vs hand-labeled) → `.claude/rules/testing.md`
 
 **Web research:** Only go to `WebSearch` / `WebFetch` for things the local docs don't cover — e.g. "is there a newer MediaPipe Tasks API for this," "what's the current Next.js 16 pattern for X." Always cite the URL in the audit doc.
@@ -211,7 +211,7 @@ Brief each one with: "Investigate `<paths>` against these architectural axes —
 - Componentization: hand-built UI that should reuse a `components/ui/kiosk.tsx` shape; Python helpers duplicated across pipeline stages instead of shared in a common module
 - Logical placement: components in `app/` route dirs instead of `components/`; pipeline logic in `scripts/` that belongs in `swingsage/` (or vice versa — debug scripts should stay thin wrappers over `swingsage/`, not reimplement it)
 - Structural soundness: files >500 lines; circular imports; mixed concerns (a module doing I/O + geometry + scoring in one file)
-- Boundary violations: client components importing server-only modules; a pipeline stage reaching past the stage boundary described in doc 02 (e.g. event detection reading club data that Stage 4 hasn't produced yet, violating the Phase 2→5 build order)
+- Boundary violations: client components importing server-only modules; a pipeline stage reaching past the stage boundary described in the architecture spec (e.g. event detection reading club data that Stage 4 hasn't produced yet, violating the Phase 2→5 build order)
 
 Return format: bulleted list, grouped by axis. Cite `components/ui/kiosk.tsx` exports or `docs/DECISIONS.md` D-numbers when relevant. No prose. No recommendations — just findings."
 
@@ -226,7 +226,7 @@ Brief it with: "Search `<audit scope paths>` for opportunities to leverage newer
 4. Edge runtime usage on a route that doesn't need it
 5. Manual streaming/Suspense patterns that could use newer App Router primitives
 
-Skip AI-SDK/provider-routing findings entirely — doc 07's AI provider isn't built yet (scoring's coach narrative is deterministic, not AI-generated, as of this project's current state), so there is nothing to route or gateway.
+Skip AI-SDK/provider-routing findings entirely — the AI-provider spec's AI provider isn't built yet (scoring's coach narrative is deterministic, not AI-generated, as of this project's current state), so there is nothing to route or gateway.
 
 Return format: `<finding type>` — `<file:line>` — `<one-line description>`. No prose."
 

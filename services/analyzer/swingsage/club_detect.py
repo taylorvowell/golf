@@ -1,16 +1,16 @@
-"""Stage 4b — learned club-head detector (doc 04 §2, "optional YOLO head detector").
+"""Stage 4b — learned club-head detector (the club-tracking spec, "optional YOLO head detector").
 
-This does NOT replace the tracker in `club.py`. Doc 04 §2 forbids a detector-only club
-path, and the measured history says the same thing from the other direction: D15c showed the
-Viterbi solver is the part that works, and D14 diagnosed the remaining failures as
+This does NOT replace the tracker in `club.py`. The club-tracking spec forbids a detector-only club
+path, and the measured history says the same thing from the other direction: the Viterbi
+solver is the part that works, and the remaining failures were diagnosed as
 *candidate starvation* — "feed both into the same trajectory tracker. The tracker is the part
 that works; it is being starved of candidates."
 
 So the detector is wired in as a **third evidence source into the same dense angular
-profile** the solver already consumes, alongside the two hand-built detectors D19 split by
+profile** the solver already consumes, alongside the two hand-built detectors split by
 phase (motion profile outside the downswing, oriented shaft lines from Top through Impact+4).
 Everything downstream — the global DP, the swing-plane hinge gate, per-segment smoothing,
-the confidence that drives doc 02's quality gate — keeps working unchanged, and a frame the
+the confidence that drives the architecture spec's quality gate — keeps working unchanged, and a frame the
 detector misses degrades to exactly today's behaviour rather than to nothing.
 
 Two properties of that choice worth stating, because they are the reason for it:
@@ -21,12 +21,12 @@ Two properties of that choice worth stating, because they are the reason for it:
     thrown out by geometry alone before it can influence the path.
   * **The detector supplies radius, which is the weakest part of the profile.** `reach` from
     the motion profile is "how far along this ray did motion continue", which overshoots
-    exactly where the club foreshortens at the top (D17). A detection localises the head
+    exactly where the club foreshortens at the top. A detection localises the head
     directly, so where it fires it gives a better radius than ray-marching can.
 
 Nothing here is trusted on faith: `scripts/checkclub.py` renders the club over the real frame
 at each event, and coverage percentages have overstated club quality three separate times
-(STATUS.md §2). Judge this by that render and by doc 04 §7's position-error metric, not by
+(STATUS.md §2). Judge this by that render and by the club-tracking spec's position-error metric, not by
 the detector's own confidence.
 """
 from __future__ import annotations
@@ -90,12 +90,12 @@ class ClubDetector:
 
     `device=None` picks CUDA when available. Note that inference will contend with a training
     run for the same GPU — pass device="cpu" when one is in flight; a 341-frame clip is a
-    matter of seconds either way and this is offline batch analysis (doc 00).
+    matter of seconds either way and this is offline batch analysis (the master plan).
     """
 
     def __init__(self, weights, conf=0.15, iou=0.5, imgsz=640, device=None):
         # Deliberately low conf. The point is to hand the solver candidates and let *it*
-        # decide — a high threshold reintroduces exactly the starvation D14 diagnosed.
+        # decide — a high threshold reintroduces exactly the candidate starvation diagnosed there.
         self.weights, self.conf, self.iou, self.imgsz = str(weights), conf, iou, imgsz
         self.device = device
         self._model = None
@@ -178,7 +178,7 @@ def _add_bump(support, reach, centre_bin, gain, n_bins, sigma_bins, radius=None)
 
     Spread rather than a single-bin spike: a box centre carries its own error and the club has
     real angular extent, so a knife-edge peak would let the solver jitter between adjacent
-    bins without that meaning anything — the same reason D19 found 90 bins beat 180.
+    bins without that meaning anything — the same reason 90 bins beat 180 here.
     """
     sig = max(sigma_bins, 1e-6)
     k = int(np.ceil(3 * sig))
@@ -203,7 +203,7 @@ def inject_heads(profile, dets, gp, club_px, cfg, n_bins):
     comparable to a fully-supported motion ray.
 
     **Radius is NOT asserted by default** (`detector_radius=False`). An earlier version wrote
-    each frame's raw detection radius straight into `reach`, which bypassed D17's "smooth the
+    each frame's raw detection radius straight into `reach`, which bypassed the "smooth the
     radius as its own signal" and measurably increased jitter: the drawn club length at the
     address hold — where the club is physically stationary — went from stdev 18.8px to 29.4px.
     The head's *angle* is the durable signal here; its per-frame distance is not.
@@ -231,8 +231,8 @@ def inject_sticks(profile, dets, gp, club_px, cfg, n_bins):
     """Fold `stick` (shaft) detections in as ANGLE evidence — the solver's native state.
 
     This is the wiring the training numbers argue for. On our weights `stick` reaches mAP50
-    0.976 / mAP50-95 0.840 while `clubhead` manages 0.686 / 0.303 (D23a) — the model sees the
-    shaft far better than the head. And D17 established the solver's state *is* shaft angle,
+    0.976 / mAP50-95 0.840 while `clubhead` manages 0.686 / 0.303 — the model sees the
+    shaft far better than the head. And the solver's state *is* shaft angle,
     because the head rides an arc about the hands. A shaft box is therefore direct evidence
     about the one quantity being solved for, rather than the model's weakest output converted
     into that quantity.

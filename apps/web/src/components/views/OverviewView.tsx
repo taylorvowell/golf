@@ -35,7 +35,7 @@ const DEFAULT_SPEED = 0.5;
  * swing measured, how much the fault matters, and how easy it is to actually fix (the info
  * icon's tooltip shows the real breakdown, not a marketing number).
  *
- * The scorecard is real: `swingsage/scoring.py` (Stage 8, doc 05 Part C1), read from
+ * The scorecard is real: `swingsage/scoring.py` (Stage 8, the scoring spec's Part C1), read from
  * `coach_report.json` by `lib/scoring.ts`. `scorecard` is null for a swing analysed before
  * Stage 8 existed, or with `--no-scoring` — that renders a "not scored" state below rather
  * than a fabricated number.
@@ -131,7 +131,7 @@ export default function OverviewView({
     onInspect(null);
     if (g.freeze) {
       // Address is a static position, not a motion — its own checks are medians over the
-      // address hold (D28). Looping a phase there just shows a golfer standing still with the
+      // address hold. Looping a phase there just shows a golfer standing still with the
       // playhead sliding, so it freezes on the frame instead.
       jumpTo(g.from);
     } else {

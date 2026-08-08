@@ -3,11 +3,11 @@ import { getJob, startReanalysis } from "@/lib/jobs";
 /**
  * Re-run the analyzer over a swing's original clip.
  *
- * POST starts, GET polls — doc 02's job protocol, against an in-memory record until the
+ * POST starts, GET polls — the architecture spec's job protocol, against an in-memory record until the
  * SQLite job table exists. The response shape is the job row the UI renders, so swapping
  * the storage later does not touch the client.
  *
- * Re-analysis is the point of storing `analysis.json` as an artifact (doc 02): improved
+ * Re-analysis is the point of storing `analysis.json` as an artifact (the architecture spec): improved
  * models can be re-run over historic swings without the golfer re-filming anything.
  */
 const noStore = { "Cache-Control": "no-store" };

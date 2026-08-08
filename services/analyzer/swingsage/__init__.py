@@ -1,1 +1,1 @@
-"""SwingSage analyzer — CV pipeline (docs 02-05)."""
+"""SwingSage analyzer — CV pipeline (the pipeline specs)."""

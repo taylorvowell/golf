@@ -1,12 +1,12 @@
-"""Stage 2 — raw pose estimation (doc 03 §3).
+"""Stage 2 — raw pose estimation (the pose spec).
 
-Uses the MediaPipe Tasks PoseLandmarker; the legacy `mp.solutions.pose` API doc 03 was
-written against no longer exists in mediapipe 1.0 (see docs/DECISIONS.md D1).
+Uses the MediaPipe Tasks PoseLandmarker; the legacy `mp.solutions.pose` API the pose spec was
+written against no longer exists in mediapipe 1.0 ().
 
 Two constraints from that API shape this module:
   * `detect_for_video` demands monotonically increasing timestamps and exposes no reset(),
     so a VIDEO-mode instance is single-use per clip and can never rewind.
-  * Consequently doc 03 §3.4's "retry a failed span in static image mode" needs a *separate*
+  * Consequently the pose spec's "retry a failed span in static image mode" needs a *separate*
     IMAGE-mode landmarker, which `retry_gaps` provides.
 """
 from __future__ import annotations
@@ -68,7 +68,7 @@ def _empty_kp():
 def _landmarks_to_kp(landmarks):
     """NormalizedLandmark list -> [[x, y, conf], ...].
 
-    `visibility` is doc 03's confidence signal. The Tasks API can return None for it, and
+    `visibility` is the pose spec's confidence signal. The Tasks API can return None for it, and
     also exposes `presence`; we take the min of whichever are present so an occluded-but-
     hallucinated joint can't score high on one signal alone.
     """
@@ -153,7 +153,7 @@ def estimate(video_path: str | Path, progress=None, silhouette: bool = False) ->
 
 
 def retry_gaps(video_path: str | Path, series: RawPoseSeries, min_run: int = 3) -> int:
-    """Doc 03 §3.4 — re-run undetected spans with a per-frame detector (IMAGE mode).
+    """The pose spec — re-run undetected spans with a per-frame detector (IMAGE mode).
 
     VIDEO mode leans on its internal tracker; once it loses the golfer it can stay lost.
     IMAGE mode re-detects from scratch on every frame, which recovers those spans at the
@@ -238,7 +238,7 @@ def remap_to_full(series: RawPoseSeries, applied_bbox) -> RawPoseSeries:
 
 
 def finalize(series: RawPoseSeries) -> RawPoseSeries:
-    """Append derived joints — doc 03 §3.6 requires this *after* smoothing."""
+    """Append derived joints — the pose spec requires this *after* smoothing."""
     for fr in series.frames:
         if len(fr["kp"]) == N_TRACKED:
             add_derived(fr["kp"], fr.get("st"), fr.get("grip"), fr.get("hands"))
@@ -246,7 +246,7 @@ def finalize(series: RawPoseSeries) -> RawPoseSeries:
 
 
 def quality(series: RawPoseSeries) -> dict:
-    """Per-joint coverage and mean confidence — the Gate 1 measurement (doc 03 §7)."""
+    """Per-joint coverage and mean confidence — the Gate 1 measurement (the pose spec)."""
     n = len(series.frames)
     per_joint = {}
     if n:

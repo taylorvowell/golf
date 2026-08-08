@@ -1,9 +1,9 @@
-"""Stage 5 — swing event detection (doc 05 Part A).
+"""Stage 5 — swing event detection (the scoring spec's Part A).
 
 The 8 canonical GolfDB events: Address, Toe-Up, Mid-Backswing, Top, Mid-Downswing, Impact,
 Mid-Follow-Through, Finish.
 
-This is the club-independent implementation doc 05 asks for in Phase 3 — club tracking does
+This is the club-independent implementation the scoring spec asks for in Phase 3 — club tracking does
 not exist yet, so every event resolves from pose alone, using the fallbacks the doc
 specifies. Phase 4 refines Impact and Toe-Up once shaft data exists.
 
@@ -145,7 +145,7 @@ def build_signals(frames, handedness="right", fps=60.0) -> Signals:
     grip_ok = ~np.isnan(grip_raw[:, 0])
     grip = _fill(grip_raw)
 
-    # Scale: ankle-to-head, so thresholds are camera-distance independent (doc 03 §5).
+    # Scale: ankle-to-head, so thresholds are camera-distance independent (the pose spec).
     head = _fill(_series(frames, "head_center"))
     ank = _fill(_series(frames, "left_ankle"))
     ank2 = _fill(_series(frames, "right_ankle"))
@@ -176,7 +176,7 @@ def build_signals(frames, handedness="right", fps=60.0) -> Signals:
 
 
 def swing_window(sg: Signals, frac=0.10):
-    """Motion burst around the fastest hand movement (doc 05 A.1) — also the auto-trim span.
+    """Motion burst around the fastest hand movement (the scoring spec) — also the auto-trim span.
 
     Thresholding relative to the peak, not to a percentile of the whole clip: a percentile
     assumes a known ratio of moving to still frames, and these clips vary from a long static
@@ -231,7 +231,7 @@ def build_tempo(out, fps):
     """`(tempo, implausible_reasons)` from the three events it is made of.
 
     A function rather than inline, because `club.refine_events` can move Impact after this has
-    already been computed (D50) and a tempo left over from the pre-refinement frames is worse
+    already been computed and a tempo left over from the pre-refinement frames is worse
     than none: it is the number the scorecard reads and the one the implausibility check fires
     on, so a stale one both misreports the swing and mis-blames the detector.
     """
@@ -261,6 +261,29 @@ def build_tempo(out, fps):
     return tempo, odd
 
 
+def playback_span(addr, fin, n, fps, lead_s=1.0, tail_s=1.0):
+    """`([a, b], [pad_before, pad_after])` from the two events the window is pinned to.
+
+    Split out of `playback_window` below, which owns the reasoning and the diagnostic note. This
+    half depends on nothing but the two frames, the frame rate and the clip length — which is
+    what lets `club.refine_events` redo it after moving Address, without Stage 5's signals. It
+    has to: the playback window promises every clip shows exactly one second of approach, and a window
+    still anchored on the pre-refinement Address quietly breaks that for the comparison view.
+    """
+    lead = int(round(lead_s * fps))
+    tail = int(round(tail_s * fps))
+    want_a, want_b = addr - lead, fin + tail
+    a, b = max(0, want_a), min(n - 1, want_b)
+    # The window must contain the swing whatever the anchors did, and must not invert on a clip
+    # too short to hold one.
+    a = min(a, addr)
+    b = max(b, min(n - 1, fin))
+    if b <= a:
+        return [0, int(n - 1)], [0, 0]
+    # What the clip could not supply, for the player to hold as a freeze frame.
+    return [int(a), int(b)], [int(max(0, a - want_a)), int(max(0, want_b - b))]
+
+
 def playback_window(sg, out, peak, fps, n, lead_s=1.0, tail_s=1.0):
     """The part of the clip worth playing: the approach, the swing, and the held finish.
 
@@ -277,7 +300,7 @@ def playback_window(sg, out, peak, fps, n, lead_s=1.0, tail_s=1.0):
 
     This deliberately replaces an earlier, cleverer back end. It used to search for the golfer
     coming to *rest* (`_settle`) and end a second after that, because the Finish event fires when
-    hand motion decays (doc 05 A.9), a few tenths before the golfer has actually arrived at the
+    hand motion decays (the scoring spec), a few tenths before the golfer has actually arrived at the
     finish and held it — so on `perfect` the window ran to 2.1s past Finish. That is more
     faithful to one swing and worse across several, and consistency is what the comparison view
     needs. `_settle` is still used by nothing else; it stays for the note it can still emit.
@@ -288,32 +311,19 @@ def playback_window(sg, out, peak, fps, n, lead_s=1.0, tail_s=1.0):
     the player can hold a freeze frame for it, keeping every approach one second whatever the
     footage gives.
     """
-    lead = int(round(lead_s * fps))
-    tail = int(round(tail_s * fps))
     addr = out["address"]["frame"]
     fin = out["finish"]["frame"]
 
     thr = max(float(sg.speed[peak]) * 0.06, 1e-6)
     hold = max(4, int(round(0.30 * fps)))
     settled = _settle(sg.speed, fin, thr, hold)
-    if settled is not None and settled > fin + tail:
+    if settled is not None and settled > fin + int(round(tail_s * fps)):
         sg.notes.append(
             f"golfer settles at frame {settled}, {(settled - fin) / fps:.1f}s after the finish "
             f"event; the playback window still ends 1.0s after Finish so every clip runs out "
             f"for the same length")
 
-    want_a, want_b = addr - lead, fin + tail
-    a, b = max(0, want_a), min(n - 1, want_b)
-    # The window must contain the swing whatever the anchors did, and must not invert on a clip
-    # too short to hold one.
-    a = min(a, addr)
-    b = max(b, min(n - 1, fin))
-    if b <= a:
-        a, b = 0, n - 1
-        return [int(a), int(b)], [0, 0]
-    # What the clip could not supply, for the player to hold as a freeze frame.
-    pad = [max(0, a - want_a), max(0, want_b - b)]
-    return [int(a), int(b)], [int(pad[0]), int(pad[1])]
+    return playback_span(addr, fin, n, fps, lead_s, tail_s)
 
 
 def _sharpness(x, i, half=6):
@@ -401,7 +411,7 @@ def detect(frames, handedness="right", fps=60.0):
     # whole stance instead of sampling one frame of it.
     address_span = [int(span_start), int(addr)]
 
-    # --- Impact: the lowest hand position after Top (doc 05 A.4's club-free fallback).
+    # --- Impact: the lowest hand position after Top (the scoring spec's club-free fallback).
     #
     # Not "hands return to address height": on swing2 they never do — the grip bottoms out
     # at 0.627 against an address of 0.661 — so a crossing test finds nothing and whatever
@@ -412,13 +422,13 @@ def detect(frames, handedness="right", fps=60.0):
     impact = int(top + np.argmax(y[top:horizon + 1])) if horizon > top else min(top + 1, n - 1)
     ev["impact"] = (impact, _sharpness(y, impact, 6))
 
-    # --- Finish: motion decays after impact and the hands end high (doc 05 A.9).
+    # --- Finish: motion decays after impact and the hands end high (the scoring spec).
     quiet = np.flatnonzero(sg.speed[impact:] < max(sg.speed[peak] * 0.06, 1e-6))
     finish = int(impact + quiet[0]) if len(quiet) else min(b, n - 1)
     finish = min(max(finish, impact + 5), n - 1)
     ev["finish"] = (finish, 0.75 if len(quiet) else 0.45)
 
-    # --- Mid-Backswing / Mid-Downswing: lead arm parallel to the ground (doc 05 A.6/A.7).
+    # --- Mid-Backswing / Mid-Downswing: lead arm parallel to the ground (the scoring spec/A.7).
     def arm_parallel(lo, hi, default):
         if hi <= lo:
             return default, 0.4
@@ -432,7 +442,7 @@ def detect(frames, handedness="right", fps=60.0):
     md, md_c = arm_parallel(top + 1, impact, (top + impact) // 2)
     ev["mid_downswing"] = (md, md_c)
 
-    # --- Toe-Up: no shaft yet, so doc 05 A.5's fallback — lead wrist reaches trail-hip
+    # --- Toe-Up: no shaft yet, so the scoring spec's fallback — lead wrist reaches trail-hip
     # height during the takeaway.
     trail_hip = "right_hip" if handedness == "right" else "left_hip"
     hip_y = _fill(_series(frames, trail_hip))[:, 1]
@@ -440,7 +450,7 @@ def detect(frames, handedness="right", fps=60.0):
                                                      else hip_y)), rising=False)
     # Toe-Up sits roughly a third of the way into the backswing. A hip-height crossing that
     # lands right on top of Address is the takeaway barely starting, not the shaft going
-    # horizontal — reject it. Doc 05 flags this as club-dependent; Phase 4 replaces the
+    # horizontal — reject it. The scoring spec flags this as club-dependent; Phase 4 replaces the
     # proxy with the real shaft-horizontal test.
     span = max(1, top - addr)
     if tu is None or not (addr + 0.15 * span <= tu <= addr + 0.6 * span):
@@ -450,7 +460,7 @@ def detect(frames, handedness="right", fps=60.0):
         tu_c = 0.7
     ev["toe_up"] = (int(tu), tu_c)
 
-    # --- Mid-Follow-Through: doc 05 A.8 fallback — wrists back at lead-hip height, rising.
+    # --- Mid-Follow-Through: the scoring spec fallback — wrists back at lead-hip height, rising.
     lead_hip = "left_hip" if handedness == "right" else "right_hip"
     lh_y = _fill(_series(frames, lead_hip))[:, 1]
     mft = _cross(y, impact + 1, finish + 1,
@@ -478,7 +488,7 @@ def detect(frames, handedness="right", fps=60.0):
     #
     # It only OVERRIDES on a large disagreement. The two estimators normally agree within a
     # frame or two, and there are still no hand-labelled event frames for any clip
-    # (docs/STATUS.md) — so quietly re-deciding events that are already plausible would be
+    # — so quietly re-deciding events that are already plausible would be
     # fitting to a sample we cannot check. A gap this size means one of them is simply wrong.
     lm = _hand_landmarks(frames, addr)
     if lm is not None:
@@ -502,14 +512,14 @@ def detect(frames, handedness="right", fps=60.0):
             # scale. Measured on the pro clip: the old mid-downswing sat at 98% of a span that
             # ended 59 frames early, which re-scaled to 2 frames before the corrected Impact.
             #
-            # These fractions are the canonical positions doc 05 A describes (lead arm parallel
+            # These fractions are the canonical positions the scoring spec describes (lead arm parallel
             # coming down; shaft parallel through), and sit inside the spread the two working
             # fixtures show. Confidence is dropped to say plainly that they are interpolated
             # rather than detected.
             ev["mid_downswing"] = (int(top + round(0.60 * (impact - top))), 0.4)
             ev["mid_follow_through"] = (int(impact + round(0.35 * (finish - impact))), 0.4)
 
-    # --- Ordering constraint (doc 05 A): violations lower confidence, they are not hidden.
+    # --- Ordering constraint (the scoring spec): violations lower confidence, they are not hidden.
     out, prev = {}, -1
     for name in EVENT_ORDER:
         f, c = ev[name]
