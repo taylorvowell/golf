@@ -235,3 +235,383 @@ quality bar rather than a date.
 - Apple App Privacy and Google Data Safety declarations require exact answers about data
   collection, sharing and retention, which makes D3's deletion-cascade decision and the
   `ai-coach` data-processing position hard launch prerequisites rather than good practice.
+
+---
+
+## D5 — Mobile client: React Native via Expo, with EAS cloud builds
+
+**Date:** 2026-08-08
+**Status:** ACTIVE
+
+**Context:** `PROJECT_MAIN.md` §44 leaves the mobile framework to the roadmap; §2.2 says
+performance beats code-sharing purity where they conflict; §2.3 makes ≥60 fps capture
+non-negotiable. Two facts settle this more than any framework benchmark does.
+
+First, **the only dev machine is Windows** — verified, no Xcode toolchain. iOS builds are
+impossible locally regardless of framework, so a cloud build service is mandatory, not a
+convenience. Expo's EAS Build provides hosted macOS builders; choosing bare React Native or
+Flutter does not remove this requirement, it just means sourcing it separately.
+
+Second, the rendering *rules* worth keeping are already TypeScript and hard-won: `usePlayer.ts`
+(frame sync), `traceSmoothing.ts` (nine endpoint-exact methods), `overlays.ts`, `skeleton.ts`,
+`angleOverlay.ts`, `swingPhases.ts`. React Native keeps them as logic and shares types with the
+web surface through `packages/schema`; Flutter means re-expressing all of it in Dart with no
+sharing against the coach/admin web app.
+
+Research (recorded in step 01's file) found the capability questions answered: VisionCamera
+exposes 30–240 fps capture on both platforms, and frame-exact seeking is reachable on both —
+zero-tolerance seek on iOS, decode-and-skip from a sync point on Android, bounded by Stage 0's
+existing GOP of 10.
+
+**Decision:** React Native, managed through **Expo with config plugins and development builds**
+(not Expo Go, which cannot host the native modules this needs), built and submitted via **EAS
+Build / EAS Submit**.
+
+**Alternatives:**
+- *Flutter.* Better raw rendering predictability via Impeller, and genuinely strong at custom
+  painting. Rejected because it discards every line of existing player logic, shares nothing
+  with the web coach surface, and does not solve the Windows/iOS build problem anyway.
+- *Fully native (Swift + Kotlin).* Best possible capture and playback control, and the only
+  option with no framework risk on the per-frame callback. Rejected as roughly double the
+  surface area for a single-developer build, against a §45 success definition spanning 20
+  capabilities.
+- *Bare React Native.* Same language benefits, but hands back EAS's build/submit/update
+  pipeline, which is the part that makes a Windows-only machine viable.
+
+**Consequences:**
+- Expo Go is unusable from the start; development requires a **dev build** installed on the
+  device. That is the Android testing path and belongs in `docs/RUNBOOK.md` once step 02
+  creates the app.
+- Native modules are expected, not exceptional — at minimum for the per-frame overlay callback.
+  The Expo config-plugin system is how they are wired without ejecting.
+- iOS builds always go through EAS. Budget for it; it is on the critical path for step 10.
+- **This decision is provisional until step 02's spike passes on Android.** The Android
+  per-frame callback is unconfirmed, and it is the one finding that would reopen this entry.
+
+---
+
+## D6 — The Next.js app becomes the coach and admin surface, not the golfer surface
+
+**Date:** 2026-08-08
+**Status:** ACTIVE
+
+**Context:** `PROJECT_MAIN.md` is mobile-first for golfers (§2.1), but coaches review swings,
+annotate frames, manage a roster and write plans (§25–§28), and administrators manage
+professional swings, drills, scoring configuration and coach approval (§31). Those are
+desk-shaped tasks on large screens. Meanwhile a working, frame-accurate player already exists
+as a Next.js app, and the roadmap risked treating it as legacy.
+
+**Decision:** The existing Next.js app stops being the golfer surface and becomes the **coach
+workspace + admin area + marketing/support** surface. `SwingWorkspace` / `SwingStage` and the
+overlay system are retained as the coach's swing-review UI rather than deleted.
+
+**Alternatives:**
+- *Retire the web app; everything on mobile.* Would force coaches to do roster management,
+  annotation and plan authoring on a phone, and throws away a working player.
+- *Keep it as a second golfer surface too.* Doubles the golfer feature surface for no stated
+  requirement — §2.1 is unambiguous that golfers are mobile-first.
+
+**Consequences:**
+- The player's existing frame-sync and overlay work keeps a production home immediately, and
+  the mobile port becomes a second implementation of shared rules rather than a migration.
+- `coach-relationships` and `coach-collaboration` build on an app that already exists.
+- The admin surface (§31) has a natural home, which is why `admin-surface` is a web track.
+- Golfer-facing routes in `apps/web` reduce to a marketing/redirect shell as the mobile app
+  takes over. Not urgent, but it must not drift into a maintained second golfer client.
+
+---
+
+## D7 — Supabase Postgres with Drizzle retained; RLS is the authorization boundary
+
+**Date:** 2026-08-08
+**Status:** ACTIVE
+
+**Context:** §4.1 requires Supabase for accounts. Supabase *is* Postgres, and this project
+already has a Drizzle schema with real migrations and `user_id` foreign keys on every
+user-scoped table. §24.3 and §34.2 make coach access to golfer data a data-access rule.
+
+**Decision:** Use Supabase as the Postgres host and identity provider. **Keep Drizzle** as the
+query and migration layer; the existing schema and migrations move rather than get rewritten.
+The app's `users` row is keyed to the Supabase `auth.users` id — one identity, no shadow table.
+**Row-level security is the authorization boundary**, not a UI check, and the analyzer worker
+gets a scoped service role that bypasses RLS and is unreachable from request handling.
+
+**Alternatives:**
+- *Move to the Supabase client and PostgREST.* Tighter RLS integration and less code, but
+  discards working migrations, loses type-safe query composition, and couples every server
+  module to one vendor's client.
+- *Enforce access in application code only.* Simpler to write, and one missed `where` clause
+  from showing a golfer another golfer's video. Rejected outright.
+
+**Consequences:**
+- Coach access, sharing and admin visibility become policy questions with one enforcement point,
+  testable before the features exist — which is why step 03 writes those tests against a
+  synthetic relationship.
+- The service-role boundary is a security-critical seam, called out in step 03.
+- Local development keeps a Docker Postgres for pipeline work; only auth-dependent paths need
+  the hosted project.
+
+---
+
+## D8 — Media lives in Supabase Storage, addressed by stable keys
+
+**Date:** 2026-08-08
+**Status:** ACTIVE
+
+**Context:** Media is on local disk behind `SWINGSAGE_MEDIA_ROOT`, the hardest blocker to the
+analyzer running anywhere else. §39 prefers Azure "for additional cloud needs". Video playback
+needs HTTP range requests or frame-accurate scrubbing breaks — the product's #1
+perceived-quality feature.
+
+**Decision:** **Supabase Storage** for both source uploads and derived artifacts, with stable
+keys derived from swing/view identity rather than folder names, and signed URLs for playback.
+
+**Alternatives:**
+- *Azure Blob + CDN.* The literal reading of §39's Azure preference, and the better answer at
+  scale. Rejected for now because signed-URL issuance would then live outside the auth system
+  that decides who may see a swing, adding a second authorization path for the most sensitive
+  asset in the product — video of users.
+- *Railway volumes.* Simplest migration, but not object storage: no lifecycle rules, no CDN
+  path, and it re-creates the local-disk coupling on someone else's disk.
+
+**Consequences:**
+- §39's Azure preference is deliberately not followed here. It is a *preference*, and §39 itself
+  subordinates preferences to non-negotiable capabilities — here, one authorization path for
+  user video.
+- **Revisit trigger, recorded so it is not forgotten:** if egress cost or playback latency
+  becomes material, move artifacts behind a CDN or to Azure Blob. Stable keys make that a
+  routing change rather than a data-model change.
+- Range-request support must be verified in step 09 against real scrubbing, not assumed.
+
+---
+
+## D9 — Upstash for dispatch, Railway for the worker; job state stays in Postgres
+
+**Date:** 2026-08-08
+**Status:** ACTIVE
+
+**Context:** §39 names Upstash and Railway. §38 requires that one user's workload cannot degrade
+everyone else's. A working job protocol already exists — stage, progress_pct, message, durable
+in Postgres, with orphan settlement — designed for one local worker.
+
+**Decision:** **Upstash QStash** dispatches analysis jobs to a **Railway**-hosted analyzer
+container. **Job state remains in Postgres**; the queue carries dispatch, not truth. Fair
+queuing is a per-user concurrency cap enforced at enqueue time.
+
+**Alternatives:**
+- *Queue as the source of truth.* Fewer moving parts, but the existing protocol, the progress UI
+  and orphan settlement all read a durable row, and clients need to recover state after
+  reconnecting.
+- *Railway-native background workers only.* Fewer vendors, but no backpressure or retry
+  semantics without building them.
+
+**Consequences:**
+- The existing job protocol survives the network boundary largely intact.
+- A per-user concurrency cap is the concrete form of §38's isolation requirement, and belongs to
+  `analyzer-service` along with the capacity and cost model.
+- GPU availability on Railway must be confirmed early — the club detector and pose model are the
+  cost driver, and a CPU-only worker changes the latency SLO materially.
+
+---
+
+## D10 — Three environments; Infisical holds every secret
+
+**Date:** 2026-08-08
+**Status:** ACTIVE
+
+**Context:** §38 lists safe configuration and secrets handling as a product expectation; §39
+names Infisical. Today configuration is `.env` files on one machine.
+
+**Decision:** **local / preview / production**, each with its own Supabase project, storage
+buckets and queue namespace. **Infisical** is the only source of secrets; nothing secret is
+committed, printed in logs, or reachable from a client bundle. The mobile app receives only
+public configuration — anything secret stays server-side, which is also why the AI provider and
+receipt validation are server-only (D16, D17).
+
+**Consequences:**
+- Preview environments need their own storage and database, so seeding and teardown must be
+  cheap.
+- A mobile binary embeds configuration at build time, so environment switching is a build
+  concern, handled through EAS build profiles.
+
+---
+
+## D11 — Offline-first capture and library; analysis requires connectivity
+
+**Date:** 2026-08-08
+**Status:** ACTIVE
+
+**Context:** Golfers record at ranges and on courses, where signal is worst. §33 lists lost
+connections and interrupted uploads as first-class failure cases. Analysis is server-side CV and
+cannot run on the device.
+
+**Decision:** **Capture, the local swing library, and playback of already-downloaded swings work
+fully offline.** A local store on the device holds swing records and pending uploads; uploads
+queue and retry. **Analysis requires connectivity**, and its pending state is explicit in the UI.
+
+**Alternatives:**
+- *Online-required throughout.* Much simpler, and directly contradicts where the product is
+  used. A golfer who records six swings out of signal must not lose them.
+- *Full bidirectional sync of all data.* Correct eventually, disproportionate now; the coach,
+  messaging and plan surfaces are read-mostly and can require connectivity.
+
+**Consequences:**
+- The device is a source of truth for un-uploaded swings, so local storage pressure and
+  retention need handling — a phone holds only so many 300 MB clips.
+- Conflict resolution is deliberately avoided by keeping offline writes append-only: new swings
+  and edits to local-only swings, never offline edits to server-owned records.
+- This is a `media-pipeline` responsibility, and is why that track exists separately from
+  `swing-ingest`.
+
+---
+
+## D12 — EAS Build and Submit; OTA updates for JavaScript only
+
+**Date:** 2026-08-08
+**Status:** ACTIVE
+
+**Context:** The dev machine is Windows with no Xcode, so iOS binaries cannot be produced
+locally. §38 wants reliable delivery; step 07 introduces a minimum-supported-client policy.
+
+**Decision:** **EAS Build** produces signed binaries for both platforms and **EAS Submit**
+delivers them to TestFlight and Play internal testing. **`expo-updates` OTA is permitted for
+JavaScript-only changes**; anything touching native code, permissions or a native module version
+requires a store release.
+
+**Consequences:**
+- OTA weakens but does not remove step 07's version-skew problem: a JS fix ships in hours, a
+  native fix waits for review. The minimum-supported-client check must therefore key on the
+  **native** build number, not the JS bundle.
+- An OTA channel per environment maps onto D10's build profiles.
+- Store review latency is a release-calendar fact, not an incident.
+
+---
+
+## D13 — SLO targets
+
+**Date:** 2026-08-08
+**Status:** ACTIVE
+
+**Context:** §38's expectations are entirely qualitative. Without numbers, "production ready" is
+unfalsifiable — the exact failure this project already made when club tracking was tuned on
+smoothness with no position-error metric to falsify it.
+
+**Decision:** the initial targets, instrumented by `observability-and-slos` and load-tested by
+`launch-readiness`:
+
+| Metric | Target |
+|---|---|
+| Analysis end-to-end (upload complete → result ready), p95 | **< 180 s** |
+| Analysis end-to-end, p99 | < 300 s |
+| Analysis failure rate (excluding video rejected as unsuitable) | **< 2 %** |
+| Upload success rate, including resume | **> 99 %** |
+| API p95, excluding analysis | < 500 ms |
+| Crash-free sessions | **> 99.5 %** |
+| Overlay drift during scrub | **0 frames** — it is exact or it is a bug |
+
+**Consequences:**
+- The p95 target is **not currently met and is not yet known to be achievable**: a ~520-frame
+  fixture takes ~5.5 minutes on this developer machine. Establishing real per-swing cost and
+  latency on the hosted worker is an explicit `analyzer-service` deliverable, and these numbers
+  are revised there with measurements rather than quietly missed.
+- Overlay drift is the one target with no tolerance, because it is the product's stated #1
+  perceived-quality feature and the existing pipeline already achieves it.
+
+---
+
+## D14 — What golfer data may reach a model provider
+
+**Date:** 2026-08-08
+**Status:** ACTIVE
+
+**Context:** §17.2 wants the AI Coach grounded in profile, goals, handedness, equipment, history
+and coach plans. §34 makes this personal data, and the store privacy declarations required at
+launch need an exact answer.
+
+**Decision:**
+- **Never sent:** raw video, raw per-frame keypoint arrays, precise location, email, payment
+  data.
+- **May be sent:** derived analysis (scores, findings, checkpoint metrics), profile fields the
+  golfer supplied, goals, equipment, club, and summarised history. **Extracted keyframe images
+  may be sent** where a visual is needed.
+- **Required of the provider:** no training on submitted data, and zero or short retention. A
+  provider unable to commit to that is not eligible.
+- **User-authored free text — notes, goals, messages — is untrusted input**, carried as data and
+  never as instructions, and never able to alter system behaviour.
+
+**Consequences:**
+- Makes the Apple App Privacy and Google Data Safety declarations answerable rather than
+  guesswork.
+- Constrains `ai-coach`'s prompt construction from the start rather than after a review.
+- The no-training requirement narrows provider choice; the model itself is deliberately still
+  open (D16).
+
+---
+
+## D15 — Deletion cascade
+
+**Date:** 2026-08-08
+**Status:** ACTIVE
+
+**Context:** §4.3 promises users understand what deletion removes; §34.1 gives them control;
+§30.1 makes retention tier-driven. Every track from here creates user data, so the obligation
+has to exist before they do.
+
+**Decision:** account deletion must reach, and be verifiable across: database rows (FK cascade),
+**object storage** (source video and every derived artifact), **AI conversation history**,
+**coach-visible copies** (access revoked; coach-authored annotations retained only where the
+coach owns them, detached from the golfer's identity), **analytics** (pseudonymised, not retained
+against the user), and **backups** (removed within a stated, published window rather than claimed
+to be instant).
+
+**Consequences:**
+- Every new table or bucket must declare its deletion behaviour when introduced. Enforced by
+  step 03's schema work and audited by `production-readiness`.
+- "Deleted everywhere immediately" is not truthfully claimable while backups exist, so the
+  privacy policy states the window instead of over-promising.
+- Tier-driven retention (§30.1) reuses the same machinery on a schedule rather than an event.
+
+---
+
+## D16 — AI provider seam is server-side; the model is not chosen here
+
+**Date:** 2026-08-08
+**Status:** ACTIVE
+
+**Context:** §44 explicitly leaves the AI model and provider to the roadmap, and §17 requires
+grounded, personalised conversation. Choosing a model now would fix a fast-moving decision months
+before the `ai-coach` track needs it.
+
+**Decision:** fix the **seam**, not the model. All model access goes through a server-side
+provider interface in `services/ai`. **The client never calls a model provider directly** — that
+would expose keys, remove cost control, and make per-tier usage limits unenforceable. Every
+response is validated against a schema, retried once on failure, then falls back to deterministic
+output. Model selection belongs to `ai-coach`, constrained by D14.
+
+**Consequences:**
+- Entitlement checks and cost ceilings have exactly one place to live.
+- The existing deterministic coach narrative is the fallback path, so an AI outage degrades the
+  product rather than breaking it — consistent with quality gates degrading, not crashing.
+
+---
+
+## D17 — Entitlement is ours; store receipts are evidence, not truth
+
+**Date:** 2026-08-08
+**Status:** ACTIVE
+
+**Context:** D1 made billing native in-app purchase. §30.3 requires the full subscription
+lifecycle and §31.4 requires admin-granted access, which no store transaction represents.
+
+**Decision:** the **entitlement record is our own**, stored server-side and authoritative. Store
+receipts are **validated server-side** and treated as evidence that updates it. A client-reported
+purchase is never trusted. Admin grants, promotional access and comped accounts are first-class
+grant types requiring no store transaction.
+
+**Consequences:**
+- Entitlement survives a store outage, a failed receipt refresh, and a platform migration.
+- The same seam serves both stores, so `billing-iap` adds sources rather than branching feature
+  code.
+- Downgrade overflow (§43's open question about stored swings exceeding a shrunken plan) is
+  expressible whichever answer the product picks, because retention reads entitlement rather than
+  store state.
