@@ -12,7 +12,9 @@
     "db:migrate": "node --env-file=.env node_modules/drizzle-kit/bin.cjs migrate",
     "db:studio": "node --env-file=.env node_modules/drizzle-kit/bin.cjs studio",
     "db:seed": "node --env-file=.env --import tsx src/db/seed.ts",
-    "db:backfill": "node --env-file=.env --import tsx src/db/backfill.ts"
+    "db:backfill": "node --env-file=.env --import tsx src/db/backfill.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",
@@ -26,11 +28,13 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitest/coverage-v8": "^4.1.10",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.3.0",
     "tailwindcss": "^4",
     "tsx": "^4.23.8",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   }
 }
