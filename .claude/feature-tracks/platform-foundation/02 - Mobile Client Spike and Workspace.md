@@ -39,8 +39,20 @@ has to be discovered now, not in the `in-app-capture` track.
 1. Build a throwaway spike on the chosen framework that does exactly three things on a real
    device: record at 60 fps and report the *actual* achieved rate; play a recorded clip back
    with frame-accurate seek; draw a moving overlay locked to the video during scrub.
+   **The third is the one that decides this.** Step 01's research found confirmed paths for
+   capture (VisionCamera, 30–240 fps) and for exact seek (zero-tolerance seek on iOS,
+   decode-and-skip from a sync point on Android, bounded by this pipeline's GOP of 10). It did
+   **not** confirm an Android equivalent of iOS's `AVPlayerItemVideoOutput` + `CADisplayLink`
+   per-frame callback. If the overlay cannot be locked to the *presented* frame on Android, the
+   product's #1 perceived-quality feature does not survive the port — so prove that first, on
+   Android, before spending time on the other two.
 2. Measure on at least one iPhone and one mid-range Android — not a flagship. Record achieved
    capture fps, dropped frames during overlay playback, and seek accuracy.
+   **Device availability is a known gap: there is an Android phone on hand and no iPhone.**
+   Resolve that before this step rather than during it — a borrowed or second-hand device, or a
+   cloud device farm for the measurement pass. The iOS simulator cannot exercise camera capture
+   and therefore cannot answer this step's question; do not treat it as a substitute. See
+   `docs/RUNBOOK.md` §6.
 3. If the spike fails the bar, say so and return to step 01's decision rather than proceeding.
    That is a legitimate outcome of this step, not a failure of it.
 4. Scaffold `apps/mobile/` properly: TypeScript strict, the lint/format setup the repo already

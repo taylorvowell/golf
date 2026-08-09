@@ -10,6 +10,7 @@ Guidance for Claude Code working in this repository.
 | [`docs/CURRENT-STATE.md`](docs/CURRENT-STATE.md) | **What actually exists today.** Facts only — no plans, no history. Source of truth for *what is real*. |
 | [`docs/PRODUCT-COVERAGE.md`](docs/PRODUCT-COVERAGE.md) | The north star scored section-by-section against current state. Source of truth for *what is missing*. |
 | [`.claude/ROADMAP.md`](.claude/ROADMAP.md) | The plan across all tracks (derived — never hand-edit). Source of truth for *what is next*. |
+| [`docs/RUNBOOK.md`](docs/RUNBOOK.md) | How to run and test it — desktop, Android phone over LAN, analyzer, tests. Source of truth for *how to start it*. |
 
 **The gap between the first two is large and deliberate.** SwingSage today is a working
 proof of concept of the analysis engine — a Python CV pipeline plus a desktop web player,

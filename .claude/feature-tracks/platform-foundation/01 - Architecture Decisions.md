@@ -44,6 +44,52 @@ None — this is the first step of the spine.
   capture, reliable camera access, accurate overlays or multi-device sync, that is a finding to
   surface, not a constraint to silently break.
 
+## Pre-gathered research (2026-08-08)
+
+Input to decision 2, gathered ahead of the step so the client choice is not made from stale
+training data. **This is evidence, not the decision** — step 02's spike is what settles it.
+
+**Capture at ≥60 fps is a camera-API problem, not a UI-framework one.** Most framework
+comparisons benchmark UI compositing frame rate, which is the wrong metric here — what matters
+is `AVCaptureDevice` high-frame-rate formats on iOS and Camera2/CameraX high-speed sessions on
+Android. On the React Native side `react-native-vision-camera` exposes configurable capture
+from 30 to 240 fps on both platforms, which covers §2.3's floor with headroom for the
+higher-rate capture §43 leaves open.
+
+**Frame-exact seeking is available on both platforms, and this pipeline already made the choice
+that keeps it cheap.** iOS reaches it by seeking with `toleranceBefore`/`toleranceAfter` set to
+zero (default tolerance is ~100 ms, which would be ~6 frames of drift at 60 fps and visibly
+wrong). Android/ExoPlayer is frame-accurate by default on progressive MP4: it seeks to the
+preceding sync point and then decodes-and-skips forward to the requested frame. That cost is
+bounded by the GOP length — and Stage 0 already forces **GOP 10**, a decision originally taken
+because libx264's default of 250 made browser scrubbing decode up to 250 frames of 1080p and
+freeze the picture. The same decision now bounds ExoPlayer's decode-and-skip to at most 9
+frames. Worth confirming that GOP 10 survives whatever transcode the upload path applies.
+
+**Per-frame overlay callback — the real risk, and the one thing without a confirmed
+cross-platform answer.** The web player's frame lock depends on `requestVideoFrameCallback`.
+iOS has a direct analogue: `AVPlayerItemVideoOutput` driven by a `CADisplayLink`, which fires on
+v-sync and vends the pixel buffer for the frame about to be displayed. Android's Media3
+equivalent (a frame-metadata listener carrying presentation time) was **not confirmed by this
+research pass and must be verified in the step 02 spike** — treat it as the spike's primary
+question, because if the overlay cannot be locked to the presented frame on Android, the
+product's stated #1 perceived-quality feature does not survive the port. Neither platform's
+mechanism is exposed by off-the-shelf RN video components, so a native module should be assumed
+either way; that is a normal outcome under §2.2, not a disqualifier.
+
+**Weighing TypeScript reuse.** The rendering *rules* worth preserving are already TypeScript and
+substantial — `usePlayer.ts` (frame sync), `traceSmoothing.ts` (nine methods, endpoint-exact),
+`overlays.ts`, `skeleton.ts`, `angleOverlay.ts`, `swingPhases.ts`. React Native keeps them as
+logic and shares types with the web surface through `packages/schema`; Flutter means
+re-expressing all of it in Dart. §2.2 says performance beats code-sharing purity *when the two
+conflict* — the evidence above suggests they may not conflict here, which is precisely what the
+spike must confirm rather than assume.
+
+Sources: [VisionCamera formats](https://react-native-vision-camera.com/docs/guides/formats) ·
+[react-native-video seek tolerance](https://www.npmjs.com/package/react-native-video) ·
+[ExoPlayer seek internals](https://takusemba.medium.com/deep-understanding-of-seek-4e10079165ec) ·
+[AVPlayerItemVideoOutput + CADisplayLink](https://developer.apple.com/library/archive/samplecode/AVBasicVideoOutput/Introduction/Intro.html)
+
 ## Files & Areas Touched
 
 - `docs/DECISIONS.md` — one numbered entry per decision below (this is the real deliverable)
