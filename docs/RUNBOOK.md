@@ -113,14 +113,35 @@ look at the frame before believing any club number.
 
 ```bash
 # analyzer — from services/analyzer, ~4s, no video/GPU/out/ needed
-.venv/Scripts/python.exe -m pytest tests
+.venv/Scripts/python.exe -m pytest tests          # 80 passed, 2 skipped, 1 xfailed
 
-# web — from the repo root
-pnpm --filter web exec tsc --noEmit
-pnpm --filter web lint
+# clients — from the repo root
+pnpm --filter web test                            # vitest, 71 tests
+pnpm --filter mobile test                         # jest-expo, 12 tests
+pnpm --filter web exec tsc --noEmit && pnpm --filter web lint
+pnpm --filter mobile exec tsc --noEmit
 ```
 
-There are **no web app tests yet**; a harness for both clients is spine step 02.
+Web uses **Vitest**, mobile uses **jest-expo** — different runners because Expo's preset carries
+the React Native transform, and fighting that into Vitest bought nothing.
+
+The web tests deliberately assert **documented behaviour, not current coordinates**. That logic
+is being re-expressed on mobile, and a snapshot of numbers would lock in one implementation;
+behavioural assertions survive the port and become the oracle for the second one.
+
+Two pnpm-specific gotchas already handled in `apps/mobile/package.json`, both of which produce
+baffling errors if they regress:
+
+- Expo's stock `transformIgnorePatterns` assumes a flat `node_modules`. pnpm nests packages
+  under `node_modules/.pnpm/<name>@<ver>/node_modules/`, so React Native's ESM goes
+  untransformed and every test dies on *"Cannot use import statement outside a module"*.
+- `tsconfig.json` needs `types: ["jest"]`, or `tsc` fails on test files while `jest` itself
+  passes — the kind of split where CI stays green and the editor lies.
+
+**Component rendering is not wired up on mobile.** `@testing-library/react-native`'s `render()`
+kept returning an object with no query functions across two dependency-pinning attempts. Logic
+is tested instead, which is where the value is anyway; revisit when there is a component worth
+rendering in a test.
 
 If `tsc` reports errors inside `.next/dev/types/` or `.next/types/`, those are stale generated
 files, not real errors — `rm -rf apps/web/.next/dev/types apps/web/.next/types` and re-run.
