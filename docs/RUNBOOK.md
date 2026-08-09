@@ -136,14 +136,21 @@ is always two commands. Look at the diff before accepting it: a snapshot only pr
 There is no `apps/mobile/`. It is created in spine step 02, which also picks the framework.
 
 When it lands, the Android device above covers Android testing. **iOS has no device**, which
-matters for two things and should be solved before step 02 rather than discovered during it:
+matters for two steps — but neither is blocked on it starting:
 
-- Step 02's spike deliberately measures capture rate, dropped frames and seek accuracy on **both
-  an iPhone and a mid-range Android**, because §2.2 makes device-class performance a product
-  requirement rather than a detail.
-- Step 10 needs signed builds distributed through TestFlight, which needs a real iOS device to
-  verify on.
+- **Step 02's spike** measures capture rate, dropped frames and seek accuracy on both an iPhone
+  and a mid-range Android. It runs **Android first**: the per-frame overlay callback is confirmed
+  on iOS and unconfirmed on Android, so the device already on hand carries the risk that could
+  actually invalidate the framework choice. iOS is needed to finish the step, not to begin it.
+- **Step 10** needs signed builds through TestFlight, verified on a real iOS device.
 
 Options are a borrowed/second-hand iPhone, a cloud device farm for the measurement pass, or —
 weakest — the iOS simulator, which cannot validate camera capture at all and so cannot answer
 the spike's actual question.
+
+Store developer accounts are **not** needed until around step 10; enrolling on day one only
+starts Apple's annual $99 clock early. Begin enrolment around step 07 for buffer. The account
+*type*, however, should be decided early: a **personal** Google Play account registered after
+13 Nov 2023 must run a closed test with 12 testers opted in for 14 continuous days before it can
+publish, while an **organization** account is exempt but needs D-U-N-S verification. See spine
+step 10 for the full comparison.

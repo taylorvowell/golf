@@ -48,11 +48,16 @@ has to be discovered now, not in the `in-app-capture` track.
    Android, before spending time on the other two.
 2. Measure on at least one iPhone and one mid-range Android — not a flagship. Record achieved
    capture fps, dropped frames during overlay playback, and seek accuracy.
-   **Device availability is a known gap: there is an Android phone on hand and no iPhone.**
-   Resolve that before this step rather than during it — a borrowed or second-hand device, or a
-   cloud device farm for the measurement pass. The iOS simulator cannot exercise camera capture
-   and therefore cannot answer this step's question; do not treat it as a substitute. See
-   `docs/RUNBOOK.md` §6.
+
+   **Run Android first, and do not wait on iOS to start.** Step 01's research confirmed a clean
+   iOS path for the hard part (`AVPlayerItemVideoOutput` + `CADisplayLink` for the per-frame
+   callback) and could **not** confirm the Android equivalent. The unconfirmed risk is therefore
+   entirely on the device already available, so the Android pass answers the question that could
+   actually kill the framework choice. If Android fails, iOS never needs measuring.
+
+   iOS is needed to *complete* this step, not to begin it — a borrowed or second-hand device, or
+   a cloud device farm for the measurement pass. The iOS simulator cannot exercise camera
+   capture and is not a substitute. See `docs/RUNBOOK.md` §6.
 3. If the spike fails the bar, say so and return to step 01's decision rather than proceeding.
    That is a legitimate outcome of this step, not a failure of it.
 4. Scaffold `apps/mobile/` properly: TypeScript strict, the lint/format setup the repo already

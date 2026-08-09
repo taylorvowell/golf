@@ -21,6 +21,33 @@ the era of software "runnable by a developer via a hand-invoked CLI" — the thi
 - Step 09 complete (media is addressable from outside this machine).
 - Steps 03–08 complete (real database, identities, contract and entitlement seam to deploy
   against).
+- **Store developer accounts exist and are verified.** This is the only external dependency in
+  the track with a clock outside our control, and it is the reason to start enrolment around
+  step 07 rather than when this step begins — see "External lead time" below.
+
+## External lead time — start enrolment around step 07, not here
+
+Neither account is needed before this step, so creating them on day one only starts Apple's
+annual $99 clock early for no benefit. But both carry verification delay, and a snag (a D-U-N-S
+record that does not match the legal entity is the common one) turns days into weeks. Beginning
+around step 07 leaves buffer without wasting most of a paid year.
+
+**The account *type* is a real scheduling decision and should be made much earlier than the
+account is created**, because one option adds a hard two-week gate immediately before launch:
+
+- **Google Play, organization account** — requires D-U-N-S and verification, and is **exempt**
+  from the closed-testing gate.
+- **Google Play, personal account** — created quickly, but any personal account registered after
+  13 Nov 2023 must run a closed test with **at least 12 testers opted in for 14 continuous days**
+  before production access unlocks. That is 14 calendar days plus recruiting 12 real testers,
+  landing exactly where the launch-readiness track sits.
+- **Apple Developer Program** — organization enrolment needs a D-U-N-S number; the individual
+  route is faster but publishes under a personal name rather than the business, which is wrong
+  for a subscription product with a coach marketplace.
+
+Given SwingSage sells subscriptions and hosts a coach directory, organization accounts on both
+stores are almost certainly correct — which means D-U-N-S is on the critical path and the
+14-day Play testing gate is avoided. Record the choice in `docs/DECISIONS.md` when it is made.
 
 ## Architectural Context
 
