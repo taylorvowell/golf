@@ -53,3 +53,25 @@ that edits the pipeline has the boundary wrong), `tsc --noEmit` clean, `eslint` 
 pytest green.
 
 Next: **02 — Mobile Client Spike and Workspace**, running Android-first.
+
+## 02 — Mobile Client Spike and Workspace 🔄 in progress
+
+Workspace done, measurements pending — they need hands on a device.
+
+**Done:** `apps/mobile` scaffolded on **Expo 57 / React Native 0.86 / React 19 / TS 6**,
+registered in the pnpm workspace (`apps/*` was already globbed), typechecking clean alongside
+`apps/web`. `App.tsx` is a spike harness rather than product code: a Device card reading what is
+knowable without native modules, and three probe cards ordered by risk rather than convenience —
+overlay-sync first, because that is the one step 01's research could not confirm on Android.
+Android run instructions are in `docs/RUNBOOK.md` §6.
+
+**Deliberately not done:** `packages/` holds no contract types. Step 07 generates those from
+JSON Schema, and hand-writing them now would only create the duplicate that step deletes.
+
+**Blocked on external input, not on work:** all three probes need a development build, since
+Expo Go cannot host native modules. That needs an Expo/EAS account, and the measurements
+themselves need the phone in hand. The client test harness (also part of this step) lands with
+the dev build so it can cover the probe code it exists to protect.
+
+Status stays `in-progress` — the step's Definition of Done is measured numbers per device, and
+there are none yet.

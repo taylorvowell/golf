@@ -131,9 +131,71 @@ is always two commands. Look at the diff before accepting it: a snapshot only pr
 
 ---
 
-## 6. Mobile app — does not exist yet
+## 6. Mobile app — running the spike on your Android
 
-There is no `apps/mobile/`. It is created in spine step 02, which also picks the framework.
+`apps/mobile/` exists as of spine step 02: **Expo 57 / React Native 0.86 / React 19**, chosen in
+`DECISIONS.md` D5. Right now it is a **spike harness, not the product** — three probe cards for
+the questions that decide whether the framework choice holds.
+
+### Run it on the phone (2 minutes, works today)
+
+```bash
+# 1. On the phone: install "Expo Go" from the Play Store.
+# 2. On the PC, from the repo root:
+pnpm --filter mobile start
+```
+
+A QR code appears in the terminal. **Scan it with the Expo Go app** (not the camera app) — phone
+and PC on the same wifi. The spike loads.
+
+If the QR route fails, press `s` in the terminal to switch modes, or open Expo Go and type the
+`exp://10.0.1.107:8081` URL shown. Same LAN caveat as the web app: the IP is DHCP, and Windows
+Firewall may need to allow Node on private networks.
+
+Useful terminal keys while it runs: `r` reload · `j` open debugger · `m` toggle dev menu.
+
+### What you will see, and what it means
+
+A **Device** card with platform, screen and a live UI frame rate. That number is JS-driven
+`requestAnimationFrame` — **not** video or capture rate. It exists to prove the toolchain reaches
+your phone from a Windows machine, nothing more.
+
+Then three probe cards, all currently **NEEDS DEV BUILD**:
+
+1. **Overlay locked to the presented frame** — the one that matters. The web player does this
+   with `requestVideoFrameCallback`; iOS has a clean analogue and the Android equivalent is
+   unconfirmed. If this fails on Android, D5 reopens and the framework choice changes.
+2. **Frame-exact seeking.**
+3. **Sustained 60 fps capture.**
+
+They are blocked because **Expo Go cannot host native modules**, and all three need one. That is
+expected at this stage, not a bug.
+
+### Next: the development build
+
+To actually measure the three probes, Android needs a **development build** (a real APK with the
+native modules compiled in) instead of Expo Go:
+
+```bash
+pnpm --filter mobile exec expo install expo-dev-client
+# then, once an Expo account + EAS is set up:
+pnpm --filter mobile exec eas build --profile development --platform android
+```
+
+EAS builds in the cloud, which is what makes a **Windows machine viable** — there is no local
+Android SDK requirement this way, and iOS is impossible locally at all (no Xcode on Windows,
+D5/D12). The resulting APK installs directly on the phone.
+
+### iOS
+
+**No iOS device and no Mac**, so iOS is unbuildable locally under any framework — this is why
+EAS is mandatory rather than convenient (D5, D12). It does not block progress: step 02 runs
+**Android first**, because the unconfirmed risk sits on the device you already have. If Android
+fails, iOS never needs measuring.
+
+iOS is needed to *finish* step 02 and for step 10's TestFlight verification. Options: a borrowed
+or second-hand device, or a cloud device farm for the measurement pass. The iOS simulator cannot
+exercise camera capture and is not a substitute.
 
 When it lands, the Android device above covers Android testing. **iOS has no device**, which
 matters for two steps — but neither is blocked on it starting:
