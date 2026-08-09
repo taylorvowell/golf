@@ -1,6 +1,6 @@
 # SwingSage — Current State
 
-**Snapshot: 2026-08-08.** What is *built and working right now*, verified against the tree, the
+**Snapshot: 2026-08-09.** What is *built and working right now*, verified against the tree, the
 artifacts on disk, and a green test run on this date. No plans, no roadmap, no history. Where
 something does not exist, that absence is stated as a fact, not as a task.
 
@@ -271,22 +271,52 @@ can re-run improved models over historic swings.
 
 ## 8. Fixtures and measured state
 
-Ten clips in `fixtures/` (gitignored); **seven analysed** into `out/` and scored against
-`scoring_config/v2.json`, verified from `coach_report.json` on disk today:
+Ten clips in `fixtures/` (gitignored), **all ten analysed** into `out/` and scored against
+`scoring_config/v2.json`. Regenerated 2026-08-09 against the current pipeline — the previous
+figures predated the club-takeaway refinement and were stale:
 
-| Fixture | Overall | Band |
-|---|---|---|
-| perfect | 79.9 | Pure |
-| 6iron-1 | 78.0 | Pure |
-| 6iron3 | 69.8 | Solid |
-| swing1 | 69.6 | Solid |
-| 6iron2 | 68.5 | Solid |
-| pro_2 | 61.6 | Solid |
-| swing2 | 57.9 | Building |
+| Fixture | Overall | Band | Club | Tempo | Frames |
+|---|---|---|---|---|---|
+| perfect | 79.9 | Pure | — | 1.57 | 829 |
+| pro_3 | 76.7 | Pure | — | 1.83 | 1889 |
+| 6iron-1 | 73.1 | Solid | irons | 2.85 | 519 |
+| 7wood-2 | 73.1 | Solid | — | 2.95 | 453 |
+| 6iron3 | 69.8 | Solid | irons | 3.44 | 519 |
+| swing1 | 69.6 | Solid | — | 2.09 | 396 |
+| 6iron2 | 68.5 | Solid | irons | 3.21 | 552 |
+| pro_2 | 61.6 | Solid | — | 2.47 | 322 |
+| swing2 | 58.3 | Building | — | 1.62 | 341 |
+| **7wood-1** | **43.1** | **Building** | — | **53.5** | 487 |
 
-`7wood-1`, `7wood-2` and `pro_3` have no `out/` folder yet. All ten are down-the-line and
-right-handed — **there is no face-on fixture and no left-handed fixture**, so every
-view-gated and mirroring-dependent path is untested against real footage.
+Two things moved and one broke:
+
+- **The takeaway refinement moved Address** on `6iron2` (261→255), `6iron3` (289→283) and
+  `swing2` (41→39), which is what shifted their tempo and scores. `perfect`, `pro_2`, `swing1`
+  and `6iron-1` were left alone, as intended — the refinement only fires when the club is
+  demonstrably still beforehand.
+- **`6iron-1` fell 78.0 → 73.1** because it is now scored with `--club-type irons` like the
+  other two 6-irons. Previously it ran with the club unknown and skipped the club-aware bands.
+  That is a correction, not a regression: the old figure was flattering it.
+- **`7wood-1` is a genuine detection failure**, described below.
+
+All ten are down-the-line and right-handed — **there is no face-on fixture and no left-handed
+fixture**, so every view-gated and mirroring-dependent path remains untested against real
+footage.
+
+### `7wood-1` — the first new clip exposed the deferred problem
+
+Its last five events collapse into consecutive frames (`top` 343, `mid_downswing` 344, `impact`
+345, `mid_follow_through` 346, `finish` 347), all at the 0.35 confidence floor, while everything
+up to `mid_backswing` (342, conf 0.95) looks healthy. The resulting "backswing" runs 1783 ms
+against a plausible 450–1300, and tempo reads **53.5:1**.
+
+The shape says the detector locked onto pre-swing motion — setup, a waggle or a practice swing —
+and then had no real downswing left to find. **That is precisely the §11 automatic-swing-detection
+problem deferred in D2**, arriving on the first genuinely new clip analysed. It is direct
+evidence for the manual trim/select fallback `in-app-capture` is required to ship.
+
+Worth noting what did work: the system **self-flagged all three implausibilities** rather than
+presenting the number as fact. The confidence discipline caught it; nothing else would have.
 
 Measured pipeline quality on the two original fixtures:
 
@@ -295,7 +325,7 @@ Measured pipeline quality on the two original fixtures:
 - Club detector contribution: 114/396 frames (29%) on swing1, 298/341 (87%) on swing2; on
   swing2 it fixed a visibly wrong finish direction.
 - Impact agrees with the club-head low point within ±2 frames on both.
-- Tempo: 2.09:1 (swing1), 1.55:1 (swing2, self-flagged implausible).
+- Tempo: 2.09:1 (swing1), 1.62:1 (swing2, self-flagged implausible).
 
 ### Honesty caveats — these are part of the current state
 
@@ -311,11 +341,16 @@ Measured pipeline quality on the two original fixtures:
 - **Coverage percentages have overstated club quality three separate times.** Always run
   `scripts/checkclub.py` and look at the club drawn over the real frame before believing them.
 - **Top of backswing is a hand landmark, not a club one.** The club keeps working at the top
-  after the hands reverse — 15 frames on swing2 — so the phase flips to downswing while the
-  club is still going back, and tempo reads low on all fixtures (1.55–2.47 against a typical
-  3:1). Four club-based redefinitions disagree by more than the transition is long, and on two
-  fixtures there are zero measured club frames within 12 of Top. Unresolved; hand labels are
-  the unlock.
+  after the hands reverse — 15 frames on swing2 — so the phase flips to downswing while the club
+  is still going back. Four club-based redefinitions disagree by more than the transition is
+  long, and on two fixtures there are zero measured club frames within 12 of Top. Unresolved;
+  hand labels are the unlock.
+
+  **The "tempo reads low everywhere" claim attached to this is now falsified**, and was an
+  artefact of a four-clip sample. Across the ten analysed fixtures, `6iron3` reads 3.44,
+  `6iron2` 3.21, `7wood-2` 2.95 and `6iron-1` 2.85 — in or beside the typical 3:1. The low
+  readings cluster on `perfect` (1.57), `swing2` (1.62) and `pro_3` (1.83), the slow-motion and
+  junior clips. Whatever the Top landmark costs, it is not a uniform downward bias on tempo.
 - **The drawn trace is still segmented on pre-refinement events**, so a refined Impact can sit
   a few frames after where the downswing segment was cut.
 - Some 2D joint angles are visibly wrong when a limb points near the camera axis (swing2 trail
