@@ -226,6 +226,26 @@ miserable, so each is proven independently:
 The debug scripts above are a first-class asset — they have repeatedly caught numbers that
 looked healthy and were wrong. Build the debug view when the work starts, not after.
 
+## How this project is run
+
+- **Autonomous execution, no approval gates.** Decide with best judgement and proceed. Do not
+  end a turn to ask "shall I continue?" — batch reporting until there is substantial progress
+  to show. Execute `human-review-required` steps rather than stopping at them, recording the
+  decision and rationale in `docs/DECISIONS.md` and the track's `_PROGRESS.md`. A question is
+  warranted only when proceeding under any assumption would be unsafe, or would waste
+  significant work if wrong.
+- **Still stop for genuinely external blockers** — missing credentials, interactive auth,
+  hardware that does not exist. Those are not approval gates.
+- **Keep autonomy reversible.** Contract and schema changes stay append-only and logged, so a
+  wrong call is a revert rather than a migration.
+- **Verify on the Android phone whenever a change is visible.** There is an Android device and
+  no iPhone; anything renderable should be checked there, and any instructions handed over
+  should be concrete enough to follow without re-deriving them. See
+  [`docs/RUNBOOK.md`](docs/RUNBOOK.md) §3.
+- **Write down facts as they arrive.** A device, account, version, network detail or constraint
+  mentioned in passing goes into the repo (RUNBOOK, step file, DECISIONS) in the same session —
+  not just into the reply.
+
 ## Working Practices
 
 - **One launch, no staged release.** SwingSage ships once, as the full product. There is no MVP
