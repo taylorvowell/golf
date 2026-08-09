@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Platform, ScrollView, StatusBar, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { PROBES, type Probe, type ProbeStatus } from "./src/spike/probes";
 
 /**
  * SwingSage — spike harness (platform-foundation step 02).
@@ -15,51 +16,6 @@ import { Platform, ScrollView, StatusBar, StyleSheet, Text, View, useWindowDimen
  * D5 reopens.
  */
 
-type Status = "pending" | "blocked-dev-build" | "pass" | "fail";
-
-interface Probe {
-  id: string;
-  title: string;
-  question: string;
-  why: string;
-  status: Status;
-  detail?: string;
-}
-
-const PROBES: Probe[] = [
-  {
-    id: "overlay-sync",
-    title: "1 · Overlay locked to the presented frame",
-    question: "Can a drawn overlay be pinned to the exact video frame on screen, during scrub?",
-    why:
-      "The web player does this with requestVideoFrameCallback. iOS has a clean analogue; the " +
-      "Android equivalent is unconfirmed. This is the product's #1 perceived-quality feature — " +
-      "if it cannot be done here, the framework choice is wrong.",
-    status: "blocked-dev-build",
-    detail: "Needs a native module + dev build. Measure: drift in frames, target exactly 0.",
-  },
-  {
-    id: "seek",
-    title: "2 · Frame-exact seeking",
-    question: "Does seeking land on the requested frame, not within ~100ms of it?",
-    why:
-      "iOS needs zero-tolerance seek; Android decodes-and-skips from the preceding sync point. " +
-      "Stage 0 already forces GOP 10, which bounds that to 9 frames.",
-    status: "blocked-dev-build",
-    detail: "Needs a video component in a dev build. Measure: requested frame vs presented frame.",
-  },
-  {
-    id: "capture",
-    title: "3 · Sustained 60fps capture",
-    question: "Does the device actually record at the rate it reports?",
-    why:
-      "PROJECT_MAIN §2.3 makes 60fps non-negotiable and forbids silently degrading it. " +
-      "VisionCamera advertises 30–240fps; advertised is not achieved.",
-    status: "blocked-dev-build",
-    detail: "Needs VisionCamera in a dev build. Measure: achieved fps + dropped frames.",
-  },
-];
-
 const COLORS = {
   bg: "#080a0d",
   panel: "#12161c",
@@ -72,8 +28,8 @@ const COLORS = {
   amber: "#f59e0b",
 };
 
-function StatusChip({ status }: { status: Status }) {
-  const map: Record<Status, { label: string; color: string }> = {
+function StatusChip({ status }: { status: ProbeStatus }) {
+  const map: Record<ProbeStatus, { label: string; color: string }> = {
     pending: { label: "PENDING", color: COLORS.muted },
     "blocked-dev-build": { label: "NEEDS DEV BUILD", color: COLORS.amber },
     pass: { label: "PASS", color: COLORS.acid },
@@ -96,7 +52,7 @@ function ProbeCard({ probe }: { probe: Probe }) {
       </View>
       <Text style={styles.question}>{probe.question}</Text>
       <Text style={styles.why}>{probe.why}</Text>
-      {probe.detail ? <Text style={styles.detail}>{probe.detail}</Text> : null}
+      <Text style={styles.detail}>Measures: {probe.measures}</Text>
     </View>
   );
 }
