@@ -381,8 +381,12 @@ keys derived from swing/view identity rather than folder names, and signed URLs 
   subordinates preferences to non-negotiable capabilities — here, one authorization path for
   user video.
 - **Revisit trigger, recorded so it is not forgotten:** if egress cost or playback latency
-  becomes material, move artifacts behind a CDN or to Azure Blob. Stable keys make that a
-  routing change rather than a data-model change.
+  becomes material, move artifacts behind a CDN or to object storage with cheaper egress.
+  Stable keys make that a routing change rather than a data-model change.
+  **Quantified 2026-08-10** in [`SCALE-10K-MAU.md`](SCALE-10K-MAU.md): at 10,000 MAU the
+  egress alone is ~7.5 TB/month, which is ~$675/month on S3-priced egress and **$0 on
+  Cloudflare R2**. R2 — not Azure Blob — is the concrete migration target, and the trigger
+  is monthly egress above ~$200.
 - Range-request support must be verified in step 09 against real scrubbing, not assumed.
 
 ---
