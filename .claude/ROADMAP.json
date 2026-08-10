@@ -2,16 +2,18 @@
   "schemaVersion": 1,
   "northStar": ".claude/ai-instructions/PROJECT_MAIN.md",
   "coverage": "docs/PRODUCT-COVERAGE.md",
-  "note": "Declarations only. Progress is DERIVED from each track's _STATUS.json by scripts/roadmap/derive.mjs — never hand-write status here. The spine flag moves forward one track at a time as phases complete; exactly one active track may carry spine:true.",
+  "note": "Declarations only. Progress is DERIVED from each track's _STATUS.json by scripts/roadmap/derive.mjs \u2014 never hand-write status here. The spine flag moves forward one track at a time as phases complete; exactly one active track may carry spine:true.",
   "auditNote": "Restructured 2026-08-08 after an architecture/production-readiness review. The platform layer gained the pieces a mobile product cannot retrofit: API versioning and a generated shared schema (native clients cannot be force-updated), an entitlement seam ahead of the features it gates, a real media pipeline for 270-330MB phone video, observability and SLOs, and push infrastructure. Sections 22, 31 and 35 gained owning tracks. See docs/PRODUCT-COVERAGE.md for the requirement-by-requirement map.",
   "launch": {
-    "strategy": "ONE full-product launch. There is no staged release, no MVP subset, and no public beta to iterate in. Every track below is launch-blocking except those listed in postLaunch, so phases are ordered by dependency and risk retirement — NOT by value-delivery order, because nothing ships before everything ships.",
-    "postLaunch": ["swing-isolation"],
-    "firstCutCandidate": "sharing-and-export — PROJECT_MAIN §35 itself says it need not be in the first release. If launch date is at risk, this is the only track to cut, and cutting it is a decision to record, not a silent descope.",
+    "strategy": "ONE full-product launch. There is no staged release, no MVP subset, and no public beta to iterate in. Every track below is launch-blocking except those listed in postLaunch, so phases are ordered by dependency and risk retirement \u2014 NOT by value-delivery order, because nothing ships before everything ships.",
+    "postLaunch": [
+      "swing-isolation"
+    ],
+    "firstCutCandidate": "sharing-and-export \u2014 PROJECT_MAIN \u00a735 itself says it need not be in the first release. If launch date is at risk, this is the only track to cut, and cutting it is a decision to record, not a silent descope.",
     "differentiators": [
-      "Multi-phone synchronized capture (§12) — PROJECT_MAIN's own words: 'one of the major differentiating features'. Highest technical risk in the product, which is why its feasibility spike runs in the capture phase and the build follows immediately rather than being left until last.",
-      "A confidence-honest analysis engine — abstaining checks, view-gated skips, and refusing to fabricate a face-angle degree from video. Competitors state numbers they cannot measure; not doing that is a product position, not a limitation. Never trade it for a fuller-looking scorecard.",
-      "AI coach and human coach in one product, with the AI aware of the human's active plan (§28.2) and guidance from each clearly distinguishable (§26.3)."
+      "Multi-phone synchronized capture (\u00a712) \u2014 PROJECT_MAIN's own words: 'one of the major differentiating features'. Highest technical risk in the product, which is why its feasibility spike runs in the capture phase and the build follows immediately rather than being left until last.",
+      "A confidence-honest analysis engine \u2014 abstaining checks, view-gated skips, and refusing to fabricate a face-angle degree from video. Competitors state numbers they cannot measure; not doing that is a product position, not a limitation. Never trade it for a fuller-looking scorecard.",
+      "AI coach and human coach in one product, with the AI aware of the human's active plan (\u00a728.2) and guidance from each clearly distinguishable (\u00a726.3)."
     ],
     "qualityBar": "Launch is gated on the launch-readiness track, not on a date. Analysis accuracy must be verifiable (analysis-ground-truth) before anyone is charged for it, and the SLOs set in platform-foundation step 01 must be met under load, not just defined."
   },
@@ -20,7 +22,7 @@
       "id": "foundation",
       "label": "Platform Foundation",
       "order": 1,
-      "intent": "Decide the architecture PROJECT_MAIN §44 deliberately left open, then stand up the platform every later track assumes: identity, the real data model, a versioned API with a generated shared schema, an entitlement seam, media transport, a hosted analyzer, telemetry and push. Deliberately large — these are the things that cannot be retrofitted into a native app once it is in users' hands."
+      "intent": "Decide the architecture PROJECT_MAIN \u00a744 deliberately left open, then stand up the platform every later track assumes: identity, the real data model, a versioned API with a generated shared schema, an entitlement seam, media transport, a hosted analyzer, telemetry and push. Deliberately large \u2014 these are the things that cannot be retrofitted into a native app once it is in users' hands."
     },
     {
       "id": "golfer-core",
@@ -32,31 +34,31 @@
       "id": "capture",
       "label": "Capture & Multi-Device",
       "order": 3,
-      "intent": "PROJECT_MAIN §9 and §12. Recording at 60fps inside the app, the manual trim fallback that hands-free recording needs while automatic swing isolation stays deferred, and the multi-phone synchronized capture that is the product's stated differentiator — spiked and then built here, while the team is in the capture domain, rather than left to the end where it would put the launch date at the mercy of the hardest problem."
+      "intent": "PROJECT_MAIN \u00a79 and \u00a712. Recording at 60fps inside the app, the manual trim fallback that hands-free recording needs while automatic swing isolation stays deferred, and the multi-phone synchronized capture that is the product's stated differentiator \u2014 spiked and then built here, while the team is in the capture domain, rather than left to the end where it would put the launch date at the mercy of the hardest problem."
     },
     {
       "id": "coaching",
       "label": "Coaching Intelligence",
       "order": 4,
-      "intent": "PROJECT_MAIN §16-§18, §31. Turn measurements into guidance: a priority model that understands dependencies, a managed drill library, the AI Coach, and the administrative surface that operates all of it."
+      "intent": "PROJECT_MAIN \u00a716-\u00a718, \u00a731. Turn measurements into guidance: a priority model that understands dependencies, a managed drill library, the AI Coach, and the administrative surface that operates all of it."
     },
     {
       "id": "improvement",
       "label": "Improvement Tracking",
       "order": 5,
-      "intent": "PROJECT_MAIN §8, §19-§22, §36. The reason a golfer returns: history, trends, goals, comparison against past and professional swings, and optional launch-monitor context."
+      "intent": "PROJECT_MAIN \u00a78, \u00a719-\u00a722, \u00a736. The reason a golfer returns: history, trends, goals, comparison against past and professional swings, and optional launch-monitor context."
     },
     {
       "id": "coach-platform",
       "label": "Coach Platform",
       "order": 6,
-      "intent": "PROJECT_MAIN §23-§29. The second user type: directory, permissioned relationships, review, annotation, messaging and plans. Ahead of commerce because it is a large surface and part of the product's differentiation, and because billing has fewer unknowns than a whole second persona."
+      "intent": "PROJECT_MAIN \u00a723-\u00a729. The second user type: directory, permissioned relationships, review, annotation, messaging and plans. Ahead of commerce because it is a large surface and part of the product's differentiation, and because billing has fewer unknowns than a whole second persona."
     },
     {
       "id": "commerce",
       "label": "Subscriptions & Data Governance",
       "order": 7,
-      "intent": "PROJECT_MAIN §30, §34, §35, §38. Attach billing to the entitlement engine built in foundation, then the privacy, retention, deletion and scale posture a real product needs. Late because it depends on knowing every feature that gets gated and every kind of data that gets retained."
+      "intent": "PROJECT_MAIN \u00a730, \u00a734, \u00a735, \u00a738. Attach billing to the entitlement engine built in foundation, then the privacy, retention, deletion and scale posture a real product needs. Late because it depends on knowing every feature that gets gated and every kind of data that gets retained."
     },
     {
       "id": "launch",
@@ -68,7 +70,7 @@
       "id": "future",
       "label": "Future Capability",
       "order": 9,
-      "intent": "Accepted product requirements deliberately deferred out of the near-term arc. Not backlog and not cancelled — real tracks with real dependencies, scheduled later. Each carries a DECISIONS entry saying why it was deferred and what has to compensate meanwhile."
+      "intent": "Accepted product requirements deliberately deferred out of the near-term arc. Not backlog and not cancelled \u2014 real tracks with real dependencies, scheduled later. Each carries a DECISIONS entry saying why it was deferred and what has to compensate meanwhile."
     }
   ],
   "tracks": [
@@ -77,7 +79,7 @@
       "spine": true,
       "lifecycle": "active",
       "phase": "foundation",
-      "goal": "Close PROJECT_MAIN §44's open architecture questions, then build identity, the real swing/session/equipment data model, a versioned API with a generated shared schema, the entitlement seam, media addressing, and a deployable release pipeline for web, analyzer and mobile.",
+      "goal": "Close PROJECT_MAIN \u00a744's open architecture questions, then build identity, the real swing/session/equipment data model, a versioned API with a generated shared schema, the entitlement seam, media addressing, and a deployable release pipeline for web, analyzer and mobile.",
       "statusFile": ".claude/feature-tracks/platform-foundation/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#3-user-types-and-roles",
@@ -104,15 +106,23 @@
       "spine": false,
       "lifecycle": "planned",
       "phase": "foundation",
-      "goal": "Promote the analyzer from a hand-invoked CLI to a hosted, queue-driven worker reading and writing object storage — with a capacity and cost model, per-user fair queuing so one workload cannot degrade everyone else's (§38), backpressure, retry/dead-letter handling, and a stated analysis-latency SLO.",
+      "goal": "Promote the analyzer from a hand-invoked CLI to a hosted, queue-driven worker reading and writing object storage. FIRST STEP is a measurement, not a deploy: pose inference currently runs on CPU and only the club detector uses GPU, so measure CPU-vs-CUDA pose on this pipeline and let that choose the host (D18 reopened Railway, which has no GPU). Then the capacity and cost model, per-user fair queuing so one workload cannot degrade everyone else's (\u00a738), backpressure, retry/dead-letter handling, and a validated analysis-latency SLO.",
       "statusFile": ".claude/feature-tracks/analyzer-service/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#32-analysis-processing-experience",
         ".claude/ai-instructions/PROJECT_MAIN.md#33-failure-handling-and-recovery",
         ".claude/ai-instructions/PROJECT_MAIN.md#38-production-readiness-and-scale-goals"
       ],
-      "owns": ["services/analyzer/service", "apps/web/src/lib/jobs.ts"],
-      "dependsOn": [{ "track": "platform-foundation" }]
+      "owns": [
+        "services/analyzer/service",
+        "apps/web/src/lib/jobs.ts"
+      ],
+      "dependsOn": [
+        {
+          "track": "platform-foundation"
+        }
+      ],
+      "blockedBy": "docs/DECISIONS.md D18 \u2014 worker host undecided"
     },
     {
       "id": "media-pipeline",
@@ -126,44 +136,65 @@
         ".claude/ai-instructions/PROJECT_MAIN.md#33-failure-handling-and-recovery",
         ".claude/ai-instructions/PROJECT_MAIN.md#38-production-readiness-and-scale-goals"
       ],
-      "owns": ["services/media", "apps/mobile/src/features/upload"],
-      "dependsOn": [{ "track": "platform-foundation" }]
+      "owns": [
+        "services/media",
+        "apps/mobile/src/features/upload"
+      ],
+      "dependsOn": [
+        {
+          "track": "platform-foundation"
+        }
+      ]
     },
     {
       "id": "observability-and-slos",
       "spine": false,
       "lifecycle": "planned",
       "phase": "foundation",
-      "goal": "Define and instrument the targets that make 'production ready' falsifiable: analysis latency, upload success rate, crash-free sessions, analysis failure rate, and analysis-QUALITY telemetry — because this pipeline fails plausibly, producing wrong-but-healthy-looking output. Error tracking and the §37 product-event funnel land here too, live from the first deployed environment rather than after five phases of features.",
+      "goal": "Define and instrument the targets that make 'production ready' falsifiable: analysis latency, upload success rate, crash-free sessions, analysis failure rate, and analysis-QUALITY telemetry \u2014 because this pipeline fails plausibly, producing wrong-but-healthy-looking output. Error tracking and the \u00a737 product-event funnel land here too, live from the first deployed environment rather than after five phases of features.",
       "statusFile": ".claude/feature-tracks/observability-and-slos/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#37-product-analytics-and-quality-measurement",
         ".claude/ai-instructions/PROJECT_MAIN.md#38-production-readiness-and-scale-goals",
         ".claude/ai-instructions/PROJECT_MAIN.md#153-confidence-and-uncertainty"
       ],
-      "owns": ["infra/observability", "packages/telemetry"],
-      "dependsOn": [{ "track": "platform-foundation" }]
+      "owns": [
+        "infra/observability",
+        "packages/telemetry"
+      ],
+      "dependsOn": [
+        {
+          "track": "platform-foundation"
+        }
+      ]
     },
     {
       "id": "notifications",
       "spine": false,
       "lifecycle": "planned",
       "phase": "foundation",
-      "goal": "Push and email notification infrastructure with user-manageable preferences. Platform-layer because §29's very first golfer event — 'swing analysis completed' — is needed the moment analysis becomes async, not in the coach phase where the rest of §29's events live.",
+      "goal": "Push and email notification infrastructure with user-manageable preferences. Platform-layer because \u00a729's very first golfer event \u2014 'swing analysis completed' \u2014 is needed the moment analysis becomes async, not in the coach phase where the rest of \u00a729's events live.",
       "statusFile": ".claude/feature-tracks/notifications/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#29-notifications",
         ".claude/ai-instructions/PROJECT_MAIN.md#32-analysis-processing-experience"
       ],
-      "owns": ["services/notifications", "apps/mobile/src/features/notifications"],
-      "dependsOn": [{ "track": "platform-foundation" }]
+      "owns": [
+        "services/notifications",
+        "apps/mobile/src/features/notifications"
+      ],
+      "dependsOn": [
+        {
+          "track": "platform-foundation"
+        }
+      ]
     },
     {
       "id": "mobile-app-shell",
       "spine": false,
       "lifecycle": "planned",
       "phase": "golfer-core",
-      "goal": "Mobile client scaffold for iPhone and Android: navigation, auth flows, onboarding with role selection, profile and goals UI, the shared design system, and §41's real-golf-conditions usability bar (bright sunlight, one-handed, large capture controls) as stated acceptance criteria rather than an aspiration.",
+      "goal": "Mobile client scaffold for iPhone and Android: navigation, auth flows, onboarding with role selection, profile and goals UI, the shared design system, and \u00a741's real-golf-conditions usability bar (bright sunlight, one-handed, large capture controls) as stated acceptance criteria rather than an aspiration.",
       "statusFile": ".claude/feature-tracks/mobile-app-shell/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#2-core-product-principles",
@@ -175,14 +206,18 @@
         "apps/mobile/src/features/auth",
         "apps/mobile/src/features/profile"
       ],
-      "dependsOn": [{ "track": "platform-foundation" }]
+      "dependsOn": [
+        {
+          "track": "platform-foundation"
+        }
+      ]
     },
     {
       "id": "mobile-player",
       "spine": false,
       "lifecycle": "planned",
       "phase": "golfer-core",
-      "goal": "Re-express the frame-accurate player and overlay system on mobile, plus the analysis results surface (scores, findings, priorities) and the swing log. The rendering RULES survive the port even though the React components may not — frame-exact seeking, endpoint-exact trace smoothing, never interpolating a gap.",
+      "goal": "Re-express the frame-accurate player and overlay system on mobile, plus the analysis results surface (scores, findings, priorities) and the swing log. The rendering RULES survive the port even though the React components may not \u2014 frame-exact seeking, endpoint-exact trace smoothing, never interpolating a gap.",
       "statusFile": ".claude/feature-tracks/mobile-player/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#13-swing-video-player",
@@ -190,9 +225,15 @@
         ".claude/ai-instructions/PROJECT_MAIN.md#15-swing-analysis",
         ".claude/ai-instructions/PROJECT_MAIN.md#21-swing-log-and-history"
       ],
-      "owns": ["apps/mobile/src/features/player"],
-      "dependsOn": [{ "track": "mobile-app-shell" }],
-      "sequencingNote": "Deliberately NOT blocked on swing-ingest. Seven analysed swings already exist on disk, so the player port — the largest single piece of UI risk in the product — can be proven against real artifacts in parallel with the ingest path being built."
+      "owns": [
+        "apps/mobile/src/features/player"
+      ],
+      "dependsOn": [
+        {
+          "track": "mobile-app-shell"
+        }
+      ],
+      "sequencingNote": "Deliberately NOT blocked on swing-ingest. Seven analysed swings already exist on disk, so the player port \u2014 the largest single piece of UI risk in the product \u2014 can be proven against real artifacts in parallel with the ingest path being built."
     },
     {
       "id": "swing-ingest",
@@ -206,11 +247,20 @@
         ".claude/ai-instructions/PROJECT_MAIN.md#32-analysis-processing-experience",
         ".claude/ai-instructions/PROJECT_MAIN.md#33-failure-handling-and-recovery"
       ],
-      "owns": ["apps/mobile/src/features/ingest", "apps/web/src/app/api/upload"],
+      "owns": [
+        "apps/mobile/src/features/ingest",
+        "apps/web/src/app/api/upload"
+      ],
       "dependsOn": [
-        { "track": "media-pipeline" },
-        { "track": "analyzer-service" },
-        { "track": "mobile-app-shell" }
+        {
+          "track": "media-pipeline"
+        },
+        {
+          "track": "analyzer-service"
+        },
+        {
+          "track": "mobile-app-shell"
+        }
       ]
     },
     {
@@ -225,7 +275,10 @@
         "docs/CURRENT-STATE.md#honesty-caveats--these-are-part-of-the-current-state",
         "services/analyzer/scoring_config/COVERAGE.md"
       ],
-      "owns": ["services/analyzer/tests", "services/analyzer/scoring_config"],
+      "owns": [
+        "services/analyzer/tests",
+        "services/analyzer/scoring_config"
+      ],
       "dependsOn": []
     },
     {
@@ -233,7 +286,7 @@
       "spine": false,
       "lifecycle": "planned",
       "phase": "capture",
-      "goal": "Record a swing inside the app at a minimum of 60fps: capability detection with honest messaging when a device cannot comply, a golf-shaped capture flow, review/retake, and hands-free recording. Owns the manual trim/select fallback that hands-free and long recordings need while automatic swing isolation stays deferred (D2) — required, not optional.",
+      "goal": "Record a swing inside the app at a minimum of 60fps: capability detection with honest messaging when a device cannot comply, a golf-shaped capture flow, review/retake, and hands-free recording. Owns the manual trim/select fallback that hands-free and long recordings need while automatic swing isolation stays deferred (D2) \u2014 required, not optional.",
       "statusFile": ".claude/feature-tracks/in-app-capture/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#23-high-frame-rate-capture",
@@ -241,22 +294,37 @@
         ".claude/ai-instructions/PROJECT_MAIN.md#94-long-recording-support",
         ".claude/ai-instructions/PROJECT_MAIN.md#40-platform-and-device-compatibility-goals"
       ],
-      "owns": ["apps/mobile/src/features/capture"],
-      "dependsOn": [{ "track": "mobile-player" }, { "track": "media-pipeline" }]
+      "owns": [
+        "apps/mobile/src/features/capture"
+      ],
+      "dependsOn": [
+        {
+          "track": "mobile-player"
+        },
+        {
+          "track": "media-pipeline"
+        }
+      ]
     },
     {
       "id": "dual-device-spike",
       "spine": false,
       "lifecycle": "planned",
       "phase": "capture",
-      "goal": "Retire the §12 feasibility risk early: prove two phones can be paired, triggered together, and their recordings aligned closely enough to scrub both to the same swing position. Answers whether the stated differentiator is achievable BEFORE the product is built around it — a throwaway spike whose only deliverable is a measured answer and a decision entry.",
+      "goal": "Retire the \u00a712 feasibility risk early: prove two phones can be paired, triggered together, and their recordings aligned closely enough to scrub both to the same swing position. Answers whether the stated differentiator is achievable BEFORE the product is built around it \u2014 a throwaway spike whose only deliverable is a measured answer and a decision entry.",
       "statusFile": ".claude/feature-tracks/dual-device-spike/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#12-multi-phone-synchronized-recording",
         ".claude/ai-instructions/PROJECT_MAIN.md#125-synchronized-playback"
       ],
-      "owns": ["spikes/dual-device"],
-      "dependsOn": [{ "track": "in-app-capture" }]
+      "owns": [
+        "spikes/dual-device"
+      ],
+      "dependsOn": [
+        {
+          "track": "in-app-capture"
+        }
+      ]
     },
     {
       "id": "priority-engine",
@@ -265,16 +333,24 @@
       "phase": "coaching",
       "goal": "Replace weakest-check-first ordering with a real priority model: dependencies between faults, order of operations, severity weighed against confidence, golfer goals, and recurrence across swings.",
       "statusFile": ".claude/feature-tracks/priority-engine/_STATUS.json",
-      "specRefs": [".claude/ai-instructions/PROJECT_MAIN.md#16-priority-coaching-system"],
-      "owns": ["services/analyzer/swingsage/scoring.py"],
-      "dependsOn": [{ "track": "analysis-ground-truth" }]
+      "specRefs": [
+        ".claude/ai-instructions/PROJECT_MAIN.md#16-priority-coaching-system"
+      ],
+      "owns": [
+        "services/analyzer/swingsage/scoring.py"
+      ],
+      "dependsOn": [
+        {
+          "track": "analysis-ground-truth"
+        }
+      ]
     },
     {
       "id": "admin-surface",
       "spine": false,
       "lifecycle": "planned",
       "phase": "coaching",
-      "goal": "The administrative area §31 describes, as one surface rather than scattered fragments: professional swing management, scoring-criteria and threshold configuration, tier/entitlement configuration, and coach administration (listing approval, visibility, verification, suspension, directory moderation).",
+      "goal": "The administrative area \u00a731 describes, as one surface rather than scattered fragments: professional swing management, scoring-criteria and threshold configuration, tier/entitlement configuration, and coach administration (listing approval, visibility, verification, suspension, directory moderation).",
       "statusFile": ".claude/feature-tracks/admin-surface/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#31-administrative-area",
@@ -283,37 +359,63 @@
         ".claude/ai-instructions/PROJECT_MAIN.md#314-subscription-and-feature-configuration",
         ".claude/ai-instructions/PROJECT_MAIN.md#315-coach-administration"
       ],
-      "owns": ["apps/web/src/app/admin"],
-      "dependsOn": [{ "track": "platform-foundation" }]
+      "owns": [
+        "apps/web/src/app/admin"
+      ],
+      "dependsOn": [
+        {
+          "track": "platform-foundation"
+        }
+      ]
     },
     {
       "id": "drill-library",
       "spine": false,
       "lifecycle": "planned",
       "phase": "coaching",
-      "goal": "A managed, preconfigured drill library with finding-to-drill mappings — explicitly not drills invented per-response by the AI. Content is authored and curated through the admin surface.",
+      "goal": "A managed, preconfigured drill library with finding-to-drill mappings \u2014 explicitly not drills invented per-response by the AI. Content is authored and curated through the admin surface.",
       "statusFile": ".claude/feature-tracks/drill-library/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#18-training-drills-and-exercises",
         ".claude/ai-instructions/PROJECT_MAIN.md#312-drill-library-management"
       ],
-      "owns": ["apps/web/src/db/drills.ts", "apps/mobile/src/features/drills"],
-      "dependsOn": [{ "track": "priority-engine" }, { "track": "admin-surface" }]
+      "owns": [
+        "apps/web/src/db/drills.ts",
+        "apps/mobile/src/features/drills"
+      ],
+      "dependsOn": [
+        {
+          "track": "priority-engine"
+        },
+        {
+          "track": "admin-surface"
+        }
+      ]
     },
     {
       "id": "ai-coach",
       "spine": false,
       "lifecycle": "planned",
       "phase": "coaching",
-      "goal": "A swing-aware AI Coach grounded in the golfer's own analysis, profile, goals, history and active coach plan — with conversation scope, per-tier usage limits and hard cost ceilings, prompt-injection handling for user-authored notes, a stated data-processing position on what golfer data reaches a model vendor, and a provider abstraction so the model is swappable.",
+      "goal": "A swing-aware AI Coach grounded in the golfer's own analysis, profile, goals, history and active coach plan \u2014 with conversation scope, per-tier usage limits and hard cost ceilings, prompt-injection handling for user-authored notes, a stated data-processing position on what golfer data reaches a model vendor, and a provider abstraction so the model is swappable.",
       "statusFile": ".claude/feature-tracks/ai-coach/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#17-ai-coach",
         ".claude/ai-instructions/PROJECT_MAIN.md#24-analysis-must-be-explainable",
         ".claude/ai-instructions/PROJECT_MAIN.md#34-privacy-permissions-and-data-control"
       ],
-      "owns": ["services/ai", "apps/web/src/app/api/coach"],
-      "dependsOn": [{ "track": "drill-library" }, { "track": "mobile-player" }]
+      "owns": [
+        "services/ai",
+        "apps/web/src/app/api/coach"
+      ],
+      "dependsOn": [
+        {
+          "track": "drill-library"
+        },
+        {
+          "track": "mobile-player"
+        }
+      ]
     },
     {
       "id": "history-and-trends",
@@ -327,48 +429,78 @@
         ".claude/ai-instructions/PROJECT_MAIN.md#21-swing-log-and-history",
         ".claude/ai-instructions/PROJECT_MAIN.md#36-search-filtering-and-organization"
       ],
-      "owns": ["apps/mobile/src/features/history"],
-      "dependsOn": [{ "track": "mobile-player" }]
+      "owns": [
+        "apps/mobile/src/features/history"
+      ],
+      "dependsOn": [
+        {
+          "track": "mobile-player"
+        }
+      ]
     },
     {
       "id": "comparison-and-reference",
       "spine": false,
       "lifecycle": "planned",
       "phase": "improvement",
-      "goal": "Comparison that surfaces the differences rather than showing two videos, selection logic (previous, same club, best, favourite), and the golfer-facing professional reference library fed by the admin surface — replacing today's hardcoded two-entry list.",
+      "goal": "Comparison that surfaces the differences rather than showing two videos, selection logic (previous, same club, best, favourite), and the golfer-facing professional reference library fed by the admin surface \u2014 replacing today's hardcoded two-entry list.",
       "statusFile": ".claude/feature-tracks/comparison-and-reference/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#19-swing-comparison",
         ".claude/ai-instructions/PROJECT_MAIN.md#20-professional-reference-swing-library"
       ],
-      "owns": ["apps/mobile/src/features/compare"],
-      "dependsOn": [{ "track": "history-and-trends" }, { "track": "admin-surface" }]
+      "owns": [
+        "apps/mobile/src/features/compare"
+      ],
+      "dependsOn": [
+        {
+          "track": "history-and-trends"
+        },
+        {
+          "track": "admin-surface"
+        }
+      ]
     },
     {
       "id": "launch-data",
       "spine": false,
       "lifecycle": "planned",
       "phase": "improvement",
-      "goal": "Manually entered launch-monitor and simulator metrics attached to a swing (§22): club/ball speed, carry, spin, path, face angle, smash factor and the rest, every field optional. Built so a future launch-monitor integration is an additional source rather than a rewrite — and note this is the ONLY authoritative source of face-angle degrees, which video never provides.",
+      "goal": "Manually entered launch-monitor and simulator metrics attached to a swing (\u00a722): club/ball speed, carry, spin, path, face angle, smash factor and the rest, every field optional. Built so a future launch-monitor integration is an additional source rather than a rewrite \u2014 and note this is the ONLY authoritative source of face-angle degrees, which video never provides.",
       "statusFile": ".claude/feature-tracks/launch-data/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#22-manually-entered-swing-and-launch-data"
       ],
-      "owns": ["apps/mobile/src/features/launchdata"],
-      "dependsOn": [{ "track": "history-and-trends" }]
+      "owns": [
+        "apps/mobile/src/features/launchdata"
+      ],
+      "dependsOn": [
+        {
+          "track": "history-and-trends"
+        }
+      ]
     },
     {
       "id": "billing-iap",
       "spine": false,
       "lifecycle": "planned",
       "phase": "commerce",
-      "goal": "Attach native in-app purchase to the entitlement engine built in foundation — StoreKit and Google Play Billing, no Stripe (D1) — with server-side receipt validation, restore-purchases as a first-class flow, admin-granted complimentary access without a store transaction, and the full upgrade/downgrade/cancellation/expiry/failed-payment lifecycle.",
+      "goal": "Attach native in-app purchase to the entitlement engine built in foundation \u2014 StoreKit and Google Play Billing, no Stripe (D1) \u2014 with server-side receipt validation, restore-purchases as a first-class flow, admin-granted complimentary access without a store transaction, and the full upgrade/downgrade/cancellation/expiry/failed-payment lifecycle.",
       "statusFile": ".claude/feature-tracks/billing-iap/_STATUS.json",
-      "specRefs": [".claude/ai-instructions/PROJECT_MAIN.md#30-subscription-tiers"],
-      "owns": ["apps/web/src/app/api/billing", "apps/mobile/src/features/billing"],
+      "specRefs": [
+        ".claude/ai-instructions/PROJECT_MAIN.md#30-subscription-tiers"
+      ],
+      "owns": [
+        "apps/web/src/app/api/billing",
+        "apps/mobile/src/features/billing"
+      ],
       "dependsOn": [
-        { "track": "platform-foundation" },
-        { "track": "analysis-ground-truth" }
+        {
+          "track": "platform-foundation"
+        },
+        {
+          "track": "analysis-ground-truth"
+        }
       ],
       "sequencingNote": "Depends on analysis-ground-truth deliberately: charging for scores nobody can independently verify is the one thing this project's own history most warns against."
     },
@@ -377,18 +509,27 @@
       "spine": false,
       "lifecycle": "planned",
       "phase": "commerce",
-      "goal": "Privacy, retention and deletion made real in code — including the full deletion cascade across object storage, derived artifacts, AI conversation history and coach-visible copies — plus tier-driven storage lifecycle, load testing against the SLOs, and the concurrency and isolation posture §38 requires.",
+      "goal": "Privacy, retention and deletion made real in code \u2014 including the full deletion cascade across object storage, derived artifacts, AI conversation history and coach-visible copies \u2014 plus tier-driven storage lifecycle, load testing against the SLOs, and the concurrency and isolation posture \u00a738 requires.",
       "statusFile": ".claude/feature-tracks/production-readiness/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#34-privacy-permissions-and-data-control",
         ".claude/ai-instructions/PROJECT_MAIN.md#43-account-lifecycle",
         ".claude/ai-instructions/PROJECT_MAIN.md#38-production-readiness-and-scale-goals"
       ],
-      "owns": ["infra/retention", "services/privacy"],
+      "owns": [
+        "infra/retention",
+        "services/privacy"
+      ],
       "dependsOn": [
-        { "track": "analyzer-service" },
-        { "track": "observability-and-slos" },
-        { "track": "billing-iap" }
+        {
+          "track": "analyzer-service"
+        },
+        {
+          "track": "observability-and-slos"
+        },
+        {
+          "track": "billing-iap"
+        }
       ]
     },
     {
@@ -396,29 +537,45 @@
       "spine": false,
       "lifecycle": "planned",
       "phase": "commerce",
-      "goal": "Share a swing with controlled access, export an eligible swing with selected overlays, and share a progress comparison (§35) — tier-restricted, and never making a video public unless the golfer intentionally chose it (§34.4).",
+      "goal": "Share a swing with controlled access, export an eligible swing with selected overlays, and share a progress comparison (\u00a735) \u2014 tier-restricted, and never making a video public unless the golfer intentionally chose it (\u00a734.4).",
       "statusFile": ".claude/feature-tracks/sharing-and-export/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#35-sharing-and-export",
         ".claude/ai-instructions/PROJECT_MAIN.md#344-public-sharing"
       ],
-      "owns": ["apps/mobile/src/features/share"],
-      "dependsOn": [{ "track": "billing-iap" }]
+      "owns": [
+        "apps/mobile/src/features/share"
+      ],
+      "dependsOn": [
+        {
+          "track": "billing-iap"
+        }
+      ]
     },
     {
       "id": "coach-relationships",
       "spine": false,
       "lifecycle": "planned",
       "phase": "coach-platform",
-      "goal": "The coach directory, the golfer-initiated request/approve relationship with revocable access boundaries, and the coach workspace roster and golfer detail views — enforced by the row-level policy shape established and tested back in foundation.",
+      "goal": "The coach directory, the golfer-initiated request/approve relationship with revocable access boundaries, and the coach workspace roster and golfer detail views \u2014 enforced by the row-level policy shape established and tested back in foundation.",
       "statusFile": ".claude/feature-tracks/coach-relationships/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#23-coach-directory",
         ".claude/ai-instructions/PROJECT_MAIN.md#24-golfer-coach-relationship",
         ".claude/ai-instructions/PROJECT_MAIN.md#25-coach-workspace"
       ],
-      "owns": ["apps/web/src/app/coach", "apps/web/src/db/relationships.ts"],
-      "dependsOn": [{ "track": "platform-foundation" }, { "track": "admin-surface" }]
+      "owns": [
+        "apps/web/src/app/coach",
+        "apps/web/src/db/relationships.ts"
+      ],
+      "dependsOn": [
+        {
+          "track": "platform-foundation"
+        },
+        {
+          "track": "admin-surface"
+        }
+      ]
     },
     {
       "id": "coach-collaboration",
@@ -432,11 +589,20 @@
         ".claude/ai-instructions/PROJECT_MAIN.md#27-two-way-messaging",
         ".claude/ai-instructions/PROJECT_MAIN.md#28-coach-created-improvement-plans"
       ],
-      "owns": ["apps/mobile/src/features/coaching", "packages/annotations"],
+      "owns": [
+        "apps/mobile/src/features/coaching",
+        "packages/annotations"
+      ],
       "dependsOn": [
-        { "track": "coach-relationships" },
-        { "track": "ai-coach" },
-        { "track": "notifications" }
+        {
+          "track": "coach-relationships"
+        },
+        {
+          "track": "ai-coach"
+        },
+        {
+          "track": "notifications"
+        }
       ]
     },
     {
@@ -445,18 +611,26 @@
       "lifecycle": "planned",
       "phase": "capture",
       "differentiator": true,
-      "goal": "DIFFERENTIATOR (§12). Two logged-in phones capturing one swing: device pairing, coordinated recording, automatic association to a single Swing, synchronized dual-view playback, and partial-capture recovery that never loses the good video. Built here rather than last so the launch date does not hang on the hardest unsolved problem in the product.",
+      "goal": "DIFFERENTIATOR (\u00a712). Two logged-in phones capturing one swing: device pairing, coordinated recording, automatic association to a single Swing, synchronized dual-view playback, and partial-capture recovery that never loses the good video. Built here rather than last so the launch date does not hang on the hardest unsolved problem in the product.",
       "statusFile": ".claude/feature-tracks/dual-device-capture/_STATUS.json",
-      "specRefs": [".claude/ai-instructions/PROJECT_MAIN.md#12-multi-phone-synchronized-recording"],
-      "owns": ["apps/mobile/src/features/pairing"],
-      "dependsOn": [{ "track": "dual-device-spike" }]
+      "specRefs": [
+        ".claude/ai-instructions/PROJECT_MAIN.md#12-multi-phone-synchronized-recording"
+      ],
+      "owns": [
+        "apps/mobile/src/features/pairing"
+      ],
+      "dependsOn": [
+        {
+          "track": "dual-device-spike"
+        }
+      ]
     },
     {
       "id": "launch-readiness",
       "spine": false,
       "lifecycle": "planned",
       "phase": "launch",
-      "goal": "The gate between built and shipped. Store submission for both platforms including Apple App Privacy and Google Data Safety declarations — both mandatory, both requiring an exact answer to what data is collected, shared and retained. Plus a security review of the whole surface (media access, coach authorization, service-role isolation, receipt validation), load testing against the SLOs rather than merely defining them, §41 accessibility verification in real outdoor conditions, a closed beta with a feedback and support channel, and the legal surface: privacy policy, terms, and subscription disclosures.",
+      "goal": "The gate between built and shipped. Store submission for both platforms including Apple App Privacy and Google Data Safety declarations \u2014 both mandatory, both requiring an exact answer to what data is collected, shared and retained. Plus a security review of the whole surface (media access, coach authorization, service-role isolation, receipt validation), load testing against the SLOs rather than merely defining them, \u00a741 accessibility verification in real outdoor conditions, a closed beta with a feedback and support channel, and the legal surface: privacy policy, terms, and subscription disclosures.",
       "statusFile": ".claude/feature-tracks/launch-readiness/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#34-privacy-permissions-and-data-control",
@@ -465,14 +639,29 @@
         ".claude/ai-instructions/PROJECT_MAIN.md#41-accessibility-and-general-usability",
         ".claude/ai-instructions/PROJECT_MAIN.md#45-definition-of-product-success"
       ],
-      "owns": ["docs/launch", "infra/loadtest"],
+      "owns": [
+        "docs/launch",
+        "infra/loadtest"
+      ],
       "dependsOn": [
-        { "track": "production-readiness" },
-        { "track": "coach-collaboration" },
-        { "track": "dual-device-capture" },
-        { "track": "comparison-and-reference" },
-        { "track": "launch-data" },
-        { "track": "sharing-and-export" }
+        {
+          "track": "production-readiness"
+        },
+        {
+          "track": "coach-collaboration"
+        },
+        {
+          "track": "dual-device-capture"
+        },
+        {
+          "track": "comparison-and-reference"
+        },
+        {
+          "track": "launch-data"
+        },
+        {
+          "track": "sharing-and-export"
+        }
       ]
     },
     {
@@ -481,15 +670,25 @@
       "lifecycle": "future",
       "phase": "future",
       "deferredBy": "docs/DECISIONS.md D2",
-      "goal": "FUTURE STATE (D2). Find the actual golf swing inside a long recording — rejecting walking in, setup, practice swings and walking away — and let the golfer choose when several are detected. Not the existing 8-event detection, which assumes a clip already contains exactly one swing. Until this ships, in-app-capture must provide a manual trim/select fallback.",
+      "goal": "FUTURE STATE (D2). Find the actual golf swing inside a long recording \u2014 rejecting walking in, setup, practice swings and walking away \u2014 and let the golfer choose when several are detected. Not the existing 8-event detection, which assumes a clip already contains exactly one swing. Until this ships, in-app-capture must provide a manual trim/select fallback.",
       "statusFile": ".claude/feature-tracks/swing-isolation/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#11-automatic-swing-detection",
         ".claude/ai-instructions/PROJECT_MAIN.md#94-long-recording-support"
       ],
-      "owns": ["services/analyzer/swingsage/segment.py"],
-      "dependsOn": [{ "track": "analysis-ground-truth" }]
+      "owns": [
+        "services/analyzer/swingsage/segment.py"
+      ],
+      "dependsOn": [
+        {
+          "track": "analysis-ground-truth"
+        }
+      ]
     }
   ],
-  "shared": ["apps/web/src/db", "services/analyzer/swingsage", "packages/schema"]
+  "shared": [
+    "apps/web/src/db",
+    "services/analyzer/swingsage",
+    "packages/schema"
+  ]
 }

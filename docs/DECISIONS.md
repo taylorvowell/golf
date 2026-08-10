@@ -388,7 +388,8 @@ keys derived from swing/view identity rather than folder names, and signed URLs 
 ## D9 — Upstash for dispatch, Railway for the worker; job state stays in Postgres
 
 **Date:** 2026-08-08
-**Status:** ACTIVE
+**Status:** SUPERSEDED IN PART by D18 — the Upstash dispatch and Postgres job-state halves
+stand; the choice of Railway as the analyzer worker host is reopened.
 
 **Context:** §39 names Upstash and Railway. §38 requires that one user's workload cannot degrade
 everyone else's. A working job protocol already exists — stage, progress_pct, message, durable
@@ -615,3 +616,50 @@ grant types requiring no store transaction.
 - Downgrade overflow (§43's open question about stored swings exceeding a shrunken plan) is
   expressible whichever answer the product picks, because retention reads entitlement rather than
   store state.
+
+---
+
+## D18 — Analyzer worker hosting is reopened; Railway has no GPU
+
+**Date:** 2026-08-10
+**Status:** OPEN — decide before the `analyzer-service` track starts
+
+**Context:** D9 named Railway as the analyzer worker host and flagged "GPU availability on Railway
+must be confirmed early". It was confirmed, and the answer is **no**: Railway does not offer GPU
+outside its Enterprise plan, and its own documentation says the platform is not yet well-equipped
+for GPU compute.
+
+Checking what the pipeline actually uses turned out to matter more than the platform question:
+
+- **RTMW pose inference already runs on CPU.** `pose_rtm.py` passes `device="cpu"`, and the
+  installed onnxruntime exposes only `CPUExecutionProvider` — the CUDA provider is not installed.
+- **Only the YOLO club detector uses the GPU**, via torch cu126.
+
+So the ~5.5 minutes per ~520-frame clip measured on the dev machine is dominated by **CPU-bound
+pose**, not GPU work. Railway's missing GPU is therefore much less damaging than it first looked
+— but it also forecloses the largest easy speedup available, because installing
+`onnxruntime-gpu` and moving pose to CUDA is untried and is the obvious lever for D13's
+**p95 < 180 s** target, which is already recorded as not known to be achievable.
+
+**Options, to be decided with a measurement rather than a preference:**
+1. **CPU-only on Railway.** Keeps D9 and the vendor list intact. Requires the club detector on
+   CPU too, and almost certainly misses the 180 s p95 — so D13 would have to be revised
+   honestly rather than quietly missed.
+2. **A GPU host for the worker, Railway for everything else.** Azure is the §39-preferred cloud
+   for "additional cloud needs", so Azure GPU compute is the option that satisfies the stated
+   preference; Modal, RunPod, Fly.io and Northflank are the obvious alternatives.
+3. **Optimise first, then choose.** Install `onnxruntime-gpu`, move pose to CUDA, and re-measure
+   on the dev machine's GTX 1080. That gives a real CPU-vs-GPU ratio for *this* pipeline and
+   turns the hosting choice into arithmetic instead of a guess.
+
+**Leaning toward 3 then 2**, because the ratio is currently unknown and every option above is
+being argued from an unmeasured assumption — the same failure this project has already made
+once, tuning club tracking on smoothness with no position-error metric.
+
+**Consequences:**
+- **Do not sign up for Railway yet.** Its role is no longer settled.
+- The `analyzer-service` track gains an explicit first step: measure CPU vs GPU pose inference
+  on the current pipeline, then choose the host.
+- D13's analysis-latency SLO cannot be validated until this is settled, and may need revising
+  downward in honesty rather than being missed silently.
+
