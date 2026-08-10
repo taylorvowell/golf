@@ -7,6 +7,10 @@
     "dev": "pnpm --filter web dev",
     "build": "pnpm --filter web build",
     "start": "pnpm --filter web start",
-    "lint": "pnpm --filter web lint"
+    "lint": "pnpm --filter web lint",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "schema:check": "pnpm --filter @swingsage/schema check",
+    "schema:generate": "pnpm --filter @swingsage/schema generate"
   }
 }

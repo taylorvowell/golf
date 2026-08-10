@@ -1,0 +1,311 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://swingsage.dev/schemas/analysis.schema.json",
+  "title": "Analysis",
+  "description": "The single contract between the analyzer and every client. Deliberately STRICT on the properties clients depend on and PERMISSIVE on the deep interior of metrics/quality, whose field set legitimately varies by pose model and view \u2014 over-specifying those would produce failures that mean nothing. Evolve additively only: new fields, never reordering or repurposing, because a native app cannot be force-updated and old builds keep reading these artifacts for months.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "video",
+    "pose",
+    "events"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Incremented when the contract changes. Clients must tolerate a HIGHER value than they were built for by ignoring unknown fields."
+    },
+    "video": {
+      "type": "object",
+      "required": [
+        "fps",
+        "frame_count",
+        "width",
+        "height"
+      ],
+      "properties": {
+        "fps": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "frame_count": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "view": {
+          "type": "string",
+          "enum": [
+            "dtl",
+            "face_on"
+          ]
+        },
+        "handedness": {
+          "type": "string",
+          "enum": [
+            "right",
+            "left"
+          ]
+        },
+        "source": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "pose": {
+      "type": "object",
+      "required": [
+        "keypoint_names",
+        "frames"
+      ],
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "keypoint_names": {
+          "type": "array",
+          "description": "Fixed, append-only order: 33 native, 7 derived, 8 measured, 1 derived-tail. The measured block sits AFTER the derived one so published indices 0-39 keep their meaning.",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 49
+        },
+        "frames": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "f"
+            ],
+            "properties": {
+              "f": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "kp": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  }
+                }
+              },
+              "interp": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": true
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "events": {
+      "type": "object",
+      "description": "The eight GolfDB events, strictly ordered by frame.",
+      "required": [
+        "address",
+        "toe_up",
+        "mid_backswing",
+        "top",
+        "mid_downswing",
+        "impact",
+        "mid_follow_through",
+        "finish"
+      ],
+      "additionalProperties": {
+        "$ref": "#/definitions/event"
+      }
+    },
+    "checkpoints": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "p",
+          "frame"
+        ],
+        "properties": {
+          "p": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "phase": {
+            "type": "string"
+          },
+          "event": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The GolfDB event this checkpoint coincides with, or null for P6 and P9, which are shaft- and arm-defined and have no event."
+          },
+          "frame": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "phases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "from",
+          "to"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "from": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "to": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "additionalProperties": true
+      }
+    },
+    "swing_window": {
+      "$ref": "#/definitions/frameRange"
+    },
+    "playback_window": {
+      "$ref": "#/definitions/frameRange",
+      "description": "Pinned to address - 1s .. finish + 1s so every clip's lead-in and run-out match. The comparison view depends on this."
+    },
+    "playback_pad": {
+      "$ref": "#/definitions/frameRange",
+      "description": "Frames of the fixed one second the clip was too short to supply; the player freezes the end frame for the shortfall."
+    },
+    "address_span": {
+      "$ref": "#/definitions/frameRange"
+    },
+    "tempo": {
+      "type": "object",
+      "properties": {
+        "backswing_frames": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "downswing_frames": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ratio": {
+          "type": "number"
+        },
+        "backswing_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "downswing_ms": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "implausible": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "description": "Null when tempo is plausible; otherwise the reasons it should not be trusted. Non-empty means the pipeline is flagging its own output and clients must surface that rather than printing the ratio as fact.",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": true
+    },
+    "club": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "face": {
+      "type": "object",
+      "description": "Checkpoint CLASSIFICATIONS only (square/open/closed). Never a fabricated face-angle degree from video \u2014 degrees require a launch monitor.",
+      "additionalProperties": true
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "posture": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "quality": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "quality_raw": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "quality_mediapipe": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "stage3": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": true,
+  "definitions": {
+    "event": {
+      "type": "object",
+      "required": [
+        "frame"
+      ],
+      "properties": {
+        "frame": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "conf": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "additionalProperties": true
+    },
+    "frameRange": {
+      "type": "array",
+      "description": "Inclusive [from, to] frame indices.",
+      "items": {
+        "type": "integer",
+        "minimum": 0
+      },
+      "minItems": 2,
+      "maxItems": 2
+    }
+  }
+}
