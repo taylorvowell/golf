@@ -285,8 +285,10 @@ Build / EAS Submit**.
 - Native modules are expected, not exceptional — at minimum for the per-frame overlay callback.
   The Expo config-plugin system is how they are wired without ejecting.
 - iOS builds always go through EAS. Budget for it; it is on the critical path for step 10.
-- **This decision is provisional until step 02's spike passes on Android.** The Android
-  per-frame callback is unconfirmed, and it is the one finding that would reopen this entry.
+- ~~**This decision is provisional until step 02's spike passes on Android.**~~ **Resolved by
+  D19**: Android exposes the per-frame callback via Media3's `VideoFrameMetadataListener`, so
+  the feasibility question that would have reopened this entry is closed. The spike now measures
+  drift rather than deciding whether the framework survives.
 
 ---
 
@@ -663,3 +665,65 @@ once, tuning club tracking on smoothness with no position-error metric.
 - D13's analysis-latency SLO cannot be validated until this is settled, and may need revising
   downward in honesty rather than being missed silently.
 
+---
+
+## D19 — Every web-player overlay is reproducible on iOS and Android; the frame lock needs one native module
+
+**Date:** 2026-08-10
+**Status:** ACTIVE — supersedes the open risk in D5, which is no longer provisional on feasibility
+
+**Context:** D5 chose React Native + Expo but was explicitly provisional, because step 01's
+research confirmed an iOS path for the per-frame overlay callback and could **not** confirm the
+Android equivalent. That was the one finding that would have reopened the framework choice, so it
+was checked against the actual platform APIs before building anything on it.
+
+**Findings, from the Expo SDK reference and the Media3 API:**
+
+*Playback and seeking — better than assumed.* `expo-video` exposes `SeekTolerance` with
+`toleranceBefore` and `toleranceAfter` **both defaulting to 0** on Android and iOS, so
+frame-exact seeking is the default rather than an opt-in. Android additionally has
+`ScrubbingModeOptions` — `scrubbingModeEnabled`, `useDecodeOnlyFlag`
+(`MediaCodec.BUFFER_FLAG_DECODE_ONLY` on API 34+), `allowSkippingMediaCodecFlush`,
+`increaseCodecOperatingRate`, `enableDynamicScheduling` — which is purpose-built for exactly this
+product's interaction: many rapid seeks while dragging. Combined with Stage 0's existing GOP of
+10, decode-and-skip on seek is bounded to at most 9 frames. `VideoTrack.frameRate` also reports
+the track's true frame rate, which §2.3 needs in order to refuse to silently degrade.
+
+*The frame lock — the actual risk, and it resolves.* `expo-video`'s `timeUpdate` event fires on
+an interval (`timeUpdateEventInterval`), **not once per presented frame**. Used as-is, the mobile
+player would get the web player's *rAF fallback* behaviour rather than its
+`requestVideoFrameCallback` guarantee. But both platforms expose the real thing natively:
+
+- **Android:** Media3's `VideoFrameMetadataListener.onVideoFrameAboutToBeRendered()` delivers the
+  frame's presentation time in microseconds *and* the wallclock time it is intended to display
+  at, in nanoseconds — arguably a stronger signal than the web API, since it arrives before the
+  frame is shown.
+- **iOS:** `AVPlayerItemVideoOutput` driven by a `CADisplayLink`, as already established.
+
+Neither is surfaced by `expo-video`, so this requires a small Expo native module. That is the
+"native modules are expected, not exceptional" consequence D5 already recorded, not a new cost.
+
+*Overlay drawing — no gaps.* `@shopify/react-native-skia` is an Expo SDK package and covers every
+shape the web canvas draws: `Path` with `fillType="evenOdd"` for the silhouette and isolation
+rings, `DashPathEffect` for the dashed chords across unmeasured trace gaps, per-segment paths for
+the red-backswing/blue-downswing trace, and text for the angle readouts. It is Skia — the same
+engine behind Chrome's canvas — and it renders on the UI thread through Reanimated worklets, so
+overlay updates do not queue behind JavaScript.
+
+**Decision:** The mobile port is confirmed feasible with no feature loss. Build the player on
+**`expo-video` + `@shopify/react-native-skia`**, with a **native module exposing the per-frame
+callback** on both platforms. D5 stands and is no longer provisional on this question.
+
+**Consequences:**
+- **The ~2,000 lines of pure geometry port unchanged** — `traceSmoothing`, `overlays`,
+  `skeleton`, `angleOverlay`, `swingPhases`, `playbackWindow`, `viewbox`, `swingSync` are pure
+  functions producing coordinates, and the 71 tests already written against them become the
+  oracle for the port. Only the thin drawing layer (canvas 2D calls) is rewritten against Skia.
+- **Step 02's spike changes character**: from "is the overlay lock possible on Android" to
+  "measure the drift the native module actually achieves". The question is now quantitative.
+- `surfaceType` needs attention on Android. The default `surfaceView` is faster and lower-power,
+  but Expo's own docs flag z-ordering problems with overlapping video views; `textureView`
+  composites conventionally. Which one an overlay-on-video layout needs is a spike measurement,
+  not a guess — and it may trade power for correctness.
+- D13's **0-frame overlay drift** target is now the acceptance criterion for the native module
+  rather than an aspiration.

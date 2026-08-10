@@ -49,11 +49,24 @@ has to be discovered now, not in the `in-app-capture` track.
 2. Measure on at least one iPhone and one mid-range Android — not a flagship. Record achieved
    capture fps, dropped frames during overlay playback, and seek accuracy.
 
-   **Run Android first, and do not wait on iOS to start.** Step 01's research confirmed a clean
-   iOS path for the hard part (`AVPlayerItemVideoOutput` + `CADisplayLink` for the per-frame
-   callback) and could **not** confirm the Android equivalent. The unconfirmed risk is therefore
-   entirely on the device already available, so the Android pass answers the question that could
-   actually kill the framework choice. If Android fails, iOS never needs measuring.
+   **Run Android first, and do not wait on iOS to start.**
+
+   **The feasibility question is now closed (D19)** — this spike measures, it does not decide.
+   Both platforms expose a real per-frame callback: Media3's
+   `VideoFrameMetadataListener.onVideoFrameAboutToBeRendered()` on Android (presentation time in
+   µs plus the intended display wallclock in ns) and `AVPlayerItemVideoOutput` + `CADisplayLink`
+   on iOS. Neither is surfaced by `expo-video`, so a small Expo native module is the deliverable
+   that makes probe 1 measurable at all — build it before trying to measure drift.
+
+   Two things `expo-video` gives for free and should be used rather than reinvented:
+   `SeekTolerance` already defaults to zero on both platforms, and Android's
+   `ScrubbingModeOptions` (`scrubbingModeEnabled`, `useDecodeOnlyFlag`,
+   `allowSkippingMediaCodecFlush`) is purpose-built for rapid seeking while dragging.
+
+   Also settle `surfaceType` here: Android's default `surfaceView` is faster and lower-power, but
+   Expo's docs flag z-ordering problems with overlapping views, and `textureView` composites
+   conventionally. Which one an overlay-on-video layout needs is a measurement, and it may trade
+   power for correctness.
 
    iOS is needed to *complete* this step, not to begin it — a borrowed or second-hand device, or
    a cloud device farm for the measurement pass. The iOS simulator cannot exercise camera
