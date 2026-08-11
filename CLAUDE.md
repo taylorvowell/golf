@@ -280,8 +280,16 @@ looked healthy and were wrong. Build the debug view when the work starts, not af
 no closing summary, no "what this means" section. A few bullets or one short table — not both.
 State *what* changed and *where*; the *why* goes in code comments or `docs/DECISIONS.md`, not in
 the reply. Don't explain reasoning unless asked, don't recap rejected options, don't restate what
-was already said. Instructions for Taylor are numbered and imperative with no commentary. A
-finding worth flagging is one line, not a section.
+was already said. A finding worth flagging is one line, not a section.
+
+**Short does not mean ambiguous.** Always end with two things, plainly: **what Taylor must do**
+(numbered, imperative, exact commands) and **what happens next**. Cutting those to save words is
+the one place brevity costs more than it saves.
+
+**Do it yourself before asking.** Builds, installs, launches, adb taps, log pulls, servers —
+attempt them and report the result. Hand Taylor only what genuinely needs him: a physical
+device interaction, a credential, a dashboard, a spend, or a judgement call. "Run this command"
+is almost never one of those; run it. Long jobs go in the background rather than being delegated.
 
 ## Working Practices
 
