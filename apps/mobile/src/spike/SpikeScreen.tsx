@@ -2,6 +2,7 @@ import { Asset } from "expo-asset";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Platform,
+  Pressable,
   ScrollView,
   StatusBar,
   Text,
@@ -38,6 +39,23 @@ const CLIP = require("../../assets/frameclock.mp4");
 const CLIP_FPS = 60;
 const CLIP_FRAMES = 600;
 
+/**
+ * Geometry of the burned-in sweeping bar. **Must match `scripts/make-frame-clip.mjs`.**
+ *
+ * These exist because getting them wrong produced the most instructive failure of this spike: the
+ * marker was positioned against the window width rather than the rendered video width, so it and
+ * the bar swept at slightly different rates and separated by ~20px across the clip. On screen that
+ * is a gap that **grows over time**, which is the signature of a scale error — a genuine sync lag
+ * would show a *constant* offset. The probe still reported PASS throughout, because frame identity
+ * and marker placement are different questions and the closed loop only measures the first.
+ *
+ * Caught by looking at the picture, not by the numbers. Same reason the analyzer has Gate 1.
+ */
+const CLIP_WIDTH_PX = 720;
+const BAR_WIDTH_PX = 12;
+/** Width of the JS marker, in screen px. Kept thin so a one-frame error is still visible. */
+const MARKER_WIDTH = 2;
+
 /** How long the overlay-sync probe plays for. 5s at 60fps is ~300 samples, over the n≥120 bar. */
 const OVERLAY_RUN_MS = 5_000;
 
@@ -66,6 +84,11 @@ export default function SpikeScreen() {
 
   /** The frame the overlay is currently drawn for. Drives the marker AND the drift report. */
   const [overlayFrame, setOverlayFrame] = useState(0);
+  /** Measured, not computed from window width — padding changes must not silently desync this. */
+  const [videoWidth, setVideoWidth] = useState(0);
+  /** Free-run playback for eyeballing the marker against the bar, and for the screenshot-based
+   *  measurement in scripts/measure_overlay.py, which needs more than a probe's 5s to sample. */
+  const [looping, setLooping] = useState(false);
   const measuring = useRef(false);
 
   useEffect(() => {
@@ -115,7 +138,7 @@ export default function SpikeScreen() {
     setProbe("overlay-sync", {
       status: verdict.status,
       measurement: { value: verdict.value, device: deviceName },
-      detail: `${verdict.detail} · event delivery p95 ${stats.eventDeliveryMs.p95.toFixed(1)}ms`,
+      detail: `${verdict.detail} · JS lead p95 ${stats.leadTimeMs.p95.toFixed(1)}ms`,
     });
     setBusy(false);
   }, [busy, deviceName, setProbe]);
@@ -147,8 +170,15 @@ export default function SpikeScreen() {
   }, [busy, deviceName, setProbe]);
 
   // The marker mirrors the clip's burned-in sweeping bar. If the two do not sit on top of each
-  // other on a screen recording, the numbers are wrong — this is the Gate 3 check, on the phone.
-  const markerLeft = (overlayFrame / (CLIP_FRAMES - 1)) * (width - 40);
+  // other on a screen recording, something is wrong — this is the Gate 3 check, on the phone.
+  //
+  // Worked in the CLIP's pixel space and then scaled to however wide the video actually rendered.
+  // The bar's left edge is (CLIP_WIDTH - BAR_WIDTH) * n / (frames - 1); add half the bar to get
+  // its centre, then subtract half the marker so the two centres coincide.
+  const barCentreInClipPx =
+    ((CLIP_WIDTH_PX - BAR_WIDTH_PX) * overlayFrame) / (CLIP_FRAMES - 1) + BAR_WIDTH_PX / 2;
+  const markerLeft =
+    (barCentreInClipPx * videoWidth) / CLIP_WIDTH_PX - MARKER_WIDTH / 2;
 
   return (
     <View style={styles.root}>
@@ -171,7 +201,10 @@ export default function SpikeScreen() {
         </View>
 
         <View style={styles.videoCard}>
-          <View style={styles.videoWrap}>
+          <View
+            style={styles.videoWrap}
+            onLayout={(e) => setVideoWidth(e.nativeEvent.layout.width)}
+          >
             <FrameClockView
               ref={clock}
               style={styles.video}
@@ -189,10 +222,40 @@ export default function SpikeScreen() {
                 );
               }}
               onPlayerError={({ nativeEvent }) => setError(nativeEvent.message)}
-              onFrameRendered={({ nativeEvent }) => setOverlayFrame(nativeEvent.frame)}
+              onFrameRendered={({ nativeEvent }) => {
+                setOverlayFrame(nativeEvent.frame);
+                if (looping && nativeEvent.frame >= CLIP_FRAMES - 2) {
+                  void clock.current?.seekToFrame(0);
+                }
+              }}
             />
             {/* The JS overlay. Should sit exactly on the clip's own green bar. */}
-            <View pointerEvents="none" style={[styles.marker, { left: markerLeft }]} />
+            {videoWidth > 0 ? (
+              <View
+                pointerEvents="none"
+                style={[styles.marker, { left: markerLeft, width: MARKER_WIDTH }]}
+              />
+            ) : null}
+          </View>
+          <View style={styles.transport}>
+            <Pressable
+              style={styles.transportButton}
+              onPress={() => {
+                setLooping(true);
+                void clock.current?.play();
+              }}
+            >
+              <Text style={styles.transportText}>Play (loop)</Text>
+            </Pressable>
+            <Pressable
+              style={styles.transportButton}
+              onPress={() => {
+                setLooping(false);
+                void clock.current?.pause();
+              }}
+            >
+              <Text style={styles.transportText}>Pause</Text>
+            </Pressable>
           </View>
           <Text style={styles.detail}>
             Overlay frame {overlayFrame} · the white marker is drawn by JS, the green bar is burned

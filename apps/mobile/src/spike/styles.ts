@@ -63,6 +63,17 @@ export const styles = StyleSheet.create({
     alignItems: "center",
   },
   buttonDisabled: { opacity: 0.45 },
+  transport: { flexDirection: "row", gap: 8 },
+  transportButton: {
+    flex: 1,
+    backgroundColor: "#1b212a",
+    borderColor: COLORS.border,
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingVertical: 9,
+    alignItems: "center",
+  },
+  transportText: { color: COLORS.text, fontSize: 12, fontWeight: "600" },
   buttonText: { color: COLORS.text, fontSize: 13, fontWeight: "700" },
   footer: { color: COLORS.dim, fontSize: 11, lineHeight: 17, marginTop: 6 },
 });

@@ -65,15 +65,58 @@ class FrameClockView(context: Context, appContext: AppContext) : ExpoView(contex
    *  mode, not a playback mode, and leaving it on would itself perturb what we are measuring. */
   var emitFrames: Boolean = false
 
-  @Volatile private var presentedFrame: Int = -1
-  @Volatile private var presentedAtNs: Long = 0L
+  /**
+   * Frames that have been handed to the surface but are scheduled to appear in the FUTURE.
+   *
+   * This exists because of a bias that made the first real measurement unusable.
+   * `onVideoFrameAboutToBeRendered` fires *before* the frame is on the glass, and `releaseTimeNs`
+   * is when it will be displayed — typically ~2 frames ahead at 60fps. Scoring the overlay
+   * against the most recent callback therefore compares JS against a frame the screen has not
+   * shown yet, and reports drift equal to the lead time even when the overlay is perfectly
+   * synced. The first run on an S25+ read p95 = 2 frames against a measured lead of ~33ms, which
+   * is the same 2 frames — the bias *was* the result.
+   *
+   * So the schedule is kept, and "what is actually on screen" is resolved against the wall clock
+   * at the moment the question is asked. Written on the playback thread, read on the main thread.
+   */
+  private val scheduled = ArrayDeque<Pair<Int, Long>>()
+  private val scheduleLock = Any()
+
+  /** The most recent callback, i.e. the newest frame the decoder has queued. Not on screen yet. */
+  @Volatile private var queuedFrame: Int = -1
 
   /** Set when a seek is in flight, so the next presented frame can be scored against it. */
   @Volatile private var pendingSeekFrame: Int? = null
 
   private val overlayDrift = FrameStats()
-  private val deliveryLatencyMs = FrameStats()
+
+  /**
+   * How far AHEAD of a frame's scheduled display time JS learns about it, in ms.
+   *
+   * Positive is lead, and lead is good — it is the budget a JS-driven overlay has to draw in.
+   * Previously this was computed as `now - releaseTimeNs`, which is lead with the sign inverted
+   * and was reported as "delivery latency"; a p95 of -33ms is what exposed the deeper bias above.
+   */
+  private val leadTimeMs = FrameStats()
   private val seekError = FrameStats()
+
+  /**
+   * The frame actually on screen right now: the newest one whose scheduled display time has
+   * already passed. Drops entries that are no longer the answer as it goes, so the deque stays
+   * a couple of frames long.
+   */
+  private fun onScreenFrame(): Int {
+    val now = System.nanoTime()
+    synchronized(scheduleLock) {
+      var current = -1
+      while (scheduled.isNotEmpty() && scheduled.first().second <= now) {
+        current = scheduled.removeFirst().first
+      }
+      // Put the answer back so repeated calls between frames stay consistent.
+      if (current >= 0) scheduled.addFirst(current to now)
+      return current
+    }
+  }
 
   init {
     // The player must exist before props arrive; source is applied when the prop lands.
@@ -91,8 +134,15 @@ class FrameClockView(context: Context, appContext: AppContext) : ExpoView(contex
     exo.setVideoFrameMetadataListener { presentationTimeUs, releaseTimeNs, _, _ ->
       // Playback thread. Keep this cheap — work done here delays the frame it describes.
       val frame = frameIndexOf(presentationTimeUs, fps)
-      presentedFrame = frame
-      presentedAtNs = if (releaseTimeNs == C.TIME_UNSET) System.nanoTime() else releaseTimeNs
+      // TIME_UNSET means "render immediately", so its display time is now, not the future.
+      val displayAtNs = if (releaseTimeNs == C.TIME_UNSET) System.nanoTime() else releaseTimeNs
+
+      queuedFrame = frame
+      synchronized(scheduleLock) {
+        scheduled.addLast(frame to displayAtNs)
+        // A seek or a stall can strand entries whose time never arrives relative to newer ones.
+        while (scheduled.size > 16) scheduled.removeFirst()
+      }
 
       val expected = pendingSeekFrame
       if (expected != null) {
@@ -101,14 +151,14 @@ class FrameClockView(context: Context, appContext: AppContext) : ExpoView(contex
       }
 
       if (emitFrames) {
-        val renderedAtNs = presentedAtNs
         main.post {
-          deliveryLatencyMs.add((System.nanoTime() - renderedAtNs) / 1_000_000.0)
+          // Positive = JS heard about the frame this many ms before it is due on screen.
+          leadTimeMs.add((displayAtNs - System.nanoTime()) / 1_000_000.0)
           onFrameRendered(
             mapOf(
               "frame" to frame,
               "presentationTimeUs" to presentationTimeUs,
-              "releaseTimeNs" to renderedAtNs
+              "releaseTimeNs" to displayAtNs
             )
           )
         }
@@ -202,22 +252,27 @@ class FrameClockView(context: Context, appContext: AppContext) : ExpoView(contex
    * the decoder, which only happens if [fps] disagrees with the media.
    */
   fun markOverlayCommitted(frame: Int) {
-    val current = presentedFrame
+    // Against what is ON SCREEN, not what has merely been queued. Comparing against the queued
+    // frame inflates drift by the callback's lead time, which is what made the first S25+ run
+    // read p95 = 2 frames when the lead was ~2 frames.
+    val current = onScreenFrame()
     if (current < 0) return
     overlayDrift.add((current - frame).toDouble())
   }
 
   fun resetStats() {
     overlayDrift.reset()
-    deliveryLatencyMs.reset()
+    leadTimeMs.reset()
     seekError.reset()
+    synchronized(scheduleLock) { scheduled.clear() }
   }
 
   fun stats(): Map<String, Any> = mapOf(
     "overlayDriftFrames" to overlayDrift.toMap(),
-    "eventDeliveryMs" to deliveryLatencyMs.toMap(),
+    "leadTimeMs" to leadTimeMs.toMap(),
     "seekErrorFrames" to seekError.toMap(),
-    "presentedFrame" to presentedFrame,
+    "onScreenFrame" to onScreenFrame(),
+    "queuedFrame" to queuedFrame,
     "fps" to fps
   )
 

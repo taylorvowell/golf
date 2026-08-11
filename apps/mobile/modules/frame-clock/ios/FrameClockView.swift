@@ -27,13 +27,37 @@ class FrameClockView: ExpoView {
   /// 60 events/sec is a measurement mode, not a playback mode.
   var emitFrames: Bool = false
 
-  private var presentedFrame: Int = -1
+  /// Frames handed to the layer but scheduled to appear at a FUTURE vsync. See the Kotlin
+  /// counterpart for why this exists: scoring the overlay against the newest callback rather than
+  /// against what is actually on screen inflates drift by the callback's lead time, and on the
+  /// first real Android run that bias was the entire result. `CADisplayLink.targetTimestamp` is
+  /// the *next* vsync, so iOS has the same bias in smaller form — one refresh interval, which is
+  /// 8ms on the 120Hz panels this product targets.
+  private var scheduled: [(frame: Int, displayAt: CFTimeInterval)] = []
+
+  /// The newest frame the display link has identified. Not on screen yet.
+  private var queuedFrame: Int = -1
   private var pendingSeekFrame: Int?
   private var lastEmittedFrame: Int = -1
 
   private let overlayDrift = FrameStats()
-  private let deliveryLatencyMs = FrameStats()
+  /// Milliseconds of LEAD — positive means JS heard about the frame before it was due on screen.
+  private let leadTimeMs = FrameStats()
   private let seekError = FrameStats()
+
+  /// The frame actually on screen: the newest whose scheduled display time has already passed.
+  private func onScreenFrame() -> Int {
+    let now = CACurrentMediaTime()
+    var current = -1
+    var idx = 0
+    while idx < scheduled.count, scheduled[idx].displayAt <= now {
+      current = scheduled[idx].frame
+      idx += 1
+    }
+    if idx > 0 { scheduled.removeFirst(idx) }
+    if current >= 0 { scheduled.insert((frame: current, displayAt: now), at: 0) }
+    return current
+  }
 
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
@@ -121,7 +145,7 @@ class FrameClockView: ExpoView {
     }
 
     let frame = frameIndex(seconds: itemTime.seconds, fps: fps)
-    presentedFrame = frame
+    queuedFrame = frame
 
     if let expected = pendingSeekFrame {
       pendingSeekFrame = nil
@@ -131,10 +155,13 @@ class FrameClockView: ExpoView {
     guard frame != lastEmittedFrame else { return }
     lastEmittedFrame = frame
 
+    scheduled.append((frame: frame, displayAt: hostTime))
+    if scheduled.count > 16 { scheduled.removeFirst(scheduled.count - 16) }
+
     if emitFrames {
-      // The display link already fires on the main thread, so this is the same hop the Android
-      // side pays via Handler.post — measured the same way for the same reason.
-      deliveryLatencyMs.add((CACurrentMediaTime() - hostTime) * 1000.0)
+      // Positive = JS heard about the frame this many ms before it is due on screen. Same
+      // quantity and same sign convention as the Android side, so the two columns compare.
+      leadTimeMs.add((hostTime - CACurrentMediaTime()) * 1000.0)
       onFrameRendered([
         "frame": frame,
         "presentationTimeUs": Int(itemTime.seconds * 1_000_000),
@@ -157,22 +184,26 @@ class FrameClockView: ExpoView {
   }
 
   func markOverlayCommitted(_ frame: Int) {
-    guard presentedFrame >= 0 else { return }
-    overlayDrift.add(Double(presentedFrame - frame))
+    // Against what is ON SCREEN, not what has merely been queued — see onScreenFrame().
+    let current = onScreenFrame()
+    guard current >= 0 else { return }
+    overlayDrift.add(Double(current - frame))
   }
 
   func resetStats() {
     overlayDrift.reset()
-    deliveryLatencyMs.reset()
+    leadTimeMs.reset()
     seekError.reset()
+    scheduled.removeAll(keepingCapacity: true)
   }
 
   func stats() -> [String: Any] {
     [
       "overlayDriftFrames": overlayDrift.toDictionary(),
-      "eventDeliveryMs": deliveryLatencyMs.toDictionary(),
+      "leadTimeMs": leadTimeMs.toDictionary(),
       "seekErrorFrames": seekError.toDictionary(),
-      "presentedFrame": presentedFrame,
+      "onScreenFrame": onScreenFrame(),
+      "queuedFrame": queuedFrame,
       "fps": fps
     ]
   }

@@ -20,11 +20,18 @@ export interface StatSummary {
 export interface FrameClockStats {
   /** Frames between the overlay JS committed and the frame actually on the glass. */
   overlayDriftFrames: StatSummary;
-  /** Milliseconds from native frame render to the JS handler running. */
-  eventDeliveryMs: StatSummary;
+  /**
+   * Milliseconds of LEAD: how far ahead of a frame's scheduled display time JS learns about it.
+   * Positive is good — it is the budget a JS-driven overlay has to draw in before the frame is
+   * due on screen.
+   */
+  leadTimeMs: StatSummary;
   /** Requested frame minus presented frame, after a seek. */
   seekErrorFrames: StatSummary;
-  presentedFrame: number;
+  /** The frame actually on screen: newest one whose scheduled display time has passed. */
+  onScreenFrame: number;
+  /** The newest frame the decoder has queued. Ahead of `onScreenFrame` by the lead time. */
+  queuedFrame: number;
   fps: number;
 }
 
