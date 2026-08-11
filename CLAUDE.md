@@ -274,6 +274,15 @@ looked healthy and were wrong. Build the debug view when the work starts, not af
   mentioned in passing goes into the repo (RUNBOOK, step file, DECISIONS) in the same session —
   not just into the reply.
 
+## Replying
+
+**Way less words. Straight to the point.** Lead with the answer or the action; no preamble,
+no closing summary, no "what this means" section. A few bullets or one short table — not both.
+State *what* changed and *where*; the *why* goes in code comments or `docs/DECISIONS.md`, not in
+the reply. Don't explain reasoning unless asked, don't recap rejected options, don't restate what
+was already said. Instructions for Taylor are numbered and imperative with no commentary. A
+finding worth flagging is one line, not a section.
+
 ## Working Practices
 
 - **One launch, no staged release.** SwingSage ships once, as the full product. There is no MVP
