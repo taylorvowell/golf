@@ -1,4 +1,13 @@
-import { BONES, MIN_CONF, buildIndex, frameAt, type PoseBundle } from "./pose";
+import {
+  BONES,
+  DRAWN_CONF,
+  HIDE_JOINT,
+  MIN_CONF,
+  buildIndex,
+  frameAt,
+  sideOf,
+  type PoseBundle,
+} from "./pose";
 
 /**
  * The pose contract, asserted on the client side.
@@ -61,11 +70,51 @@ describe("frameAt", () => {
   });
 });
 
-describe("rendering constants", () => {
-  it("gates confidence at the same value the analyzer used", () => {
-    // Every consumer re-applies MIN_CONF. If this drifts from metrics.MIN_CONF the client starts
-    // drawing points the analyzer treated as missing.
+describe("confidence gates", () => {
+  it("keeps the measurement gate at the analyzer's value", () => {
     expect(MIN_CONF).toBe(0.35);
+  });
+
+  it("draws at a far looser gate than it measures", () => {
+    // These are different questions and conflating them already caused a bug: gating RENDERING at
+    // MIN_CONF deleted every joint between 0 and 0.35 that the web player draws, making the
+    // mobile skeleton visibly sparser than the desktop one for no reason present in the data.
+    expect(DRAWN_CONF).toBeLessThan(MIN_CONF);
+    expect(DRAWN_CONF).toBe(0);
+  });
+
+  it("treats only confidence zero as missing for drawing", () => {
+    // Zero is the analyzer's sentinel for a point it never located; 0.2 is a point it found and
+    // was unsure about, which the player still draws.
+    expect(0.2 > DRAWN_CONF).toBe(true);
+    expect(0 > DRAWN_CONF).toBe(false);
+  });
+});
+
+describe("joint dots", () => {
+  it("hides face detail and finger tips, as the web player does", () => {
+    for (const n of ["nose", "left_eye", "mouth_left", "right_pinky", "left_thumb", "jaw_1"]) {
+      expect(HIDE_JOINT.test(n)).toBe(true);
+    }
+  });
+
+  it("keeps every joint a coach actually reads", () => {
+    for (const n of ["left_shoulder", "right_elbow", "mid_hip", "left_knee", "grip_center"]) {
+      expect(HIDE_JOINT.test(n)).toBe(false);
+    }
+  });
+
+  it("hides the dot without hiding the bone that uses it", () => {
+    // The knuckle line (pinky -> index) is forearm roll and must still be drawn, even though
+    // neither endpoint gets a dot.
+    expect(HIDE_JOINT.test("left_pinky")).toBe(true);
+    expect(BONES.some(([a, b]) => a === "left_pinky" && b === "left_index")).toBe(true);
+  });
+
+  it("colours by anatomical side", () => {
+    expect(sideOf("left_knee")).toBe("L");
+    expect(sideOf("right_knee")).toBe("R");
+    expect(sideOf("neck")).toBe("M");
   });
 
   it("names both ends of every bone, never an index", () => {

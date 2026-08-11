@@ -1,7 +1,7 @@
 import { memo, useMemo } from "react";
 import { View } from "react-native";
 
-import { BONES, MIN_CONF, SIDE_COLOR, type PoseFrame } from "./pose";
+import { BONES, DRAWN_CONF, HIDE_JOINT, SIDE_COLOR, sideOf, type PoseFrame } from "./pose";
 
 /**
  * The real overlay, drawn in JS — 28 bones and their joints from a real `analysis.json`.
@@ -32,9 +32,11 @@ export interface SkeletonProps {
   strokeWidth?: number;
   /** Index in `keypointNames` for each name, built once by the caller. */
   index: Record<string, number>;
+  /** Names in artifact order, needed to colour and filter the joint dots. */
+  names: string[];
 }
 
-function SkeletonImpl({ frame, width, height, index, strokeWidth = 3 }: SkeletonProps) {
+function SkeletonImpl({ frame, width, height, index, names, strokeWidth = 3 }: SkeletonProps) {
   const bones = useMemo(() => {
     if (!frame || width <= 0) return [];
     const out: {
@@ -49,9 +51,10 @@ function SkeletonImpl({ frame, width, height, index, strokeWidth = 3 }: Skeleton
     for (const [from, to, side] of BONES) {
       const a = frame.kp[index[from]];
       const b = frame.kp[index[to]];
-      // Missing means missing. The analyzer already decided these points were untrustworthy;
-      // drawing them anyway would invent a limb position the pipeline refused to claim.
-      if (!a || !b || a[2] < MIN_CONF || b[2] < MIN_CONF) continue;
+      // Missing means missing — and missing is confidence ZERO, the analyzer's sentinel for a
+      // point it never located. Gating here at the *measurement* threshold instead was the first
+      // port's bug: it deleted every joint between 0 and MIN_CONF that the web player draws.
+      if (!a || !b || a[2] <= DRAWN_CONF || b[2] <= DRAWN_CONF) continue;
 
       const x1 = a[0] * width;
       const y1 = a[1] * height;
@@ -74,6 +77,27 @@ function SkeletonImpl({ frame, width, height, index, strokeWidth = 3 }: Skeleton
     return out;
   }, [frame, width, height, index, strokeWidth]);
 
+  // Joint dots, matching the web player: every located point except the face/finger detail it
+  // hides. These are most of the element count, and therefore most of what the cost comparison
+  // is actually measuring.
+  const joints = useMemo(() => {
+    if (!frame || width <= 0) return [];
+    const r = Math.max(3, width / 190);
+    const out: { key: string; left: number; top: number; size: number; color: string }[] = [];
+    names.forEach((n, i) => {
+      const p = frame.kp[i];
+      if (!p || p[2] <= DRAWN_CONF || HIDE_JOINT.test(n)) return;
+      out.push({
+        key: n,
+        left: p[0] * width - r,
+        top: p[1] * height - r,
+        size: r * 2,
+        color: SIDE_COLOR[sideOf(n)] ?? SIDE_COLOR.M,
+      });
+    });
+    return out;
+  }, [frame, width, height, names]);
+
   if (!frame) return null;
 
   return (
@@ -93,6 +117,20 @@ function SkeletonImpl({ frame, width, height, index, strokeWidth = 3 }: Skeleton
             // rather than the centre of a rotated box.
             transformOrigin: "left center",
             transform: [{ rotate: b.angle }],
+          }}
+        />
+      ))}
+      {joints.map((j) => (
+        <View
+          key={j.key}
+          style={{
+            position: "absolute",
+            left: j.left,
+            top: j.top,
+            width: j.size,
+            height: j.size,
+            borderRadius: j.size / 2,
+            backgroundColor: j.color,
           }}
         />
       ))}

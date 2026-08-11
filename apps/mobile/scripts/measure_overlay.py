@@ -42,7 +42,7 @@ import numpy as np
 # Must match apps/mobile/scripts/make-frame-clip.mjs and SpikeScreen.tsx.
 CLIP_WIDTH_PX = 720
 BAR_WIDTH_PX = 12
-CLIP_FRAMES = 600
+DEFAULT_CLIP_FRAMES = 600  # synthetic; the real swing clip is 396 (pass --frames)
 
 # Colours as authored. Tolerances are wide because the panel, video encoding and any colour
 # management between them all shift these a little; they only need to separate two known marks
@@ -62,6 +62,7 @@ class Sample:
     marker_x: float
     video_left: float
     video_width: float
+    clip_frames: int
 
     @property
     def gap_px(self) -> float:
@@ -76,7 +77,7 @@ class Sample:
         the clip is rendered at `video_width`, so one frame of travel is that distance scaled.
         """
         span_px = (CLIP_WIDTH_PX - BAR_WIDTH_PX) / CLIP_WIDTH_PX * self.video_width
-        per_frame = span_px / (CLIP_FRAMES - 1)
+        per_frame = span_px / (self.clip_frames - 1)
         return self.gap_px / per_frame if per_frame else 0.0
 
 
@@ -124,7 +125,7 @@ def near(img: np.ndarray, rgb: tuple[int, int, int], tol: int) -> np.ndarray:
     )
 
 
-def measure(img: np.ndarray) -> Sample | None:
+def measure(img: np.ndarray, clip_frames: int) -> Sample | None:
     bar = tall_column(near(img, BAR_RGB, 60), 0.6)
     if bar is None:
         return None
@@ -147,7 +148,13 @@ def measure(img: np.ndarray) -> Sample | None:
     video_width = right - left + 1
     if video_width < 50:
         return None
-    return Sample(bar_x=bar_x, marker_x=marker_x, video_left=left, video_width=video_width)
+    return Sample(
+        bar_x=bar_x,
+        marker_x=marker_x,
+        video_left=left,
+        video_width=video_width,
+        clip_frames=clip_frames,
+    )
 
 
 def main() -> int:
@@ -155,13 +162,15 @@ def main() -> int:
     ap.add_argument("--samples", type=int, default=30)
     ap.add_argument("--label", default="unlabelled", help="which overlay strategy this run is")
     ap.add_argument("--json", help="write raw samples here")
+    ap.add_argument("--frames", type=int, default=DEFAULT_CLIP_FRAMES,
+                    help="frame count of the clip on screen: synthetic 600, swing1 396")
     args = ap.parse_args()
 
     samples: list[Sample] = []
     misses = 0
     for _ in range(args.samples):
         try:
-            s = measure(grab())
+            s = measure(grab(), args.frames)
         except subprocess.CalledProcessError as exc:
             print(f"adb failed: {exc}", file=sys.stderr)
             return 2

@@ -303,6 +303,7 @@ export default function SpikeScreen() {
                 width={videoWidth}
                 height={(videoWidth * 16) / 9}
                 index={poseIndex}
+                names={clip.pose.keypointNames}
               />
             ) : null}
             {/* The JS overlay. Should sit exactly on the clip's own green bar. */}

@@ -5,9 +5,33 @@
  * the same reason `probes.ts` is separate from the screen.
  */
 
-/** Matches `metrics.MIN_CONF` and the web player. Below this the analyzer treated the point as
- *  missing, so every consumer re-applies the same gate rather than inventing its own. */
+/**
+ * Two different gates, and conflating them is a real bug that already happened here.
+ *
+ * `MIN_CONF` is the **measurement** gate, matching `metrics.MIN_CONF`. Below it the analyzer
+ * refused to compute an angle from the point, so anything metric-like re-applies it rather than
+ * inventing its own threshold.
+ *
+ * `DRAWN_CONF` is the **rendering** gate, and it is far looser: the web player draws any point
+ * with confidence above zero, because zero is the analyzer's "missing" sentinel — a point it
+ * never located at all. Applying the measurement gate to drawing was the first mobile port's
+ * mistake and it silently deleted every joint between 0 and 0.35 that the web player shows, so
+ * the skeleton looked sparser on the phone than on the desktop for no reason visible in the data.
+ */
 export const MIN_CONF = 0.35;
+export const DRAWN_CONF = 0;
+
+/**
+ * Joints the web player hides as dots — face detail and finger tips, which are noisy, tiny, and
+ * clutter the figure. The BONES list still uses some of them (the knuckle line is forearm roll),
+ * so this hides the dot only, never the bone.
+ */
+export const HIDE_JOINT = /^(nose|.*_eye.*|mouth_.*|.*_pinky|.*_index|.*_thumb|jaw_.*)$/;
+
+/** Anatomical side from a keypoint name, for colouring. */
+export function sideOf(name: string): string {
+  return name.startsWith("left_") ? "L" : name.startsWith("right_") ? "R" : "M";
+}
 
 /** Mirrors `apps/web/src/lib/skeleton.ts`. L = lead-agnostic anatomical left, R right, M midline. */
 export const SIDE_COLOR: Record<string, string> = {
