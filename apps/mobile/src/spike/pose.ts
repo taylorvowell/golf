@@ -73,9 +73,28 @@ export const BONES: [string, string, string][] = [
   ["left_small_toe", "left_foot_index", "L"],
   ["right_heel", "right_small_toe", "R"],
   ["right_small_toe", "right_foot_index", "R"],
-  ["left_pinky", "left_index", "L"],
-  ["right_pinky", "right_index", "R"],
   ["chin", "nose_bridge", "M"],
+];
+
+/**
+ * Bones the web player draws that this one deliberately does NOT.
+ *
+ * The knuckle line (pinky knuckle -> index knuckle) was there to show forearm roll. It is dropped
+ * on the client's own judgement: it is built from RTMW's hand keypoints, which are the least
+ * reliable part of the pose at golf-swing distance — a hand is a few dozen pixels across in a
+ * down-the-line clip, and the two knuckles sit inside each other's noise, exactly the geometry
+ * that made the shoulder/hip rods misbehave in D20. A roll cue derived from that is a confident
+ * wrong number, which this project would rather not draw at all.
+ *
+ * The wrist ANGLE is unaffected and is what a coach reads anyway: it is the joint between
+ * `elbow -> wrist` and `wrist -> grip_center`, both of which are still drawn.
+ *
+ * The web player still draws the knuckle line. That divergence is intentional and recorded here
+ * rather than left to be discovered as a difference between two renderers.
+ */
+export const OMITTED_BONES: [string, string][] = [
+  ["left_pinky", "left_index"],
+  ["right_pinky", "right_index"],
 ];
 
 /** One keypoint: normalized x, normalized y, confidence. */

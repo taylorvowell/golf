@@ -877,3 +877,35 @@ the two platforms' columns mean the same thing.
   noise: swing1's shoulder angle runs 138.6° → −160° monotonically from f125 to f175 while the
   span grows 43 → 195px. The golfer really is turning through the approach. `ORIENT_EXTEND` is
   therefore the only honest lever, and it was halved to 0.5 for that reason.
+
+---
+
+## D22 — The mobile skeleton drops the knuckle line; hands are read as wrist angle only
+
+**Date:** 2026-08-11
+**Status:** ACTIVE
+
+**Context:** The web player draws a knuckle line (pinky knuckle → index knuckle) per hand, whose
+rotation is forearm roll. Porting the skeleton to mobile put the question in front of a real swing
+on a real phone, and the call was made there: **drop it, and read the hands as wrist angle only.**
+
+**Why:** those two keypoints come from RTMW's hand block, which is the least reliable part of the
+pose at golf-swing distance. A hand spans a few dozen pixels in a down-the-line clip, so the two
+knuckles sit well inside each other's noise — the same geometry that made the shoulder/hip rods
+swing wildly in D20 when a pair's projected span collapsed. A forearm-roll cue computed from that
+is a confident wrong number, and this project's stated position is that abstaining beats
+fabricating.
+
+**What is kept:** the wrist **angle**, which is what the knuckle line was standing in for and what
+a coach actually reads. It is the joint between `elbow → wrist` and `wrist → grip_center`, both of
+which are drawn and both of which rest on far more reliable keypoints.
+
+**Consequences:**
+- `apps/mobile/src/spike/pose.ts` exports `OMITTED_BONES` and a test asserts those bones are
+  absent, so the line cannot creep back in with a future copy from the web player.
+- **The web player still draws it.** That divergence is deliberate and recorded here rather than
+  left to be discovered as an unexplained difference between two renderers. The web player is the
+  coach/admin surface (D6), not the golfer-facing client, so it is not urgent — but if the
+  reasoning holds there too, it should follow.
+- No scoring check reads these keypoints, so nothing measured changes. This is a rendering
+  decision only.

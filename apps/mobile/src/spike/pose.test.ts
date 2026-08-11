@@ -1,6 +1,7 @@
 import {
   BONES,
   DRAWN_CONF,
+  OMITTED_BONES,
   HIDE_JOINT,
   MIN_CONF,
   buildIndex,
@@ -104,11 +105,9 @@ describe("joint dots", () => {
     }
   });
 
-  it("hides the dot without hiding the bone that uses it", () => {
-    // The knuckle line (pinky -> index) is forearm roll and must still be drawn, even though
-    // neither endpoint gets a dot.
+  it("still hides face and finger dots", () => {
     expect(HIDE_JOINT.test("left_pinky")).toBe(true);
-    expect(BONES.some(([a, b]) => a === "left_pinky" && b === "left_index")).toBe(true);
+    expect(HIDE_JOINT.test("nose")).toBe(true);
   });
 
   it("colours by anatomical side", () => {
@@ -128,6 +127,24 @@ describe("joint dots", () => {
   it("connects the wrists to the grip, so the club is not drawn detached from the body", () => {
     const pairs = BONES.map(([a, b]) => `${a}->${b}`);
     expect(pairs).toContain("left_wrist->grip_center");
+    expect(pairs).toContain("right_wrist->grip_center");
+  });
+
+  it("omits the knuckle line, whose keypoints are too unreliable to draw", () => {
+    // Dropped on the client's judgement: a hand is a few dozen pixels across down the line, so the
+    // two knuckles sit inside each other's noise. Drawing a roll cue from that is a confident
+    // wrong number. Asserted so the bone cannot creep back in with a future port from the web.
+    for (const [a, b] of OMITTED_BONES) {
+      expect(BONES.some(([x, y]) => x === a && y === b)).toBe(false);
+    }
+  });
+
+  it("keeps the wrist angle, which is what the hand detail was standing in for", () => {
+    // elbow -> wrist -> grip_center is the joint a coach actually reads.
+    const pairs = BONES.map(([a, b]) => `${a}->${b}`);
+    expect(pairs).toContain("left_elbow->left_wrist");
+    expect(pairs).toContain("left_wrist->grip_center");
+    expect(pairs).toContain("right_elbow->right_wrist");
     expect(pairs).toContain("right_wrist->grip_center");
   });
 
