@@ -13,7 +13,7 @@ next, see [`../.claude/ROADMAP.md`](../.claude/ROADMAP.md).
 | | |
 |---|---|
 | Primary machine | Windows 11, repo at `C:\Users\taylo\development\golf` |
-| Phone available for testing | **Android** — no iPhone on hand |
+| Phone available for testing | **Galaxy S25+**, Android 15 / One UI 7 — no iPhone on hand. A flagship, which matters for the step 02 spike (§6) |
 | LAN IP (DHCP, re-check after a router reboot) | `10.0.1.107` — `ipconfig \| grep IPv4` |
 | Analyzer Python | `services/analyzer/.venv/Scripts/python.exe` — always this interpreter, never a global `python` |
 | Postgres | Docker, port **5433** (not 5432) |
@@ -233,22 +233,27 @@ Useful keys while it runs: `r` reload · `j` open debugger · `m` toggle dev men
 through 36, NDK), JDK 17 and `adb`. An Expo/EAS account is **not** required for Android — that
 was recorded as a blocker in step 02's first pass and it was wrong.
 
-**No cable required.** The device is a **Galaxy S25 (Android 15 / One UI 7)**, and `adb pair` is
+**No cable required.** The device is a **Galaxy S25+ (Android 15 / One UI 7)**, and `adb pair` is
 available here (adb 35.0.2). On the phone: *Developer options → Wireless debugging → on → Pair
 device with pairing code*, then with phone and PC on the same wifi:
 
 ```bash
-adb pair 192.168.x.x:PORT         # the PAIRING dialog's port + its 6-digit code
-adb connect 192.168.x.x:PORT      # the OTHER port, on the main Wireless debugging screen
+adb pair 10.0.1.NNN:PORT          # the PAIRING dialog's address + its 6-digit code
+adb connect 10.0.1.NNN:PORT       # the OTHER port, on the main Wireless debugging screen
 adb devices                       # must list a device, not "unauthorized"
 
 cd apps/mobile
 npx expo run:android              # first build ~5-10 min; later ones are fast
 ```
 
-Those are two different ports and mixing them up is the usual failure: the pairing port is
-single-use, the connect port is the persistent one. Pairing survives reboots — normally you just
-re-run `adb connect`.
+**Read both addresses off the phone** — they are the *phone's* address, not this PC's. This LAN
+is `10.0.1.x` (the PC was `10.0.1.107` on 2026-08-10, DHCP — check with `ipconfig`), so anything
+starting `192.168.` means you are reading the wrong number or are on the wrong network.
+
+Those are two different **ports**, and mixing them up is the usual failure: the pairing dialog's
+port is single-use and disappears when you close it, while the port on the main Wireless
+debugging screen is the persistent one. Pairing survives reboots — normally you just re-run
+`adb connect`.
 
 USB works too (plug in, enable USB debugging, accept the RSA prompt) but is never *required*.
 
@@ -320,10 +325,10 @@ A probe cannot display PASS or FAIL without a measurement attached to it — tha
 enforced in `src/spike/probes.ts` and covered by the mobile test suite, because a card claiming
 PASS with nothing behind it would quietly convert "untested" into "validated".
 
-> **The S25 is a flagship, and step 02 asks for a mid-range Android.** Read its result
+> **The S25+ is a flagship, and step 02 asks for a mid-range Android.** Read its result
 > asymmetrically: a **failure** is decisive and kills the framework choice outright, but a
 > **pass** does not close the step — a flagship has the headroom to absorb exactly the dropped
-> frames a mid-range device would expose. Label S25 numbers as flagship data and keep a mid-range
+> frames a mid-range device would expose. Label S25+ numbers as flagship data and keep a mid-range
 > measurement outstanding. See the note appended to the step 02 file.
 
 ### iOS
