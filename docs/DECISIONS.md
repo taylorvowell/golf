@@ -1831,3 +1831,39 @@ those. It is not a nice-to-have; it is the highest-leverage capture decision in 
 
 Both are the same class of mistake this project keeps paying for: a measurement that looks healthy
 and is not.
+
+### D37 amendment, same day — the device offers 1080p120 and 1080p240, and CameraX 1.5 can reach them
+
+Decoding `android.control.availableHighSpeedVideoConfigurations` (tuples of width, height, minFps,
+maxFps, batchSize) on the S25+ back camera:
+
+```
+1920×1080  30–120        1920×1080  120–120
+1920×1080  30–240        1920×1080  240–240
+1920×824   30–120
+```
+
+Both 120 and 240 at full 1080p, in hardware. The block is entirely the session type: VisionCamera
+v5 opens an ordinary `CameraCaptureSession`, and these configurations are reachable only through
+`CameraConstrainedHighSpeedCaptureSession`. No parameter crosses that gap.
+
+**CameraX 1.5 added a high-speed API** — `SessionConfig` plus `HighSpeedVideoSessionConfig`,
+covering 120/240/480 — and its frame rate is *guaranteed on successful configuration* rather than
+hinted, with support queried via `CameraInfo.getSupportedFrameRateRanges(SessionConfig)`. That is
+the practical route.
+
+**One trap, recorded before it is stepped in:** CameraX's `setSlowMotionEnabled` must be **false**.
+Set true, CameraX re-times the high-speed stream and writes a standard **30 fps** file — a 240fps
+capture would reach the analyzer as 30fps, every derived frame index would be wrong, and the file
+would look perfectly healthy. That is D37's silent degrade one layer deeper, and it is the exact
+shape of failure this project has paid for repeatedly.
+
+**Preferred route:** a small native Expo module wrapping CameraX high-speed video, built in
+`in-app-capture`. `frame-clock` already proves the pattern — a local Expo module in Kotlin, driven
+from JS — so the ground is known. Camera2 directly is the fallback; upstreaming into VisionCamera
+is not, because it puts a launch-blocking capability outside our control.
+
+**Why this is worth real effort rather than accepting 60:** impact is over inside a single frame at
+60fps. That is part of why `analysis.json` carries no impact face angle, why the club detector is
+weakest exactly where the swing is fastest, and why the trace refuses to draw through the strike on
+`pro_2`. 240fps eases all three at once. It is the highest-leverage capture decision in the product.
