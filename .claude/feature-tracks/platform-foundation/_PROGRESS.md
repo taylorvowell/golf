@@ -20,6 +20,57 @@ closing.
 
 ---
 
+## 02 — Mobile Client Spike and Workspace ✅ 2026-08-11
+
+**Every probe is measured, on real hardware, from decoded artifacts rather than API self-reports.**
+Galaxy S25+ (SM-S936U1, Android 36), driven over wireless debugging. Decisions **D34–D40**; the
+standing summary is `docs/CURRENT-STATE.md` §11b.
+
+| | Result |
+|---|---|
+| Overlay locked to the presented frame | **99.2% exact** (n=250), ~49 ms of lead to draw in |
+| Frame-exact seeking | **100% exact** once the target became `frame / fps` |
+| Seeking over HTTP | **identical to bundled** — the network adds zero error |
+| True high-frame-rate capture | **1080p @ 231 fps** |
+| Sustained 60 fps capture | 59.5–60.0 fps |
+| `analysis.json` parse on device | 13.7 MB in **199 ms** |
+
+**D5's Expo/React Native choice is confirmed on Android.** React is not the overlay bottleneck —
+removing it entirely scored no better (99.0% vs 99.2%) — and plain rotated `View`s were fast
+enough, so the Skia retest `Skeleton.tsx` warned about is **cancelled rather than deferred**.
+
+**The single most valuable finding is a convention inversion.** media3 resolves a seek FORWARD to
+the next frame boundary, so the web player's `(frame + 0.5) / fps` lands on N+1 — 0% exact,
+measured. HTML video seeks to the frame *containing* a time; the conventions are opposite. Porting
+the web rule to Android silently costs a frame on every seek, and it did. Now a standing warning.
+
+**Two modules must survive the spike's deletion**, and this is written into §11b so it is not lost:
+`modules/frame-clock` (no Expo/RN video component surfaces a frame callback) and
+`modules/high-speed-camera` (Camera2 constrained high-speed, on the **deprecated** overload — the
+modern `SessionConfiguration(SESSION_HIGH_SPEED, …)` is silently swallowed on this device).
+
+**Three libraries were tried for high-speed capture and two lied or refused.** `vision-camera` v5
+accepted 240 and delivered 60 without an error; CameraX 1.5 refused honestly, because it gates on a
+`CamcorderProfile` this device leaves empty; only Camera2 reads the configuration map the sensor
+actually publishes. Both losing paths were removed, with their reasons recorded so they are not
+re-attempted.
+
+**The process finding worth carrying forward:** an async probe that throws with no `try`/`catch`
+leaves its button dead and nothing logged — indistinguishable from never having been tapped. That
+cost a round three separate times. Every probe now reports its own failure and the native side has
+a watchdog. A measurement harness that can fail silently is not a harness.
+
+**Open, and named rather than buried:** scrubbing is unmeasured after four instrument revisions
+(a seeked frame is displayed on arrival, so there is no lead on that path — reassigned to
+`scripts/measure_overlay.py`); 231 fps against a requested 240 is 3.6% short, likely encoder ramp;
+iOS is entirely untested with no Mac and no device, which D31's amendment makes non-gating.
+
+Oracles: mobile tsc clean, 54 tests, web tsc/lint clean, 121 vitest, analyzer pytest green.
+
+Next: **07 — API Contract and Shared Schema**.
+
+---
+
 ## 09 — Media Storage and Artifact Addressing ✅ 2026-08-11
 
 **Media is no longer bolted to this laptop.** `SWINGSAGE_MEDIA_ROOT` was the single hardest blocker

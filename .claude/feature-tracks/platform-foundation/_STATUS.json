@@ -3,15 +3,16 @@
   "featureName": "platform-foundation",
   "currentStep": "07",
   "phase": "Platform Foundation",
-  "lastUpdated": "2026-08-11T11:20:00Z",
+  "lastUpdated": "2026-08-11T19:00:00Z",
   "steps": {
     "01": {
       "status": "complete",
       "completedAt": "2026-08-08T23:30:00Z"
     },
     "02": {
-      "status": "in-progress",
-      "startedAt": "2026-08-08T23:32:00Z"
+      "status": "complete",
+      "completedAt": "2026-08-11T19:00:00Z",
+      "note": "All probes measured on a Galaxy S25+ over wireless debugging (D34-D40). Overlay 99.2% frame-locked with ~49ms draw budget; seeking 100% frame-exact once the target became frame/fps (media3 resolves seeks FORWARD - the web player's midpoint rule is wrong on Android); network adds ZERO seek error; 1080p at 231fps via Camera2 constrained high-speed. D5's Expo/RN choice is confirmed on Android. Two modules must survive the spike: frame-clock and high-speed-camera. Open and named: scrubbing unmeasured (reassigned to measure_overlay.py), 231 vs 240 is 3.6% short, iOS entirely untested (no Mac/device, non-gating per D31)."
     },
     "03": {
       "status": "in-progress",
@@ -44,17 +45,6 @@
       "status": "not-started"
     }
   },
-  "blockers": [
-    {
-      "step": "02",
-      "classification": "AUTONOMOUS-FIX",
-      "raisedAt": "2026-08-11T11:20:00Z",
-      "summary": "Probes 1, 2 and 2b are now MEASURED on a Galaxy S25+ (D34) and all three fail. The hardware blocker is gone - wireless debugging works and no USB is needed, correcting the previous note. What remains is a code change, not an external dependency.",
-      "needed": "Re-run probes 1 and 2b with the overlay painted synchronously from the native frame callback instead of through a React state commit. The current numbers measure the architecture apps/web/src/lib/usePlayer.ts already abandoned, and reproduce its known one-frame-behind signature exactly (p50 -1, 10.5% exactly locked). Probe 2 also needs more seek targets to clear THRESHOLDS.minSamples (n=20 vs 120).",
-      "alsoNeeded": "Probe 3 (sustained 60fps capture) is still unanswered and remains blocked-dev-build; it needs a camera path that does not exist in the harness yet.",
-      "iosNote": "Unchanged and still external: no iPhone and no Mac, so the iOS half of frame-clock has never been compiled. Per D31's amendment Android leads and iOS is not gating.",
-      "note": "A false PASS was found and fixed while recording these: judgeOverlayDrift gated on a SIGNED p95, so a run sitting mostly one frame behind scored p95=0 and passed. Fixed to gate on exactShare, with the real S25+ distribution as a regression test."
-    }
-  ],
+  "blockers": [],
   "skipped": []
 }

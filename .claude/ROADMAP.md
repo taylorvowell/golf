@@ -1,8 +1,11 @@
-# SwingSage Roadmap — generated 2026-08-10
+# SwingSage Roadmap — generated 2026-08-11
 
 > Macro source of truth. Declarations live in `.claude/ROADMAP.json`; this rollup is DERIVED by `/roadmap`
 > (`node scripts/roadmap/derive.mjs`). Do not hand-edit the table — re-run the script. Single-track detail:
 > `/feature <name> status`.
+
+> **Session handoff:** [`.claude/NEXT-SESSION.md`](NEXT-SESSION.md) — where the build is, what is
+> next, and the traps worth re-reading before touching mobile video.
 
 ## Arc
 
@@ -12,7 +15,7 @@ Platform Foundation → Core Golfer Experience → Capture & Multi-Device → Co
 
 | Track | Phase | Goal | Progress | Current | Lifecycle | Blocked on |
 |-------|-------|------|----------|---------|-----------|------------|
-| **platform-foundation** (spine) | Platform Foundation | Close PROJECT_MAIN §44's open architecture questions, then build identity, t… | 1/10 (10%, 1 in-prog) | 02 | active | — |
+| **platform-foundation** (spine) | Platform Foundation | Close PROJECT_MAIN §44's open architecture questions, then build identity, t… | 4/10 (40%, 2 in-prog) | 07 | active | — |
 | analyzer-service | Platform Foundation | Promote the analyzer from a hand-invoked CLI to a hosted, queue-driven worke… | 0/0 (—) | — | planned | — |
 | media-pipeline | Platform Foundation | Get 270-330MB phone video off a device on cellular, reliably: on-device trim… | 0/0 (—) | — | planned | — |
 | observability-and-slos | Platform Foundation | Define and instrument the targets that make 'production ready' falsifiable: … | 0/0 (—) | — | planned | — |
@@ -48,5 +51,5 @@ Platform Foundation → Core Golfer Experience → Capture & Multi-Device → Co
 
 ## Recommended next
 
-Spine: **platform-foundation 02** (`/build`). Then the other unblocked active/planned tracks per phase order. Externally-blocked
+Spine: **platform-foundation 07** (`/build`). Then the other unblocked active/planned tracks per phase order. Externally-blocked
 tracks wait on their `unblockTrigger`.
