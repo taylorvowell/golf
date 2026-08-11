@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import type { Analysis, RawBox } from "@/lib/swings";
+import type { Analysis, RawBox } from "@swingsage/schema/contract";
 import { BONES, HIDE_JOINT, SIDE_COLOR, TRACE_COLOR } from "@/lib/skeleton";
 import { ANGLE_COLORS, MIN_CONF, drawAngle, drawAngleTarget } from "@/lib/angleOverlay";
 import { computeViewBox, fullView } from "@/lib/viewbox";
@@ -1157,7 +1157,7 @@ export default function SwingStage({
               does the clipping. `max-w-none` is load-bearing: Tailwind's preflight caps video
               at max-width 100%, which would silently defeat any width above it. The rendered
               aspect ratio still equals the video's own, so nothing is stretched. */}
-          <video ref={videoRef} src={`/api/swings/${id}/video${t.stamp ? "?v=framestamp" : ""}`} playsInline muted preload="auto"
+          <video ref={videoRef} src={`/api/v1/swings/${id}/video${t.stamp ? "?v=framestamp" : ""}`} playsInline muted preload="auto"
                  className="absolute max-w-none"
                  style={{
                    width: `${100 / view.cw}%`,

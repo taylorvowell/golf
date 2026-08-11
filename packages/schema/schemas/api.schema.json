@@ -1,0 +1,550 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://swingsage.dev/schemas/api.schema.json",
+  "title": "Api",
+  "description": "Every JSON request and response body of the versioned HTTP API, in one place.\n\nThis file exists because of one fact: a native app cannot be force-updated. Once a build is in a store, old versions keep calling these routes for months, so an unannounced change to a body is an outage for someone who cannot install the fix. Bodies are therefore evolved ADDITIVELY inside a version, and a shape that genuinely cannot be evolved gets a new version prefix instead.\n\n`ApiVersion`, `ClientConfig` and `UpgradeRequired` below are the negotiation itself — what a client sends, what the server answers, and how the server says 'you are too old to be safe'.",
+  "type": "object",
+  "properties": {
+    "_unused": {
+      "type": "null",
+      "description": "This document is a definitions container; the API has no single root body. Types come from `definitions`."
+    }
+  },
+  "definitions": {
+    "apiVersion": {
+      "title": "ApiVersion",
+      "type": "string",
+      "enum": [
+        "v1"
+      ],
+      "description": "The path segment every route lives under (`/api/v1/...`). Adding a member here is how a breaking change ships: the old version keeps answering for its whole support window while the new one is adopted."
+    },
+    "apiError": {
+      "title": "ApiError",
+      "type": "object",
+      "description": "The one error envelope. A machine-readable `error` code plus a human `message` — clients switch on the code, and never on the prose, which is free to change.",
+      "required": [
+        "error"
+      ],
+      "properties": {
+        "error": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "upgradeRequired": {
+      "title": "UpgradeRequired",
+      "type": "object",
+      "description": "The body of a 426. The escape hatch for the case where compatibility is genuinely impossible — it should be rare, and it must exist, because the alternative is a client that fails every request with no way to explain why.\n\nA client that receives this must show a real screen, not a failed request.",
+      "required": [
+        "error",
+        "message",
+        "minimumVersion",
+        "currentVersion",
+        "storeUrl"
+      ],
+      "properties": {
+        "error": {
+          "type": "string",
+          "enum": [
+            "upgrade_required"
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "minimumVersion": {
+          "type": "string",
+          "description": "The oldest client build still served, as `major.minor.patch`."
+        },
+        "currentVersion": {
+          "type": "string",
+          "description": "The newest build the server knows about — what the store is expected to offer."
+        },
+        "storeUrl": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Where to go and update. Null when the platform is unknown, in which case the client falls back to its own store link."
+        }
+      }
+    },
+    "clientConfig": {
+      "title": "ClientConfig",
+      "type": "object",
+      "description": "What a client asks for at launch, before it trusts anything else. Unauthenticated on purpose: a client too old to authenticate must still be able to learn that it is too old.",
+      "required": [
+        "apiVersion",
+        "minimumVersion",
+        "currentVersion",
+        "supportedApiVersions",
+        "deprecatedApiVersions",
+        "minimumArtifactSchema",
+        "currentArtifactSchema"
+      ],
+      "properties": {
+        "apiVersion": {
+          "$ref": "#/definitions/apiVersion"
+        },
+        "minimumVersion": {
+          "type": "string"
+        },
+        "currentVersion": {
+          "type": "string"
+        },
+        "supportedApiVersions": {
+          "type": "array",
+          "description": "Every version prefix still answering, newest last. A version leaves this list only after its published deprecation window closes.",
+          "items": {
+            "$ref": "#/definitions/apiVersion"
+          }
+        },
+        "deprecatedApiVersions": {
+          "type": "array",
+          "description": "Still answering, but scheduled for removal. A client on one of these is told by the `Deprecation` and `Sunset` response headers as well.",
+          "items": {
+            "$ref": "#/definitions/deprecation"
+          }
+        },
+        "minimumArtifactSchema": {
+          "type": "integer",
+          "description": "The oldest `analysis.json` schema_version a client must still be able to render. Stored artifacts are served AS WRITTEN — §38 forbids reprocessing that buys nothing — so this is the floor a renderer has to cope with, not a promise that everything is current."
+        },
+        "currentArtifactSchema": {
+          "type": "integer",
+          "description": "The schema_version freshly analysed swings are written at."
+        }
+      }
+    },
+    "deprecation": {
+      "title": "ApiDeprecation",
+      "type": "object",
+      "required": [
+        "version",
+        "sunsetOn"
+      ],
+      "properties": {
+        "version": {
+          "$ref": "#/definitions/apiVersion"
+        },
+        "sunsetOn": {
+          "type": "string",
+          "description": "ISO-8601 date this version stops answering."
+        },
+        "replacedBy": {
+          "$ref": "#/definitions/apiVersion"
+        }
+      }
+    },
+    "swingViewSummary": {
+      "title": "SwingViewSummary",
+      "type": "object",
+      "description": "One camera's recording of a swing, as the log and the player need it.",
+      "required": [
+        "id",
+        "view",
+        "mediaKey",
+        "revision",
+        "fps",
+        "frameCount",
+        "width",
+        "height",
+        "status",
+        "overallScore",
+        "band"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "view": {
+          "type": "string",
+          "enum": [
+            "dtl",
+            "face_on"
+          ]
+        },
+        "mediaKey": {
+          "type": "string",
+          "description": "The analyzer's working-directory stem. NOT an address — storage keys are derived from identity, never stored."
+        },
+        "revision": {
+          "type": "integer",
+          "description": "Which analysis run's artifacts this view currently addresses. A re-analysis writes r<n+1> and only then repoints the row, so a golfer mid-scrub finishes on what they started with."
+        },
+        "fps": {
+          "type": "number"
+        },
+        "frameCount": {
+          "type": "integer"
+        },
+        "width": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "height": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "status": {
+          "type": "string"
+        },
+        "overallScore": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "band": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "swingSummary": {
+      "title": "SwingSummary",
+      "type": "object",
+      "required": [
+        "id",
+        "label",
+        "referenceLabel",
+        "views",
+        "primaryViewId",
+        "frameCount",
+        "fps",
+        "view",
+        "overallScore",
+        "band",
+        "scoringModelVersion",
+        "status",
+        "createdAt",
+        "model",
+        "tempoRatio",
+        "traceEnabled",
+        "poseCoverage"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The swing's own uuid. Since migration 0006 this is NOT a folder name."
+        },
+        "label": {
+          "type": "string",
+          "description": "What to call this swing on screen — a uuid is useless to a person, so the human-facing name is explicit."
+        },
+        "referenceLabel": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Set on the bundled model swings; null on a golfer's own."
+        },
+        "views": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/swingViewSummary"
+          }
+        },
+        "primaryViewId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "frameCount": {
+          "type": "integer"
+        },
+        "fps": {
+          "type": "number"
+        },
+        "view": {
+          "type": "string"
+        },
+        "overallScore": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "band": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "scoringModelVersion": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "description": "Rolled up across views: `ready` only when every view is, `failed` if any failed."
+        },
+        "createdAt": {
+          "type": "integer"
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Display-only extras below are still read from `analysis.json` rather than denormalized onto the swing row. Cheap at today's counts; promoting them to columns is an additive migration, not a rearchitecture."
+        },
+        "tempoRatio": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "traceEnabled": {
+          "type": "boolean"
+        },
+        "poseCoverage": {
+          "type": "number"
+        }
+      }
+    },
+    "swingListResponse": {
+      "title": "SwingListResponse",
+      "type": "object",
+      "required": [
+        "swings"
+      ],
+      "properties": {
+        "swings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/swingSummary"
+          }
+        }
+      }
+    },
+    "headMarker": {
+      "title": "HeadMarker",
+      "type": "object",
+      "description": "A hand-placed club head, normalized 0–1 against the video frame — the same convention as `analysis.json`. Corrections live in the database and merge by frame at render time, never in the artifact, which is rewritten wholesale by every re-analysis.",
+      "required": [
+        "frame",
+        "x",
+        "y"
+      ],
+      "properties": {
+        "frame": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        }
+      }
+    },
+    "markerListResponse": {
+      "title": "MarkerListResponse",
+      "type": "object",
+      "required": [
+        "markers"
+      ],
+      "properties": {
+        "markers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/headMarker"
+          }
+        }
+      }
+    },
+    "markerSaveRequest": {
+      "title": "MarkerSaveRequest",
+      "type": "object",
+      "description": "A batch, deliberately not idempotent-per-click: a drag emits a position per pointer move and there is nothing to be gained from a request each.",
+      "properties": {
+        "markers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/headMarker"
+          }
+        },
+        "deleted": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "markerSaveResponse": {
+      "title": "MarkerSaveResponse",
+      "type": "object",
+      "required": [
+        "saved",
+        "deleted"
+      ],
+      "properties": {
+        "saved": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "deleted": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "stageMark": {
+      "title": "StageMark",
+      "type": "object",
+      "description": "A hand-corrected swing stage: which frame this swing's `top` (or `impact`, …) really is.",
+      "required": [
+        "stage",
+        "frame"
+      ],
+      "properties": {
+        "stage": {
+          "type": "string",
+          "enum": [
+            "approach_start",
+            "backswing_start",
+            "downswing_start",
+            "impact",
+            "finish_start"
+          ]
+        },
+        "frame": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "stageListResponse": {
+      "title": "StageListResponse",
+      "type": "object",
+      "required": [
+        "stages"
+      ],
+      "properties": {
+        "stages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/stageMark"
+          }
+        }
+      }
+    },
+    "stageSetRequest": {
+      "title": "StageSetRequest",
+      "type": "object",
+      "description": "One stage per request, unlike the marker batch: picking a stage is a single deliberate choice. `frame: null` clears it.",
+      "required": [
+        "stage"
+      ],
+      "properties": {
+        "stage": {
+          "type": "string"
+        },
+        "frame": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      }
+    },
+    "job": {
+      "title": "Job",
+      "type": "object",
+      "description": "One analyzer run over one clip. A swing with two cameras is two jobs, not one job that quietly does half the work. Job state lives in Postgres, not in a process.",
+      "required": [
+        "id",
+        "viewId",
+        "status",
+        "stage",
+        "progressPct",
+        "message",
+        "log",
+        "startedAt",
+        "finishedAt"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "viewId": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "queued",
+            "running",
+            "done",
+            "failed"
+          ]
+        },
+        "stage": {
+          "type": "string"
+        },
+        "progressPct": {
+          "type": "number"
+        },
+        "message": {
+          "type": "string"
+        },
+        "log": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "startedAt": {
+          "type": "integer"
+        },
+        "finishedAt": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        }
+      }
+    },
+    "jobStatusResponse": {
+      "title": "JobStatusResponse",
+      "description": "Either the job row, or `{ status: 'idle' }` when no run has ever been started for this view.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/job"
+        },
+        {
+          "title": "JobIdle",
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": [
+                "idle"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+}

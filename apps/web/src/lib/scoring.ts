@@ -1,12 +1,12 @@
 import { ARTIFACT_BUCKET, artifactKey, type ViewAddress } from "@/lib/media/keys";
 import { getJson, getMediaStore } from "@/lib/media/store";
-import type { Scorecard } from "./scoreDisplay";
+import type { CoachReport } from "@swingsage/schema/contract";
 
 /**
  * The real scorecard (the scoring spec's Part C1) — reads `coach_report.json`, written by
  * `swingsage/scoring.py` as Stage 8 of `burnin.py`. Replaces `lib/mockScoring.ts`'s generator.
  *
- * Server-only (uses `node:fs`) — see `lib/scoreDisplay.ts` for the `Scorecard` type and the
+ * Server-only (uses `node:fs`) — see `lib/scoreDisplay.ts` for the `CoachReport` type and the
  * client-safe display helpers, and why the two files are split. Called from server components
  * (`app/swing/[id]/page.tsx`) and from `db/scores.ts`'s sync helper, never from a `"use client"`
  * component directly.
@@ -18,9 +18,9 @@ import type { Scorecard } from "./scoreDisplay";
  * `null` rather than throwing, and every consumer renders its "not scored" state instead of
  * crashing (the same degrade-don't-crash pattern as `missingCapabilities()`).
  */
-export async function getScorecard(address: ViewAddress): Promise<Scorecard | null> {
+export async function getScorecard(address: ViewAddress): Promise<CoachReport | null> {
   const store = await getMediaStore();
-  return getJson<Scorecard>(store, ARTIFACT_BUCKET, artifactKey(address, "coach_report.json"));
+  return getJson<CoachReport>(store, ARTIFACT_BUCKET, artifactKey(address, "coach_report.json"));
 }
 
-export type { Scorecard } from "./scoreDisplay";
+

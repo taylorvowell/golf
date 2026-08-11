@@ -103,17 +103,35 @@ The rule that shapes everything: **a native app cannot be force-updated.** Old v
 the API for months, and a rendering bug cannot be hotfixed — it waits for review, release, and
 the user choosing to update.
 
-- **One schema, three consumers.** JSON Schema in `packages/schema` generates TypeScript for
-  both clients; the Python analyzer validates its output against the same schema before writing.
-  CI fails on generated-type drift.
-- **`analysis.json` evolves additively.** New fields only; never reorder, never repurpose. It is
-  already at `schema_version: 9`, and those nine changes were free only because the single client
-  shipped in the same commit.
+Built in step 07; the full policy and its alternatives are **D41**.
+
+- **One schema, three consumers.** `packages/schema/schemas/` holds JSON Schema for
+  `analysis.json`, `coach_report.json`, `silhouette.json` and every API body.
+  `packages/schema/src/generated/` is compiled from it; both clients import those types and
+  neither describes a contract object by hand. The Python analyzer validates against the same
+  schema *files* — not a copy — before writing, and refuses to write an artifact that fails.
+  CI regenerates and fails on any diff.
+- **`analysis.json` evolves additively, and a test says so.** New fields only; never reorder,
+  never repurpose. `schemas/shape-lock.json` is the committed signature of every schema, and a
+  removal, retype, new `required` entry or dropped enum member fails the suite. It is already at
+  `schema_version: 9`, and those nine changes were free only because the single client shipped in
+  the same commit.
+- **`required` describes every artifact ever stored, not today's pipeline.** That is why
+  `checkpoints` (schema 3), `playback_window` (5), `posture` (8) and `playback_pad` (9) are
+  optional. A client asks what it can show (`missingCapabilities`), never what version it has.
+- **Stored artifacts are served as written** on a pipeline upgrade — not re-analysed, not lazily
+  migrated (§38, D41). The range a renderer must cope with is published as
+  `minimumArtifactSchema` / `currentArtifactSchema`.
 - **The keypoint array is append-only** — 49 entries, measured block after derived, so published
   indices keep their meaning.
-- **The API is versioned**, with a written deprecation policy and a minimum-supported-client
-  check keyed to the **native build number**, not the JS bundle (OTA can move the bundle
-  underneath it — D12).
+- **The API is versioned in the path.** Everything lives under `/api/v1/`; nothing is served
+  unversioned, and a test enumerates the route files to keep it that way. A breaking change mints
+  `/api/v2/` while `v1` answers for 12 months, announced by `Deprecation` / `Sunset` headers and
+  by `GET /api/v1/client`.
+- **Minimum-supported-client is a 426 with a screen behind it**, keyed to the **native build
+  number**, not the JS bundle (OTA can move the bundle underneath it — D12). Enforced once in
+  `proxy.ts`; fails open for a caller that sends no version header, because the web app ships
+  with the server it calls.
 
 ---
 

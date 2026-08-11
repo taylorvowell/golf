@@ -113,7 +113,7 @@ export default function DebugMenu({ id, reanalyze, smoothing, onPickSmoothing,
               <ReanalyzeButton r={reanalyze} />
             </div>
 
-            <a href={`/api/swings/${id}/analysis`} target="_blank" rel="noreferrer"
+            <a href={`/api/v1/swings/${id}/analysis`} target="_blank" rel="noreferrer"
                className="mt-3 flex items-center gap-2 rounded-xl border border-line bg-raised px-3 py-2.5
                           text-[11px] font-semibold text-neutral-400 hover:border-white/25 hover:text-neutral-100">
               <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

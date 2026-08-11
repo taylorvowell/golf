@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { playbackWindow, playbackPad } from "./playbackWindow";
-import type { Analysis } from "./swings";
+import type { Analysis } from "@swingsage/schema/contract";
 
 /**
  * The one-second rule: `playback_window` is pinned to `address − 1s … finish + 1s` so every

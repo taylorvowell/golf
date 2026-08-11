@@ -43,7 +43,7 @@ export function useReanalyze(id: string): Reanalyze {
 
   const poll = useCallback(async () => {
     try {
-      const r = await fetch(`/api/swings/${id}/reanalyze`, { cache: "no-store" });
+      const r = await fetch(`/api/v1/swings/${id}/reanalyze`, { cache: "no-store" });
       const j: ReanalyzeJob = await r.json();
       setJob(j);
       if (j.status === "running" || j.status === "queued") {
@@ -66,7 +66,7 @@ export function useReanalyze(id: string): Reanalyze {
   // Rejoin a run already in flight, so a reload mid-analysis picks it back up.
   useEffect(() => {
     const ac = new AbortController();
-    fetch(`/api/swings/${id}/reanalyze`, { cache: "no-store", signal: ac.signal })
+    fetch(`/api/v1/swings/${id}/reanalyze`, { cache: "no-store", signal: ac.signal })
       .then((r) => r.json())
       .then((j: ReanalyzeJob) => {
         if (j.status === "running" || j.status === "queued") {
@@ -83,7 +83,7 @@ export function useReanalyze(id: string): Reanalyze {
 
   const start = useCallback(() => {
     setJob({ status: "queued", message: "starting analyzer", progressPct: 0 });
-    fetch(`/api/swings/${id}/reanalyze`, { method: "POST" })
+    fetch(`/api/v1/swings/${id}/reanalyze`, { method: "POST" })
       .then(async (r) => {
         const j: ReanalyzeJob = await r.json();
         setJob(j);

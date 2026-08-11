@@ -225,7 +225,7 @@ export const jobs = pgTable("jobs", {
 
 /**
  * The real scorecard (the scoring spec's Part C1), one row per swing's latest scoring run. `categories` /
- * `checkpoints` / `findings` / `priorities` / `primaryFix` / `drill` mirror the `Scorecard`
+ * `checkpoints` / `findings` / `priorities` / `primaryFix` / `drill` mirror the `CoachReport`
  * shape `apps/web/src/lib/scoring.ts` reads `coach_report.json` into — kept as `jsonb` because
  * the UI always reads the whole nested structure at once, never a single field of it (unlike
  * `overall`/`band`/`scoringModelVersion`, which the swing list filters/sorts on and are real
@@ -264,7 +264,7 @@ export const scores = pgTable("scores", {
  * on the next run, which is the one thing a hand-label must never do. Keeping markers in their
  * own table means re-analysing improves the automatic path underneath them while every manual
  * position survives. It also makes these rows the first hand-labelled club-head truth in the
- * project — `GET /api/swings/:id/markers` returns them, and doc 08 Phase 3's position-error
+ * project — `GET /api/v1/swings/:id/markers` returns them, and doc 08 Phase 3's position-error
  * criterion (still unmet, `tests/fixtures.json:hand_labeled` is null) is what they are for.
  *
  * Coordinates are normalized 0–1 against the video frame, the same convention as everything in

@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { Analysis } from "@/lib/swings";
-import type { CheckResult, Scorecard } from "@/lib/scoreDisplay";
+import type { Analysis } from "@swingsage/schema/contract";
+import type { CheckResult, CoachReport } from "@swingsage/schema/contract";
 import { DEFAULT_TOGGLES, type Toggles } from "@/lib/overlays";
 import { buildSwingSync } from "@/lib/swingSync";
 import { playbackWindow } from "@/lib/playbackWindow";
@@ -57,7 +57,7 @@ export default function SwingWorkspace({
   id: string;
   analysis: Analysis;
   /** null when this swing predates Stage 8 or was analysed with `--no-scoring`. */
-  scorecard: Scorecard | null;
+  scorecard: CoachReport | null;
   /**
    * The bundled model swings with their real ids, resolved by the server page. Empty when none
    * have been analysed on this machine, in which case the comparison opens on nothing rather
@@ -142,10 +142,10 @@ export default function SwingWorkspace({
 
   useEffect(() => {
     // No id to compare against is a real state — no reference has been analysed on this machine.
-    // Fetching `/api/swings//analysis` instead would 404 and read as the picker being broken.
+    // Fetching `/api/v1/swings//analysis` instead would 404 and read as the picker being broken.
     if (!compareOn || !compareId) return;
     let cancelled = false;
-    fetch(`/api/swings/${compareId}/analysis`)
+    fetch(`/api/v1/swings/${compareId}/analysis`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((d: Analysis) => {
         if (!cancelled) setRefData({ id: compareId, analysis: d, error: null });

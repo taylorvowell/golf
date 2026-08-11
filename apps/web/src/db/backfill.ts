@@ -8,7 +8,7 @@ import { syncSwingScore } from "./scores";
 import { mediaAddress, viewByMediaKey } from "./views";
 import { ANALYZER_OUT_ROOT, publishFromWorkingDir, workingDirFor } from "../lib/media/publish";
 import { proSwingByKey } from "../lib/proSwings";
-import type { Analysis } from "../lib/swings";
+import type { Analysis } from "@swingsage/schema/contract";
 
 /**
  * Backfill + score-sync for whatever's on disk under `out/`.

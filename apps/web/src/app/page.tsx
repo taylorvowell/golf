@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { listSwings } from "@/lib/swings";
 import { ANALYZER_OUT_ROOT } from "@/lib/media/publish";
-import type { SwingSummary } from "@/lib/swings";
+import type { SwingSummary } from "@swingsage/schema/contract";
 import { requireUserId } from "@/lib/auth";
 import { Chip, MicroHead, NotBuilt } from "@/components/ui/kiosk";
 
@@ -125,7 +125,7 @@ function SwingCard({ s, reference }: {
           : "hover:border-acid/30 hover:shadow-[0_0_0_1px_rgba(94,208,255,.18),0_18px_60px_rgba(94,208,255,.18)]"}`}>
         <div className="video-surface relative aspect-video overflow-hidden">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={`/api/swings/${s.id}/thumb`} alt=""
+          <img src={`/api/v1/swings/${s.id}/thumb`} alt=""
                className="h-full w-full object-cover opacity-85 transition
                           group-hover:scale-[1.03] group-hover:opacity-100" />
           <span className="absolute left-3 top-3 rounded-xl border border-white/10 bg-black/55

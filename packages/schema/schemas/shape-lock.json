@@ -1,0 +1,2110 @@
+{
+  "analysis#": {
+    "type": "object",
+    "required": [
+      "address_span",
+      "club",
+      "events",
+      "face",
+      "metrics",
+      "phases",
+      "pose",
+      "quality",
+      "quality_mediapipe",
+      "quality_raw",
+      "schema_version",
+      "stage3",
+      "swing_window",
+      "tempo",
+      "video"
+    ]
+  },
+  "analysis#/definitions/angleField": {
+    "type": "object",
+    "required": [
+      "delta",
+      "field",
+      "geom",
+      "label",
+      "view",
+      "when"
+    ]
+  },
+  "analysis#/definitions/angleField/properties/delta": {
+    "type": "boolean"
+  },
+  "analysis#/definitions/angleField/properties/field": {
+    "type": "string"
+  },
+  "analysis#/definitions/angleField/properties/geom/anyOf/0": {
+    "ref": "#/definitions/angleGeom"
+  },
+  "analysis#/definitions/angleField/properties/geom/anyOf/1": {
+    "type": "null"
+  },
+  "analysis#/definitions/angleField/properties/label": {
+    "type": "string"
+  },
+  "analysis#/definitions/angleField/properties/view": {
+    "type": "string",
+    "enum": [
+      "\"both\"",
+      "\"dtl\"",
+      "\"face_on\""
+    ]
+  },
+  "analysis#/definitions/angleField/properties/when": {
+    "type": "string",
+    "enum": [
+      "\"both\"",
+      "\"setup\"",
+      "\"swing\""
+    ]
+  },
+  "analysis#/definitions/angleGeom": {
+    "type": "object",
+    "required": [
+      "kind"
+    ]
+  },
+  "analysis#/definitions/angleGeom/properties/a": {
+    "ref": "#/definitions/pointExpr"
+  },
+  "analysis#/definitions/angleGeom/properties/at": {
+    "ref": "#/definitions/pointExpr"
+  },
+  "analysis#/definitions/angleGeom/properties/b": {
+    "ref": "#/definitions/pointExpr"
+  },
+  "analysis#/definitions/angleGeom/properties/from": {
+    "ref": "#/definitions/pointExpr"
+  },
+  "analysis#/definitions/angleGeom/properties/guide": {
+    "type": "string",
+    "enum": [
+      "\"plumb\""
+    ]
+  },
+  "analysis#/definitions/angleGeom/properties/kind": {
+    "type": "string",
+    "enum": [
+      "\"horizontal\"",
+      "\"interior\"",
+      "\"plumb\"",
+      "\"vectors\"",
+      "\"vertical\""
+    ]
+  },
+  "analysis#/definitions/angleGeom/properties/supplement": {
+    "type": "boolean"
+  },
+  "analysis#/definitions/angleGeom/properties/to": {
+    "ref": "#/definitions/pointExpr"
+  },
+  "analysis#/definitions/angleGeom/properties/u": {
+    "ref": "#/definitions/pointPair"
+  },
+  "analysis#/definitions/angleGeom/properties/v": {
+    "ref": "#/definitions/pointPair"
+  },
+  "analysis#/definitions/angleGeom/properties/vertex": {
+    "ref": "#/definitions/pointExpr"
+  },
+  "analysis#/definitions/ball": {
+    "type": "object",
+    "required": [
+      "r",
+      "source",
+      "x",
+      "y"
+    ]
+  },
+  "analysis#/definitions/ball/properties/r": {
+    "type": "number"
+  },
+  "analysis#/definitions/ball/properties/source": {
+    "type": "string"
+  },
+  "analysis#/definitions/ball/properties/x": {
+    "type": "number"
+  },
+  "analysis#/definitions/ball/properties/y": {
+    "type": "number"
+  },
+  "analysis#/definitions/buttLine": {
+    "type": "object",
+    "required": [
+      "band",
+      "conf",
+      "frame",
+      "frames",
+      "n",
+      "side",
+      "source",
+      "spread_bh",
+      "x",
+      "y0",
+      "y1"
+    ]
+  },
+  "analysis#/definitions/buttLine/properties/band": {
+    "ref": "#/definitions/numberPair"
+  },
+  "analysis#/definitions/buttLine/properties/conf": {
+    "type": "number"
+  },
+  "analysis#/definitions/buttLine/properties/frame": {
+    "type": "integer"
+  },
+  "analysis#/definitions/buttLine/properties/frames": {
+    "ref": "#/definitions/frameRange"
+  },
+  "analysis#/definitions/buttLine/properties/n": {
+    "type": "integer"
+  },
+  "analysis#/definitions/buttLine/properties/side": {
+    "type": "integer",
+    "enum": [
+      "-1",
+      "1"
+    ]
+  },
+  "analysis#/definitions/buttLine/properties/source": {
+    "type": "string"
+  },
+  "analysis#/definitions/buttLine/properties/spread_bh": {
+    "type": "number"
+  },
+  "analysis#/definitions/buttLine/properties/x": {
+    "type": "number"
+  },
+  "analysis#/definitions/buttLine/properties/y0": {
+    "type": "number"
+  },
+  "analysis#/definitions/buttLine/properties/y1": {
+    "type": "number"
+  },
+  "analysis#/definitions/checkpoint": {
+    "type": "object",
+    "required": [
+      "basis",
+      "conf",
+      "definition",
+      "event",
+      "frame",
+      "id",
+      "label",
+      "p",
+      "phase"
+    ]
+  },
+  "analysis#/definitions/checkpoint/properties/basis": {
+    "type": "string"
+  },
+  "analysis#/definitions/checkpoint/properties/conf": {
+    "type": "number"
+  },
+  "analysis#/definitions/checkpoint/properties/definition": {
+    "type": "string"
+  },
+  "analysis#/definitions/checkpoint/properties/event": {
+    "type": "null|string"
+  },
+  "analysis#/definitions/checkpoint/properties/frame": {
+    "type": "integer"
+  },
+  "analysis#/definitions/checkpoint/properties/id": {
+    "type": "string"
+  },
+  "analysis#/definitions/checkpoint/properties/label": {
+    "type": "string"
+  },
+  "analysis#/definitions/checkpoint/properties/p": {
+    "type": "string"
+  },
+  "analysis#/definitions/checkpoint/properties/phase": {
+    "type": "string",
+    "enum": [
+      "\"backswing\"",
+      "\"downswing\"",
+      "\"finish\"",
+      "\"follow_through\"",
+      "\"impact\"",
+      "\"setup\""
+    ]
+  },
+  "analysis#/definitions/club": {
+    "type": "object",
+    "required": [
+      "butt_len",
+      "club_len",
+      "coverage",
+      "frames",
+      "notes",
+      "trace",
+      "trace_enabled"
+    ]
+  },
+  "analysis#/definitions/club/properties/ball/anyOf/0": {
+    "ref": "#/definitions/ball"
+  },
+  "analysis#/definitions/club/properties/ball/anyOf/1": {
+    "type": "null"
+  },
+  "analysis#/definitions/club/properties/butt_len": {
+    "type": "number"
+  },
+  "analysis#/definitions/club/properties/club_len": {
+    "type": "number"
+  },
+  "analysis#/definitions/club/properties/coverage": {
+    "ref": "#/definitions/clubCoverage"
+  },
+  "analysis#/definitions/club/properties/detector/anyOf/0": {
+    "ref": "#/definitions/clubDetector"
+  },
+  "analysis#/definitions/club/properties/detector/anyOf/1": {
+    "type": "null"
+  },
+  "analysis#/definitions/club/properties/frames": {
+    "type": "array"
+  },
+  "analysis#/definitions/club/properties/frames/items": {
+    "ref": "#/definitions/clubFrame"
+  },
+  "analysis#/definitions/club/properties/notes": {
+    "type": "array"
+  },
+  "analysis#/definitions/club/properties/notes/items": {
+    "type": "string"
+  },
+  "analysis#/definitions/club/properties/trace": {
+    "ref": "#/definitions/traceSegments"
+  },
+  "analysis#/definitions/club/properties/trace_enabled": {
+    "type": "boolean"
+  },
+  "analysis#/definitions/club/properties/trace_frames/anyOf/0": {
+    "ref": "#/definitions/traceFrames"
+  },
+  "analysis#/definitions/club/properties/trace_frames/anyOf/1": {
+    "type": "null"
+  },
+  "analysis#/definitions/club/properties/variants": {
+    "type": "null|object"
+  },
+  "analysis#/definitions/club/properties/variants/additionalProperties": {
+    "ref": "#/definitions/clubVariant"
+  },
+  "analysis#/definitions/clubCoverage": {
+    "type": "object"
+  },
+  "analysis#/definitions/clubCoverage/additionalProperties": {
+    "type": "number"
+  },
+  "analysis#/definitions/clubDetector": {
+    "type": "object",
+    "required": [
+      "sha256",
+      "weights"
+    ]
+  },
+  "analysis#/definitions/clubDetector/properties/boxes": {
+    "type": "array"
+  },
+  "analysis#/definitions/clubDetector/properties/boxes/items": {
+    "ref": "#/definitions/rawBoxFrame"
+  },
+  "analysis#/definitions/clubDetector/properties/bytes": {
+    "type": "integer"
+  },
+  "analysis#/definitions/clubDetector/properties/classes": {
+    "type": "object"
+  },
+  "analysis#/definitions/clubDetector/properties/classes/additionalProperties": {
+    "type": "string"
+  },
+  "analysis#/definitions/clubDetector/properties/conf": {
+    "type": "number"
+  },
+  "analysis#/definitions/clubDetector/properties/device": {
+    "type": "string"
+  },
+  "analysis#/definitions/clubDetector/properties/frames": {
+    "type": "integer"
+  },
+  "analysis#/definitions/clubDetector/properties/frames_with_head": {
+    "type": "integer"
+  },
+  "analysis#/definitions/clubDetector/properties/head_detections": {
+    "type": "integer"
+  },
+  "analysis#/definitions/clubDetector/properties/imgsz": {
+    "type": "integer"
+  },
+  "analysis#/definitions/clubDetector/properties/inject": {
+    "type": "string"
+  },
+  "analysis#/definitions/clubDetector/properties/names": {
+    "type": "object"
+  },
+  "analysis#/definitions/clubDetector/properties/names/additionalProperties": {
+    "type": "string"
+  },
+  "analysis#/definitions/clubDetector/properties/sha256": {
+    "type": "string"
+  },
+  "analysis#/definitions/clubDetector/properties/weights": {
+    "type": "string"
+  },
+  "analysis#/definitions/clubFrame": {
+    "type": "object",
+    "required": [
+      "butt",
+      "conf",
+      "f",
+      "head",
+      "interp",
+      "shaft"
+    ]
+  },
+  "analysis#/definitions/clubFrame/properties/blurred": {
+    "type": "boolean"
+  },
+  "analysis#/definitions/clubFrame/properties/butt/anyOf/0": {
+    "ref": "#/definitions/point"
+  },
+  "analysis#/definitions/clubFrame/properties/butt/anyOf/1": {
+    "type": "null"
+  },
+  "analysis#/definitions/clubFrame/properties/conf": {
+    "type": "number"
+  },
+  "analysis#/definitions/clubFrame/properties/f": {
+    "type": "integer"
+  },
+  "analysis#/definitions/clubFrame/properties/from_ball": {
+    "type": "boolean"
+  },
+  "analysis#/definitions/clubFrame/properties/from_model": {
+    "type": "boolean"
+  },
+  "analysis#/definitions/clubFrame/properties/head/anyOf/0": {
+    "ref": "#/definitions/point"
+  },
+  "analysis#/definitions/clubFrame/properties/head/anyOf/1": {
+    "type": "null"
+  },
+  "analysis#/definitions/clubFrame/properties/interp": {
+    "type": "boolean"
+  },
+  "analysis#/definitions/clubFrame/properties/shaft": {
+    "type": "array|null"
+  },
+  "analysis#/definitions/clubFrame/properties/shaft/items": {
+    "ref": "#/definitions/point"
+  },
+  "analysis#/definitions/clubFrame/properties/shaft_angle_deg": {
+    "type": "null|number"
+  },
+  "analysis#/definitions/clubVariant": {
+    "type": "object",
+    "required": [
+      "butt_len",
+      "club_len",
+      "coverage",
+      "frames",
+      "label",
+      "notes",
+      "trace"
+    ]
+  },
+  "analysis#/definitions/clubVariant/properties/butt_len": {
+    "type": "number"
+  },
+  "analysis#/definitions/clubVariant/properties/club_len": {
+    "type": "number"
+  },
+  "analysis#/definitions/clubVariant/properties/coverage": {
+    "ref": "#/definitions/clubCoverage"
+  },
+  "analysis#/definitions/clubVariant/properties/frames": {
+    "type": "array"
+  },
+  "analysis#/definitions/clubVariant/properties/frames/items": {
+    "ref": "#/definitions/clubFrame"
+  },
+  "analysis#/definitions/clubVariant/properties/label": {
+    "type": "string"
+  },
+  "analysis#/definitions/clubVariant/properties/notes": {
+    "type": "array"
+  },
+  "analysis#/definitions/clubVariant/properties/notes/items": {
+    "type": "string"
+  },
+  "analysis#/definitions/clubVariant/properties/trace": {
+    "ref": "#/definitions/traceSegments"
+  },
+  "analysis#/definitions/clubVariant/properties/trace_frames/anyOf/0": {
+    "ref": "#/definitions/traceFrames"
+  },
+  "analysis#/definitions/clubVariant/properties/trace_frames/anyOf/1": {
+    "type": "null"
+  },
+  "analysis#/definitions/event": {
+    "type": "object",
+    "required": [
+      "frame"
+    ]
+  },
+  "analysis#/definitions/event/properties/conf": {
+    "type": "number"
+  },
+  "analysis#/definitions/event/properties/frame": {
+    "type": "integer"
+  },
+  "analysis#/definitions/face": {
+    "type": "object",
+    "required": [
+      "capability_note",
+      "checkpoints",
+      "frames"
+    ]
+  },
+  "analysis#/definitions/face/properties/capability_note": {
+    "type": "string"
+  },
+  "analysis#/definitions/face/properties/checkpoints": {
+    "type": "object"
+  },
+  "analysis#/definitions/face/properties/checkpoints/additionalProperties": {
+    "ref": "#/definitions/faceCheckpoint"
+  },
+  "analysis#/definitions/face/properties/frames": {
+    "type": "array"
+  },
+  "analysis#/definitions/face/properties/frames/items": {
+    "ref": "#/definitions/faceFrame"
+  },
+  "analysis#/definitions/faceCheckpoint": {
+    "type": "object",
+    "required": [
+      "class",
+      "conf"
+    ]
+  },
+  "analysis#/definitions/faceCheckpoint/properties/class": {
+    "type": "string"
+  },
+  "analysis#/definitions/faceCheckpoint/properties/conf": {
+    "type": "number"
+  },
+  "analysis#/definitions/faceCheckpoint/properties/deviation_deg": {
+    "type": "number"
+  },
+  "analysis#/definitions/faceCheckpoint/properties/head_to_shaft_deg": {
+    "type": "number"
+  },
+  "analysis#/definitions/faceCheckpoint/properties/n_frames": {
+    "type": "integer"
+  },
+  "analysis#/definitions/faceCheckpoint/properties/reason": {
+    "type": "string"
+  },
+  "analysis#/definitions/faceFrame": {
+    "type": "object",
+    "required": [
+      "conf",
+      "f",
+      "head_axis_deg",
+      "to_shaft_deg"
+    ]
+  },
+  "analysis#/definitions/faceFrame/properties/conf": {
+    "type": "number"
+  },
+  "analysis#/definitions/faceFrame/properties/f": {
+    "type": "integer"
+  },
+  "analysis#/definitions/faceFrame/properties/head_axis_deg": {
+    "type": "null|number"
+  },
+  "analysis#/definitions/faceFrame/properties/to_shaft_deg": {
+    "type": "null|number"
+  },
+  "analysis#/definitions/frameRange": {
+    "type": "array"
+  },
+  "analysis#/definitions/frameRange/items/0": {
+    "type": "integer"
+  },
+  "analysis#/definitions/frameRange/items/1": {
+    "type": "integer"
+  },
+  "analysis#/definitions/jointQuality": {
+    "type": "object",
+    "required": [
+      "coverage",
+      "mean_conf"
+    ]
+  },
+  "analysis#/definitions/jointQuality/properties/coverage": {
+    "type": "number"
+  },
+  "analysis#/definitions/jointQuality/properties/mean_conf": {
+    "type": "number"
+  },
+  "analysis#/definitions/keypoint": {
+    "type": "array"
+  },
+  "analysis#/definitions/keypoint/items/0": {
+    "type": "number"
+  },
+  "analysis#/definitions/keypoint/items/1": {
+    "type": "number"
+  },
+  "analysis#/definitions/keypoint/items/2": {
+    "type": "number"
+  },
+  "analysis#/definitions/metricCheckpoint": {
+    "type": "object",
+    "required": [
+      "basis",
+      "conf",
+      "definition",
+      "delta_from_address",
+      "event",
+      "frame",
+      "id",
+      "label",
+      "p",
+      "phase",
+      "values"
+    ]
+  },
+  "analysis#/definitions/metricCheckpoint/properties/basis": {
+    "type": "string"
+  },
+  "analysis#/definitions/metricCheckpoint/properties/conf": {
+    "type": "number"
+  },
+  "analysis#/definitions/metricCheckpoint/properties/definition": {
+    "type": "string"
+  },
+  "analysis#/definitions/metricCheckpoint/properties/delta_from_address": {
+    "type": "object"
+  },
+  "analysis#/definitions/metricCheckpoint/properties/delta_from_address/additionalProperties": {
+    "type": "number"
+  },
+  "analysis#/definitions/metricCheckpoint/properties/event": {
+    "type": "null|string"
+  },
+  "analysis#/definitions/metricCheckpoint/properties/frame": {
+    "type": "integer"
+  },
+  "analysis#/definitions/metricCheckpoint/properties/id": {
+    "type": "string"
+  },
+  "analysis#/definitions/metricCheckpoint/properties/label": {
+    "type": "string"
+  },
+  "analysis#/definitions/metricCheckpoint/properties/p": {
+    "type": "string"
+  },
+  "analysis#/definitions/metricCheckpoint/properties/phase": {
+    "type": "string",
+    "enum": [
+      "\"backswing\"",
+      "\"downswing\"",
+      "\"finish\"",
+      "\"follow_through\"",
+      "\"impact\"",
+      "\"setup\""
+    ]
+  },
+  "analysis#/definitions/metricCheckpoint/properties/values": {
+    "ref": "#/definitions/metricValues"
+  },
+  "analysis#/definitions/metricValues": {
+    "type": "object"
+  },
+  "analysis#/definitions/metricValues/additionalProperties": {
+    "type": "boolean|null|number|string"
+  },
+  "analysis#/definitions/metrics": {
+    "type": "object",
+    "required": [
+      "body_height_norm",
+      "event_snapshots",
+      "glossary",
+      "provisional_thresholds",
+      "series",
+      "sides",
+      "summary",
+      "units"
+    ]
+  },
+  "analysis#/definitions/metrics/properties/angle_fields": {
+    "type": "array|null"
+  },
+  "analysis#/definitions/metrics/properties/angle_fields/items": {
+    "ref": "#/definitions/angleField"
+  },
+  "analysis#/definitions/metrics/properties/body_height_norm": {
+    "type": "number"
+  },
+  "analysis#/definitions/metrics/properties/checkpoint_notes": {
+    "type": "array|null"
+  },
+  "analysis#/definitions/metrics/properties/checkpoint_notes/items": {
+    "type": "string"
+  },
+  "analysis#/definitions/metrics/properties/checkpoints": {
+    "type": "array|null"
+  },
+  "analysis#/definitions/metrics/properties/checkpoints/items": {
+    "ref": "#/definitions/metricCheckpoint"
+  },
+  "analysis#/definitions/metrics/properties/event_snapshots": {
+    "type": "object"
+  },
+  "analysis#/definitions/metrics/properties/event_snapshots/additionalProperties": {
+    "ref": "#/definitions/metricValues"
+  },
+  "analysis#/definitions/metrics/properties/glossary/anyOf/0": {
+    "ref": "#/definitions/openMap"
+  },
+  "analysis#/definitions/metrics/properties/glossary/anyOf/1": {
+    "type": "null"
+  },
+  "analysis#/definitions/metrics/properties/provisional_thresholds": {
+    "type": "boolean"
+  },
+  "analysis#/definitions/metrics/properties/series": {
+    "type": "array"
+  },
+  "analysis#/definitions/metrics/properties/series/items": {
+    "ref": "#/definitions/metricValues"
+  },
+  "analysis#/definitions/metrics/properties/sides/anyOf/0": {
+    "ref": "#/definitions/sides"
+  },
+  "analysis#/definitions/metrics/properties/sides/anyOf/1": {
+    "type": "null"
+  },
+  "analysis#/definitions/metrics/properties/summary": {
+    "type": "object"
+  },
+  "analysis#/definitions/metrics/properties/summary/additionalProperties": {
+    "type": "null|number|string"
+  },
+  "analysis#/definitions/metrics/properties/units": {
+    "type": "string"
+  },
+  "analysis#/definitions/numberPair": {
+    "type": "array"
+  },
+  "analysis#/definitions/numberPair/items/0": {
+    "type": "number"
+  },
+  "analysis#/definitions/numberPair/items/1": {
+    "type": "number"
+  },
+  "analysis#/definitions/openMap": {
+    "type": "object"
+  },
+  "analysis#/definitions/phase": {
+    "type": "object",
+    "required": [
+      "from",
+      "name",
+      "to"
+    ]
+  },
+  "analysis#/definitions/phase/properties/from": {
+    "type": "integer"
+  },
+  "analysis#/definitions/phase/properties/name": {
+    "type": "string"
+  },
+  "analysis#/definitions/phase/properties/to": {
+    "type": "integer"
+  },
+  "analysis#/definitions/point": {
+    "type": "array"
+  },
+  "analysis#/definitions/point/items/0": {
+    "type": "number"
+  },
+  "analysis#/definitions/point/items/1": {
+    "type": "number"
+  },
+  "analysis#/definitions/pointExpr/anyOf/0": {
+    "type": "string"
+  },
+  "analysis#/definitions/pointExpr/anyOf/1": {
+    "type": "object",
+    "required": [
+      "chain"
+    ]
+  },
+  "analysis#/definitions/pointExpr/anyOf/1/properties/chain": {
+    "type": "array"
+  },
+  "analysis#/definitions/pointExpr/anyOf/1/properties/chain/items": {
+    "type": "string"
+  },
+  "analysis#/definitions/pointExpr/anyOf/1/properties/src": {
+    "type": "string"
+  },
+  "analysis#/definitions/pointExpr/anyOf/2": {
+    "type": "object",
+    "required": [
+      "feet"
+    ]
+  },
+  "analysis#/definitions/pointExpr/anyOf/2/properties/feet": {
+    "type": "number"
+  },
+  "analysis#/definitions/pointExpr/anyOf/3": {
+    "type": "object",
+    "required": [
+      "club"
+    ]
+  },
+  "analysis#/definitions/pointExpr/anyOf/3/properties/club": {
+    "type": "string",
+    "enum": [
+      "\"head\""
+    ]
+  },
+  "analysis#/definitions/pointPair": {
+    "type": "array"
+  },
+  "analysis#/definitions/pointPair/items/0": {
+    "ref": "#/definitions/pointExpr"
+  },
+  "analysis#/definitions/pointPair/items/1": {
+    "ref": "#/definitions/pointExpr"
+  },
+  "analysis#/definitions/pose": {
+    "type": "object",
+    "required": [
+      "frames",
+      "keypoint_names",
+      "model"
+    ]
+  },
+  "analysis#/definitions/pose/properties/frames": {
+    "type": "array"
+  },
+  "analysis#/definitions/pose/properties/frames/items": {
+    "ref": "#/definitions/poseFrame"
+  },
+  "analysis#/definitions/pose/properties/keypoint_names": {
+    "type": "array"
+  },
+  "analysis#/definitions/pose/properties/keypoint_names/items": {
+    "type": "string"
+  },
+  "analysis#/definitions/pose/properties/model": {
+    "type": "string"
+  },
+  "analysis#/definitions/poseFrame": {
+    "type": "object",
+    "required": [
+      "f",
+      "interp",
+      "kp",
+      "st"
+    ]
+  },
+  "analysis#/definitions/poseFrame/properties/f": {
+    "type": "integer"
+  },
+  "analysis#/definitions/poseFrame/properties/interp": {
+    "type": "boolean"
+  },
+  "analysis#/definitions/poseFrame/properties/kp": {
+    "type": "array"
+  },
+  "analysis#/definitions/poseFrame/properties/kp/items": {
+    "ref": "#/definitions/keypoint"
+  },
+  "analysis#/definitions/poseFrame/properties/st": {
+    "type": "array|null"
+  },
+  "analysis#/definitions/poseFrame/properties/st/items": {
+    "type": "number"
+  },
+  "analysis#/definitions/posture": {
+    "type": "object",
+    "required": [
+      "butt_line",
+      "notes"
+    ]
+  },
+  "analysis#/definitions/posture/properties/butt_line/anyOf/0": {
+    "ref": "#/definitions/buttLine"
+  },
+  "analysis#/definitions/posture/properties/butt_line/anyOf/1": {
+    "type": "null"
+  },
+  "analysis#/definitions/posture/properties/notes": {
+    "type": "array"
+  },
+  "analysis#/definitions/posture/properties/notes/items": {
+    "type": "string"
+  },
+  "analysis#/definitions/quality": {
+    "type": "object",
+    "required": [
+      "detection_coverage",
+      "frames",
+      "overall_mean_conf",
+      "per_joint"
+    ]
+  },
+  "analysis#/definitions/quality/properties/detection_coverage": {
+    "type": "number"
+  },
+  "analysis#/definitions/quality/properties/frames": {
+    "type": "integer"
+  },
+  "analysis#/definitions/quality/properties/overall_mean_conf": {
+    "type": "number"
+  },
+  "analysis#/definitions/quality/properties/per_joint": {
+    "type": "object"
+  },
+  "analysis#/definitions/quality/properties/per_joint/additionalProperties": {
+    "ref": "#/definitions/jointQuality"
+  },
+  "analysis#/definitions/rawBox": {
+    "type": "object",
+    "required": [
+      "c",
+      "p",
+      "wh",
+      "xy"
+    ]
+  },
+  "analysis#/definitions/rawBox/properties/c": {
+    "type": "integer"
+  },
+  "analysis#/definitions/rawBox/properties/p": {
+    "type": "number"
+  },
+  "analysis#/definitions/rawBox/properties/wh": {
+    "ref": "#/definitions/point"
+  },
+  "analysis#/definitions/rawBox/properties/xy": {
+    "ref": "#/definitions/point"
+  },
+  "analysis#/definitions/rawBoxFrame": {
+    "type": "object",
+    "required": [
+      "d",
+      "f"
+    ]
+  },
+  "analysis#/definitions/rawBoxFrame/properties/d": {
+    "type": "array"
+  },
+  "analysis#/definitions/rawBoxFrame/properties/d/items": {
+    "ref": "#/definitions/rawBox"
+  },
+  "analysis#/definitions/rawBoxFrame/properties/f": {
+    "type": "integer"
+  },
+  "analysis#/definitions/resolution": {
+    "type": "object",
+    "required": [
+      "height",
+      "width"
+    ]
+  },
+  "analysis#/definitions/resolution/properties/height": {
+    "type": "integer"
+  },
+  "analysis#/definitions/resolution/properties/width": {
+    "type": "integer"
+  },
+  "analysis#/definitions/sides": {
+    "type": "object",
+    "required": [
+      "handedness",
+      "lead",
+      "note",
+      "trail"
+    ]
+  },
+  "analysis#/definitions/sides/properties/handedness": {
+    "type": "string"
+  },
+  "analysis#/definitions/sides/properties/lead": {
+    "type": "string"
+  },
+  "analysis#/definitions/sides/properties/note": {
+    "type": "string"
+  },
+  "analysis#/definitions/sides/properties/trail": {
+    "type": "string"
+  },
+  "analysis#/definitions/tempo": {
+    "type": "object",
+    "required": [
+      "backswing_frames",
+      "backswing_ms",
+      "downswing_frames",
+      "downswing_ms",
+      "ratio"
+    ]
+  },
+  "analysis#/definitions/tempo/properties/backswing_frames": {
+    "type": "integer"
+  },
+  "analysis#/definitions/tempo/properties/backswing_ms": {
+    "type": "integer"
+  },
+  "analysis#/definitions/tempo/properties/downswing_frames": {
+    "type": "integer"
+  },
+  "analysis#/definitions/tempo/properties/downswing_ms": {
+    "type": "integer"
+  },
+  "analysis#/definitions/tempo/properties/implausible": {
+    "type": "array|null"
+  },
+  "analysis#/definitions/tempo/properties/implausible/items": {
+    "type": "string"
+  },
+  "analysis#/definitions/tempo/properties/ratio": {
+    "type": "number"
+  },
+  "analysis#/definitions/traceFrames": {
+    "type": "object",
+    "required": [
+      "backswing",
+      "downswing",
+      "followthrough"
+    ]
+  },
+  "analysis#/definitions/traceFrames/properties/backswing": {
+    "type": "array"
+  },
+  "analysis#/definitions/traceFrames/properties/backswing/items": {
+    "type": "integer"
+  },
+  "analysis#/definitions/traceFrames/properties/downswing": {
+    "type": "array"
+  },
+  "analysis#/definitions/traceFrames/properties/downswing/items": {
+    "type": "integer"
+  },
+  "analysis#/definitions/traceFrames/properties/followthrough": {
+    "type": "array"
+  },
+  "analysis#/definitions/traceFrames/properties/followthrough/items": {
+    "type": "integer"
+  },
+  "analysis#/definitions/traceSegments": {
+    "type": "object",
+    "required": [
+      "backswing",
+      "downswing",
+      "followthrough"
+    ]
+  },
+  "analysis#/definitions/traceSegments/properties/backswing": {
+    "type": "array"
+  },
+  "analysis#/definitions/traceSegments/properties/backswing/items": {
+    "ref": "#/definitions/point"
+  },
+  "analysis#/definitions/traceSegments/properties/downswing": {
+    "type": "array"
+  },
+  "analysis#/definitions/traceSegments/properties/downswing/items": {
+    "ref": "#/definitions/point"
+  },
+  "analysis#/definitions/traceSegments/properties/followthrough": {
+    "type": "array"
+  },
+  "analysis#/definitions/traceSegments/properties/followthrough/items": {
+    "ref": "#/definitions/point"
+  },
+  "analysis#/definitions/video": {
+    "type": "object",
+    "required": [
+      "analysis_res",
+      "fps",
+      "frame_count",
+      "handedness",
+      "height",
+      "source",
+      "view",
+      "width"
+    ]
+  },
+  "analysis#/definitions/video/properties/analysis_res": {
+    "ref": "#/definitions/resolution"
+  },
+  "analysis#/definitions/video/properties/fps": {
+    "type": "number"
+  },
+  "analysis#/definitions/video/properties/frame_count": {
+    "type": "integer"
+  },
+  "analysis#/definitions/video/properties/handedness": {
+    "type": "string",
+    "enum": [
+      "\"left\"",
+      "\"right\""
+    ]
+  },
+  "analysis#/definitions/video/properties/height": {
+    "type": "integer"
+  },
+  "analysis#/definitions/video/properties/source": {
+    "ref": "#/definitions/videoSource"
+  },
+  "analysis#/definitions/video/properties/view": {
+    "type": "string",
+    "enum": [
+      "\"dtl\"",
+      "\"face_on\""
+    ]
+  },
+  "analysis#/definitions/video/properties/width": {
+    "type": "integer"
+  },
+  "analysis#/definitions/videoSource": {
+    "type": "object",
+    "required": [
+      "codec",
+      "fps",
+      "height",
+      "is_vfr",
+      "path",
+      "rotation",
+      "width"
+    ]
+  },
+  "analysis#/definitions/videoSource/properties/codec": {
+    "type": "string"
+  },
+  "analysis#/definitions/videoSource/properties/fps": {
+    "type": "number"
+  },
+  "analysis#/definitions/videoSource/properties/height": {
+    "type": "integer"
+  },
+  "analysis#/definitions/videoSource/properties/is_vfr": {
+    "type": "boolean"
+  },
+  "analysis#/definitions/videoSource/properties/path": {
+    "type": "string"
+  },
+  "analysis#/definitions/videoSource/properties/rotation": {
+    "type": "integer"
+  },
+  "analysis#/definitions/videoSource/properties/width": {
+    "type": "integer"
+  },
+  "analysis#/properties/address_span/anyOf/0": {
+    "ref": "#/definitions/frameRange"
+  },
+  "analysis#/properties/address_span/anyOf/1": {
+    "type": "null"
+  },
+  "analysis#/properties/checkpoints": {
+    "type": "array|null"
+  },
+  "analysis#/properties/checkpoints/items": {
+    "ref": "#/definitions/checkpoint"
+  },
+  "analysis#/properties/club/anyOf/0": {
+    "ref": "#/definitions/club"
+  },
+  "analysis#/properties/club/anyOf/1": {
+    "type": "null"
+  },
+  "analysis#/properties/events": {
+    "type": "object",
+    "required": [
+      "address",
+      "finish",
+      "impact",
+      "mid_backswing",
+      "mid_downswing",
+      "mid_follow_through",
+      "toe_up",
+      "top"
+    ]
+  },
+  "analysis#/properties/events/additionalProperties": {
+    "ref": "#/definitions/event"
+  },
+  "analysis#/properties/face/anyOf/0": {
+    "ref": "#/definitions/face"
+  },
+  "analysis#/properties/face/anyOf/1": {
+    "type": "null"
+  },
+  "analysis#/properties/metrics/anyOf/0": {
+    "ref": "#/definitions/metrics"
+  },
+  "analysis#/properties/metrics/anyOf/1": {
+    "type": "null"
+  },
+  "analysis#/properties/phases": {
+    "type": "array|null"
+  },
+  "analysis#/properties/phases/items": {
+    "ref": "#/definitions/phase"
+  },
+  "analysis#/properties/playback_pad/anyOf/0": {
+    "ref": "#/definitions/frameRange"
+  },
+  "analysis#/properties/playback_pad/anyOf/1": {
+    "type": "null"
+  },
+  "analysis#/properties/playback_window/anyOf/0": {
+    "ref": "#/definitions/frameRange"
+  },
+  "analysis#/properties/playback_window/anyOf/1": {
+    "type": "null"
+  },
+  "analysis#/properties/pose": {
+    "ref": "#/definitions/pose"
+  },
+  "analysis#/properties/posture/anyOf/0": {
+    "ref": "#/definitions/posture"
+  },
+  "analysis#/properties/posture/anyOf/1": {
+    "type": "null"
+  },
+  "analysis#/properties/quality": {
+    "ref": "#/definitions/quality"
+  },
+  "analysis#/properties/quality_mediapipe/anyOf/0": {
+    "ref": "#/definitions/quality"
+  },
+  "analysis#/properties/quality_mediapipe/anyOf/1": {
+    "type": "null"
+  },
+  "analysis#/properties/quality_raw/anyOf/0": {
+    "ref": "#/definitions/quality"
+  },
+  "analysis#/properties/quality_raw/anyOf/1": {
+    "type": "null"
+  },
+  "analysis#/properties/schema_version": {
+    "type": "integer"
+  },
+  "analysis#/properties/stage3/anyOf/0": {
+    "ref": "#/definitions/openMap"
+  },
+  "analysis#/properties/stage3/anyOf/1": {
+    "type": "null"
+  },
+  "analysis#/properties/swing_window/anyOf/0": {
+    "ref": "#/definitions/frameRange"
+  },
+  "analysis#/properties/swing_window/anyOf/1": {
+    "type": "null"
+  },
+  "analysis#/properties/tempo/anyOf/0": {
+    "ref": "#/definitions/tempo"
+  },
+  "analysis#/properties/tempo/anyOf/1": {
+    "type": "null"
+  },
+  "analysis#/properties/video": {
+    "ref": "#/definitions/video"
+  },
+  "api#": {
+    "type": "object"
+  },
+  "api#/definitions/apiError": {
+    "type": "object",
+    "required": [
+      "error"
+    ]
+  },
+  "api#/definitions/apiError/properties/error": {
+    "type": "string"
+  },
+  "api#/definitions/apiError/properties/message": {
+    "type": "string"
+  },
+  "api#/definitions/apiVersion": {
+    "type": "string",
+    "enum": [
+      "\"v1\""
+    ]
+  },
+  "api#/definitions/clientConfig": {
+    "type": "object",
+    "required": [
+      "apiVersion",
+      "currentArtifactSchema",
+      "currentVersion",
+      "deprecatedApiVersions",
+      "minimumArtifactSchema",
+      "minimumVersion",
+      "supportedApiVersions"
+    ]
+  },
+  "api#/definitions/clientConfig/properties/apiVersion": {
+    "ref": "#/definitions/apiVersion"
+  },
+  "api#/definitions/clientConfig/properties/currentArtifactSchema": {
+    "type": "integer"
+  },
+  "api#/definitions/clientConfig/properties/currentVersion": {
+    "type": "string"
+  },
+  "api#/definitions/clientConfig/properties/deprecatedApiVersions": {
+    "type": "array"
+  },
+  "api#/definitions/clientConfig/properties/deprecatedApiVersions/items": {
+    "ref": "#/definitions/deprecation"
+  },
+  "api#/definitions/clientConfig/properties/minimumArtifactSchema": {
+    "type": "integer"
+  },
+  "api#/definitions/clientConfig/properties/minimumVersion": {
+    "type": "string"
+  },
+  "api#/definitions/clientConfig/properties/supportedApiVersions": {
+    "type": "array"
+  },
+  "api#/definitions/clientConfig/properties/supportedApiVersions/items": {
+    "ref": "#/definitions/apiVersion"
+  },
+  "api#/definitions/deprecation": {
+    "type": "object",
+    "required": [
+      "sunsetOn",
+      "version"
+    ]
+  },
+  "api#/definitions/deprecation/properties/replacedBy": {
+    "ref": "#/definitions/apiVersion"
+  },
+  "api#/definitions/deprecation/properties/sunsetOn": {
+    "type": "string"
+  },
+  "api#/definitions/deprecation/properties/version": {
+    "ref": "#/definitions/apiVersion"
+  },
+  "api#/definitions/headMarker": {
+    "type": "object",
+    "required": [
+      "frame",
+      "x",
+      "y"
+    ]
+  },
+  "api#/definitions/headMarker/properties/frame": {
+    "type": "integer"
+  },
+  "api#/definitions/headMarker/properties/x": {
+    "type": "number"
+  },
+  "api#/definitions/headMarker/properties/y": {
+    "type": "number"
+  },
+  "api#/definitions/job": {
+    "type": "object",
+    "required": [
+      "finishedAt",
+      "id",
+      "log",
+      "message",
+      "progressPct",
+      "stage",
+      "startedAt",
+      "status",
+      "viewId"
+    ]
+  },
+  "api#/definitions/job/properties/finishedAt": {
+    "type": "integer|null"
+  },
+  "api#/definitions/job/properties/id": {
+    "type": "string"
+  },
+  "api#/definitions/job/properties/log": {
+    "type": "array"
+  },
+  "api#/definitions/job/properties/log/items": {
+    "type": "string"
+  },
+  "api#/definitions/job/properties/message": {
+    "type": "string"
+  },
+  "api#/definitions/job/properties/progressPct": {
+    "type": "number"
+  },
+  "api#/definitions/job/properties/stage": {
+    "type": "string"
+  },
+  "api#/definitions/job/properties/startedAt": {
+    "type": "integer"
+  },
+  "api#/definitions/job/properties/status": {
+    "type": "string",
+    "enum": [
+      "\"done\"",
+      "\"failed\"",
+      "\"queued\"",
+      "\"running\""
+    ]
+  },
+  "api#/definitions/job/properties/viewId": {
+    "type": "string"
+  },
+  "api#/definitions/jobStatusResponse/anyOf/0": {
+    "ref": "#/definitions/job"
+  },
+  "api#/definitions/jobStatusResponse/anyOf/1": {
+    "type": "object",
+    "required": [
+      "status"
+    ]
+  },
+  "api#/definitions/jobStatusResponse/anyOf/1/properties/status": {
+    "type": "string",
+    "enum": [
+      "\"idle\""
+    ]
+  },
+  "api#/definitions/markerListResponse": {
+    "type": "object",
+    "required": [
+      "markers"
+    ]
+  },
+  "api#/definitions/markerListResponse/properties/markers": {
+    "type": "array"
+  },
+  "api#/definitions/markerListResponse/properties/markers/items": {
+    "ref": "#/definitions/headMarker"
+  },
+  "api#/definitions/markerSaveRequest": {
+    "type": "object"
+  },
+  "api#/definitions/markerSaveRequest/properties/deleted": {
+    "type": "array"
+  },
+  "api#/definitions/markerSaveRequest/properties/deleted/items": {
+    "type": "integer"
+  },
+  "api#/definitions/markerSaveRequest/properties/markers": {
+    "type": "array"
+  },
+  "api#/definitions/markerSaveRequest/properties/markers/items": {
+    "ref": "#/definitions/headMarker"
+  },
+  "api#/definitions/markerSaveResponse": {
+    "type": "object",
+    "required": [
+      "deleted",
+      "saved"
+    ]
+  },
+  "api#/definitions/markerSaveResponse/properties/deleted": {
+    "type": "integer"
+  },
+  "api#/definitions/markerSaveResponse/properties/saved": {
+    "type": "integer"
+  },
+  "api#/definitions/stageListResponse": {
+    "type": "object",
+    "required": [
+      "stages"
+    ]
+  },
+  "api#/definitions/stageListResponse/properties/stages": {
+    "type": "array"
+  },
+  "api#/definitions/stageListResponse/properties/stages/items": {
+    "ref": "#/definitions/stageMark"
+  },
+  "api#/definitions/stageMark": {
+    "type": "object",
+    "required": [
+      "frame",
+      "stage"
+    ]
+  },
+  "api#/definitions/stageMark/properties/frame": {
+    "type": "integer"
+  },
+  "api#/definitions/stageMark/properties/stage": {
+    "type": "string",
+    "enum": [
+      "\"approach_start\"",
+      "\"backswing_start\"",
+      "\"downswing_start\"",
+      "\"finish_start\"",
+      "\"impact\""
+    ]
+  },
+  "api#/definitions/stageSetRequest": {
+    "type": "object",
+    "required": [
+      "stage"
+    ]
+  },
+  "api#/definitions/stageSetRequest/properties/frame": {
+    "type": "integer|null"
+  },
+  "api#/definitions/stageSetRequest/properties/stage": {
+    "type": "string"
+  },
+  "api#/definitions/swingListResponse": {
+    "type": "object",
+    "required": [
+      "swings"
+    ]
+  },
+  "api#/definitions/swingListResponse/properties/swings": {
+    "type": "array"
+  },
+  "api#/definitions/swingListResponse/properties/swings/items": {
+    "ref": "#/definitions/swingSummary"
+  },
+  "api#/definitions/swingSummary": {
+    "type": "object",
+    "required": [
+      "band",
+      "createdAt",
+      "fps",
+      "frameCount",
+      "id",
+      "label",
+      "model",
+      "overallScore",
+      "poseCoverage",
+      "primaryViewId",
+      "referenceLabel",
+      "scoringModelVersion",
+      "status",
+      "tempoRatio",
+      "traceEnabled",
+      "view",
+      "views"
+    ]
+  },
+  "api#/definitions/swingSummary/properties/band": {
+    "type": "null|string"
+  },
+  "api#/definitions/swingSummary/properties/createdAt": {
+    "type": "integer"
+  },
+  "api#/definitions/swingSummary/properties/fps": {
+    "type": "number"
+  },
+  "api#/definitions/swingSummary/properties/frameCount": {
+    "type": "integer"
+  },
+  "api#/definitions/swingSummary/properties/id": {
+    "type": "string"
+  },
+  "api#/definitions/swingSummary/properties/label": {
+    "type": "string"
+  },
+  "api#/definitions/swingSummary/properties/model": {
+    "type": "null|string"
+  },
+  "api#/definitions/swingSummary/properties/overallScore": {
+    "type": "null|number"
+  },
+  "api#/definitions/swingSummary/properties/poseCoverage": {
+    "type": "number"
+  },
+  "api#/definitions/swingSummary/properties/primaryViewId": {
+    "type": "null|string"
+  },
+  "api#/definitions/swingSummary/properties/referenceLabel": {
+    "type": "null|string"
+  },
+  "api#/definitions/swingSummary/properties/scoringModelVersion": {
+    "type": "null|string"
+  },
+  "api#/definitions/swingSummary/properties/status": {
+    "type": "string"
+  },
+  "api#/definitions/swingSummary/properties/tempoRatio": {
+    "type": "null|number"
+  },
+  "api#/definitions/swingSummary/properties/traceEnabled": {
+    "type": "boolean"
+  },
+  "api#/definitions/swingSummary/properties/view": {
+    "type": "string"
+  },
+  "api#/definitions/swingSummary/properties/views": {
+    "type": "array"
+  },
+  "api#/definitions/swingSummary/properties/views/items": {
+    "ref": "#/definitions/swingViewSummary"
+  },
+  "api#/definitions/swingViewSummary": {
+    "type": "object",
+    "required": [
+      "band",
+      "fps",
+      "frameCount",
+      "height",
+      "id",
+      "mediaKey",
+      "overallScore",
+      "revision",
+      "status",
+      "view",
+      "width"
+    ]
+  },
+  "api#/definitions/swingViewSummary/properties/band": {
+    "type": "null|string"
+  },
+  "api#/definitions/swingViewSummary/properties/fps": {
+    "type": "number"
+  },
+  "api#/definitions/swingViewSummary/properties/frameCount": {
+    "type": "integer"
+  },
+  "api#/definitions/swingViewSummary/properties/height": {
+    "type": "integer|null"
+  },
+  "api#/definitions/swingViewSummary/properties/id": {
+    "type": "string"
+  },
+  "api#/definitions/swingViewSummary/properties/mediaKey": {
+    "type": "string"
+  },
+  "api#/definitions/swingViewSummary/properties/overallScore": {
+    "type": "null|number"
+  },
+  "api#/definitions/swingViewSummary/properties/revision": {
+    "type": "integer"
+  },
+  "api#/definitions/swingViewSummary/properties/status": {
+    "type": "string"
+  },
+  "api#/definitions/swingViewSummary/properties/view": {
+    "type": "string",
+    "enum": [
+      "\"dtl\"",
+      "\"face_on\""
+    ]
+  },
+  "api#/definitions/swingViewSummary/properties/width": {
+    "type": "integer|null"
+  },
+  "api#/definitions/upgradeRequired": {
+    "type": "object",
+    "required": [
+      "currentVersion",
+      "error",
+      "message",
+      "minimumVersion",
+      "storeUrl"
+    ]
+  },
+  "api#/definitions/upgradeRequired/properties/currentVersion": {
+    "type": "string"
+  },
+  "api#/definitions/upgradeRequired/properties/error": {
+    "type": "string",
+    "enum": [
+      "\"upgrade_required\""
+    ]
+  },
+  "api#/definitions/upgradeRequired/properties/message": {
+    "type": "string"
+  },
+  "api#/definitions/upgradeRequired/properties/minimumVersion": {
+    "type": "string"
+  },
+  "api#/definitions/upgradeRequired/properties/storeUrl": {
+    "type": "null|string"
+  },
+  "api#/properties/_unused": {
+    "type": "null"
+  },
+  "coach-report#": {
+    "type": "object",
+    "required": [
+      "arc_shift",
+      "band",
+      "categories",
+      "checkpoints",
+      "club_type",
+      "coverage",
+      "drill",
+      "findings",
+      "overall",
+      "primary",
+      "priorities",
+      "scoring_model_version",
+      "view"
+    ]
+  },
+  "coach-report#/definitions/category": {
+    "type": "object",
+    "required": [
+      "category",
+      "checks",
+      "n_deferred",
+      "n_measurable",
+      "n_total",
+      "score"
+    ]
+  },
+  "coach-report#/definitions/category/properties/category": {
+    "type": "string"
+  },
+  "coach-report#/definitions/category/properties/checks": {
+    "type": "array"
+  },
+  "coach-report#/definitions/category/properties/checks/items": {
+    "ref": "#/definitions/check"
+  },
+  "coach-report#/definitions/category/properties/n_deferred": {
+    "type": "integer"
+  },
+  "coach-report#/definitions/category/properties/n_measurable": {
+    "type": "integer"
+  },
+  "coach-report#/definitions/category/properties/n_total": {
+    "type": "integer"
+  },
+  "coach-report#/definitions/category/properties/score": {
+    "type": "null|number"
+  },
+  "coach-report#/definitions/check": {
+    "type": "object",
+    "required": [
+      "abs_value",
+      "advice",
+      "band",
+      "category",
+      "checkpoint",
+      "deferred",
+      "effort",
+      "field",
+      "fix",
+      "good_values",
+      "id",
+      "kind",
+      "label",
+      "leverage",
+      "leverage_breakdown",
+      "score",
+      "skip_reason",
+      "unit",
+      "value",
+      "weight"
+    ]
+  },
+  "coach-report#/definitions/check/properties/abs_value": {
+    "type": "boolean"
+  },
+  "coach-report#/definitions/check/properties/advice": {
+    "type": "null|string"
+  },
+  "coach-report#/definitions/check/properties/band/anyOf/0": {
+    "ref": "#/definitions/checkBand"
+  },
+  "coach-report#/definitions/check/properties/band/anyOf/1": {
+    "type": "null"
+  },
+  "coach-report#/definitions/check/properties/category": {
+    "type": "string"
+  },
+  "coach-report#/definitions/check/properties/checkpoint": {
+    "type": "null|string"
+  },
+  "coach-report#/definitions/check/properties/deferred": {
+    "type": "boolean"
+  },
+  "coach-report#/definitions/check/properties/effort": {
+    "type": "number"
+  },
+  "coach-report#/definitions/check/properties/field": {
+    "type": "string"
+  },
+  "coach-report#/definitions/check/properties/fix": {
+    "type": "string"
+  },
+  "coach-report#/definitions/check/properties/good_values": {
+    "type": "array|null"
+  },
+  "coach-report#/definitions/check/properties/good_values/items": {
+    "type": "string"
+  },
+  "coach-report#/definitions/check/properties/id": {
+    "type": "string"
+  },
+  "coach-report#/definitions/check/properties/kind": {
+    "type": "string",
+    "enum": [
+      "\"band\"",
+      "\"categorical\""
+    ]
+  },
+  "coach-report#/definitions/check/properties/label": {
+    "type": "string"
+  },
+  "coach-report#/definitions/check/properties/leverage": {
+    "type": "null|number"
+  },
+  "coach-report#/definitions/check/properties/leverage_breakdown/anyOf/0": {
+    "ref": "#/definitions/leverageBreakdown"
+  },
+  "coach-report#/definitions/check/properties/leverage_breakdown/anyOf/1": {
+    "type": "null"
+  },
+  "coach-report#/definitions/check/properties/score": {
+    "type": "null|number"
+  },
+  "coach-report#/definitions/check/properties/skip_reason": {
+    "type": "null|string"
+  },
+  "coach-report#/definitions/check/properties/unit": {
+    "type": "null|string"
+  },
+  "coach-report#/definitions/check/properties/value": {
+    "type": "null|number|string"
+  },
+  "coach-report#/definitions/check/properties/weight": {
+    "type": "number"
+  },
+  "coach-report#/definitions/checkBand": {
+    "type": "object",
+    "required": [
+      "falloff",
+      "max",
+      "min"
+    ]
+  },
+  "coach-report#/definitions/checkBand/properties/falloff": {
+    "type": "number"
+  },
+  "coach-report#/definitions/checkBand/properties/max": {
+    "type": "number"
+  },
+  "coach-report#/definitions/checkBand/properties/min": {
+    "type": "number"
+  },
+  "coach-report#/definitions/checkpointScore": {
+    "type": "object",
+    "required": [
+      "label",
+      "n_measurable",
+      "p",
+      "score"
+    ]
+  },
+  "coach-report#/definitions/checkpointScore/properties/label": {
+    "type": "string"
+  },
+  "coach-report#/definitions/checkpointScore/properties/n_measurable": {
+    "type": "integer"
+  },
+  "coach-report#/definitions/checkpointScore/properties/p": {
+    "type": "string"
+  },
+  "coach-report#/definitions/checkpointScore/properties/score": {
+    "type": "number"
+  },
+  "coach-report#/definitions/coverage": {
+    "type": "object",
+    "required": [
+      "deferred_in_config",
+      "scored",
+      "skipped_this_swing",
+      "total_checks"
+    ]
+  },
+  "coach-report#/definitions/coverage/properties/deferred_in_config": {
+    "type": "integer"
+  },
+  "coach-report#/definitions/coverage/properties/scored": {
+    "type": "integer"
+  },
+  "coach-report#/definitions/coverage/properties/skipped_this_swing": {
+    "type": "integer"
+  },
+  "coach-report#/definitions/coverage/properties/total_checks": {
+    "type": "integer"
+  },
+  "coach-report#/definitions/drill": {
+    "type": "object",
+    "required": [
+      "copy",
+      "dose",
+      "doseNote",
+      "title"
+    ]
+  },
+  "coach-report#/definitions/drill/properties/copy": {
+    "type": "string"
+  },
+  "coach-report#/definitions/drill/properties/dose": {
+    "type": "string"
+  },
+  "coach-report#/definitions/drill/properties/doseNote": {
+    "type": "string"
+  },
+  "coach-report#/definitions/drill/properties/title": {
+    "type": "string"
+  },
+  "coach-report#/definitions/finding": {
+    "type": "object",
+    "required": [
+      "detail",
+      "icon",
+      "title",
+      "tone"
+    ]
+  },
+  "coach-report#/definitions/finding/properties/detail": {
+    "type": "string"
+  },
+  "coach-report#/definitions/finding/properties/icon": {
+    "type": "string"
+  },
+  "coach-report#/definitions/finding/properties/title": {
+    "type": "string"
+  },
+  "coach-report#/definitions/finding/properties/tone": {
+    "type": "string",
+    "enum": [
+      "\"negative\"",
+      "\"positive\""
+    ]
+  },
+  "coach-report#/definitions/leverageBreakdown": {
+    "type": "object",
+    "required": [
+      "ease",
+      "impact",
+      "severity"
+    ]
+  },
+  "coach-report#/definitions/leverageBreakdown/properties/ease": {
+    "type": "number"
+  },
+  "coach-report#/definitions/leverageBreakdown/properties/impact": {
+    "type": "number"
+  },
+  "coach-report#/definitions/leverageBreakdown/properties/severity": {
+    "type": "number"
+  },
+  "coach-report#/definitions/primaryFix": {
+    "type": "object",
+    "required": [
+      "checkpoint",
+      "copy",
+      "id",
+      "leverage",
+      "moment",
+      "score",
+      "title"
+    ]
+  },
+  "coach-report#/definitions/primaryFix/properties/checkpoint": {
+    "type": "null|string"
+  },
+  "coach-report#/definitions/primaryFix/properties/copy": {
+    "type": "string"
+  },
+  "coach-report#/definitions/primaryFix/properties/id": {
+    "type": "null|string"
+  },
+  "coach-report#/definitions/primaryFix/properties/leverage": {
+    "type": "number"
+  },
+  "coach-report#/definitions/primaryFix/properties/moment": {
+    "type": "string"
+  },
+  "coach-report#/definitions/primaryFix/properties/score": {
+    "type": "number"
+  },
+  "coach-report#/definitions/primaryFix/properties/title": {
+    "type": "string"
+  },
+  "coach-report#/definitions/priority": {
+    "type": "object",
+    "required": [
+      "checkpoint",
+      "cue",
+      "key",
+      "label",
+      "leverage",
+      "score"
+    ]
+  },
+  "coach-report#/definitions/priority/properties/checkpoint": {
+    "type": "null|string"
+  },
+  "coach-report#/definitions/priority/properties/cue": {
+    "type": "string"
+  },
+  "coach-report#/definitions/priority/properties/key": {
+    "type": "string"
+  },
+  "coach-report#/definitions/priority/properties/label": {
+    "type": "string"
+  },
+  "coach-report#/definitions/priority/properties/leverage": {
+    "type": "number"
+  },
+  "coach-report#/definitions/priority/properties/score": {
+    "type": "number"
+  },
+  "coach-report#/properties/arc_shift": {
+    "type": "null|number"
+  },
+  "coach-report#/properties/band": {
+    "type": "null|string"
+  },
+  "coach-report#/properties/categories": {
+    "type": "object"
+  },
+  "coach-report#/properties/categories/additionalProperties": {
+    "ref": "#/definitions/category"
+  },
+  "coach-report#/properties/checkpoints": {
+    "type": "object"
+  },
+  "coach-report#/properties/checkpoints/additionalProperties": {
+    "ref": "#/definitions/checkpointScore"
+  },
+  "coach-report#/properties/club_type": {
+    "type": "null|string",
+    "enum": [
+      "\"driver\"",
+      "\"irons\"",
+      "null"
+    ]
+  },
+  "coach-report#/properties/coverage": {
+    "ref": "#/definitions/coverage"
+  },
+  "coach-report#/properties/drill": {
+    "ref": "#/definitions/drill"
+  },
+  "coach-report#/properties/findings": {
+    "type": "array"
+  },
+  "coach-report#/properties/findings/items": {
+    "ref": "#/definitions/finding"
+  },
+  "coach-report#/properties/overall": {
+    "type": "null|number"
+  },
+  "coach-report#/properties/primary": {
+    "ref": "#/definitions/primaryFix"
+  },
+  "coach-report#/properties/priorities": {
+    "type": "array"
+  },
+  "coach-report#/properties/priorities/items": {
+    "ref": "#/definitions/priority"
+  },
+  "coach-report#/properties/scoring_model_version": {
+    "type": "string"
+  },
+  "coach-report#/properties/view": {
+    "type": "string"
+  },
+  "silhouette#": {
+    "type": "object",
+    "required": [
+      "coverage",
+      "eps",
+      "frame_count",
+      "frames",
+      "height",
+      "model",
+      "notes",
+      "schema",
+      "source",
+      "width"
+    ]
+  },
+  "silhouette#/definitions/point": {
+    "type": "array"
+  },
+  "silhouette#/definitions/point/items/0": {
+    "type": "number"
+  },
+  "silhouette#/definitions/point/items/1": {
+    "type": "number"
+  },
+  "silhouette#/definitions/silhouetteFrame": {
+    "type": "object",
+    "required": [
+      "f",
+      "p"
+    ]
+  },
+  "silhouette#/definitions/silhouetteFrame/properties/f": {
+    "type": "integer"
+  },
+  "silhouette#/definitions/silhouetteFrame/properties/p": {
+    "type": "array"
+  },
+  "silhouette#/definitions/silhouetteFrame/properties/p/items": {
+    "type": "array"
+  },
+  "silhouette#/definitions/silhouetteFrame/properties/p/items/items": {
+    "ref": "#/definitions/point"
+  },
+  "silhouette#/properties/coverage": {
+    "type": "number"
+  },
+  "silhouette#/properties/eps": {
+    "type": "number"
+  },
+  "silhouette#/properties/frame_count": {
+    "type": "integer"
+  },
+  "silhouette#/properties/frames": {
+    "type": "array"
+  },
+  "silhouette#/properties/frames/items": {
+    "ref": "#/definitions/silhouetteFrame"
+  },
+  "silhouette#/properties/height": {
+    "type": "integer"
+  },
+  "silhouette#/properties/model": {
+    "type": "string"
+  },
+  "silhouette#/properties/notes": {
+    "type": "array"
+  },
+  "silhouette#/properties/notes/items": {
+    "type": "string"
+  },
+  "silhouette#/properties/schema": {
+    "type": "integer"
+  },
+  "silhouette#/properties/source": {
+    "type": "string"
+  },
+  "silhouette#/properties/width": {
+    "type": "integer"
+  }
+}

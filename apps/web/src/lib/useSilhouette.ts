@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Silhouette } from "@/lib/swings";
+import type { Silhouette } from "@swingsage/schema/contract";
 
 export interface SilhouetteData {
   /** Rings by frame, ready to fill. Empty until the fetch lands, and after a failure. */
@@ -56,7 +56,7 @@ export function useSilhouette(swingId: string, enabled: boolean,
     const ac = new AbortController();
     setLoading(true);
     setError(null);
-    fetch(`/api/swings/${swingId}/${kind}`, { signal: ac.signal })
+    fetch(`/api/v1/swings/${swingId}/${kind}`, { signal: ac.signal })
       .then((r) => {
         if (r.status === 404) return null;          // simply not analysed with Stage 2b
         if (!r.ok) throw new Error(`silhouette: ${r.status}`);

@@ -1,4 +1,4 @@
-import type { Analysis } from "@/lib/swings";
+import type { Analysis } from "@swingsage/schema/contract";
 
 /**
  * Frame-mapping between two swings, so a comparison pane shows the same *part of the swing* as

@@ -2,7 +2,7 @@ import { getAnalysis } from "@/lib/swings";
 import { requireViewAccess, viewParam } from "@/lib/auth";
 
 /**
- * the architecture spec API surface: GET /api/swings/:id/analysis.json
+ * the architecture spec API surface: GET /api/v1/swings/:id/analysis.json
  *
  * `?view=dtl|face_on` picks which camera's artifact, defaulting to the swing's primary view.
  * Every artifact route below takes the same parameter — one `analysis.json` per view is the

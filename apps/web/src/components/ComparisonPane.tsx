@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef } from "react";
-import type { Analysis } from "@/lib/swings";
+import type { Analysis } from "@swingsage/schema/contract";
 import type { Toggles } from "@/lib/overlays";
 import type { SwingSync } from "@/lib/swingSync";
 import { usePlayer } from "@/lib/usePlayer";

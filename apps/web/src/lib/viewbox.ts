@@ -1,4 +1,4 @@
-import type { Analysis } from "./swings";
+import type { Analysis } from "@swingsage/schema/contract";
 
 /**
  * The sub-rectangle of the frame worth showing, in the same normalized 0-1 space as every
@@ -141,7 +141,7 @@ export function computeViewBox(a: Analysis): ViewBox {
     // one overlay whose whole point is its shape, so trimming its ends to spare a few pixels
     // would be the wrong trade. It does reach past the per-frame club points: on swing1 the
     // trace runs x 0.011-0.752 where the club frames only reach 0.032-0.743.
-    for (const pts of Object.values(club.trace ?? {})) {
+    for (const pts of Object.values(club.trace)) {
       for (const p of pts ?? []) {
         x0 = Math.min(x0, p[0]); x1 = Math.max(x1, p[0]);
         y0 = Math.min(y0, p[1]); y1 = Math.max(y1, p[1]);

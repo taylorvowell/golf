@@ -1,24 +1,43 @@
-import Ajv, { type ErrorObject } from "ajv";
+import Ajv, { type ErrorObject, type ValidateFunction } from "ajv";
 import analysisSchema from "../schemas/analysis.schema.json" with { type: "json" };
-import type { Analysis } from "./generated/analysis.js";
-
-export type { Analysis } from "./generated/analysis.js";
-export { analysisSchema };
+import apiSchema from "../schemas/api.schema.json" with { type: "json" };
+import coachReportSchema from "../schemas/coach-report.schema.json" with { type: "json" };
+import silhouetteSchema from "../schemas/silhouette.schema.json" with { type: "json" };
+import type { Analysis } from "./generated/analysis";
+import type { CoachReport } from "./generated/coach-report";
+import type { Silhouette } from "./generated/silhouette";
 
 /**
  * One contract, three consumers: a Python producer and two TypeScript clients.
  *
- * The schema is the source of truth and `src/generated/` is derived from it — never edit the
+ * The schemas are the source of truth and `src/generated/` is derived from them — never edit a
  * generated file. `pnpm --filter @swingsage/schema check` fails if the two drift, which is what
  * stops a hand-edit quietly becoming the real contract.
  *
- * Validation matters more here than in most projects: a native app cannot be force-updated, so
- * a contract break that reaches a device is not hotfixable. Catching it at analysis time, on the
- * producing side, is the only cheap place to catch it.
+ * Validation matters more here than in most projects: a native app cannot be force-updated, so a
+ * contract break that reaches a device is not hotfixable. Catching it at analysis time, on the
+ * producing side, is the only cheap place to catch it — `swingsage/contract.py` runs these same
+ * schema files against the same artifacts before they are written.
+ *
+ * This entry point carries Ajv. Clients import `@swingsage/schema/contract` instead, which is
+ * the same types and rules with no validator attached.
  */
 
+export * from "./contract";
+export { breakingChanges, schemaSignature } from "./shape";
+export type { ShapeEntry, Signature } from "./shape";
+export { analysisSchema, apiSchema, coachReportSchema, silhouetteSchema };
+
+/**
+ * `strict: false` because the schemas carry prose the strict meta-schema objects to, and
+ * `allErrors` because a contract break is usually several fields at once — reporting only the
+ * first turns one fix into several round trips.
+ */
 const ajv = new Ajv({ allErrors: true, strict: false });
-const validateAnalysis = ajv.compile(analysisSchema);
+
+const validateAnalysisFn = ajv.compile(analysisSchema);
+const validateCoachReportFn = ajv.compile(coachReportSchema);
+const validateSilhouetteFn = ajv.compile(silhouetteSchema);
 
 export interface ValidationResult {
   valid: boolean;
@@ -30,58 +49,32 @@ function format(errors: ErrorObject[] | null | undefined): string[] {
   return (errors ?? []).map((e) => `${e.instancePath || "/"} ${e.message ?? "is invalid"}`);
 }
 
-export function validate(data: unknown): ValidationResult {
-  const valid = validateAnalysis(data) as boolean;
-  return { valid, errors: valid ? [] : format(validateAnalysis.errors) };
+function run(fn: ValidateFunction, data: unknown): ValidationResult {
+  const valid = fn(data) as boolean;
+  return { valid, errors: valid ? [] : format(fn.errors) };
+}
+
+export const validate = (data: unknown): ValidationResult => run(validateAnalysisFn, data);
+export const validateCoachReport = (data: unknown): ValidationResult =>
+  run(validateCoachReportFn, data);
+export const validateSilhouette = (data: unknown): ValidationResult =>
+  run(validateSilhouetteFn, data);
+
+function assertWith(label: string, result: ValidationResult): void {
+  if (!result.valid) {
+    throw new Error(`${label} failed schema validation:\n  ${result.errors.join("\n  ")}`);
+  }
 }
 
 /** Narrows on success; throws with every problem listed, not just the first. */
 export function assertAnalysis(data: unknown): asserts data is Analysis {
-  const { valid, errors } = validate(data);
-  if (!valid) {
-    throw new Error(`analysis.json failed schema validation:\n  ${errors.join("\n  ")}`);
-  }
+  assertWith("analysis.json", validate(data));
 }
 
-/** The eight GolfDB events, in the order the contract requires them to occur. */
-export const EVENT_ORDER = [
-  "address",
-  "toe_up",
-  "mid_backswing",
-  "top",
-  "mid_downswing",
-  "impact",
-  "mid_follow_through",
-  "finish",
-] as const;
-
-export type EventName = (typeof EVENT_ORDER)[number];
-
-/**
- * Strict event ordering is an invariant the analyzer's own test suite enforces, but it cannot
- * be expressed in JSON Schema — so it lives here, where both clients can apply the same check
- * to an artifact they did not produce.
- */
-export function eventsAreOrdered(a: Analysis): boolean {
-  const e = a.events as Record<string, { frame: number }> | undefined;
-  if (!e) return false;
-  let last = -1;
-  for (const name of EVENT_ORDER) {
-    const f = e[name]?.frame;
-    if (typeof f !== "number" || f < last) return false;
-    last = f;
-  }
-  return true;
+export function assertCoachReport(data: unknown): asserts data is CoachReport {
+  assertWith("coach_report.json", validateCoachReport(data));
 }
 
-/**
- * True when the pipeline is flagging its own tempo as untrustworthy.
- *
- * Clients must surface this rather than printing the ratio as fact — `7wood-1` reports 53.5:1
- * with three self-reported implausibilities, and a UI that ignored them would present a broken
- * detection as a measurement.
- */
-export function tempoIsFlagged(a: Analysis): boolean {
-  const t = a.tempo as { implausible?: unknown[] } | undefined;
-  return Array.isArray(t?.implausible) && t.implausible.length > 0;
+export function assertSilhouette(data: unknown): asserts data is Silhouette {
+  assertWith("silhouette.json", validateSilhouette(data));
 }

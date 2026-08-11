@@ -23,6 +23,12 @@ function localAddresses(): string[] {
 const nextConfig: NextConfig = {
   // Dev-only allowance; has no effect on a production build.
   allowedDevOrigins: localAddresses(),
+  /**
+   * `@swingsage/schema` is published as TypeScript source, not a build artifact — one generated
+   * contract, compiled by whichever app consumes it, so there is no dist/ that can lag the
+   * schema it came from. Next has to be told to transpile it like first-party code.
+   */
+  transpilePackages: ["@swingsage/schema"],
 };
 
 export default nextConfig;

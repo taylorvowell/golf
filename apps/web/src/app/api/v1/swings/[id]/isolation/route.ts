@@ -2,7 +2,7 @@ import { getIsolation } from "@/lib/swings";
 import { requireViewAccess, viewParam } from "@/lib/auth";
 
 /**
- * GET /api/swings/:id/isolation — golfer+club rings (body silhouette UNION attached
+ * GET /api/v1/swings/:id/isolation — golfer+club rings (body silhouette UNION attached
  * motion), same lazy-fetch reasoning as /silhouette. 404 means `scripts/isolate.py` has
  * not been run for this swing — a normal state, not an error.
  */

@@ -5,3 +5,9 @@
 #
 #   .venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 pytest>=9.0
+
+# Contract validation (swingsage/contract.py). Not strictly runtime — the module degrades to a
+# no-op when it is absent so a missing dev dependency can never stop a swing being analysed —
+# but with it absent the producing side stops enforcing the shared schema, which is the whole
+# point of packages/schema. Install it anywhere artifacts are written for real.
+jsonschema>=4.23

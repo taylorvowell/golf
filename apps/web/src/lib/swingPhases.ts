@@ -1,4 +1,4 @@
-import type { Analysis } from "@/lib/swings";
+import type { Analysis } from "@swingsage/schema/contract";
 
 /**
  * The five frames that divide a swing into the parts a coach names, and the single place the

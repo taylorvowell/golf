@@ -25,7 +25,7 @@ export interface SwingStages {
 }
 
 /**
- * Hand-corrected swing stages for one swing, from `/api/swings/:id/stages`.
+ * Hand-corrected swing stages for one swing, from `/api/v1/swings/:id/stages`.
  *
  * Saved on every change rather than batched behind a save button, unlike `useHeadMarkers`. The
  * two are different shapes of edit: a head position is a drag that emits a value per pointer
@@ -45,7 +45,7 @@ export function useSwingStages(swingId: string): SwingStages {
 
   useEffect(() => {
     const ac = new AbortController();
-    fetch(`/api/swings/${swingId}/stages`, { cache: "no-store", signal: ac.signal })
+    fetch(`/api/v1/swings/${swingId}/stages`, { cache: "no-store", signal: ac.signal })
       .then((r) => r.json())
       .then((d: { stages?: { stage: string; frame: number }[] }) => apply(d.stages ?? []))
       .catch((e: Error) => { if (e.name !== "AbortError") setError("could not load swing stages"); });
@@ -63,7 +63,7 @@ export function useSwingStages(swingId: string): SwingStages {
     });
     setSaving(true);
     setError(null);
-    fetch(`/api/swings/${swingId}/stages`, {
+    fetch(`/api/v1/swings/${swingId}/stages`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ stage, frame }),

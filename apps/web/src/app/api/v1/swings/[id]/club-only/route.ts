@@ -2,7 +2,7 @@ import { getClubOnly } from "@/lib/swings";
 import { requireViewAccess, viewParam } from "@/lib/auth";
 
 /**
- * GET /api/swings/:id/club-only — the subtractive isolation rings (attached motion minus
+ * GET /api/v1/swings/:id/club-only — the subtractive isolation rings (attached motion minus
  * the golfer's body): just the club, by elimination. Same lazy-fetch contract as
  * /silhouette and /isolation; 404 means `scripts/isolate.py` has not run for this swing.
  */

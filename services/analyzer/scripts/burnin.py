@@ -26,7 +26,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from swingsage import (checkpoints, club, club_detect, events, face,  # noqa: E402
+from swingsage import (checkpoints, club, club_detect, contract, events, face,  # noqa: E402
                        metrics, pose, pose_rtm, postprocess, render, scoring,
                        silhouette, source_timing, video)
 from swingsage.skeleton import KEYPOINT_NAMES, strip_derived  # noqa: E402
@@ -894,22 +894,21 @@ def main() -> int:
                     "promoted": rep.promoted, "interpolated": rep.interpolated,
                     "notes": rep.notes} if rep else None),
     }
-    # Write atomically. A re-run overwrites this file in place while the web app may be
-    # reading it, and a partial read is not a partial artifact — `getAnalysis` parses the whole
-    # file, so a truncated read throws, returns null, and the player 404s on a swing that
-    # exists. os.replace is atomic on the same filesystem, so a reader sees either the old
-    # artifact or the new one and never a half-written one.
-    tmp = out / "analysis.json.tmp"
-    tmp.write_text(json.dumps(doc), encoding="utf-8")
-    os.replace(tmp, out / "analysis.json")
+    # Validated against packages/schema, then written atomically.
+    #
+    # Validation first because a break that reaches a device cannot be hotfixed — an app in a
+    # store keeps reading these for months. Atomic because a re-run overwrites in place while the
+    # web app may be reading, and a partial read is not a partial artifact: the reader parses the
+    # whole file, so a truncated read throws, returns null, and the player 404s on a swing that
+    # exists. os.replace on the same filesystem means a reader sees either the old artifact or
+    # the new one and never a half-written one.
+    contract.write_json("analysis", doc, out / "analysis.json")
 
-    # Its own file, and written the same atomic way for the same reason: the web app may be
-    # reading it while a re-analysis rewrites it, and a truncated read is not a partial
-    # silhouette — it throws and the overlay 404s on a swing that has one.
+    # Its own file, and written the same way for the same reasons: the web app may be reading it
+    # while a re-analysis rewrites it, and a truncated read is not a partial silhouette — it
+    # throws and the overlay 404s on a swing that has one.
     if sil_doc:
-        tmp = out / "silhouette.json.tmp"
-        tmp.write_text(json.dumps(sil_doc), encoding="utf-8")
-        os.replace(tmp, out / "silhouette.json")
+        contract.write_json("silhouette", sil_doc, out / "silhouette.json")
 
     # --- Stage 8: deterministic scoring (the scoring spec's Part C1) -----------------------------
     # After analysis.json, not before: coach_report.json is a separate artifact (the architecture spec's data

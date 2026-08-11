@@ -1,4 +1,4 @@
-import type { Analysis } from "./swings";
+import type { Analysis } from "@swingsage/schema/contract";
 
 /** Approach shown before the swing, and hold shown after it, when deriving a fallback. */
 const LEAD_S = 1.0;

@@ -197,9 +197,20 @@ from CSS, not a JS config), and the shared card/panel shapes as named components
 **Pages:** `/` (swing list, Postgres-backed, sortable by denormalized score/band) and
 `/swing/[id]` (the workspace).
 
-**API routes:** `GET /api/swings`, and per swing: `analysis`, `silhouette`, `isolation`,
-`club-only`, `markers`, `stages`, `reanalyze` (POST start / GET poll), `thumb`, `video`. Media
-is served off disk from `SWINGSAGE_MEDIA_ROOT` (the analyzer's `out/`).
+**API routes — all under `/api/v1/`, nothing unversioned (D41).** `GET /api/v1/swings`, and per
+swing: `analysis`, `silhouette`, `isolation`, `club-only`, `markers`, `stages`, `reanalyze` (POST
+start / GET poll), `thumb`, `video`. Plus `GET /api/v1/client`, the one unauthenticated route:
+version negotiation, so a build too old to sign in can still learn that it is too old. A test
+enumerates the route files and fails on any that is unversioned or unguarded. `proxy.ts` answers
+**426** with an `UpgradeRequired` body to any client below `SWINGSAGE_MIN_CLIENT_VERSION`, and
+fails open for a caller that sends no version header. Media goes through `lib/media`, addressed by
+identity (D33); no route reads the filesystem for it.
+
+**The contract lives in `packages/schema`.** JSON Schema for `analysis.json`,
+`coach_report.json`, `silhouette.json` and the API bodies; TypeScript generated from it and
+imported by both clients; the analyzer validates against the same files before writing.
+`schemas/shape-lock.json` fails the suite on any non-additive change. `pnpm schema:generate` /
+`pnpm schema:check`; re-lock with `pnpm --filter @swingsage/schema lock`.
 
 **The player** (`SwingWorkspace` → `SwingStage` + three folder tabs):
 

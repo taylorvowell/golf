@@ -1,0 +1,6 @@
+# The generated contract is compared byte-for-byte in CI (`git diff --exit-code` after
+# regenerating). This repo is developed on Windows with core.autocrlf=true, so without pinning
+# these to LF a commit could carry CRLF into the repo and fail that check on Linux for a reason
+# that has nothing to do with the schema.
+packages/schema/src/generated/*.ts text eol=lf
+packages/schema/schemas/*.json      text eol=lf

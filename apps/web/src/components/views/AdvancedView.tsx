@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { Analysis } from "@/lib/swings";
+import type { Analysis } from "@swingsage/schema/contract";
 import type { Player } from "@/lib/usePlayer";
-import type { Scorecard } from "@/lib/scoreDisplay";
+import type { CoachReport } from "@swingsage/schema/contract";
 import { ANGLE_COLORS } from "@/lib/angleOverlay";
 import { EV_SHORT } from "@/lib/skeleton";
 import { useDragScroll } from "@/lib/useDragScroll";
@@ -34,7 +34,7 @@ export default function AdvancedView({
   analysis, scorecard, player, angles, onToggleAngle,
 }: {
   analysis: Analysis;
-  scorecard: Scorecard | null;
+  scorecard: CoachReport | null;
   player: Player;
   angles: string[];
   onToggleAngle: (field: string) => void;

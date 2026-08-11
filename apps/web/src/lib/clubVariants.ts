@@ -2,7 +2,7 @@
 // the Debug Menu (picking). Extracted when the picker moved out of the video's Overlay
 // menu: engineering comparisons live in Debug, the Overlay menu stays a viewer control
 // (user directive 2026-08-08).
-import type { Analysis } from "@/lib/swings";
+import type { Analysis } from "@swingsage/schema/contract";
 
 export interface ClubVariantOption {
   key: string;

@@ -1,8 +1,8 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { EVENT_ORDER, assertAnalysis, eventsAreOrdered, tempoIsFlagged, validate } from "./index.js";
-import type { Analysis } from "./generated/analysis.js";
+import { EVENT_ORDER, assertAnalysis, eventsAreOrdered, tempoIsFlagged, validate } from "./index";
+import type { Analysis } from "./generated/analysis";
 
 /**
  * The schema only earns trust if it validates the artifacts the pipeline actually writes.
@@ -62,13 +62,56 @@ describe("real artifacts on disk", () => {
   }
 });
 
+/**
+ * The smallest artifact the schema accepts — every block the pipeline has emitted since schema
+ * 1, and nothing that arrived later. That is what `required` means here: not "what burnin.py
+ * writes today", but "what is true of every artifact ever stored", because those are the ones
+ * still being read.
+ *
+ * The blocks deliberately absent are the version-dependent ones: `checkpoints` (3),
+ * `playback_window` (5), `posture` (8), `playback_pad` (9). A client must render without them.
+ */
+export const minimalArtifact = (): Record<string, unknown> => ({
+  schema_version: 9,
+  video: {
+    fps: 60,
+    frame_count: 300,
+    width: 1080,
+    height: 1920,
+    view: "dtl",
+    handedness: "right",
+    source: {
+      path: "/clips/x.mp4",
+      is_vfr: false,
+      codec: "h264",
+      rotation: 0,
+      width: 1080,
+      height: 1920,
+      fps: 59.94,
+    },
+    analysis_res: { width: 1080, height: 1920 },
+  },
+  pose: {
+    model: "rtmpose",
+    keypoint_names: Array.from({ length: 49 }, (_, i) => `k${i}`),
+    frames: [],
+  },
+  events: Object.fromEntries(EVENT_ORDER.map((e, i) => [e, { frame: i * 10, conf: 0.9 }])),
+  phases: null,
+  tempo: null,
+  swing_window: null,
+  address_span: null,
+  club: null,
+  face: null,
+  metrics: null,
+  quality: { frames: 300, detection_coverage: 1, overall_mean_conf: 0.9, per_joint: {} },
+  quality_raw: null,
+  quality_mediapipe: null,
+  stage3: null,
+});
+
 describe("the schema rejects what it should", () => {
-  const minimal = (): Record<string, unknown> => ({
-    schema_version: 9,
-    video: { fps: 60, frame_count: 300, width: 1080, height: 1920 },
-    pose: { keypoint_names: Array.from({ length: 49 }, (_, i) => `k${i}`), frames: [] },
-    events: Object.fromEntries(EVENT_ORDER.map((e, i) => [e, { frame: i * 10, conf: 0.9 }])),
-  });
+  const minimal = minimalArtifact;
 
   it("accepts a minimal well-formed artifact", () => {
     expect(validate(minimal()).valid).toBe(true);
@@ -133,13 +176,23 @@ describe("assertAnalysis", () => {
   });
 
   it("passes a valid artifact through", () => {
-    const ok = {
-      schema_version: 9,
-      video: { fps: 60, frame_count: 300, width: 1080, height: 1920 },
-      pose: { keypoint_names: Array.from({ length: 49 }, (_, i) => `k${i}`), frames: [] },
-      events: Object.fromEntries(EVENT_ORDER.map((e, i) => [e, { frame: i * 10 }])),
-    };
-    expect(() => assertAnalysis(ok)).not.toThrow();
+    expect(() => assertAnalysis(minimalArtifact())).not.toThrow();
+  });
+
+  it("rejects an artifact missing a block that has always been written", () => {
+    const bad = minimalArtifact();
+    delete bad.quality;
+    expect(() => assertAnalysis(bad)).toThrow(/quality/);
+  });
+
+  it("accepts one missing only the blocks introduced after schema 1", () => {
+    // checkpoints (3), playback_window (5), posture (8), playback_pad (9) are already absent
+    // from `minimalArtifact`; this states it as a property rather than leaving it implied.
+    const old = minimalArtifact();
+    for (const late of ["checkpoints", "playback_window", "playback_pad", "posture"]) {
+      expect(late in old).toBe(false);
+    }
+    expect(validate(old).valid).toBe(true);
   });
 });
 

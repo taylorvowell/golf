@@ -2,13 +2,24 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://swingsage.dev/schemas/analysis.schema.json",
   "title": "Analysis",
-  "description": "The single contract between the analyzer and every client. Deliberately STRICT on the properties clients depend on and PERMISSIVE on the deep interior of metrics/quality, whose field set legitimately varies by pose model and view \u2014 over-specifying those would produce failures that mean nothing. Evolve additively only: new fields, never reordering or repurposing, because a native app cannot be force-updated and old builds keep reading these artifacts for months.",
+  "description": "The single contract between the analyzer and every client — one artifact per analysed video.\n\nTwo rules govern everything below.\n\nSTRICT ON SHAPE, PERMISSIVE ON PRESENCE. Every field a client renders is described here so the generated TypeScript is complete, but `required` stays confined to what the pipeline has always emitted. A block absent because the run skipped it (`--no-club`) is not a contract break; a block whose `head` stopped being a normalised pair is.\n\nADDITIVE ONLY. Unknown properties validate — a client built for schema 9 must keep working against an artifact written at 11, because a native app cannot be force-updated and old builds read these artifacts for months. `shape-lock.json` enforces the other direction: nothing here may be removed, retyped, or newly required.\n\nCoordinates are normalized 0–1 (x right, y down) so a client only ever scales. Confidence is truncated, never rounded — a value rounding up onto MIN_CONF makes a client draw a point the analyzer dropped.",
   "type": "object",
   "required": [
     "schema_version",
     "video",
     "pose",
-    "events"
+    "events",
+    "phases",
+    "tempo",
+    "swing_window",
+    "address_span",
+    "club",
+    "face",
+    "metrics",
+    "quality",
+    "quality_raw",
+    "quality_mediapipe",
+    "stage3"
   ],
   "properties": {
     "schema_version": {
@@ -17,17 +28,273 @@
       "description": "Incremented when the contract changes. Clients must tolerate a HIGHER value than they were built for by ignoring unknown fields."
     },
     "video": {
+      "$ref": "#/definitions/video"
+    },
+    "pose": {
+      "$ref": "#/definitions/pose"
+    },
+    "events": {
+      "title": "Events",
+      "type": "object",
+      "description": "The eight GolfDB events, strictly ordered by frame. Ordering itself is not expressible in JSON Schema — `eventsAreOrdered()` checks it.",
+      "required": [
+        "address",
+        "toe_up",
+        "mid_backswing",
+        "top",
+        "mid_downswing",
+        "impact",
+        "mid_follow_through",
+        "finish"
+      ],
+      "additionalProperties": {
+        "$ref": "#/definitions/event"
+      }
+    },
+    "checkpoints": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "description": "P1–P10. Null on analyses produced before Stage 5b existed.",
+      "items": {
+        "$ref": "#/definitions/checkpoint"
+      }
+    },
+    "phases": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/definitions/phase"
+      }
+    },
+    "swing_window": {
+      "description": "Stage 3's motion-burst gate, around the hand-speed peak. Far too tight to play.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/frameRange"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "playback_window": {
+      "description": "The span worth playing, pinned to address − 1s … finish + 1s so every clip's lead-in and run-out match. Absent before schema 5; the player derives an equivalent from the events, so it degrades rather than breaking. The comparison view depends on it.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/frameRange"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "playback_pad": {
+      "description": "Frames of the fixed one second the clip was too short to supply, held as a freeze frame so every swing's lead-in and run-out are the same length. Absent before schema 9.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/frameRange"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "address_span": {
+      "description": "The quasi-static hold ending at the address event; setup metrics are medians over it.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/frameRange"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "tempo": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/tempo"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "club": {
+      "description": "Null when the swing was analysed with --no-club.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/club"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "face": {
+      "description": "Club head ORIENTATION only. Never a fabricated impact face angle — degrees require a launch monitor, and the impact entry always defers to one.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/face"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "metrics": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/metrics"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "posture": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/posture"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "quality": {
+      "$ref": "#/definitions/quality"
+    },
+    "quality_raw": {
+      "description": "The same coverage figures before postprocessing, so a gain can be attributed.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/quality"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "quality_mediapipe": {
+      "description": "The MediaPipe baseline, present only on an RTMPose run.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/quality"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "stage3": {
+      "description": "Postprocessing counters — how many joints were swapped, rejected, promoted or interpolated.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/openMap"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "definitions": {
+    "openMap": {
+      "title": "OpenMap",
+      "type": "object",
+      "additionalProperties": {}
+    },
+    "frameRange": {
+      "title": "FrameRange",
+      "type": "array",
+      "description": "Inclusive [from, to] frame indices.",
+      "items": [
+        {
+          "type": "integer",
+          "minimum": 0
+        },
+        {
+          "type": "integer",
+          "minimum": 0
+        }
+      ],
+      "additionalItems": false,
+      "minItems": 2
+    },
+    "point": {
+      "title": "Point",
+      "type": "array",
+      "description": "A normalized [x, y] position — x by frame width, y by frame height.",
+      "items": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "additionalItems": false,
+      "minItems": 2
+    },
+    "keypoint": {
+      "title": "Keypoint",
+      "type": "array",
+      "description": "[x, y, confidence] — position normalized 0–1, confidence TRUNCATED to the artifact's precision so re-applying MIN_CONF on the client keeps the analyzer's own answer.",
+      "items": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "additionalItems": false,
+      "minItems": 3
+    },
+    "event": {
+      "title": "SwingEvent",
+      "type": "object",
+      "required": [
+        "frame"
+      ],
+      "properties": {
+        "frame": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "conf": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "video": {
+      "title": "VideoInfo",
       "type": "object",
       "required": [
         "fps",
         "frame_count",
         "width",
-        "height"
+        "height",
+        "view",
+        "handedness",
+        "source",
+        "analysis_res"
       ],
       "properties": {
         "fps": {
           "type": "number",
-          "exclusiveMinimum": 0
+          "exclusiveMinimum": 0,
+          "description": "The CFR rate the clip was normalized to. `frame = round(currentTime * fps)` is only exact because of that normalization."
         },
         "frame_count": {
           "type": "integer",
@@ -53,23 +320,82 @@
           "enum": [
             "right",
             "left"
-          ]
+          ],
+          "description": "Sets which anatomical side is lead. Never inferred from which side faces the camera — that inverts for a left-handed golfer."
         },
         "source": {
-          "type": "object",
-          "properties": {
-            "path": {
-              "type": "string"
-            }
-          },
-          "additionalProperties": true
+          "$ref": "#/definitions/videoSource"
+        },
+        "analysis_res": {
+          "$ref": "#/definitions/resolution"
+        }
+      }
+    },
+    "videoSource": {
+      "title": "VideoSource",
+      "type": "object",
+      "description": "The clip this artifact was produced from, as it arrived — before CFR normalization.",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Absolute path to the clip; what a re-analysis re-reads."
+        },
+        "is_vfr": {
+          "type": "boolean",
+          "description": "True when the phone wrote variable frame rate, which breaks frame ↔ time arithmetic until normalized."
+        },
+        "codec": {
+          "type": "string"
+        },
+        "rotation": {
+          "type": "integer"
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "fps": {
+          "type": "number",
+          "exclusiveMinimum": 0
         }
       },
-      "additionalProperties": true
+      "required": [
+        "path",
+        "is_vfr",
+        "codec",
+        "rotation",
+        "width",
+        "height",
+        "fps"
+      ]
+    },
+    "resolution": {
+      "title": "Resolution",
+      "type": "object",
+      "properties": {
+        "width": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "width",
+        "height"
+      ]
     },
     "pose": {
+      "title": "Pose",
       "type": "object",
       "required": [
+        "model",
         "keypoint_names",
         "frames"
       ],
@@ -79,7 +405,7 @@
         },
         "keypoint_names": {
           "type": "array",
-          "description": "Fixed, append-only order: 33 native, 7 derived, 8 measured, 1 derived-tail. The measured block sits AFTER the derived one so published indices 0-39 keep their meaning.",
+          "description": "Fixed, APPEND-ONLY order: 33 native, 7 derived, 8 measured, 1 derived-tail. The measured block sits after the derived one precisely so published indices 0–39 keep their meaning. Undo the derived joints with skeleton.strip_derived() — the two derived blocks are not contiguous.",
           "items": {
             "type": "string"
           },
@@ -88,127 +414,130 @@
         "frames": {
           "type": "array",
           "items": {
-            "type": "object",
-            "required": [
-              "f"
-            ],
-            "properties": {
-              "f": {
-                "type": "integer",
-                "minimum": 0
-              },
-              "kp": {
-                "type": "array",
-                "items": {
-                  "type": "array",
-                  "items": {
-                    "type": "number"
-                  }
-                }
-              },
-              "interp": {
-                "type": "boolean"
-              }
-            },
-            "additionalProperties": true
+            "$ref": "#/definitions/poseFrame"
           }
         }
-      },
-      "additionalProperties": true
+      }
     },
-    "events": {
+    "poseFrame": {
+      "title": "PoseFrame",
       "type": "object",
-      "description": "The eight GolfDB events, strictly ordered by frame.",
       "required": [
-        "address",
-        "toe_up",
-        "mid_backswing",
-        "top",
-        "mid_downswing",
-        "impact",
-        "mid_follow_through",
-        "finish"
+        "f",
+        "kp",
+        "st",
+        "interp"
       ],
-      "additionalProperties": {
-        "$ref": "#/definitions/event"
-      }
-    },
-    "checkpoints": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": [
-          "p",
-          "frame"
-        ],
-        "properties": {
-          "p": {
-            "type": "string"
-          },
-          "id": {
-            "type": "string"
-          },
-          "label": {
-            "type": "string"
-          },
-          "phase": {
-            "type": "string"
-          },
-          "event": {
-            "type": [
-              "string",
-              "null"
-            ],
-            "description": "The GolfDB event this checkpoint coincides with, or null for P6 and P9, which are shaft- and arm-defined and have no event."
-          },
-          "frame": {
-            "type": "integer",
-            "minimum": 0
+      "properties": {
+        "f": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "kp": {
+          "type": "array",
+          "description": "One entry per published keypoint name, in that order.",
+          "items": {
+            "$ref": "#/definitions/keypoint"
           }
         },
-        "additionalProperties": true
-      }
-    },
-    "phases": {
-      "type": "array",
-      "items": {
-        "type": "object",
-        "required": [
-          "name",
-          "from",
-          "to"
-        ],
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "from": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "to": {
-            "type": "integer",
-            "minimum": 0
+        "st": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "description": "Per-keypoint provenance state, when the postprocessor recorded one.",
+          "items": {
+            "type": "number"
           }
         },
-        "additionalProperties": true
+        "interp": {
+          "type": "boolean",
+          "description": "This frame's pose was interpolated rather than detected."
+        }
       }
     },
-    "swing_window": {
-      "$ref": "#/definitions/frameRange"
+    "checkpoint": {
+      "title": "Checkpoint",
+      "type": "object",
+      "description": "One of the ten coaching positions (P1–P10). Eight are the GolfDB events under the names a golfer uses; P6 (shaft parallel coming down) and P9 (trail arm parallel through) are the two the eight do not cover, and `event` is null for exactly those.",
+      "required": [
+        "p",
+        "id",
+        "label",
+        "phase",
+        "event",
+        "frame",
+        "conf",
+        "basis",
+        "definition"
+      ],
+      "properties": {
+        "p": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "phase": {
+          "type": "string",
+          "enum": [
+            "setup",
+            "backswing",
+            "downswing",
+            "impact",
+            "follow_through",
+            "finish"
+          ]
+        },
+        "event": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "frame": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "conf": {
+          "type": "number"
+        },
+        "basis": {
+          "type": "string",
+          "description": "How this frame was decided, in words — so a low confidence is diagnosable rather than merely low."
+        },
+        "definition": {
+          "type": "string"
+        }
+      }
     },
-    "playback_window": {
-      "$ref": "#/definitions/frameRange",
-      "description": "Pinned to address - 1s .. finish + 1s so every clip's lead-in and run-out match. The comparison view depends on this."
-    },
-    "playback_pad": {
-      "$ref": "#/definitions/frameRange",
-      "description": "Frames of the fixed one second the clip was too short to supply; the player freezes the end frame for the shortfall."
-    },
-    "address_span": {
-      "$ref": "#/definitions/frameRange"
+    "phase": {
+      "title": "Phase",
+      "type": "object",
+      "required": [
+        "name",
+        "from",
+        "to"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "from": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "to": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
     },
     "tempo": {
+      "title": "Tempo",
       "type": "object",
       "properties": {
         "backswing_frames": {
@@ -235,77 +564,1040 @@
             "array",
             "null"
           ],
-          "description": "Null when tempo is plausible; otherwise the reasons it should not be trusted. Non-empty means the pipeline is flagging its own output and clients must surface that rather than printing the ratio as fact.",
+          "description": "Null when tempo is plausible; otherwise the reasons it should not be trusted. Non-empty means the pipeline is flagging its own output, and a client must surface that rather than printing the ratio as fact.",
           "items": {
             "type": "string"
           }
         }
       },
-      "additionalProperties": true
+      "required": [
+        "backswing_frames",
+        "downswing_frames",
+        "ratio",
+        "backswing_ms",
+        "downswing_ms"
+      ]
     },
-    "club": {
+    "traceSegments": {
+      "title": "TraceSegments",
       "type": "object",
-      "additionalProperties": true
+      "description": "The drawn club-head path, split by swing segment. NOT one point per frame — only the frames the detector answered — so growing it with the playhead by point count puts the head of the line tens of frames from the club.",
+      "properties": {
+        "backswing": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/point"
+          }
+        },
+        "downswing": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/point"
+          }
+        },
+        "followthrough": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/point"
+          }
+        }
+      },
+      "required": [
+        "backswing",
+        "downswing",
+        "followthrough"
+      ]
     },
-    "face": {
+    "traceFrames": {
+      "title": "TraceFrames",
       "type": "object",
-      "description": "Checkpoint CLASSIFICATIONS only (square/open/closed). Never a fabricated face-angle degree from video \u2014 degrees require a launch monitor.",
-      "additionalProperties": true
+      "description": "The frame each trace point was measured on, parallel to `trace`. Absent before schema 6. It is also what tells the renderer which spans were bridged (a frame step > 2) and must be drawn as unmeasured — the trace never interpolates across a gap.",
+      "properties": {
+        "backswing": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "downswing": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "followthrough": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "required": [
+        "backswing",
+        "downswing",
+        "followthrough"
+      ]
     },
-    "metrics": {
-      "type": "object",
-      "additionalProperties": true
-    },
-    "posture": {
-      "type": "object",
-      "additionalProperties": true
-    },
-    "quality": {
-      "type": "object",
-      "additionalProperties": true
-    },
-    "quality_raw": {
-      "type": "object",
-      "additionalProperties": true
-    },
-    "quality_mediapipe": {
-      "type": "object",
-      "additionalProperties": true
-    },
-    "stage3": {
-      "type": "object",
-      "additionalProperties": true
-    }
-  },
-  "additionalProperties": true,
-  "definitions": {
-    "event": {
+    "clubFrame": {
+      "title": "ClubFrame",
       "type": "object",
       "required": [
-        "frame"
+        "f",
+        "shaft",
+        "head",
+        "butt",
+        "conf",
+        "interp"
       ],
       "properties": {
+        "f": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "shaft": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "description": "The shaft as two normalized endpoints, butt first.",
+          "items": {
+            "$ref": "#/definitions/point"
+          }
+        },
+        "head": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/point"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "butt": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/point"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "conf": {
+          "type": "number"
+        },
+        "shaft_angle_deg": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "blurred": {
+          "type": "boolean"
+        },
+        "interp": {
+          "type": "boolean"
+        },
+        "from_model": {
+          "type": "boolean",
+          "description": "This position came from the learned detector rather than the classical solver."
+        },
+        "from_ball": {
+          "type": "boolean",
+          "description": "Placed on the ball at Impact from the Address landmark (club.anchor_ball), NOT found in this frame. A third provenance on purpose — never the same thing as a detection."
+        }
+      }
+    },
+    "clubCoverage": {
+      "title": "ClubCoverage",
+      "type": "object",
+      "description": "Fraction of frames with a club position, per segment. Coverage has overstated club quality three separate times — look at checkclub.py before believing it.",
+      "additionalProperties": {
+        "type": "number"
+      }
+    },
+    "rawBox": {
+      "title": "RawBox",
+      "type": "object",
+      "description": "One detection exactly as the model emitted it: `c` the class id (0 clubhead, 1 stick), `xy` the box centre, `wh` its size — both normalized — and `p` the model's own confidence.",
+      "required": [
+        "c",
+        "xy",
+        "wh",
+        "p"
+      ],
+      "properties": {
+        "c": {
+          "type": "integer"
+        },
+        "xy": {
+          "$ref": "#/definitions/point"
+        },
+        "wh": {
+          "$ref": "#/definitions/point"
+        },
+        "p": {
+          "type": "number"
+        }
+      }
+    },
+    "clubDetector": {
+      "title": "ClubDetector",
+      "type": "object",
+      "description": "The learned detector's provenance and its RAW output. `boxes` is deliberately unprocessed — no confidence gate, no geometric rejection, no dependence on the solver — so the model can be judged separately from the pipeline's interpretation of it.",
+      "properties": {
+        "weights": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string"
+        },
+        "bytes": {
+          "type": "integer"
+        },
+        "imgsz": {
+          "type": "integer"
+        },
+        "conf": {
+          "type": "number"
+        },
+        "device": {
+          "type": "string"
+        },
+        "frames": {
+          "type": "integer"
+        },
+        "frames_with_head": {
+          "type": "integer"
+        },
+        "head_detections": {
+          "type": "integer"
+        },
+        "names": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "inject": {
+          "type": "string",
+          "description": "Which classes fed the solver: none | heads | sticks | both."
+        },
+        "classes": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "boxes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rawBoxFrame"
+          }
+        }
+      },
+      "required": [
+        "weights",
+        "sha256"
+      ]
+    },
+    "rawBoxFrame": {
+      "title": "RawBoxFrame",
+      "type": "object",
+      "required": [
+        "f",
+        "d"
+      ],
+      "properties": {
+        "f": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "d": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/rawBox"
+          }
+        }
+      }
+    },
+    "clubVariant": {
+      "title": "ClubVariant",
+      "type": "object",
+      "description": "An alternative club solution over the same frames and the same detections. RENDER-ONLY: metrics, face and event refinement all read the primary block. Present so the player can switch without re-running the analyzer, because there is no ground-truth position metric yet to pick a winner.",
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "coverage": {
+          "$ref": "#/definitions/clubCoverage"
+        },
+        "club_len": {
+          "type": "number"
+        },
+        "butt_len": {
+          "type": "number"
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "frames": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/clubFrame"
+          }
+        },
+        "trace": {
+          "$ref": "#/definitions/traceSegments"
+        },
+        "trace_frames": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/traceFrames"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "label",
+        "coverage",
+        "club_len",
+        "butt_len",
+        "notes",
+        "frames",
+        "trace"
+      ]
+    },
+    "ball": {
+      "title": "Ball",
+      "type": "object",
+      "description": "The ball, when it was located — normalized, with `r` the radius as a fraction of frame height. Null when it could not be found, never a guess: anchor_ball writes a club position from it.",
+      "properties": {
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        },
+        "r": {
+          "type": "number"
+        },
+        "source": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "x",
+        "y",
+        "r",
+        "source"
+      ]
+    },
+    "club": {
+      "title": "Club",
+      "type": "object",
+      "description": "The per-frame club head and the drawn trace are DIFFERENT PRODUCTS. `frames` is judged by checkclub.py, `trace` by checktrace.py; a good sheet for one says nothing about the other.",
+      "properties": {
+        "club_len": {
+          "type": "number"
+        },
+        "butt_len": {
+          "type": "number"
+        },
+        "coverage": {
+          "$ref": "#/definitions/clubCoverage"
+        },
+        "trace_enabled": {
+          "type": "boolean",
+          "description": "False when club coverage was too low to draw an honest line. The analysis still succeeds; the trace is disabled and club-dependent checks abstain."
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ball": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ball"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "detector": {
+          "description": "Null when the swing was analysed without --club-detector.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/clubDetector"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "frames": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/clubFrame"
+          }
+        },
+        "trace": {
+          "$ref": "#/definitions/traceSegments"
+        },
+        "trace_frames": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/traceFrames"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "variants": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/definitions/clubVariant"
+          }
+        }
+      },
+      "required": [
+        "club_len",
+        "butt_len",
+        "coverage",
+        "trace_enabled",
+        "notes",
+        "frames",
+        "trace"
+      ]
+    },
+    "faceCheckpoint": {
+      "title": "FaceCheckpoint",
+      "type": "object",
+      "description": "A CLASSIFICATION (square/open/closed), or the reason one is not measurable. Never a degree.",
+      "required": [
+        "class",
+        "conf"
+      ],
+      "properties": {
+        "class": {
+          "type": "string"
+        },
+        "conf": {
+          "type": "number"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "head_to_shaft_deg": {
+          "type": "number"
+        },
+        "deviation_deg": {
+          "type": "number"
+        },
+        "n_frames": {
+          "type": "integer"
+        }
+      }
+    },
+    "faceFrame": {
+      "title": "FaceFrame",
+      "type": "object",
+      "required": [
+        "f",
+        "head_axis_deg",
+        "to_shaft_deg",
+        "conf"
+      ],
+      "properties": {
+        "f": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "head_axis_deg": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "to_shaft_deg": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "conf": {
+          "type": "number"
+        }
+      }
+    },
+    "face": {
+      "title": "Face",
+      "type": "object",
+      "properties": {
+        "checkpoints": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/faceCheckpoint"
+          }
+        },
+        "frames": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/faceFrame"
+          }
+        },
+        "capability_note": {
+          "type": "string",
+          "description": "What video can and cannot say about the face. Shown to the golfer rather than quietly implied."
+        }
+      },
+      "required": [
+        "checkpoints",
+        "frames",
+        "capability_note"
+      ]
+    },
+    "metricValues": {
+      "title": "MetricValues",
+      "type": "object",
+      "description": "One frame or checkpoint's angle values. Null means NOT MEASURABLE IN THIS VIEW, never zero.",
+      "additionalProperties": {
+        "type": [
+          "number",
+          "string",
+          "boolean",
+          "null"
+        ]
+      }
+    },
+    "pointExpr": {
+      "title": "PointExpr",
+      "description": "Where a piece of an angle's geometry lives: a keypoint name, a first-tracked-wins chain (optionally told by `src` which per-frame series field recorded the anchor that answered), a fraction along heel→toe averaged over both feet, or the tracked club head.",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "title": "PointChain",
+          "type": "object",
+          "required": [
+            "chain"
+          ],
+          "properties": {
+            "chain": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "src": {
+              "type": "string"
+            }
+          }
+        },
+        {
+          "title": "PointFeet",
+          "type": "object",
+          "required": [
+            "feet"
+          ],
+          "properties": {
+            "feet": {
+              "type": "number"
+            }
+          }
+        },
+        {
+          "title": "PointClub",
+          "type": "object",
+          "required": [
+            "club"
+          ],
+          "properties": {
+            "club": {
+              "type": "string",
+              "enum": [
+                "head"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "pointPair": {
+      "title": "PointPair",
+      "type": "array",
+      "items": [
+        {
+          "$ref": "#/definitions/pointExpr"
+        },
+        {
+          "$ref": "#/definitions/pointExpr"
+        }
+      ],
+      "additionalItems": false,
+      "minItems": 2
+    },
+    "angleGeom": {
+      "title": "AngleGeom",
+      "type": "object",
+      "description": "Where an angle lives on the body, so a client can draw it over the video. Every kind is a vertex plus two rays; they differ only in what the second ray is — another bone (`interior`), straight up (`vertical`), straight down (`plumb`), or along +x (`horizontal`, which is what the stack and tilt angles are measured from).\n\n`supplement` marks a `_flex` field, whose arc opens from the bone's continuation through the joint because the number is departure from straight. `vectors` is for wrist hinge alone: forearm and shaft share no endpoint, so no single vertex would be honest.",
+      "required": [
+        "kind"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "interior",
+            "vertical",
+            "plumb",
+            "horizontal",
+            "vectors"
+          ]
+        },
+        "vertex": {
+          "$ref": "#/definitions/pointExpr"
+        },
+        "a": {
+          "$ref": "#/definitions/pointExpr"
+        },
+        "b": {
+          "$ref": "#/definitions/pointExpr"
+        },
+        "supplement": {
+          "type": "boolean"
+        },
+        "from": {
+          "$ref": "#/definitions/pointExpr"
+        },
+        "to": {
+          "$ref": "#/definitions/pointExpr"
+        },
+        "guide": {
+          "type": "string",
+          "enum": [
+            "plumb"
+          ]
+        },
+        "at": {
+          "$ref": "#/definitions/pointExpr"
+        },
+        "u": {
+          "$ref": "#/definitions/pointPair"
+        },
+        "v": {
+          "$ref": "#/definitions/pointPair"
+        }
+      }
+    },
+    "angleField": {
+      "title": "AngleField",
+      "type": "object",
+      "description": "One row of the angle catalogue, emitted by the analyzer so the table is data-driven and the field list is never duplicated client-side.",
+      "required": [
+        "field",
+        "label",
+        "view",
+        "delta",
+        "when",
+        "geom"
+      ],
+      "properties": {
+        "field": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "view": {
+          "type": "string",
+          "enum": [
+            "both",
+            "dtl",
+            "face_on"
+          ],
+          "description": "The view this number means what its name says in. Computed but misleading elsewhere — every 2D joint angle is projection-sensitive."
+        },
+        "delta": {
+          "type": "boolean",
+          "description": "False where the field is already measured against address."
+        },
+        "when": {
+          "type": "string",
+          "enum": [
+            "setup",
+            "swing",
+            "both"
+          ],
+          "description": "`setup` fields are only interpretable at P1 — arm hang at the top is meaningless."
+        },
+        "geom": {
+          "description": "Null where the angle has no drawable geometry — the width-derived rotation estimates.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/angleGeom"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "metricCheckpoint": {
+      "title": "MetricCheckpoint",
+      "type": "object",
+      "description": "The swing indexed by the ten coaching positions rather than the eight events, with every angle at each and its change from address. This is what the angle table renders; `event_snapshots` stays for consumers keyed to the GolfDB names.",
+      "required": [
+        "p",
+        "id",
+        "label",
+        "phase",
+        "event",
+        "frame",
+        "conf",
+        "basis",
+        "definition",
+        "values",
+        "delta_from_address"
+      ],
+      "properties": {
+        "p": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "phase": {
+          "type": "string",
+          "enum": [
+            "setup",
+            "backswing",
+            "downswing",
+            "impact",
+            "follow_through",
+            "finish"
+          ]
+        },
+        "event": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "frame": {
           "type": "integer",
           "minimum": 0
         },
         "conf": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
+          "type": "number"
+        },
+        "basis": {
+          "type": "string"
+        },
+        "definition": {
+          "type": "string"
+        },
+        "values": {
+          "$ref": "#/definitions/metricValues"
+        },
+        "delta_from_address": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "sides": {
+      "title": "Sides",
+      "type": "object",
+      "description": "Resolved handedness → lead/trail mapping, so no consumer re-derives it. Lead is the side nearest the TARGET, never the side facing the camera.",
+      "properties": {
+        "handedness": {
+          "type": "string"
+        },
+        "lead": {
+          "type": "string"
+        },
+        "trail": {
+          "type": "string"
+        },
+        "note": {
+          "type": "string"
         }
       },
-      "additionalProperties": true
+      "required": [
+        "handedness",
+        "lead",
+        "trail",
+        "note"
+      ]
     },
-    "frameRange": {
-      "type": "array",
-      "description": "Inclusive [from, to] frame indices.",
-      "items": {
-        "type": "integer",
-        "minimum": 0
+    "metrics": {
+      "title": "Metrics",
+      "type": "object",
+      "description": "Stage 6 metrics. Keypoints are anatomical (`left_wrist`); metrics are lead/trail (`lead_knee_flex`).",
+      "properties": {
+        "body_height_norm": {
+          "type": "number"
+        },
+        "units": {
+          "type": "string"
+        },
+        "provisional_thresholds": {
+          "type": "boolean"
+        },
+        "glossary": {
+          "description": "Standard coaching terms mapped onto the fields above — see docs/GLOSSARY.md.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/openMap"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sides": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/sides"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "series": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/metricValues"
+          }
+        },
+        "event_snapshots": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/metricValues"
+          }
+        },
+        "checkpoints": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/metricCheckpoint"
+          }
+        },
+        "checkpoint_notes": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
+        "angle_fields": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "$ref": "#/definitions/angleField"
+          }
+        },
+        "summary": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "number",
+              "string",
+              "null"
+            ]
+          }
+        }
       },
-      "minItems": 2,
-      "maxItems": 2
+      "required": [
+        "body_height_norm",
+        "units",
+        "provisional_thresholds",
+        "glossary",
+        "sides",
+        "series",
+        "event_snapshots",
+        "summary"
+      ]
+    },
+    "buttLine": {
+      "title": "ButtLine",
+      "type": "object",
+      "description": "The down-the-line posture line: a vertical tangent to the rear of the seat, taken as a median over the address hold and then held for the whole clip. The seat should stay in contact with it through the backswing; leaving it toward the ball is early extension.",
+      "required": [
+        "x",
+        "y0",
+        "y1",
+        "band",
+        "frame",
+        "frames",
+        "n",
+        "side",
+        "spread_bh",
+        "conf",
+        "source"
+      ],
+      "properties": {
+        "x": {
+          "type": "number",
+          "description": "Normalized x, fixed for every frame — that is the entire point of the drill."
+        },
+        "y0": {
+          "type": "number"
+        },
+        "y1": {
+          "type": "number"
+        },
+        "band": {
+          "$ref": "#/definitions/numberPair"
+        },
+        "frame": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "frames": {
+          "$ref": "#/definitions/frameRange"
+        },
+        "n": {
+          "type": "integer"
+        },
+        "side": {
+          "type": "integer",
+          "enum": [
+            -1,
+            1
+          ],
+          "description": "Image direction the seat faces: −1 left of the golfer, +1 right."
+        },
+        "spread_bh": {
+          "type": "number",
+          "description": "How much the seat wandered across the address hold, in body heights."
+        },
+        "conf": {
+          "type": "number"
+        },
+        "source": {
+          "type": "string"
+        }
+      }
+    },
+    "numberPair": {
+      "title": "NumberPair",
+      "type": "array",
+      "items": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "additionalItems": false,
+      "minItems": 2
+    },
+    "posture": {
+      "title": "Posture",
+      "type": "object",
+      "description": "Setup reference geometry measured off the golfer's SILHOUETTE, not off keypoints — a coaching line is tangent to the body's outline, which no keypoint knows about. Null before schema 8, and on face-on clips where the rear of the pelvis points at neither edge of frame.",
+      "properties": {
+        "butt_line": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/buttLine"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "notes": {
+          "type": "array",
+          "description": "Why there is no line, when there isn't one — shown rather than silently hiding the control.",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "butt_line",
+        "notes"
+      ]
+    },
+    "jointQuality": {
+      "title": "JointQuality",
+      "type": "object",
+      "properties": {
+        "coverage": {
+          "type": "number"
+        },
+        "mean_conf": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "coverage",
+        "mean_conf"
+      ]
+    },
+    "quality": {
+      "title": "Quality",
+      "type": "object",
+      "description": "The gate that decides whether an analysis is trustworthy at all. Catastrophically low pose confidence fails the run with a readable reason and filming tips; low club coverage still succeeds, with the trace off and club-dependent checks abstaining.",
+      "required": [
+        "frames",
+        "detection_coverage",
+        "overall_mean_conf",
+        "per_joint"
+      ],
+      "properties": {
+        "frames": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "detection_coverage": {
+          "type": "number"
+        },
+        "overall_mean_conf": {
+          "type": "number"
+        },
+        "per_joint": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/jointQuality"
+          }
+        }
+      }
     }
   }
 }

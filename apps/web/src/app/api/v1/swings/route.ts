@@ -1,7 +1,7 @@
 import { listSwings } from "@/lib/swings";
 import { requireUserIdOrNull } from "@/lib/auth";
 
-/** the architecture spec API surface: GET /api/swings?filters... — the admin user's log, from Postgres. */
+/** the architecture spec API surface: GET /api/v1/swings?filters... — the admin user's log, from Postgres. */
 export async function GET() {
   const userId = await requireUserIdOrNull();
   // 401, never a redirect: a fetch cannot do anything useful with sign-in HTML.

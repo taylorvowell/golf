@@ -1,8 +1,8 @@
 "use client";
 
-import type { Analysis } from "@/lib/swings";
+import type { Analysis } from "@swingsage/schema/contract";
 import type { Player } from "@/lib/usePlayer";
-import type { Scorecard } from "@/lib/scoreDisplay";
+import type { CoachReport } from "@swingsage/schema/contract";
 import { scoreColor } from "@/lib/scoreDisplay";
 import { Eyebrow, MicroHead, NotBuilt, PanelTitle, TipCard } from "../ui/kiosk";
 
@@ -17,7 +17,7 @@ import { Eyebrow, MicroHead, NotBuilt, PanelTitle, TipCard } from "../ui/kiosk";
  */
 export default function CoachView({
   analysis, scorecard, player,
-}: { analysis: Analysis; scorecard: Scorecard | null; player: Player }) {
+}: { analysis: Analysis; scorecard: CoachReport | null; player: Player }) {
   const { loop, playRange } = player;
   const e = analysis.events;
 

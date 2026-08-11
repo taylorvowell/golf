@@ -44,8 +44,9 @@ test.describe("swing log → player", () => {
     await expect(page.locator("canvas").first()).toBeAttached({ timeout: 30_000 });
 
     const src = await video.getAttribute("src");
-    expect(src, "video should stream from the swing's own media route").toMatch(
-      /^\/api\/swings\/.+\/video/,
+    // Versioned since step 07 — nothing is served unversioned (D41).
+    expect(src, "video should stream from the swing's own versioned media route").toMatch(
+      /^\/api\/v1\/swings\/.+\/video/,
     );
 
     // The real assertion: the browser got far enough into the stream to know how long it is and

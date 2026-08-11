@@ -20,6 +20,82 @@ closing.
 
 ---
 
+## 07 — API Contract and Shared Schema ✅ 2026-08-11
+
+**Completed:** 2026-08-11 14:45 UTC
+**Phase:** Platform Foundation
+
+**One fact drives all of this: a native app cannot be force-updated.** `analysis.json` is at
+`schema_version: 9` — nine contract changes, every one free because the client that read it shipped
+in the same commit. That stops being true at the first store release. Decision **D41**.
+
+**One schema, generated types, no hand-written duplicates.** `packages/schema/schemas/` now holds
+JSON Schema for `analysis.json`, `coach_report.json`, `silhouette.json` and every API body;
+`src/generated/` is compiled from it and both clients import it. `apps/web`'s ~300-line
+`Analysis` / `Scorecard` block is **deleted, not kept alongside** — 16 files repointed at
+`@swingsage/schema/contract`, a validator-free entry point so no phone bundles Ajv.
+
+**The producer validates before writing, against the same files.** `swingsage/contract.py` — not a
+copy of the schemas, because a copy is a thing that can drift. `burnin.py`, `rescore.py` and
+`resegment.py` all write through it, and a failing artifact never reaches disk (no file, no
+`.tmp` left behind). Proven on a real fixture: a club head mutated from `[x, y]` to `[x, y, 0.5]` —
+a shape change that still looks like data, and would have rendered the club in the wrong place on
+every shipped build — is rejected as `/club/frames/0/head Additional items are not allowed`.
+
+**The additive-only rule is now a test, not a convention.** `schemas/shape-lock.json` is the
+committed signature of all four contracts (526 nodes). A node that is removed, retyped, re-`$ref`ed,
+newly required, or that drops an enum member fails the suite; additions pass and are re-locked
+deliberately with `pnpm --filter @swingsage/schema lock`, which rewrites the file and then **fails
+the run on purpose** — the same idiom as `pytest --update-golden`. This project's own history is
+that conventions about the contract held only once a test enforced them.
+
+**`required` describes every artifact ever stored, not today's pipeline.** That distinction did the
+real work: `checkpoints` (schema 3), `playback_window` (5), `posture` (8) and `playback_pad` (9)
+stay optional, and tightening the rest surfaced **~96 places in the player that assumed a block an
+older artifact may not carry**. Those are now optional chains. That is what "a schema-3 artifact
+still renders" actually costs, and the compiler found it rather than a user.
+
+**Everything is versioned in the path.** Every route moved to `/api/v1/`; `route-auth.test.ts` now
+also fails on anything unversioned and on any undocumented public route. Added `GET /api/v1/client`
+— the one deliberately unauthenticated route, because a build too old to sign in must still be able
+to learn that it is too old. A build below the floor gets **426** with an `UpgradeRequired` body,
+gated once in `proxy.ts` rather than per route, and **fails open for a caller with no version
+header** so the web app cannot 426 itself off its own API. Mobile renders it as a terminal screen
+with a store link — no retry, no dismiss.
+
+**Verified against the running server, not just compiled:** `/api/v1/client` → 200 with the version
+floor and artifact-schema range; `/api/v1/swings` with `x-swingsage-client-version: 0.0.1` → **426**
+with the Play Store link; the same route with no header → 200; `/api/swings` → **404**; and
+`analysis`, `markers`, `stages`, `thumb` all 200 with `video` still answering **206** to a Range
+request. Playwright green.
+
+**First `.github/workflows/` in the repo.** Four jobs: the contract gate (drift check, then
+regenerate-and-`git diff --exit-code`, then the contract tests), both clients, and the analyzer's
+contract tests. It deliberately does not install the CV stack — gigabytes, GPU-shaped, and its
+tests need gitignored fixtures. A `.gitattributes` pins the generated files to LF so a Windows
+commit cannot fail the byte-comparison for a reason unrelated to the schema.
+
+Oracles: web tsc/lint clean, **135 vitest** (14 new), mobile tsc clean + **66 jest** (12 new),
+**100 schema vitest**, analyzer **123 pytest** (43 new), Playwright green, drift check clean twice
+in a row.
+
+**Two findings worth carrying forward.** A `T | null` field is an `anyOf`, so `jsonschema` reports a
+bad value inside `T` at the *parent* with the whole parent as the instance — the first broken-artifact
+run produced a **1.4 MB error message**, which is strictly worse than none because it buries the one
+line that says what broke. `contract.errors()` now descends to the deepest sub-error and truncates,
+and a test asserts the message stays under 400 characters and names the field. And `pnpm install`
+died three times on Windows with `ENOENT … @expo/cli_tmp_NNNN`; `rm -rf node_modules/@expo/cli`
+then re-installing cleared it. The dev server also holds `src/app/api/` open, so a route directory
+cannot be `git mv`d while it runs.
+
+**Open against the DoD:** nothing. The deprecation window (12 months, announced three ways) is
+written but untested — there is only one API version, so `DEPRECATED_API_VERSIONS` is empty and the
+`Deprecation` / `Sunset` header path has no live case yet.
+
+Next: **03 — Supabase Project and Data Platform Migration** (still in-progress from an earlier run).
+
+---
+
 ## 02 — Mobile Client Spike and Workspace ✅ 2026-08-11
 
 **Every probe is measured, on real hardware, from decoded artifacts rather than API self-reports.**

@@ -36,7 +36,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from swingsage import scoring  # noqa: E402
+from swingsage import contract, scoring  # noqa: E402
 
 
 def rescore_one(out_dir: Path, config: dict, club_type: str | None,
@@ -63,7 +63,10 @@ def rescore_one(out_dir: Path, config: dict, club_type: str | None,
                              metrics.get("glossary", {}), analysis.get("tempo") or {},
                              view, club_type)
     if not dry_run:
-        report_path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+        # Same gate as burnin.py: a scorecard is validated against packages/schema before it
+        # lands. Stage 8 is a pure function, so a config change can reshape every report at
+        # once — which is exactly when a shape break would go unnoticed.
+        contract.write_json("coach-report", report, report_path, indent=2)
 
     cov = report["coverage"]
     print(f"  {out_dir.name}: {report['overall']} ({report['band']})  "

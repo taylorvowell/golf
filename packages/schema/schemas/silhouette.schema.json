@@ -1,0 +1,102 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://swingsage.dev/schemas/silhouette.schema.json",
+  "title": "Silhouette",
+  "description": "The golfer's outline per frame — its own artifact rather than part of `analysis.json` because it is large (0.3–1.1 MB) and only wanted when its overlay is on. Fetched lazily; never part of a first load.\n\n`p` is a list of closed rings with NO outer/hole distinction, deliberately: filling them all under an even-odd rule puts the holes back by itself (the gap between the arms at the top of the backswing is a hole), so no consumer has to classify them.\n\nThe same shape carries the isolation and club-only masks, which differ only in what was segmented.",
+  "type": "object",
+  "required": [
+    "schema",
+    "source",
+    "model",
+    "eps",
+    "width",
+    "height",
+    "frame_count",
+    "coverage",
+    "notes",
+    "frames"
+  ],
+  "properties": {
+    "schema": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "source": {
+      "type": "string"
+    },
+    "model": {
+      "type": "string"
+    },
+    "eps": {
+      "type": "number",
+      "description": "Douglas–Peucker tolerance the rings were simplified at, in pixels."
+    },
+    "width": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "height": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "frame_count": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "coverage": {
+      "type": "number"
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "frames": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/silhouetteFrame"
+      }
+    }
+  },
+  "definitions": {
+    "silhouetteFrame": {
+      "title": "SilhouetteFrame",
+      "type": "object",
+      "required": [
+        "f",
+        "p"
+      ],
+      "properties": {
+        "f": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "p": {
+          "type": "array",
+          "description": "Closed rings, each a list of normalized [x, y] points.",
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/definitions/point"
+            }
+          }
+        }
+      }
+    },
+    "point": {
+      "title": "SilhouettePoint",
+      "type": "array",
+      "items": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "additionalItems": false,
+      "minItems": 2
+    }
+  }
+}

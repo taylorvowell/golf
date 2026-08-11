@@ -2,7 +2,7 @@ import { getSilhouette } from "@/lib/swings";
 import { requireViewAccess, viewParam } from "@/lib/auth";
 
 /**
- * GET /api/swings/:id/silhouette — the golfer's per-frame outline (Stage 2b).
+ * GET /api/v1/swings/:id/silhouette — the golfer's per-frame outline (Stage 2b).
  *
  * Its own endpoint rather than a field on `/analysis` because it is 0.3–1.1 MB and most
  * viewings never switch the overlay on; the client fetches it once, on demand

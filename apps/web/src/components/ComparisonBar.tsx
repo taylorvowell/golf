@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { SwingSummary } from "@/lib/swings";
+import type { SwingSummary } from "@swingsage/schema/contract";
 import type { ReferenceSwing } from "@/lib/proSwings";
 
 /**
@@ -55,7 +55,7 @@ export function SourcePicker({ sourceId, onPickSource, currentId, references }: 
   useEffect(() => {
     if (!open || swings) return;
     let cancelled = false;
-    fetch("/api/swings")
+    fetch("/api/v1/swings")
       .then((r) => r.json())
       .then((d) => { if (!cancelled) setSwings(d.swings ?? []); })
       .catch(() => { if (!cancelled) setSwings([]); });

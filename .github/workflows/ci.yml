@@ -1,0 +1,104 @@
+name: CI
+
+# The contract gate. Everything here answers one question: could this commit break a client
+# that is already in someone's hands and cannot be force-updated?
+#
+# The drift check is the load-bearing job. A generated artifact that can silently go stale is
+# not a contract — someone edits the .ts because it is closer to hand, the schema stops
+# describing reality, and the Python producer and the two TypeScript clients quietly disagree.
+#
+# `services/analyzer/out/` is gitignored, so no real artifacts exist here. Both test suites are
+# written to fall back to synthetic cases rather than to skip silently.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Schema contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      # Fails when src/generated/ no longer matches what the schemas produce.
+      - name: Generated types are in sync with the schemas
+        run: pnpm schema:check
+
+      # Regenerating must be a no-op on a clean tree. `schema:check` compares in memory; this
+      # catches the case where the committed file differs only in a way the comparison
+      # normalizes away — line endings, most obviously, on a repo developed on Windows.
+      - name: Regenerating produces no diff
+        run: |
+          pnpm schema:generate
+          git diff --exit-code -- packages/schema/src/generated
+
+      # The additive-only rule, plus validation against real and synthetic artifacts.
+      - name: Contract tests
+        run: pnpm --filter @swingsage/schema test
+
+      - name: Typecheck the schema package
+        run: pnpm --filter @swingsage/schema exec tsc --noEmit
+
+  web:
+    name: Web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter web exec tsc --noEmit
+      - run: pnpm --filter web lint
+      - run: pnpm --filter web test
+
+  mobile:
+    name: Mobile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter mobile exec tsc --noEmit
+      - run: pnpm --filter mobile test
+
+  analyzer:
+    name: Analyzer
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # Deliberately NOT the full runtime stack. mediapipe, torch, ultralytics and onnxruntime
+      # are gigabytes and GPU-shaped; the tests that need them are the ones that need fixtures,
+      # which are gitignored anyway. What runs here is the contract half — schema validation
+      # against the frozen test data — which is exactly what must not regress unnoticed.
+      - name: Install test dependencies
+        working-directory: services/analyzer
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-dev.txt
+
+      - name: Contract tests
+        working-directory: services/analyzer
+        run: python -m pytest tests/test_contract.py -q

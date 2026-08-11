@@ -124,18 +124,32 @@ look at the frame before believing any club number.
 ## 5. Tests
 
 ```bash
-# analyzer — from services/analyzer, ~4s, no video/GPU/out/ needed
-.venv/Scripts/python.exe -m pytest tests          # 80 passed, 2 skipped, 1 xfailed
+# analyzer — from services/analyzer, ~5s, no video/GPU needed
+.venv/Scripts/python.exe -m pytest tests          # 125 passed, 2 skipped, 1 xfailed
 
 # clients — from the repo root
-pnpm --filter web test                            # vitest, 71 tests
-pnpm --filter mobile test                         # jest-expo, 33 tests (logic + components)
+pnpm --filter web test                            # vitest, 135 tests
+pnpm --filter mobile test                         # jest-expo, 66 tests (logic + components)
 pnpm --filter web exec tsc --noEmit && pnpm --filter web lint
 pnpm --filter mobile exec tsc --noEmit
+
+# the shared contract — from the repo root
+pnpm --filter @swingsage/schema test              # vitest, 100 tests
+pnpm schema:check                                 # generated types match the schemas
+pnpm schema:generate                              # rewrite them after a schema edit
+pnpm --filter @swingsage/schema lock              # re-lock shape-lock.json, then FAILS on purpose
 
 # web end-to-end — needs Docker Postgres up and at least one analysed swing
 pnpm --filter web test:e2e                        # playwright, 1 path, headless
 ```
+
+**Editing a contract is four steps, and CI fails if you skip one.** Edit
+`packages/schema/schemas/*.schema.json`, run `pnpm schema:generate`, run `pnpm --filter
+@swingsage/schema lock` and read the `shape-lock.json` diff, then commit all of it. The lock
+command rewrites the file and then fails the run deliberately — the same idiom as
+`pytest --update-golden` — because re-locking is the moment you decide a shape change is right.
+A change that removes, retypes or newly requires a field is a break for a client already in
+someone's hands; see D41.
 
 **`pnpm --filter web test` now REQUIRES Postgres.** `src/db/rls.test.ts` is the authorization
 boundary — it proves a golfer cannot read another golfer's swing, and that an approved coach can,

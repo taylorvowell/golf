@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { Analysis } from "@/lib/swings";
+import type { Analysis } from "@swingsage/schema/contract";
 import { SIDE_COLOR, TRACE_COLOR } from "@/lib/skeleton";
 import { BUILD_TAG, OVERLAY_GROUPS, type ToggleKey, type Toggles } from "@/lib/overlays";
 import { MicroHead } from "./ui/kiosk";

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { Analysis } from "@/lib/swings";
+import type { Analysis } from "@swingsage/schema/contract";
 import { ANGLE_COLORS } from "@/lib/angleOverlay";
 import { useDragScroll } from "@/lib/useDragScroll";
 

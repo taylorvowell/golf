@@ -2028,3 +2028,95 @@ An async probe that throws with no `try`/`catch` leaves its busy flag set, its b
 round three separate times here: the Camera2 session that never called back, the recording that
 left a 0-byte file, and this sweep. Every probe now reports its own failure on the card, and the
 native side has a watchdog. **A measurement harness that can fail silently is not a harness.**
+
+---
+
+## D41 — The API is versioned in the path, the contract is generated from one schema, and it evolves additively
+
+**Date:** 2026-08-11
+**Status:** ACTIVE
+
+**Context:** Step 07. Today the web app and the analyzer deploy together, so a change to
+`analysis.json` costs nothing — the client that reads it ships in the same commit. That artifact
+is already at `schema_version: 9`, meaning the contract has changed nine times under exactly those
+free conditions. **A native app cannot be force-updated.** Once a build is in a store, old versions
+call the API and read stored artifacts for months; a rendering bug caused by a field a client did
+not expect waits for review, release, and the user choosing to update. Every one of those nine
+changes would have been an outage for someone. There was also no shared schema at all: `packages/`
+held a partial `analysis.json` schema and nothing else, while two TypeScript clients and a Python
+producer described the same objects by hand.
+
+**Decision:** Four rules, each enforced by something that fails rather than by a convention.
+
+1. **One schema, generated types.** `packages/schema/schemas/` holds JSON Schema for
+   `analysis.json`, `coach_report.json`, `silhouette.json` and every API body.
+   `packages/schema/src/generated/` is compiled from them and never hand-edited; a CI job
+   regenerates and fails on any diff. No contract object is described by hand in either client —
+   `apps/web`'s 300-line `Analysis`/`Scorecard` block is deleted, not kept alongside.
+2. **The producer validates before writing.** `swingsage/contract.py` validates every artifact
+   against those same schema *files* — not a copy, because a copy is a thing that can drift — and
+   refuses to write one that fails. `burnin.py`, `rescore.py` and `resegment.py` all go through it.
+3. **Additive only, test-enforced.** `schemas/shape-lock.json` is the committed signature of every
+   schema. A node that is removed, retyped, re-`$ref`ed, newly required, or that drops an enum
+   member fails the suite. Additions pass and are re-locked deliberately (`pnpm --filter
+   @swingsage/schema lock` rewrites it and then fails the run on purpose, the same idiom as
+   `pytest --update-golden`).
+4. **Versioned in the path.** Every route moved to `/api/v1/`; nothing is served unversioned, and a
+   test enumerates the route files and fails if one is. Inside a version, bodies only gain fields. A
+   change that cannot be made additively mints `/api/v2/`; `v1` keeps answering for its published
+   window and reports `Deprecation` / `Sunset` headers meanwhile.
+
+**Deprecation policy.** A version is supported for **12 months** after its successor ships, and
+never less than 6 months after the last store release that depends on it. It is announced three
+ways so a client cannot miss it: `Deprecation: true` and `Sunset: <date>` on every response,
+`deprecatedApiVersions` in `GET /api/v1/client`, and a `Link: rel="successor-version"` header.
+
+**`schema_version` compatibility.** An artifact written at 9 must render in a client built for 11,
+and a client built for 9 must degrade against 11 rather than crash. That works because unknown
+fields validate and known ones never change meaning. `required` in the schemas is a statement about
+*every artifact ever stored*, not about what the pipeline writes today — which is why `checkpoints`
+(schema 3), `playback_window` (5), `posture` (8) and `playback_pad` (9) are optional while the
+blocks present since schema 1 are not. Capability, not version arithmetic, is how a client decides
+what it can show (`missingCapabilities`).
+
+**Stored artifacts on a pipeline upgrade: served as written.** Not re-analysed on read, not lazily
+migrated. §38 forbids reprocessing that buys nothing, a re-analysis is minutes of GPU per swing, and
+a lazy migration would write a second, differently-produced artifact behind the golfer's back. The
+range a renderer must cope with is published as `minimumArtifactSchema` / `currentArtifactSchema`.
+
+**Forced upgrade.** A build below `minimumVersion` gets **426** with an `UpgradeRequired` body, and
+the mobile client renders it as a terminal screen with a store link — no retry, no dismiss, because
+retrying cannot succeed and a dismissable blocker is one users learn to dismiss. The gate lives in
+`proxy.ts`, not per route, since a route that forgot it is exactly the route an unsupported build
+keeps calling. It **fails open for a caller that sends no version header**: the web app is deployed
+with this server and cannot lag it, and 426-ing it would take the coach workspace down over a guard
+meant for phones. `GET /api/v1/client` is the one unauthenticated route — a build too old to sign in
+must still be able to learn that it is too old.
+
+**Alternatives:**
+- *Header or query-parameter versioning.* Invisible in a log, a CDN cache key and a bug report;
+  and easy to omit, which silently means "latest".
+- *Author the schema separately from the analyzer's output.* It would be wrong within a release.
+  The schema is derived from what the pipeline actually emits and is validated against every stored
+  artifact on disk.
+- *Keep the client types hand-written and validate only at runtime.* That is the current state, and
+  it is how three descriptions of the same object come to disagree.
+- *Strict `additionalProperties: false`.* Would make every additive change a breaking one. The
+  schemas leave it unset (permissive validation) and the codegen assumes `false` (precise types).
+- *Re-analyse stored artifacts on a pipeline upgrade.* Rejected above.
+
+**Consequences:**
+- `packages/schema` is now a dependency of `apps/web`, `apps/mobile` and the analyzer. It ships
+  TypeScript source; `@swingsage/schema/contract` is the validator-free entry point clients import,
+  so no phone bundles Ajv.
+- Adding a field is: edit the schema, `pnpm schema:generate`, `pnpm --filter @swingsage/schema lock`,
+  commit. Four steps, and CI fails if any is skipped.
+- The tightened schema surfaced ~96 places in the web player that assumed a block an older artifact
+  may not carry. They now read through optional chaining, which is what "an artifact from schema 3
+  still renders" actually requires.
+- `jsonschema` is a new analyzer dependency (`requirements-dev.txt`). `contract.py` degrades to a
+  no-op when it is absent, so a missing dev dependency can never stop a swing being analysed — CI
+  and the test suite are where absence is caught.
+- The first `.github/workflows/` in the repo. CI runs the contract gate, both clients, and the
+  analyzer's contract tests; it deliberately does not install the CV stack, which is gigabytes and
+  GPU-shaped and whose tests need gitignored fixtures anyway.

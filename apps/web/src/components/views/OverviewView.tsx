@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Analysis } from "@/lib/swings";
+import type { Analysis } from "@swingsage/schema/contract";
 import type { Player } from "@/lib/usePlayer";
-import type { CheckResult, Scorecard } from "@/lib/scoreDisplay";
+import type { CheckResult, CoachReport } from "@swingsage/schema/contract";
 import { describeCheck, scoreColor } from "@/lib/scoreDisplay";
 import { useDragScroll } from "@/lib/useDragScroll";
 import { FindingBox, IndicatorCard, NotBuilt, ScoreGauge } from "../ui/kiosk";
@@ -44,7 +44,7 @@ export default function OverviewView({
   analysis, scorecard, player, inspecting, onInspect,
 }: {
   analysis: Analysis;
-  scorecard: Scorecard | null;
+  scorecard: CoachReport | null;
   player: Player;
   /** The check currently paused-and-highlighted on the video, if any — owned by
    * SwingWorkspace (it also feeds SwingStage's overlay), this component only sets it. */

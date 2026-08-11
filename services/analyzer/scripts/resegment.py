@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import sys
 import time
 from pathlib import Path
@@ -31,7 +30,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from swingsage import silhouette  # noqa: E402
+from swingsage import contract, silhouette  # noqa: E402
 
 MODEL = ROOT / "models" / "pose_landmarker_heavy.task"
 
@@ -71,17 +70,13 @@ def resegment_one(out_dir: Path, dry_run: bool = False) -> bool:
     if dry_run:
         return True
 
-    tmp = out_dir / "silhouette.json.tmp"
-    tmp.write_text(blob, encoding="utf-8")
-    os.replace(tmp, out_dir / "silhouette.json")
+    contract.write_json("silhouette", payload, out_dir / "silhouette.json")
 
     # Patch, don't rebuild. Every other key keeps its existing value, including
     # schema_version: this artifact really is a v7 that has gained one v8 block, and claiming
     # a full v8 would assert the rest of that version's contract too.
     doc["posture"] = {"butt_line": butt, "notes": notes}
-    tmp = out_dir / "analysis.json.tmp"
-    tmp.write_text(json.dumps(doc), encoding="utf-8")
-    os.replace(tmp, out_dir / "analysis.json")
+    contract.write_json("analysis", doc, out_dir / "analysis.json")
     return True
 
 

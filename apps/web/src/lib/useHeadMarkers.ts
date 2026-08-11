@@ -31,7 +31,7 @@ export interface HeadMarkers {
 
 /**
  * Hand-placed club-head positions for one swing, loaded from and saved to
- * `/api/swings/:id/markers`.
+ * `/api/v1/swings/:id/markers`.
  *
  * Edits are held locally and written in one batch, not per click. Placing a head is a fiddly
  * pointing task — you nudge it several times before it is right — and a request per nudge would
@@ -66,7 +66,7 @@ export function useHeadMarkers(swingId: string): HeadMarkers {
   // already in flight when they made it.
   useEffect(() => {
     const ac = new AbortController();
-    fetch(`/api/swings/${swingId}/markers`, { cache: "no-store", signal: ac.signal })
+    fetch(`/api/v1/swings/${swingId}/markers`, { cache: "no-store", signal: ac.signal })
       .then((r) => r.json())
       .then((d: { markers?: HeadMarker[] }) => {
         setByFrame((cur) => {
@@ -148,7 +148,7 @@ export function useHeadMarkers(swingId: string): HeadMarkers {
     if (!markers.length && !deleted.length) return;
     setSaving(true);
     setError(null);
-    fetch(`/api/swings/${swingId}/markers`, {
+    fetch(`/api/v1/swings/${swingId}/markers`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ markers, deleted }),

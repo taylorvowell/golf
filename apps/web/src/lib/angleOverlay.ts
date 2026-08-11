@@ -11,7 +11,7 @@
  * space, (x·W/H, y), which is pixel space under a uniform scale — and uniform scales preserve
  * angles. So the arc drawn at (x·w, y·h) is exactly the angle in the label.
  */
-import type { AngleField, Analysis, Keypoint, PointExpr } from "@/lib/swings";
+import type { AngleField, Analysis, Keypoint, PointExpr } from "@swingsage/schema/contract";
 
 /** Matches metrics.MIN_CONF — below this the analyzer treated the point as missing, so
  *  drawing it would put a confident-looking arc on a keypoint the number never used. */

@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "featureName": "platform-foundation",
-  "currentStep": "07",
+  "currentStep": "03",
   "phase": "Platform Foundation",
-  "lastUpdated": "2026-08-11T19:00:00Z",
+  "lastUpdated": "2026-08-11T14:45:00Z",
   "steps": {
     "01": {
       "status": "complete",
@@ -28,10 +28,12 @@
     "06": {
       "status": "complete",
       "completedAt": "2026-08-11T03:35:00Z",
-      "note": "Shipped in two halves by D28: the additive equipment/session/organization model (migration 0005), then the \u00a77.1 multi-view restructure and uuid swing identity (migration 0006, D30). All ten analysed fixtures survived with their scores; verified by src/db/multiView.test.ts and the Playwright end-to-end path."
+      "note": "Shipped in two halves by D28: the additive equipment/session/organization model (migration 0005), then the §7.1 multi-view restructure and uuid swing identity (migration 0006, D30). All ten analysed fixtures survived with their scores; verified by src/db/multiView.test.ts and the Playwright end-to-end path."
     },
     "07": {
-      "status": "not-started"
+      "status": "complete",
+      "completedAt": "2026-08-11T14:45:00Z",
+      "note": "D41. packages/schema now holds JSON Schema for analysis.json, coach_report.json, silhouette.json and every API body; TypeScript is generated from it and both clients import it - apps/web's ~300-line hand-written Analysis/Scorecard block is deleted. The analyzer validates against the SAME schema files before writing (swingsage/contract.py; burnin, rescore, resegment). schemas/shape-lock.json makes the additive-only rule a test: 526 locked nodes, and a removal/retype/new-required/dropped-enum fails the suite. Every route moved to /api/v1/ with a route test that fails on anything unversioned, plus GET /api/v1/client and a 426 UpgradeRequired path enforced in proxy.ts and rendered as a terminal screen on mobile. First .github/workflows/ in the repo. Tightening the schema surfaced ~96 places in the player that assumed a block an older artifact may not carry."
     },
     "08": {
       "status": "not-started"

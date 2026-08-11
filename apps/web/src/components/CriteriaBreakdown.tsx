@@ -1,6 +1,6 @@
 "use client";
 
-import type { Scorecard } from "@/lib/scoreDisplay";
+import type { CoachReport } from "@swingsage/schema/contract";
 import { CATEGORY_LABELS, CATEGORY_ORDER, describeCheck } from "@/lib/scoreDisplay";
 import { Chip, DataRow, KioskPanel, MicroHead, QualityBar } from "./ui/kiosk";
 
@@ -11,7 +11,7 @@ import { Chip, DataRow, KioskPanel, MicroHead, QualityBar } from "./ui/kiosk";
  * `analysis.json`. Composed entirely from existing `kiosk.tsx` primitives (`KioskPanel`,
  * `DataRow`, `QualityBar`, `Chip`, `MicroHead`) — no new low-level UI needed.
  */
-export default function CriteriaBreakdown({ scorecard }: { scorecard: Scorecard | null }) {
+export default function CriteriaBreakdown({ scorecard }: { scorecard: CoachReport | null }) {
   if (!scorecard) {
     return (
       <KioskPanel className="p-5">

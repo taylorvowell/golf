@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import SwingWorkspace from "@/components/SwingWorkspace";
-import { CURRENT_SCHEMA, getAnalysis, listSwings, missingCapabilities } from "@/lib/swings";
+import { CURRENT_ARTIFACT_SCHEMA, missingCapabilities } from "@swingsage/schema/contract";
+import { getAnalysis, listSwings } from "@/lib/swings";
 import { requireUserId } from "@/lib/auth";
 import { isViewType, mediaAddress, resolveView } from "@/db/views";
 import { getScorecard } from "@/lib/scoring";
@@ -58,7 +59,7 @@ export default async function SwingPage({
       prevId={olderId}
       nextId={newerId}
       missing={missingCapabilities(analysis)}
-      currentSchema={CURRENT_SCHEMA}
+      currentSchema={CURRENT_ARTIFACT_SCHEMA}
     />
   );
 }

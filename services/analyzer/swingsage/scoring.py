@@ -28,6 +28,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from swingsage import contract
+
 CONFIG_DIR = Path(__file__).resolve().parent.parent / "scoring_config"
 # `checkpoints.py`'s own ordering-violation clamp caps a suspect frame's confidence at exactly
 # 0.35 (the same value as metrics.py's MIN_CONF) — that is this codebase's established "no
@@ -394,6 +396,8 @@ def write_coach_report(out_dir: Path, config: dict, checkpoint_items: list[dict]
                        summary: dict, glossary: dict, tempo: dict, view: str,
                        club_type: str | None = None) -> dict:
     report = compute(config, checkpoint_items, summary, glossary, tempo, view, club_type)
-    (out_dir / "coach_report.json").write_text(
-        json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    # Validated against packages/schema before it lands, the same as analysis.json. A scorecard
+    # is what a golfer is shown and what `db/scores.ts` denormalizes onto the swing row; a
+    # malformed one is a wrong number on a screen, not merely a bad file.
+    contract.write_json("coach-report", report, out_dir / "coach_report.json", indent=2)
     return report
