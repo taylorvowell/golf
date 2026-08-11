@@ -19,10 +19,12 @@ import { ProbeCard } from "./ProbeCard";
 import {
   PROBES,
   judgeOverlayDrift,
+  judgeArtifact,
   judgeSeekError,
   type Probe,
   type ProbeStatus,
 } from "./probes";
+import { CaptureProbe } from "./CaptureProbe";
 import { recordResult } from "./record";
 import { Skeleton } from "./Skeleton";
 import { buildIndex, frameAt, type PoseBundle } from "./pose";
@@ -96,6 +98,15 @@ const CAL_TICK_WIDTH = 4;
 const OVERLAY_RUN_MS = 5_000;
 
 /**
+ * The PC serving real artifacts over the LAN (`scripts/serve-fixtures.mjs`).
+ *
+ * Hardcoded rather than discovered: this is a spike driven from one machine, and a device that
+ * cannot reach it should FAIL the network probes loudly rather than silently fall back to the
+ * bundled clip and report a number that measures nothing.
+ */
+const FIXTURE_ORIGIN = "http://10.0.1.107:8790";
+
+/**
  * Seek targets for probe 2.
  *
  * Fixed rather than random so a re-run is comparable, and chosen to land in every position
@@ -131,6 +142,8 @@ export default function SpikeScreen() {
   const [clipKey, setClipKey] = useState<ClipKey>("synthetic");
   const clip = CLIPS[clipKey];
   const [clipUri, setClipUri] = useState<string | null>(null);
+  /** Set while a network probe runs; overrides the bundled clip as the player's source. */
+  const [remoteSource, setRemoteSource] = useState<string | null>(null);
   const [probes, setProbes] = useState<Probe[]>(PROBES);
   const [ready, setReady] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -289,6 +302,99 @@ export default function SpikeScreen() {
    * and says nothing about this.
    */
   /**
+   * Probe 3 records; the VERDICT is computed on the PC from the file itself
+   * (`scripts/measure-capture.mjs`). The camera cannot be the witness for whether the camera
+   * degraded, so this side only reports what was requested and where the artifact landed.
+   */
+  const onCaptureRecorded = useCallback((info: {
+    path: string; requestedFps: number; resolvedFps: number; seconds: number;
+  }) => {
+    setProbe("capture", {
+      status: "fail",
+      measurement: { value: info.requestedFps, device: deviceName },
+      detail:
+        `recorded ${info.seconds.toFixed(1)}s, REQUESTED ${info.requestedFps}fps, ` +
+        `pipeline negotiated ${info.resolvedFps || "?"}fps -> ${info.path} · ` +
+        `run scripts/measure-capture.mjs for the achieved rate`,
+    });
+  }, [deviceName, setProbe]);
+
+  const onCaptureError = useCallback((message: string) => {
+    setProbe("capture", {
+      status: "fail",
+      measurement: { value: 0, device: deviceName },
+      detail: `capture failed: ${message}`,
+    });
+  }, [deviceName, setProbe]);
+
+  /**
+   * Probe 4 — the same seek measurement, against a clip arriving over HTTP.
+   *
+   * Reuses SEEK_TARGETS unchanged so the streaming number is directly comparable with the bundled
+   * one; a difference between them is the network's contribution and nothing else.
+   */
+  const runRemoteSeekProbe = useCallback(async () => {
+    const handle = clock.current;
+    if (!handle || busy) return;
+    setBusy(true);
+    setProbe("remote-seek", { status: "running" as ProbeStatus, measurement: undefined });
+
+    setRemoteSource(`${FIXTURE_ORIGIN}/assets/frameclock.mp4`);
+    // Let the player rebuild against the network source and buffer before asking for a seek.
+    await new Promise((r) => setTimeout(r, 4_000));
+
+    await handle.pause();
+    await handle.resetStats();
+    for (const target of SEEK_TARGETS) {
+      await handle.seekToFrame(target);
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    const stats: FrameClockStats = await handle.getStats();
+    const verdict = judgeSeekError(stats.seekErrorFrames);
+
+    setProbe("remote-seek", {
+      status: verdict.status,
+      measurement: { value: verdict.value, device: deviceName },
+      detail: `${verdict.detail} · source=network`,
+    });
+    setRemoteSource(null);
+    setBusy(false);
+  }, [busy, deviceName, setProbe]);
+
+  /** Probe 5 — download and parse the largest real artifact, timed on the device. */
+  const runArtifactProbe = useCallback(async () => {
+    if (busy) return;
+    setBusy(true);
+    setProbe("artifact-weight", { status: "running" as ProbeStatus, measurement: undefined });
+
+    try {
+      const t0 = Date.now();
+      const res = await fetch(`${FIXTURE_ORIGIN}/out/pro_3/analysis.json`);
+      const text = await res.text();
+      const t1 = Date.now();
+      // JSON.parse, not res.json(), so download and parse are timed separately — they have
+      // different fixes and a combined number would hide which one is the problem.
+      const parsed = JSON.parse(text) as { pose?: { frames?: unknown[] } };
+      const t2 = Date.now();
+
+      const verdict = judgeArtifact(text.length, t1 - t0, t2 - t1);
+      setProbe("artifact-weight", {
+        status: verdict.status,
+        measurement: { value: verdict.value, device: deviceName },
+        detail: `${verdict.detail} · ${parsed.pose?.frames?.length ?? 0} pose frames`,
+      });
+    } catch (err) {
+      setProbe("artifact-weight", {
+        status: "fail",
+        measurement: { value: 0, device: deviceName },
+        detail: `could not reach ${FIXTURE_ORIGIN} — is scripts/serve-fixtures.mjs running? ` +
+          `${err instanceof Error ? err.message : String(err)}`,
+      });
+    }
+    setBusy(false);
+  }, [busy, deviceName, setProbe]);
+
+  /**
    * @param drawFirst  Draw the overlay for the TARGET frame before asking for the seek, instead
    *                   of waiting to be told a frame arrived.
    *
@@ -392,7 +498,7 @@ export default function SpikeScreen() {
             <FrameClockView
               ref={clock}
               style={styles.video}
-              source={clipUri}
+              source={remoteSource ?? clipUri}
               fps={clip.fps}
               // Always on here, even though the module defaults it off. The overlay marker IS
               // driven by these events, so this is not instrumentation sitting beside the thing
@@ -493,10 +599,22 @@ export default function SpikeScreen() {
                       ? () => runScrubProbe(false)
                       : p.id === "scrub-draw-first"
                         ? () => runScrubProbe(true)
-                        : undefined
+                        : p.id === "remote-seek"
+                          ? runRemoteSeekProbe
+                          : p.id === "artifact-weight"
+                            ? runArtifactProbe
+                            : undefined
             }
             disabled={busy || !clipUri}
-          />
+          >
+            {p.id === "capture" ? (
+              <CaptureProbe
+                onRecorded={onCaptureRecorded}
+                onError={onCaptureError}
+                disabled={busy}
+              />
+            ) : null}
+          </ProbeCard>
         ))}
 
         <Text style={styles.footer}>

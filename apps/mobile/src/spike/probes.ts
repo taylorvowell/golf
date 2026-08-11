@@ -92,14 +92,37 @@ export const PROBES: Probe[] = [
     measures: "% of frames NOT exactly locked — target 0",
   },
   {
+    id: "remote-seek",
+    title: "4 · Frame-exact seek over the NETWORK",
+    question: "Does seeking stay frame-exact when the clip streams over HTTP instead of bundling?",
+    why:
+      "Every probe above measured a video compiled INTO the app. The product streams from object " +
+      "storage (D8/D33), which is a different problem: range requests, buffering, and a decoder " +
+      "that can stall on the wire rather than on the CPU. mobile-player is built on this path and " +
+      "nothing has tested it.",
+    status: "pending",
+    measures: "requested frame minus presented frame, streaming — target exactly 0",
+  },
+  {
+    id: "artifact-weight",
+    title: "5 · Parsing a real analysis.json on the device",
+    question: "Can a phone hold and parse the largest real artifact without falling over?",
+    why:
+      "analysis.json runs 2.8-13.7 MB across the ten fixtures. If the biggest is slow or fatal on " +
+      "a mid-range phone the API needs a lean per-view payload — and that is a STEP 07 decision, " +
+      "so it has to be measured before the schema is authored rather than after.",
+    status: "pending",
+    measures: "download + parse milliseconds for the largest fixture",
+  },
+  {
     id: "capture",
     title: "3 · Sustained 60fps capture",
     question: "Does the device actually record at the rate it reports?",
     why:
       "PROJECT_MAIN §2.3 makes 60fps non-negotiable and forbids silently degrading it. " +
       "VisionCamera advertises 30–240fps; advertised is not achieved.",
-    status: "blocked-dev-build",
-    measures: "achieved fps and dropped-frame count over a 10s recording",
+    status: "pending",
+    measures: "achieved fps from the RECORDED FILE — bar 59.5",
   },
 ];
 
@@ -233,6 +256,26 @@ export function judgeSeekError(stats: StatSummary): Verdict {
  * is that the recorded rate must be the true rate, so the file is the evidence and the API's
  * self-report is not.
  */
+/**
+ * Parse cost is a budget question, not a correctness one, so this bar is a stated judgement
+ * rather than a physical limit: a swing must open in about a second, and a parse that eats most
+ * of that leaves nothing for the request, the video and the first paint.
+ */
+export const ARTIFACT_PARSE_BUDGET_MS = 600;
+
+export function judgeArtifact(bytes: number, downloadMs: number, parseMs: number): Verdict {
+  const mb = bytes / 1_000_000;
+  const detail =
+    `${mb.toFixed(1)} MB · download ${Math.round(downloadMs)}ms · parse ${Math.round(parseMs)}ms ` +
+    `· total ${Math.round(downloadMs + parseMs)}ms`;
+  if (bytes <= 0) return { status: "fail", value: 0, detail: "artifact did not download" };
+  return {
+    status: parseMs <= ARTIFACT_PARSE_BUDGET_MS ? "pass" : "fail",
+    value: Number(parseMs.toFixed(0)),
+    detail,
+  };
+}
+
 export function judgeCapture(frameCount: number, durationSec: number, requestedFps: number): Verdict {
   if (durationSec <= 0 || frameCount <= 0) {
     return { status: "fail", value: 0, detail: "no recording to measure" };

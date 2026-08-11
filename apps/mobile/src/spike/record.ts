@@ -1,4 +1,4 @@
-import { THRESHOLDS, type Probe } from "./probes";
+import { ARTIFACT_PARSE_BUDGET_MS, THRESHOLDS, type Probe } from "./probes";
 
 /**
  * Make a probe result survive the screen it was drawn on.
@@ -38,7 +38,8 @@ function thresholdFor(probeId: string): number | null {
       probeId === "scrub-draw-first") {
     return THRESHOLDS.overlayDriftP95;
   }
-  if (probeId === "seek") return THRESHOLDS.seekErrorMax;
+  if (probeId === "seek" || probeId === "remote-seek") return THRESHOLDS.seekErrorMax;
+  if (probeId === "artifact-weight") return ARTIFACT_PARSE_BUDGET_MS;
   if (probeId === "capture") return THRESHOLDS.captureMinFps;
   return null;
 }

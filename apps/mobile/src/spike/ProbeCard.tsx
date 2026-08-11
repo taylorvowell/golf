@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 
 import type { Probe, ProbeStatus } from "./probes";
@@ -38,9 +39,11 @@ export interface ProbeCardProps {
   probe: Probe;
   onRun?: () => void;
   disabled?: boolean;
+  /** Extra controls a probe supplies itself, e.g. the camera preview for probe 3. */
+  children?: ReactNode;
 }
 
-export function ProbeCard({ probe, onRun, disabled = false }: ProbeCardProps) {
+export function ProbeCard({ probe, onRun, disabled = false , children }: ProbeCardProps) {
   return (
     <View style={styles.card}>
       <View style={styles.cardHead}>
@@ -64,6 +67,7 @@ export function ProbeCard({ probe, onRun, disabled = false }: ProbeCardProps) {
           </Text>
         </Pressable>
       ) : null}
+      {children}
     </View>
   );
 }
