@@ -1913,3 +1913,64 @@ be used. `modules/high-speed-camera` stays as the seam that path will fill.
 frame at 60fps. That is why `analysis.json` carries no impact face angle, why the club detector is
 weakest exactly where the swing is fastest, and why the trace refuses to draw through the strike on
 `pro_2`. Every one of those eases at 240.
+
+---
+
+## D39 — 1080p240 WORKS on the S25+. The API overload was the entire difference.
+
+**Date:** 2026-08-11
+**Status:** ACTIVE — **overturns D38's conclusion**
+
+Decoded frame counts from real recordings, at full 1920×1080:
+
+| requested | decoded frames | duration | **achieved** |
+|---|---|---|---|
+| 120 | 692 | 5.813 s | **119.04 fps** |
+| 240 | 1344 | 5.807 s | **231.44 fps** |
+
+Third-party 1080p240 is available on this device. The community reports that the S25+ caps
+third-party high-speed at 30fps are **wrong for this device**, and D38's "only Camera2 can reach it,
+and Samsung probably blocks that too" was half right — Camera2 can reach it, and Samsung does not
+block it.
+
+### The difference was which overload was called
+
+Both attempts used Camera2 constrained high-speed. They differ in one line:
+
+| Call | Result |
+|---|---|
+| `device.createCaptureSession(SessionConfiguration(SESSION_HIGH_SPEED, …))` | **Swallowed.** Camera opened, then neither `onConfigured` nor `onConfigureFailed` ever fired. No answer at all — only a watchdog turned it into a failure. |
+| `device.createConstrainedHighSpeedCaptureSession(surfaces, callback, handler)` | **Configured**, recorder started, files written |
+
+The second is deprecated. The deprecated one is the one that works. That is worth stating plainly,
+because the instinct on seeing a deprecation warning is to switch to the modern overload, and doing
+so here silently removes 240fps capture with no error to explain it.
+
+**And "no answer" is the worst failure mode there is.** A refusal is information; silence is
+indistinguishable from a hang, a slow camera, or a coding error. The only reason this was
+diagnosable is the watchdog and the per-stage native logging added after the first attempt sat
+there with a 0-byte file and a button reading "Recording…".
+
+### What still needs a look, and what does not
+
+**231.44 against a requested 240 is 3.6% short** — about 50 frames missing across 5.8 seconds. That
+is NOT the silent degrade of D37, where 240 became 60: this is genuine 240fps capture with some
+loss, most likely encoder ramp at the start or the stop edge, since the clip also came out 5.81s
+against a 6s request. It needs one look before `in-app-capture` relies on an exact rate, and the
+analyzer's Stage 0 normalizes to CFR anyway, so a small loss degrades rather than breaks.
+
+**The 120 result — 119.04 — is within 0.8%** and is not a concern.
+
+### Consequences
+
+- **`in-app-capture` can plan on 240fps at 1080p on flagship Samsung hardware.** Impact is over
+  inside a single frame at 60fps; at 240 there are four. This eases the three things the project
+  has repeatedly hit: no impact face angle, a club detector weakest where the swing is fastest, and
+  a trace that refuses to draw through the strike on `pro_2`.
+- **Device capability must be probed at runtime, never assumed.** This device offers it; the
+  mid-range Android that step 02 still wants may not, and iOS is untested. `capabilities()` on the
+  module is the check, and §2.3's "never silently degrade" means telling the user what they got.
+- **The module keeps the deprecated call**, with the reason written next to it. A future tidy-up
+  that "fixes the deprecation" would remove the capability.
+- D38 stands as the record of how the answer was reached — CamcorderProfile empty, CameraX
+  correctly refusing — but its conclusion that Camera2 was likely blocked is superseded.

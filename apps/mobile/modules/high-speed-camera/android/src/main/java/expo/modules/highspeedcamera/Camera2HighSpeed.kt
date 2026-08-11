@@ -12,6 +12,7 @@ import android.hardware.camera2.params.SessionConfiguration
 import android.media.MediaRecorder
 import android.os.Handler
 import android.os.HandlerThread
+import android.util.Log
 import android.util.Range
 import android.util.Size
 import java.io.File
@@ -47,6 +48,8 @@ import java.util.concurrent.Executor
  * eliminate.
  */
 class Camera2HighSpeed(private val context: Context) {
+
+  private companion object { const val TAG = "SwingSageHighSpeed" }
 
   private val manager get() = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
 
@@ -143,24 +146,55 @@ class Camera2HighSpeed(private val context: Context) {
     }
     val surface = recorder.surface
 
+    Log.i(TAG, "record: chose ${size.width}x${size.height} @ ${range.lower}-${range.upper}")
+
     var opened: CameraDevice? = null
+    var settled = false
     val finish = { result: Result<String> ->
+      // Guarded: a constrained session can report BOTH a configure failure and a device error, and
+      // settling a promise twice crashes the bridge. First answer wins.
+      if (settled) Unit else {
+      settled = true
+      Log.i(TAG, "record: settled ${if (result.isSuccess) "OK" else "ERR " + result.exceptionOrNull()?.message}")
       runCatching { opened?.close() }
       runCatching { recorder.reset(); recorder.release() }
       thread.quitSafely()
       onDone(result)
+      }
     }
+
+    /**
+     * A hang is a real outcome and must not look like "still working".
+     *
+     * The first Camera2 attempt produced a 0-byte file and never settled: `onConfigured` never
+     * fired, nothing called back, and the card sat on "Recording…" indefinitely with no way to tell
+     * a slow camera from a dead one. A watchdog turns that into a reportable failure.
+     */
+    handler.postDelayed({
+      finish(Result.failure(IllegalStateException(
+        "timed out after ${seconds + 8}s — the high-speed session never delivered frames"
+      )))
+    }, (seconds + 8) * 1000L)
 
     manager.openCamera(id, executor, object : CameraDevice.StateCallback() {
       override fun onOpened(device: CameraDevice) {
+        Log.i(TAG, "camera opened")
         opened = device
         try {
-          val config = SessionConfiguration(
-            SessionConfiguration.SESSION_HIGH_SPEED,
-            listOf(OutputConfiguration(surface)),
-            executor,
-            object : CameraCaptureSession.StateCallback() {
+          /**
+           * The DEPRECATED dedicated call, not `SessionConfiguration(SESSION_HIGH_SPEED, …)`.
+           *
+           * The SessionConfiguration path was swallowed on this device: the camera opened and then
+           * neither `onConfigured` nor `onConfigureFailed` ever fired — no answer at all, which the
+           * watchdog had to turn into a failure. `createConstrainedHighSpeedCaptureSession` is the
+           * older, more widely exercised entry point, and OEM camera HALs are routinely better
+           * behaved on it. If this is also swallowed, the restriction is real rather than an
+           * artefact of which overload was called.
+           */
+          @Suppress("DEPRECATION")
+          val callback = object : CameraCaptureSession.StateCallback() {
               override fun onConfigured(session: CameraCaptureSession) {
+                Log.i(TAG, "high-speed session CONFIGURED")
                 try {
                   val highSpeed = session as CameraConstrainedHighSpeedCaptureSession
                   val request = device.createCaptureRequest(CameraDevice.TEMPLATE_RECORD).apply {
@@ -173,6 +207,7 @@ class Camera2HighSpeed(private val context: Context) {
                     highSpeed.createHighSpeedRequestList(request), null, handler,
                   )
                   recorder.start()
+                  Log.i(TAG, "recorder started")
                   handler.postDelayed({
                     runCatching { highSpeed.stopRepeating() }
                     runCatching { recorder.stop() }
@@ -189,9 +224,8 @@ class Camera2HighSpeed(private val context: Context) {
                     "this is the third-party restriction, not a coding error"
                 )))
               }
-            },
-          )
-          device.createCaptureSession(config)
+          }
+          device.createConstrainedHighSpeedCaptureSession(listOf(surface), callback, handler)
         } catch (e: Throwable) {
           finish(Result.failure(e))
         }

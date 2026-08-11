@@ -29,6 +29,15 @@ export function HighSpeedProbe({ onRecorded, onError, disabled }: HighSpeedProbe
 
   const [queryError, setQueryError] = useState<string | null>(null);
   const [cam2, setCam2] = useState<Camera2Capabilities | null>(null);
+  /**
+   * The last attempt, shown ON THE CARD.
+   *
+   * A recording that hung left the button reading "Recording 120…" with nothing else to go on —
+   * no way to tell a slow camera from a dead one without reading logcat on another machine. The
+   * probe has to be able to report its own outcome, or it is not usable by the person holding the
+   * phone.
+   */
+  const [last, setLast] = useState<string | null>(null);
 
   useEffect(() => {
     HighSpeedCamera.camera2Capabilities()
@@ -60,15 +69,19 @@ export function HighSpeedProbe({ onRecorded, onError, disabled }: HighSpeedProbe
   const record = useCallback(async (fps: number, api: "camerax" | "camera2") => {
     if (busy !== null) return;
     setBusy(fps);
+    setLast(`requesting ${fps}fps via ${api}…`);
     try {
       const result = api === "camera2"
         ? await HighSpeedCamera.camera2Record(fps, RECORD_SECONDS)
         : await HighSpeedCamera.record(fps, RECORD_SECONDS);
+      setLast(`✓ recorded ${fps}fps -> ${result.path.split("/").pop()}`);
       onRecorded(result);
     } catch (e) {
       // A rejection here is a GOOD outcome relative to the alternative: D37's failure was a
       // request for 240 quietly served at 60. Refusing outright is the honest answer.
-      onError(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      setLast(`✗ ${fps}fps failed: ${msg}`);
+      onError(msg);
     }
     setBusy(null);
   }, [busy, onError, onRecorded]);
@@ -94,6 +107,7 @@ export function HighSpeedProbe({ onRecorded, onError, disabled }: HighSpeedProbe
               }`
             : `unsupported (${cam2.reason ?? "declares=" + cam2.declaresCapability})`}
       </Text>
+      {last ? <Text style={styles.detail}>{last}</Text> : null}
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
         {RATES.map((fps) => (
           <Pressable
