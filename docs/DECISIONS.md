@@ -1640,3 +1640,60 @@ and it is worth it: the alternative is building the largest single piece of UI r
 on an unknown, having already built the instrument that can answer it.
 
 Probe 2 additionally needs more seek targets to clear `minSamples`.
+
+---
+
+## D35 — The overlay was never late; the instrument was subtracting the decoder's lead
+
+**Date:** 2026-08-11
+**Status:** ACTIVE — supersedes D34's reading of probe 1, which was measured on a biased instrument
+
+**The run that settled it** (S25+, Android 36, after D34's ceiling probe landed):
+
+| Probe | paint | n | p50 | exactly locked | JS lead p95 |
+|---|---|---|---|---|---|
+| 1 · overlay | `react-state` | 261 | **−2** | 0.4% | 49.2 ms |
+| 1b · ceiling | `sync-ack` | 301 | **−3** | 0.7% | 49.1 ms |
+
+**Removing React entirely made the number WORSE.** That is the signature of a measurement bias
+rather than a rendering cost — a real cost cannot go up when work is removed. The ceiling probe
+D34 added to separate "the platform cannot" from "our renderer is too slow" answered a third
+question instead: *the instrument is wrong*.
+
+**What it was really measuring.** `onFrameRendered` fires ~49 ms before the frame it names reaches
+the glass — about **three frames at 60 fps**, and `leadTimeMs` p95 says exactly that. JS acked
+immediately; `markOverlayCommitted` then compared against `onScreenFrame()`, which is what is
+displayed *at the instant of the ack* — three frames older. An overlay drawn immediately and
+perfectly early therefore scored **−3**. The `react-state` path scored −2 because the React commit
+delay was **partially cancelling the lead**, which is why the broken architecture looked better.
+
+The negative numbers were never lateness. They were earliness, with a minus sign.
+
+**This is the third version of the same mistake, in the third direction.** `FrameClockView`'s own
+comment records v1: comparing against the newest *queued* frame, which inflated drift by the lead
+and "read p95 = 2 frames against a measured lead of ~33ms — the bias *was* the result". v2 fixed
+that by comparing against what is on screen, and thereby introduced the mirror image. Both versions
+answered "how far apart are these two numbers right now", when the question is **"was the overlay
+ready in time?"**
+
+**Decision:** `markOverlayCommitted(N)` now looks up frame N's own scheduled display time and
+compares it against the clock. Committed before N was due → **0, locked**; committed after →
+counted in frames late. Early is zero, because a lead is a budget to draw in, not an error.
+
+**What this means for D5, stated carefully because the measurement has been wrong three times:**
+a JS-driven overlay has a **~49 ms budget** on this device — roughly three frames at 60 fps — to
+draw in before the frame it describes is displayed. That is a large budget and it is the number
+that decides whether the web player's architecture ports. **It is not yet evidence that the overlay
+is locked**; that requires re-running probes 1 and 1b on the corrected instrument. D5 stays
+provisional until it does.
+
+**Unchanged by this**, because they are measured independently of the overlay path:
+- **Seek is one frame late, consistently** — now on 128 samples, over the `minSamples` bar of 120,
+  with the GOP worst cases included. `expo-video`/media3 with `SeekParameters.EXACT` lands on N+1.
+  That is a real finding and it stands.
+- **Scrub p95 12 frames** stands as measured, but it conflates seek error with overlay paint and
+  cannot be attributed until probes 1 and 1b re-run clean.
+
+**Requires a rebuild** — this is Kotlin, not JS. The iOS half needs the mirror change and still
+cannot be compiled here (no Mac), so it is written but unverified, exactly as D31's amendment
+allows for Android-first.

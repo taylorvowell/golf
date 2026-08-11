@@ -18,6 +18,7 @@ import androidx.media3.exoplayer.SeekParameters
 import expo.modules.kotlin.AppContext
 import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
+import kotlin.math.ceil
 
 /**
  * The measuring instrument for platform-foundation step 02, probes 1 and 2.
@@ -252,13 +253,50 @@ class FrameClockView(context: Context, appContext: AppContext) : ExpoView(contex
    * whole frames of lateness in the JS round-trip. A negative value would mean JS drew ahead of
    * the decoder, which only happens if [fps] disagrees with the media.
    */
+  /**
+   * Did the overlay for frame N land before N reached the glass?
+   *
+   * ## Two bugs, in opposite directions, and this is the third attempt
+   *
+   * v1 compared JS against the newest QUEUED frame. That inflated drift by the callback's lead
+   * time and read p95 = 2 frames when the lead was ~2 frames — the bias *was* the result.
+   *
+   * v2 (the version this replaces) compared against what was ON SCREEN at the instant JS acked.
+   * That is the mirror image of the same mistake: `onFrameRendered` fires ~49ms — about three
+   * frames at 60fps — BEFORE the frame it names is displayed, so an overlay drawn immediately and
+   * perfectly early scored −3. Measured on an S25+: sync-ack p50 −3 against a lead p95 of 49.1ms.
+   * The ceiling probe removed React entirely and got *worse* (−3 vs −2), which is the signature of
+   * a measurement bias rather than a rendering cost — the React commit had been partially
+   * cancelling the lead.
+   *
+   * Neither version answered the actual question, which is not "how far apart are these two
+   * numbers right now" but **"was the overlay ready in time?"** So: look up the frame's own
+   * scheduled display time and compare against the clock. Early is 0 — early is the whole point of
+   * having a lead — and late is counted in frames.
+   */
   fun markOverlayCommitted(frame: Int) {
-    // Against what is ON SCREEN, not what has merely been queued. Comparing against the queued
-    // frame inflates drift by the callback's lead time, which is what made the first S25+ run
-    // read p95 = 2 frames when the lead was ~2 frames.
-    val current = onScreenFrame()
-    if (current < 0) return
-    overlayDrift.add((current - frame).toDouble())
+    val now = System.nanoTime()
+    val displayAtNs = synchronized(scheduleLock) {
+      scheduled.firstOrNull { it.first == frame }?.second
+    }
+
+    if (displayAtNs == null) {
+      // Not in the schedule: either it was drained (already displayed, so JS is late and the
+      // gap to what is on screen is the honest cost) or it was never seen. A frame ahead of
+      // what is on screen with no schedule entry is not measurable, so it is not counted.
+      val current = onScreenFrame()
+      if (current < 0 || current < frame) return
+      overlayDrift.add((current - frame).toDouble())
+      return
+    }
+
+    val lateNs = now - displayAtNs
+    if (lateNs <= 0L) {
+      overlayDrift.add(0.0) // committed before the frame was due — locked
+      return
+    }
+    val frameNs = 1_000_000_000.0 / fps
+    overlayDrift.add(ceil(lateNs / frameNs))
   }
 
   fun resetStats() {
