@@ -1,7 +1,7 @@
 import "server-only";
 
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { db } from "./client";
+import type { DbTx } from "./session";
 import { headMarkers, swings, swingViews } from "./schema";
 
 /** A hand-placed club head, normalized 0–1 against the video frame. */
@@ -19,8 +19,8 @@ export interface HeadMarker {
  * here on frame N", and frame N is a different instant in a face-on clip than in the
  * down-the-line one shot beside it.
  */
-export async function listMarkers(viewId: string): Promise<HeadMarker[]> {
-  const rows = await db
+export async function listMarkers(tx: DbTx, viewId: string): Promise<HeadMarker[]> {
+  const rows = await tx
     .select({ frame: headMarkers.frame, x: headMarkers.x, y: headMarkers.y })
     .from(headMarkers)
     .where(eq(headMarkers.viewId, viewId))
@@ -42,12 +42,13 @@ export async function listMarkers(viewId: string): Promise<HeadMarker[]> {
  * it here is what stops one user's save landing on another user's swing.
  */
 export async function saveMarkers(
+  tx: DbTx,
   viewId: string,
   userId: string,
   upserts: HeadMarker[],
   deletes: number[],
 ): Promise<{ saved: number; deleted: number }> {
-  const owned = await db
+  const owned = await tx
     .select({ id: swingViews.id })
     .from(swingViews)
     .innerJoin(swings, eq(swings.id, swingViews.swingId))
@@ -66,23 +67,24 @@ export async function saveMarkers(
       y: Math.min(1, Math.max(0, m.y)),
     }));
 
-  await db.transaction(async (tx) => {
-    if (clean.length) {
-      await tx.insert(headMarkers).values(clean).onConflictDoUpdate({
-        target: [headMarkers.viewId, headMarkers.frame],
-        set: {
-          x: sql`excluded.x`,
-          y: sql`excluded.y`,
-          updatedAt: new Date(),
-        },
-      });
-    }
-    if (deletes.length) {
-      await tx.delete(headMarkers).where(and(
-        eq(headMarkers.viewId, viewId),
-        inArray(headMarkers.frame, deletes.map((f) => Math.round(f))),
-      ));
-    }
-  });
+  // No nested transaction: `tx` already is one. Every caller reaches this through `withUser`,
+  // which wraps the whole request in a single transaction, so "a half-applied correction is not a
+  // state the user can reach" now holds for the identity context too rather than only the writes.
+  if (clean.length) {
+    await tx.insert(headMarkers).values(clean).onConflictDoUpdate({
+      target: [headMarkers.viewId, headMarkers.frame],
+      set: {
+        x: sql`excluded.x`,
+        y: sql`excluded.y`,
+        updatedAt: new Date(),
+      },
+    });
+  }
+  if (deletes.length) {
+    await tx.delete(headMarkers).where(and(
+      eq(headMarkers.viewId, viewId),
+      inArray(headMarkers.frame, deletes.map((f) => Math.round(f))),
+    ));
+  }
   return { saved: clean.length, deleted: deletes.length };
 }

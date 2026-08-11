@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { withUser } from "@/db/session";
 import { listSwings } from "@/lib/swings";
 import { ANALYZER_OUT_ROOT } from "@/lib/media/publish";
 import type { SwingSummary } from "@swingsage/schema/contract";
@@ -16,7 +17,7 @@ export const dynamic = "force-dynamic"; // the analyzer writes new swings while 
  */
 export default async function Home() {
   const userId = await requireUserId();
-  const all = await listSwings(userId);
+  const all = await withUser(userId, (tx) => listSwings(tx, userId));
 
   // The bundled pro references live in the same table (they need real rows to be fetchable and
   // comparable) but they are not the golfer's own swings, so they get their own shelf below

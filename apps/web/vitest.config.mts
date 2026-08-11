@@ -11,7 +11,13 @@ if (existsSync(".env")) {
 
 export default defineConfig({
   resolve: {
-    alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },
+    alias: {
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
+      // `server-only` throws unless the `react-server` condition is set, which Next does and
+      // vitest does not. Without this, marking a database module server-only would make it
+      // untestable — a bad trade, since those are the modules most worth testing.
+      "server-only": fileURLToPath(new URL("../../node_modules/server-only/empty.js", import.meta.url)),
+    },
   },
   test: {
     environment: "node",

@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
-import { db } from "@/db/client";
-import { isUuid, isViewType } from "@/db/views";
+import { withUser } from "@/db/session";
+import { isUuid, isViewType, type ResolvedView } from "@/db/views";
 import type { ViewType } from "@/db/schema";
 import type { ViewAddress } from "@/lib/media/keys";
 import { createClient } from "@/lib/supabase/server";
@@ -79,61 +79,30 @@ function isAllowed(email: string | undefined): boolean {
 }
 
 /**
- * The signed-in user's id, creating their profile row on first sign-in.
+ * Mirror a signed-in identity into this database, once, on first sign-in.
  *
  * Auth lives in the hosted Supabase project while application data currently lives in the local
- * Postgres (D7 keeps a local database for pipeline work). So the first time someone signs in,
- * their identity has to be mirrored into this database before any row can reference it.
+ * Postgres (D7 keeps a local database for pipeline work), so an identity has to exist here before
+ * any row can reference it. That insert is the one write a request cannot make as `authenticated`:
+ * `users` has no INSERT policy and the local `auth.users` shim is not writable by a request role.
  *
- * The `auth.users` insert targets the SHIM that migration 0003 creates locally. Against a real
- * Supabase database the row already exists and `on conflict do nothing` makes this a no-op — it
- * cannot manufacture an identity where a real auth system owns them.
+ * The obvious fix — an elevated connection used "just for this" — is exactly what D26 forbids, so
+ * it goes through `app.ensure_profile()` (migration 0008) instead: a SECURITY DEFINER function
+ * that takes the email as data and reads the identity from `auth.uid()` internally. Creating
+ * someone else's profile is not expressible.
+ */
+async function ensureProfile(userId: string, email: string | null): Promise<void> {
+  await withUser(userId, (tx) => tx.execute(sql`select app.ensure_profile(${email})`));
+}
+
+/**
+ * The signed-in user's id, creating their profile row on first sign-in.
  */
 export async function requireUserId(): Promise<string> {
   const user = await getCurrentUser();
   if (!user) redirect("/signin");
-
-  await db.execute(sql`
-    insert into auth.users (id, email) values (${user.id}, ${user.email ?? null})
-    on conflict (id) do nothing
-  `);
-  await db.execute(sql`
-    insert into public.users (id, email, display_name)
-    values (${user.id}, ${user.email ?? null}, ${user.email?.split("@")[0] ?? "golfer"})
-    on conflict (id) do nothing
-  `);
-
-  await claimLegacyFixtures(user.id);
+  await ensureProfile(user.id, user.email ?? null);
   return user.id;
-}
-
-/**
- * Hand the pre-auth development fixtures to the first real account that signs in.
- *
- * Before step 04 every swing was owned by a seeded "admin" row. That row is gone, but the ten
- * analysed fixtures on this machine still point at it, and without this they would be invisible
- * the moment real identity arrived — RLS would correctly hide swings belonging to a user nobody
- * can sign in as.
- *
- * Strictly a local-development migration, and it is deliberately one-shot: it only fires while an
- * `admin` row still exists, then deletes it, so the second account to sign in inherits nothing.
- * On a fresh Supabase database there is no admin row and this does nothing at all.
- */
-async function claimLegacyFixtures(userId: string) {
-  // Gated behind an explicit opt-in. Handing every fixture to whoever signs in first is a
-  // privilege grant, and the runbook tells you to browse this dev server from your phone over
-  // the LAN — so "first" is not necessarily you. Off unless deliberately turned on.
-  if (process.env.CLAIM_LEGACY_FIXTURES !== "true") return;
-
-  await db.execute(sql`
-    with legacy as (
-      delete from public.users where display_name = 'admin' returning id
-    ), moved as (
-      update public.swings set user_id = ${userId}
-       where user_id in (select id from legacy) returning id
-    )
-    select 1
-  `);
 }
 
 /**
@@ -143,15 +112,7 @@ async function claimLegacyFixtures(userId: string) {
 export async function requireUserIdOrNull(): Promise<string | null> {
   const user = await getCurrentUser();
   if (!user) return null;
-  await db.execute(sql`
-    insert into auth.users (id, email) values (${user.id}, ${user.email ?? null})
-    on conflict (id) do nothing
-  `);
-  await db.execute(sql`
-    insert into public.users (id, email, display_name)
-    values (${user.id}, ${user.email ?? null}, ${user.email?.split("@")[0] ?? "golfer"})
-    on conflict (id) do nothing
-  `);
+  await ensureProfile(user.id, user.email ?? null);
   return user.id;
 }
 
@@ -167,12 +128,11 @@ export async function requireUserIdOrNull(): Promise<string | null> {
  * It resolves the view in the same round trip rather than in a second query, because the video
  * route runs this once per HTTP Range request and scrubbing issues a great many of them.
  *
- * The rule is duplicated here rather than delegated to RLS, and that is a **temporary** state
- * that must not be mistaken for the design. The app currently connects to Postgres as a
- * superuser, and superusers bypass RLS entirely — `FORCE ROW LEVEL SECURITY` does not apply to
- * them — so the policies in migration 0003 are inert in the running application. Until the app
- * connects as a non-superuser and sets the request context per transaction, this function is the
- * only thing actually enforcing the boundary. See docs/DECISIONS.md D26.
+ * Since D42 this query runs inside `withUser`, so the `swings_select` and `swing_views_select`
+ * policies filter it before the `where` clause is ever reached — the database is the boundary D7
+ * says it is. The ownership predicate below is kept anyway, as **defence in depth** and because it
+ * is what distinguishes 404 from found; it is no longer the only thing standing between one
+ * golfer and another's video, which is what D26 recorded it as.
  */
 export async function requireViewAccess(
   swingId: string,
@@ -190,7 +150,7 @@ export async function requireViewAccess(
   // silently serving down-the-line for `?view=overhead` would look like the parameter worked.
   if (viewType && !wanted) return { error: new Response("unknown view", { status: 400 }) };
 
-  const rows = await db.execute<{
+  const rows = await withUser(userId, (tx) => tx.execute<{
     view_id: string; view: ViewType; media_key: string;
     owner_id: string; artifact_revision: number;
   }>(sql`
@@ -211,7 +171,7 @@ export async function requireViewAccess(
        )
      order by v.is_primary desc, v.created_at asc
      limit 1
-  `);
+  `));
 
   // 404, not 403. Telling an unauthorized caller that a swing exists is itself a disclosure —
   // it confirms an id is real and that someone owns it. The same answer covers "no such view",
@@ -235,6 +195,25 @@ export async function requireViewAccess(
       viewId: row.view_id,
       revision: row.artifact_revision,
     },
+  };
+}
+
+/**
+ * The same view as a `ResolvedView`, keyed to the OWNER.
+ *
+ * `ViewAccess.userId` is whoever is asking; `ResolvedView.userId` is whose namespace the media
+ * lives in, and for an approved coach those are different people. Anything that derives a storage
+ * address (`mediaAddress`) must use the owner or it looks in an empty namespace and 404s a swing
+ * the caller is entitled to see — the same reasoning that produced `ViewAccess.address`.
+ */
+export function ownedView(access: ViewAccess): ResolvedView {
+  return {
+    swingId: access.swingId,
+    userId: access.ownerId,
+    viewId: access.viewId,
+    view: access.view,
+    mediaKey: access.mediaKey,
+    revision: access.revision,
   };
 }
 

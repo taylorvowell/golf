@@ -1,5 +1,5 @@
 import { and, asc, desc, eq } from "drizzle-orm";
-import { db } from "./client";
+import type { DbTx } from "./session";
 import { swings, swingViews, type ViewType } from "./schema";
 import type { ViewAddress } from "@/lib/media/keys";
 
@@ -54,12 +54,13 @@ export function isViewType(v: string): v is ViewType {
 
 /** The view a swing id + optional view type names, or null if there is no such view. */
 export async function resolveView(
+  tx: DbTx,
   swingId: string,
   viewType?: ViewType | null,
 ): Promise<ResolvedView | null> {
   if (!isUuid(swingId)) return null;
 
-  const rows = await db
+  const rows = await tx
     .select({
       swingId: swings.id,
       userId: swings.userId,
@@ -89,8 +90,8 @@ export async function resolveView(
  * which walks that directory, needs exactly one lookup in the other direction. Nothing on a
  * request path uses it, which is the point: a storage key must not be an address.
  */
-export async function viewByMediaKey(mediaKey: string): Promise<ResolvedView | null> {
-  const rows = await db
+export async function viewByMediaKey(tx: DbTx, mediaKey: string): Promise<ResolvedView | null> {
+  const rows = await tx
     .select({
       swingId: swings.id,
       userId: swings.userId,
@@ -108,9 +109,9 @@ export async function viewByMediaKey(mediaKey: string): Promise<ResolvedView | n
 }
 
 /** The view with this id, with its owning swing — for anything already holding a view id. */
-export async function viewById(viewId: string): Promise<ResolvedView | null> {
+export async function viewById(tx: DbTx, viewId: string): Promise<ResolvedView | null> {
   if (!isUuid(viewId)) return null;
-  const rows = await db
+  const rows = await tx
     .select({
       swingId: swings.id,
       userId: swings.userId,

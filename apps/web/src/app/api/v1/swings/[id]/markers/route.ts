@@ -1,4 +1,5 @@
 import { listMarkers, saveMarkers, type HeadMarker } from "@/db/markers";
+import { withUser } from "@/db/session";
 import { requireViewAccess, viewParam } from "@/lib/auth";
 
 /**
@@ -22,7 +23,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   const { id } = await ctx.params;
   const access = await requireViewAccess(id, viewParam(req));
   if ("error" in access) return access.error;
-  const markers = await listMarkers(access.viewId);
+  const markers = await withUser(access.userId, (tx) => listMarkers(tx, access.viewId));
   return Response.json({ markers }, { headers: { "Cache-Control": "no-store" } });
 }
 
@@ -46,7 +47,8 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
   const access = await requireViewAccess(id, viewParam(req));
   if ("error" in access) return access.error;
   try {
-    const result = await saveMarkers(access.viewId, access.userId, markers, deleted);
+    const result = await withUser(access.userId, (tx) =>
+      saveMarkers(tx, access.viewId, access.userId, markers, deleted));
     return Response.json(result);
   } catch (e) {
     return Response.json({ error: (e as Error).message }, { status: 404 });

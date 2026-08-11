@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { desc, eq } from "drizzle-orm";
-import { db } from "@/db/client";
+import { withUser, type DbTx } from "@/db/session";
 import { jobs as jobsTable, swingViews as viewsTable } from "@/db/schema";
 import { syncSwingScore } from "@/db/scores";
 import { mediaAddress, type ResolvedView } from "@/db/views";
@@ -84,15 +84,26 @@ const STAGES: [RegExp, string, number][] = [
   [/^rendered /, "render", 99],
 ];
 
-async function persist(job: Job) {
-  await db.update(jobsTable).set({
+/**
+ * Persist a job's state.
+ *
+ * `actorId` rather than the swing's owner: a job row is written under the identity of whoever is
+ * driving the analysis, and `jobs_write` only admits the owner. That is the point — a coach
+ * polling a golfer's swing must not be silently promoted to the golfer in order to write a row.
+ *
+ * Called from `setInterval` and from the child process's `close` handler, both of which run long
+ * after the request that started them has ended. `withUser` opens its own transaction each time,
+ * so it works identically on and off a request — there is no ambient context to lose.
+ */
+async function persist(actorId: string, job: Job) {
+  await withUser(actorId, (tx) => tx.update(jobsTable).set({
     status: job.status,
     stage: job.stage,
     progressPct: job.progressPct,
     message: job.message,
     log: job.log,
     finishedAt: job.finishedAt ? new Date(job.finishedAt) : null,
-  }).where(eq(jobsTable.id, job.id));
+  }).where(eq(jobsTable.id, job.id)));
 }
 
 /**
@@ -109,7 +120,7 @@ async function persist(job: Job) {
  * *succeeded* is then a fact about the artifact: `analysis.json` newer than the job started.
  * Both are read rather than inferred, which is why this cannot mark a running job dead.
  */
-async function reconcile(job: Job, view: ResolvedView): Promise<Job> {
+async function reconcile(actorId: string, job: Job, view: ResolvedView): Promise<Job> {
   if (job.status !== "running" && job.status !== "queued") return job;
   const dir = workingDirFor(view.mediaKey);
   try {
@@ -124,37 +135,54 @@ async function reconcile(job: Job, view: ResolvedView): Promise<Job> {
   } catch { /* no artifact at all */ }
 
   job.finishedAt = Date.now();
+  // Every write here is best-effort and always was. What changed with D42 is *why* one can fail:
+  // an approved coach may legitimately read this job (`jobs_select` follows the swing), but
+  // `jobs_write` admits the owner only, so a coach polling a stuck job settles nothing. Correct —
+  // the golfer's next poll does it — and the alternative, running these as the owner, would put an
+  // elevated write on a request path.
   if (wroteArtifact) {
     job.status = "done";
     job.stage = "complete";
     job.progressPct = 100;
     job.message = "analysis rewritten";
-    await db.update(viewsTable).set({ status: "ready", analyzedAt: new Date() })
-      .where(eq(viewsTable.id, job.viewId)).catch(() => {});
-    await syncSwingScore(view).catch(() => {});
+    await withUser(actorId, (tx) => tx.update(viewsTable)
+      .set({ status: "ready", analyzedAt: new Date() })
+      .where(eq(viewsTable.id, job.viewId))).catch(() => {});
+    await withUser(actorId, (tx) => syncSwingScore(tx, view)).catch(() => {});
   } else {
     job.status = "failed";
     job.message = "the analyzer stopped without writing an analysis — see log";
-    await db.update(viewsTable).set({ status: "failed", failureReason: job.message })
-      .where(eq(viewsTable.id, job.viewId)).catch(() => {});
+    await withUser(actorId, (tx) => tx.update(viewsTable)
+      .set({ status: "failed", failureReason: job.message })
+      .where(eq(viewsTable.id, job.viewId))).catch(() => {});
   }
-  await persist(job).catch(() => {});
+  await persist(actorId, job).catch(() => {});
   return job;
 }
 
-export async function getJob(view: ResolvedView): Promise<Job | null> {
+export async function getJob(tx: DbTx, actorId: string, view: ResolvedView): Promise<Job | null> {
   const inMemory = live.get(view.viewId);
   if (inMemory) return inMemory;
 
-  const rows = await db.select().from(jobsTable)
+  const rows = await tx.select().from(jobsTable)
     .where(eq(jobsTable.viewId, view.viewId))
     .orderBy(desc(jobsTable.startedAt))
     .limit(1);
-  return rows[0] ? await reconcile(toJob(rows[0]), view) : null;
+  // `reconcile` opens its own transactions rather than using `tx`: it writes, and a policy
+  // violation inside the caller's transaction would abort the whole read.
+  return rows[0] ? await reconcile(actorId, toJob(rows[0]), view) : null;
 }
 
-export async function startReanalysis(view: ResolvedView): Promise<Job> {
-  const existing = await getJob(view);
+/**
+ * `actorId` is the caller, and the reanalyze route rejects anyone but the owner before reaching
+ * here — a coach may watch a golfer's swing, not spend GPU time on it.
+ */
+export async function startReanalysis(
+  tx: DbTx,
+  actorId: string,
+  view: ResolvedView,
+): Promise<Job> {
+  const existing = await getJob(tx, actorId, view);
   if (existing && (existing.status === "running" || existing.status === "queued")) {
     return existing;
   }
@@ -185,16 +213,16 @@ export async function startReanalysis(view: ResolvedView): Promise<Job> {
   };
   live.set(view.viewId, job);
 
-  await db.insert(jobsTable).values({
+  await tx.insert(jobsTable).values({
     id: job.id, viewId: view.viewId, type: "reanalyze",
     status: job.status, stage: job.stage, progressPct: job.progressPct, message: job.message,
     log: job.log,
   });
-  await db.update(viewsTable).set({ status: "analyzing" }).where(eq(viewsTable.id, view.viewId));
+  await tx.update(viewsTable).set({ status: "analyzing" }).where(eq(viewsTable.id, view.viewId));
 
   // Throttled durability: the fast path (below) mutates `job` in memory on every stdout line;
   // this flush is what makes that survive a hot-reload without a DB write per line.
-  const timer = setInterval(() => { persist(job).catch(() => {}); }, 2000);
+  const timer = setInterval(() => { persist(actorId, job).catch(() => {}); }, 2000);
   flushTimers.set(view.viewId, timer);
 
   const args = [
@@ -228,7 +256,7 @@ export async function startReanalysis(view: ResolvedView): Promise<Job> {
           job.stage = stage;
           job.progressPct = pct;
           job.message = line.trim();
-          persist(job).catch(() => {}); // stage transitions are rare; persist immediately
+          persist(actorId, job).catch(() => {}); // stage transitions are rare; persist immediately
           break;
         }
       }
@@ -249,7 +277,7 @@ export async function startReanalysis(view: ResolvedView): Promise<Job> {
     flushTimers.delete(view.viewId);
     live.delete(view.viewId);
 
-    await persist(job).catch(() => {});
+    await persist(actorId, job).catch(() => {});
     if (status === "done") {
       /**
        * Publish before the row moves, and publish to the NEXT revision.
@@ -274,15 +302,15 @@ export async function startReanalysis(view: ResolvedView): Promise<Job> {
       }
 
       if (publishError) {
-        await db.update(viewsTable).set({
+        await withUser(actorId, (t) => t.update(viewsTable).set({
           status: "failed",
           failureReason: `analysis succeeded but publishing failed: ${publishError}`,
-        }).where(eq(viewsTable.id, view.viewId)).catch(() => {});
+        }).where(eq(viewsTable.id, view.viewId))).catch(() => {});
       } else {
         // Read back through the store rather than off disk: it is the published copy the player
         // will get, so anything wrong with the publish shows up here rather than at playback.
         const fresh = await getAnalysis(address).catch(() => null);
-        await db.update(viewsTable).set({
+        await withUser(actorId, (t) => t.update(viewsTable).set({
           status: "ready",
           analyzedAt: new Date(),
           artifactRevision: revision,
@@ -290,12 +318,13 @@ export async function startReanalysis(view: ResolvedView): Promise<Job> {
           frameCount: fresh?.video.frame_count,
           width: fresh?.video.width,
           height: fresh?.video.height,
-        }).where(eq(viewsTable.id, view.viewId)).catch(() => {});
-        await syncSwingScore({ ...view, revision }).catch(() => {});
+        }).where(eq(viewsTable.id, view.viewId))).catch(() => {});
+        await withUser(actorId, (t) => syncSwingScore(t, { ...view, revision })).catch(() => {});
       }
     } else {
-      await db.update(viewsTable).set({ status: "failed", failureReason: message })
-        .where(eq(viewsTable.id, view.viewId)).catch(() => {});
+      await withUser(actorId, (t) => t.update(viewsTable)
+        .set({ status: "failed", failureReason: message })
+        .where(eq(viewsTable.id, view.viewId))).catch(() => {});
     }
   };
 

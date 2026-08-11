@@ -5,6 +5,7 @@ import type {
   SwingViewSummary,
 } from "@swingsage/schema/contract";
 
+import type { DbTx } from "@/db/session";
 import { ARTIFACT_BUCKET, artifactKey, type ViewAddress } from "@/lib/media/keys";
 import { getJson, getMediaStore } from "@/lib/media/store";
 
@@ -54,14 +55,14 @@ function rollUpStatus(views: { status: string }[]): string {
  * exist but whose `is_primary` flag is somehow unset must still appear (falling back to its first
  * view) instead of silently vanishing from the golfer's own log.
  */
-export async function listSwings(userId: string): Promise<SwingSummary[]> {
-  // Imported lazily so this module (used by API routes that don't touch the DB, like the video
-  // and thumb streamers) doesn't require DATABASE_URL to be set just to load.
-  const { db } = await import("../db/client");
+export async function listSwings(tx: DbTx, userId: string): Promise<SwingSummary[]> {
+  // Schema and operators imported lazily so this module (used by API routes that don't touch the
+  // DB, like the video and thumb streamers) stays cheap to load. The connection itself is no
+  // longer part of that concern: it belongs to `db/session.ts` and arrives as `tx`.
   const { swings, swingViews } = await import("../db/schema");
   const { eq, desc, asc } = await import("drizzle-orm");
 
-  const rows = await db.select({ swing: swings, view: swingViews }).from(swings)
+  const rows = await tx.select({ swing: swings, view: swingViews }).from(swings)
     .leftJoin(swingViews, eq(swingViews.swingId, swings.id))
     .where(eq(swings.userId, userId))
     .orderBy(desc(swings.createdAt), asc(swingViews.createdAt));

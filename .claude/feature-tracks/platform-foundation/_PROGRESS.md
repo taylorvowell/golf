@@ -20,6 +20,72 @@ closing.
 
 ---
 
+## 03 — Supabase Project and Data Platform Migration ✅ 2026-08-11
+
+**Completed:** 2026-08-11 16:45 UTC
+**Phase:** Platform Foundation
+
+**The policies were right the whole time. The product was not using them.** D24 shipped RLS on
+eight tables, forced, sixteen policies, coach access tested five phases early. D26 then found the
+app connected as `swingsage` — a superuser — and would have connected on Supabase as `postgres`,
+which is not a superuser but carries `BYPASSRLS`. Both are exempt from `FORCE ROW LEVEL SECURITY`,
+`auth.uid()` was NULL because nothing set the claims, and `rls.test.ts` passed throughout because
+it impersonates `authenticated` by hand. Decision **D42** closes it.
+
+**Four changes, and none of them works alone:**
+
+| | |
+|---|---|
+| `swingsage_app` | Login role, **NOINHERIT**, no superuser, no `BYPASSRLS`, member of `anon`/`authenticated` and **not** `service_role`. Holds membership without privileges, so a query outside the seam reads *nothing* rather than everything. |
+| `withUser(userId, fn)` | The only way the app reaches Postgres. Transaction → `request.jwt.claims` → `set local role authenticated` → both revert on commit, so a pooled connection cannot carry one request's identity into the next. |
+| The ambient `db` export | **Deleted.** `src/db/client.ts` no longer exists; `views`/`scores`/`stages`/`markers`/`jobs`/`swings` take the transaction as their first argument. There is nowhere else to run a query. |
+| `withOwner(reason, fn)` | The privileged counterpart, and it **throws at import if `NEXT_RUNTIME` is set** — a route that imports it fails to build. Four call sites, all CLI. |
+
+**The startup assertion is what makes a misconfiguration loud rather than invisible.** Pointing
+`APP_DATABASE_URL` at the owner would restore the entire defect with every test still green, so
+`withUser` checks four properties against the live connection before serving: not superuser, not
+`BYPASSRLS`, member of `authenticated`, **not** member of `service_role`. Verified by doing exactly
+that — 11 of 12 boundary tests fail with the offending role named. There is no fallback from
+`APP_DATABASE_URL` to `DATABASE_URL`.
+
+**`app.ensure_profile()` removes the last elevated write from a request path**, and its schema was
+a real finding rather than a detail. In `public` it is a PostgREST endpoint, and Supabase's own
+default privileges grant EXECUTE on new public functions **directly to `anon`** — which
+`revoke … from public` does not undo. The advisor flagged it as externally facing. It now lives in
+an `app` schema PostgREST does not serve: unreachable by construction, not by a grant that has to
+stay right. Advisors back to **zero findings**.
+
+**Three things this turned up on the way:**
+- **The hosted project was three migrations behind and nothing said so.** 0005, 0006 and 0007 had
+  only ever run against local Docker Postgres — eight tables hosted, ten locally. All applied; both
+  now agree. A standing hazard while migrations reach production by hand.
+- **The local shim diverged from Supabase invisibly.** `authenticated` had no USAGE on the local
+  `auth` schema, and it did not matter because a policy expression is parsed when *created*, as the
+  owner. The first line of app code to ask "who am I" failed locally and would have worked hosted.
+- **Point-in-time grants**, twice already (0003, then 0006 repairing 0005). Now `alter default
+  privileges`, so the next table is covered by a rule instead of by remembering.
+
+Also: `claimLegacyFixtures` left the request path for `pnpm --filter web db:claim-fixtures <email>`
+(it was a privilege grant racing whoever signed in first, on a LAN-reachable server);
+re-analysis is owner-only with a 403 rather than a coach-triggered 500; and `ownedView(access)`
+fixes storage addressing keyed off the caller instead of the owner.
+
+Oracles: web tsc/lint clean, **149 vitest** (14 new), Playwright green, mobile tsc clean, **100
+schema vitest**, analyzer **123 pytest**. Every route re-checked against the running server —
+analysis/markers/stages/thumb/silhouette 200, video 206 to a Range request, unversioned 404, a
+stage write and clear round-tripping through RLS, and `pg_stat_activity` confirming the server
+connects as `swingsage_app`.
+
+**Carried forward deliberately, not forgotten:** one Supabase project rather than three (D10 —
+money, and it is step 10's work), and the analyzer's service role is still unscoped to specific
+tables because what it needs is defined by the `analyzer-service` track. The hosted `swingsage_app`
+has no password yet; setting one belongs with the secret manager step 10 builds.
+
+Next: **04 — Passwordless Authentication** (in-progress; `DEV_USER_EMAIL` is still the identity
+in local dev and is deleted, not disabled, when 04 closes).
+
+---
+
 ## 07 — API Contract and Shared Schema ✅ 2026-08-11
 
 **Completed:** 2026-08-11 14:45 UTC

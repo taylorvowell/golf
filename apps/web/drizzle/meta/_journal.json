@@ -57,6 +57,13 @@
       "when": 1786510000000,
       "tag": "0007_artifact_revision",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1786550000000,
+      "tag": "0008_app_role_and_request_context",
+      "breakpoints": true
     }
   ]
 }

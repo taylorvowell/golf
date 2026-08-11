@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import SwingWorkspace from "@/components/SwingWorkspace";
 import { CURRENT_ARTIFACT_SCHEMA, missingCapabilities } from "@swingsage/schema/contract";
+import { withUser } from "@/db/session";
 import { getAnalysis, listSwings } from "@/lib/swings";
 import { requireUserId } from "@/lib/auth";
 import { isViewType, mediaAddress, resolveView } from "@/db/views";
@@ -27,13 +28,19 @@ export default async function SwingPage({
   const { view } = await searchParams;
   const userId = await requireUserId();
 
-  const resolved = await resolveView(id, view && isViewType(view) ? view : null);
-  // Ownership, not just existence — the same rule the API routes apply. A page that rendered a
-  // stranger's swing would leak everything the routes are careful not to.
+  // One transaction for both database reads, under this user's identity: row-level security
+  // filters `resolveView` before the ownership check below ever runs, so a stranger's swing is
+  // not merely rejected here — it is not returned (D42).
+  const { resolved, swings } = await withUser(userId, async (tx) => ({
+    resolved: await resolveView(tx, id, view && isViewType(view) ? view : null),
+    swings: await listSwings(tx, userId),
+  }));
+  // Ownership, not just existence — defence in depth behind the policy, and what distinguishes a
+  // coach's read (allowed by RLS, not yet supported by this page) from the owner's.
   if (!resolved || resolved.userId !== userId) notFound();
 
-  const [analysis, swings, scorecard] = await Promise.all([
-    getAnalysis(mediaAddress(resolved)), listSwings(userId), getScorecard(mediaAddress(resolved)),
+  const [analysis, scorecard] = await Promise.all([
+    getAnalysis(mediaAddress(resolved)), getScorecard(mediaAddress(resolved)),
   ]);
   if (!analysis) notFound();
 

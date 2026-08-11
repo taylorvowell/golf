@@ -1,4 +1,5 @@
 import { isStage, listStages, setStage } from "@/db/stages";
+import { withUser } from "@/db/session";
 import { requireViewAccess, viewParam } from "@/lib/auth";
 
 /**
@@ -19,7 +20,7 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   const { id } = await ctx.params;
   const access = await requireViewAccess(id, viewParam(req));
   if ("error" in access) return access.error;
-  const stages = await listStages(access.viewId);
+  const stages = await withUser(access.userId, (tx) => listStages(tx, access.viewId));
   return Response.json({ stages }, { headers: { "Cache-Control": "no-store" } });
 }
 
@@ -46,8 +47,12 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
   const access = await requireViewAccess(id, viewParam(req));
   if ("error" in access) return access.error;
   try {
-    await setStage(access.viewId, access.userId, stage, frame);
-    return Response.json({ stages: await listStages(access.viewId) });
+    // One transaction: the write and the read-back that the client renders cannot disagree.
+    const stages = await withUser(access.userId, async (tx) => {
+      await setStage(tx, access.viewId, access.userId, stage, frame);
+      return listStages(tx, access.viewId);
+    });
+    return Response.json({ stages });
   } catch (e) {
     return Response.json({ error: (e as Error).message }, { status: 404 });
   }

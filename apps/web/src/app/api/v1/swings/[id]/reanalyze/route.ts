@@ -1,5 +1,6 @@
+import { withUser } from "@/db/session";
 import { getJob, startReanalysis } from "@/lib/jobs";
-import { requireViewAccess, viewParam } from "@/lib/auth";
+import { ownedView, requireViewAccess, viewParam } from "@/lib/auth";
 
 /**
  * Re-run the analyzer over a swing's original clip.
@@ -20,10 +21,17 @@ export async function POST(
   const { id } = await params;
   const access = await requireViewAccess(id, viewParam(req));
   if ("error" in access) return access.error;
+  // Owner only. `requireViewAccess` also admits an approved coach, which is right for reading a
+  // swing and wrong for spending GPU time on it — and `jobs_write` would refuse the insert anyway,
+  // so without this the coach path fails as a 500 instead of an answer.
+  if (access.userId !== access.ownerId) {
+    return Response.json({ error: "only the swing's owner can re-analyse it" }, { status: 403, headers: noStore });
+  }
   try {
     // One view at a time: re-analysis re-runs the analyzer over ONE clip, so a swing with two
     // cameras is two jobs, not one job that quietly does half the work.
-    const job = await startReanalysis(access);
+    const job = await withUser(access.userId, (tx) =>
+      startReanalysis(tx, access.userId, ownedView(access)));
     return Response.json(job, { headers: noStore });
   } catch (err) {
     return Response.json(
@@ -40,7 +48,8 @@ export async function GET(
   const { id } = await params;
   const access = await requireViewAccess(id, viewParam(req));
   if ("error" in access) return access.error;
-  const job = await getJob(access);
+  const job = await withUser(access.userId, (tx) =>
+    getJob(tx, access.userId, ownedView(access)));
   if (!job) return Response.json({ status: "idle" }, { headers: noStore });
   return Response.json(job, { headers: noStore });
 }

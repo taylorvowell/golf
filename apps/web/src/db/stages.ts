@@ -1,7 +1,7 @@
 import "server-only";
 
 import { and, eq } from "drizzle-orm";
-import { db } from "./client";
+import type { DbTx } from "./session";
 import { swingStages, swings, swingViews } from "./schema";
 
 /** A hand-corrected swing stage: which frame this swing's `top` (or `impact`, …) really is. */
@@ -36,8 +36,8 @@ export function isStage(s: string): s is Stage {
  * `db/markers.ts`: a stage mark is a frame number, and two cameras number the same swing
  * differently.
  */
-export async function listStages(viewId: string): Promise<StageMark[]> {
-  const rows = await db
+export async function listStages(tx: DbTx, viewId: string): Promise<StageMark[]> {
+  const rows = await tx
     .select({ stage: swingStages.stage, frame: swingStages.frame })
     .from(swingStages)
     .where(eq(swingStages.viewId, viewId));
@@ -56,12 +56,13 @@ export async function listStages(viewId: string): Promise<StageMark[]> {
  * `db/markers.ts`.
  */
 export async function setStage(
+  tx: DbTx,
   viewId: string,
   userId: string,
   stage: Stage,
   frame: number | null,
 ): Promise<void> {
-  const owned = await db
+  const owned = await tx
     .select({ id: swingViews.id })
     .from(swingViews)
     .innerJoin(swings, eq(swings.id, swingViews.swingId))
@@ -69,13 +70,13 @@ export async function setStage(
   if (!owned[0]) throw new Error(`no such swing view for this user: ${viewId}`);
 
   if (frame === null) {
-    await db.delete(swingStages)
+    await tx.delete(swingStages)
       .where(and(eq(swingStages.viewId, viewId), eq(swingStages.stage, stage)));
     return;
   }
   if (!Number.isFinite(frame) || frame < 0) throw new Error(`bad frame: ${frame}`);
 
-  await db.insert(swingStages)
+  await tx.insert(swingStages)
     .values({ viewId, stage, frame: Math.round(frame) })
     .onConflictDoUpdate({
       target: [swingStages.viewId, swingStages.stage],

@@ -1,5 +1,6 @@
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { withOwner, endOwnerPool } from "./admin";
 import { resolveView, viewByMediaKey } from "./views";
 import { ARTIFACT_BUCKET, artifactKey } from "../lib/media/keys";
 import { getMediaStore } from "../lib/media/store";
@@ -43,6 +44,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await endOwnerPool();
   if (!sql) return;
   await sql`delete from auth.users where id = ${OWNER}`;
   await sql.end();
@@ -151,18 +153,23 @@ describe("every pre-existing swing survived the rebuild", () => {
     const [row] = await sql<{ swing_id: string; media_key: string }[]>`
       select swing_id, media_key from public.swing_views where is_primary limit 1
     `;
-    const resolved = await resolveView(row.swing_id);
+    // Through the OWNER seam, deliberately: these are data-model claims about every row that
+    // exists, not authorization claims. `appBoundary.test.ts` is where the app's own connection is
+    // put under a policy — running this suite there instead would make it a test of two things and
+    // a reliable diagnosis of neither.
+    const resolved = await withOwner("multi-view model check", (tx) => resolveView(tx, row.swing_id));
     expect(resolved?.mediaKey).toBe(row.media_key);
 
     // And the reverse lookup the backfill uses, which is the only place a storage key is allowed
     // to address anything.
-    expect((await viewByMediaKey(row.media_key))?.swingId).toBe(row.swing_id);
+    expect((await withOwner("multi-view model check", (tx) => viewByMediaKey(tx, row.media_key)))?.swingId)
+      .toBe(row.swing_id);
   });
 
   it("answers null for a pre-0006 bookmark rather than raising", async () => {
     // `/swing/perfect` was a valid URL before the migration. A uuid column cannot compare against
     // it, so the guard has to catch it before Postgres does — otherwise a 404 arrives as a 500.
-    expect(await resolveView("perfect")).toBeNull();
+    expect(await withOwner("multi-view model check", (tx) => resolveView(tx, "perfect"))).toBeNull();
   });
 });
 
@@ -190,10 +197,12 @@ describe("a swing can hold two views", () => {
   });
 
   it("lets each view be addressed by name", async () => {
-    expect((await resolveView(DUAL_SWING, "dtl"))?.mediaKey).toBe("mv-dtl");
-    expect((await resolveView(DUAL_SWING, "face_on"))?.mediaKey).toBe("mv-faceon");
+    const resolve = (v?: "dtl" | "face_on") =>
+      withOwner("multi-view model check", (tx) => resolveView(tx, DUAL_SWING, v));
+    expect((await resolve("dtl"))?.mediaKey).toBe("mv-dtl");
+    expect((await resolve("face_on"))?.mediaKey).toBe("mv-faceon");
     // No view named: the primary, never "whichever came back first".
-    expect((await resolveView(DUAL_SWING))?.mediaKey).toBe("mv-dtl");
+    expect((await resolve())?.mediaKey).toBe("mv-dtl");
   });
 
   it("refuses a second view of the same kind", async () => {

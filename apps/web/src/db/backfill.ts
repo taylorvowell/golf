@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { eq } from "drizzle-orm";
-import { db } from "./client";
+import { endOwnerPool, withOwner } from "./admin";
 import { swings, swingViews } from "./schema";
 import { ensureAdminUser } from "./seed";
 import { syncSwingScore } from "./scores";
@@ -33,9 +33,15 @@ import type { Analysis } from "@swingsage/schema/contract";
  * re-analyze route, a backfill is a developer bridge run from a terminal, so there is no session
  * mid-scrub to protect and bumping the revision on every run would leave a trail of dead copies.
  */
+/**
+ * Owner-privileged by nature, and that is why it is a script rather than a route.
+ *
+ * A backfill mints swings on behalf of a user it is not authenticated as, writing rows no policy
+ * would admit — the same shape of work the analyzer worker will need (step 03 item 4b). It runs
+ * under `withOwner` from a terminal; `src/db/admin.ts` throws if it is ever loaded inside Next,
+ * so this cannot drift onto a request path (D42).
+ */
 async function main() {
-  const admin = await ensureAdminUser();
-
   let entries: string[];
   try {
     entries = await fs.readdir(ANALYZER_OUT_ROOT);
@@ -45,6 +51,8 @@ async function main() {
   }
 
   let inserted = 0, skipped = 0, scored = 0, published = 0;
+  const admin = await withOwner("local backfill of CLI-analysed folders", ensureAdminUser);
+
   for (const mediaKey of entries) {
     const analysisPath = path.join(ANALYZER_OUT_ROOT, mediaKey, "analysis.json");
     let analysis: Analysis;
@@ -55,30 +63,36 @@ async function main() {
       continue; // mid-analysis or failed folder, no readable analysis.json
     }
 
-    let view = await viewByMediaKey(mediaKey);
+    let view = await withOwner("backfill: locate the view for a working directory",
+      (tx) => viewByMediaKey(tx, mediaKey));
     if (!view) {
       // The bundled model swings are marked by the CATALOGUE, keyed on the folder name — the one
       // place a storage key legitimately decides something, because it is how a human names the
       // clip they dropped in `fixtures/`. Everything downstream reads the column, not the key.
       const reference = proSwingByKey(mediaKey);
-      const [swing] = await db.insert(swings).values({
-        userId: admin.id,
-        handedness: analysis.video.handedness,
-        referenceLabel: reference?.label ?? null,
-      }).returning({ id: swings.id });
+      const { swing, row } = await withOwner("backfill: create a swing for a working directory",
+        async (tx) => {
+          const [swing] = await tx.insert(swings).values({
+            userId: admin.id,
+            handedness: analysis.video.handedness,
+            referenceLabel: reference?.label ?? null,
+          }).returning({ id: swings.id });
 
-      const [row] = await db.insert(swingViews).values({
-        swingId: swing.id,
-        view: analysis.video.view,
-        mediaKey,
-        fps: analysis.video.fps,
-        frameCount: analysis.video.frame_count,
-        width: analysis.video.width,
-        height: analysis.video.height,
-        status: "ready",
-        isPrimary: true,
-        analyzedAt: new Date(),
-      }).returning({ id: swingViews.id });
+          const [row] = await tx.insert(swingViews).values({
+            swingId: swing.id,
+            view: analysis.video.view,
+            mediaKey,
+            fps: analysis.video.fps,
+            frameCount: analysis.video.frame_count,
+            width: analysis.video.width,
+            height: analysis.video.height,
+            status: "ready",
+            isPrimary: true,
+            analyzedAt: new Date(),
+          }).returning({ id: swingViews.id });
+
+          return { swing, row };
+        });
 
       view = {
         swingId: swing.id, userId: admin.id,
@@ -91,19 +105,20 @@ async function main() {
       skipped++;
       // The artifact is the record: a re-analysis can change fps or frame count, and a row that
       // disagrees with the clip it points at is what makes an overlay land on the wrong frame.
-      await db.update(swingViews).set({
-        view: analysis.video.view,
-        fps: analysis.video.fps,
-        frameCount: analysis.video.frame_count,
-        width: analysis.video.width,
-        height: analysis.video.height,
-      }).where(eq(swingViews.id, view.viewId));
+      await withOwner("backfill: re-sync a view row with its artifact", (tx) =>
+        tx.update(swingViews).set({
+          view: analysis.video.view,
+          fps: analysis.video.fps,
+          frameCount: analysis.video.frame_count,
+          width: analysis.video.width,
+          height: analysis.video.height,
+        }).where(eq(swingViews.id, view!.viewId)));
     }
 
     const result = await publishFromWorkingDir(mediaAddress(view), workingDirFor(mediaKey));
     published += result.published.length;
 
-    if (await syncSwingScore(view)) {
+    if (await withOwner("backfill: sync a scorecard from disk", (tx) => syncSwingScore(tx, view!))) {
       scored++;
       console.log(`synced score for ${mediaKey}`);
     }
@@ -113,6 +128,7 @@ async function main() {
     `done: ${inserted} inserted, ${skipped} already present, ${scored} scores synced, ` +
     `${published} artifacts published`,
   );
+  await endOwnerPool();
   process.exit(0);
 }
 

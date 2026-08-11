@@ -280,9 +280,27 @@ API routes take a **swing** id plus an optional `?view=dtl|face_on`, defaulting 
 view; `db/views.ts:resolveView` is the single resolution point. A `?view=` naming something that
 is not one of the two is a 400, not a silent default.
 
+**Row-level security is the authorization boundary, and it is live in the running app** (D7, D42).
+RLS is enabled and **forced** on all ten tables. The app connects as `swingsage_app` — a login role
+that is NOINHERIT, not a superuser, without `BYPASSRLS`, and not a member of `service_role` — and
+every query goes through `withUser(userId, fn)` in `src/db/session.ts`, which opens a transaction,
+sets `request.jwt.claims` and `set local role authenticated`, and drops both on commit. **There is
+no ambient `db` export**; the data modules take the transaction as their first argument, so there
+is nowhere else a query can run. `withUser` refuses to serve if the connection turns out to be
+privileged, so a mis-set `APP_DATABASE_URL` is a loud failure rather than a silent bypass.
+
+`src/db/admin.ts` (`withOwner`) is the privileged counterpart for command-line work only — it
+**throws at import if `NEXT_RUNTIME` is set**, so it cannot reach a request path. First sign-in
+goes through `app.ensure_profile()`, a `SECURITY DEFINER` function that reads the identity from
+`auth.uid()` internally and lives in a schema PostgREST does not serve.
+
+Two connection strings, and the difference is the boundary: **`DATABASE_URL`** is the owner
+(migrations, seed, backfill), **`APP_DATABASE_URL`** is what serves requests.
+
 Commands (repo root unless noted): `docker compose up -d`, then from `apps/web`:
-`pnpm db:migrate`, `pnpm db:seed`, `pnpm db:backfill` (idempotent — indexes every `out/` folder
-+ syncs scores), `pnpm db:generate`, `pnpm db:studio`.
+`pnpm db:migrate` (applies migrations *and* runs `db:app-role`, which gives `swingsage_app` its
+password), `pnpm db:seed`, `pnpm db:backfill` (idempotent — indexes every `out/` folder + syncs
+scores), `pnpm db:claim-fixtures <email>`, `pnpm db:generate`, `pnpm db:studio`.
 
 **Known seam:** `burnin.py` run from the CLI does not touch Postgres at all. A manually
 re-analysed fixture shows a stale score in the swing list until `pnpm db:backfill` runs.

@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "featureName": "platform-foundation",
-  "currentStep": "03",
+  "currentStep": "04",
   "phase": "Platform Foundation",
-  "lastUpdated": "2026-08-11T14:45:00Z",
+  "lastUpdated": "2026-08-11T16:45:00Z",
   "steps": {
     "01": {
       "status": "complete",
@@ -15,8 +15,9 @@
       "note": "All probes measured on a Galaxy S25+ over wireless debugging (D34-D40). Overlay 99.2% frame-locked with ~49ms draw budget; seeking 100% frame-exact once the target became frame/fps (media3 resolves seeks FORWARD - the web player's midpoint rule is wrong on Android); network adds ZERO seek error; 1080p at 231fps via Camera2 constrained high-speed. D5's Expo/RN choice is confirmed on Android. Two modules must survive the spike: frame-clock and high-speed-camera. Open and named: scrubbing unmeasured (reassigned to measure_overlay.py), 231 vs 240 is 3.6% short, iOS entirely untested (no Mac/device, non-gating per D31)."
     },
     "03": {
-      "status": "in-progress",
-      "startedAt": "2026-08-11T01:05:00Z"
+      "status": "complete",
+      "completedAt": "2026-08-11T16:45:00Z",
+      "note": "D42 closes the gap D26 opened. The app connects as swingsage_app (NOINHERIT, no superuser, no BYPASSRLS, not a member of service_role) and every query goes through withUser() - a transaction that sets request.jwt.claims and `set local role authenticated`, both reverting on commit. The ambient db export is DELETED (src/db/client.ts is gone); the data modules take the transaction as their first argument. withUser asserts four properties against the live connection and refuses to serve otherwise - verified by pointing APP_DATABASE_URL at the owner, which fails 11 of 12 boundary tests naming the role. app.ensure_profile() (SECURITY DEFINER, identity from auth.uid() internally, in a schema PostgREST does not serve) removes the last elevated write from a request path; Supabase's advisor caught it while it was in public and anon could call it over REST. Also found: the hosted project was three migrations behind (0005/0006/0007 local-only), now applied - both databases agree at ten tables, RLS forced, 2 policies each, zero advisor findings. Carried forward deliberately: one Supabase project rather than three (D10, money, step 10) and the analyzer service role unscoped to specific tables (defined by the analyzer-service track)."
     },
     "04": {
       "status": "in-progress",

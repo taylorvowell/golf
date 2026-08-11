@@ -1,5 +1,6 @@
 import { eq, sql } from "drizzle-orm";
-import { db } from "./client";
+import { endOwnerPool, withOwner } from "./admin";
+import type { DbTx } from "./session";
 import { users } from "./schema";
 
 /**
@@ -27,19 +28,25 @@ export const ADMIN_DISPLAY_NAME = "admin";
  */
 export const ADMIN_USER_ID = "00000000-0000-4000-8000-000000000001";
 
-export async function ensureAdminUser() {
-  const existing = await db.select().from(users).where(eq(users.displayName, ADMIN_DISPLAY_NAME));
+/**
+ * Takes the transaction rather than opening one: seeding writes into `auth.users` and mints a user
+ * row, neither of which any policy admits, so it is owner-only work by construction. Passing `tx`
+ * in is what keeps that fact visible at the call site — the caller had to reach for `withOwner`
+ * and say why (D42).
+ */
+export async function ensureAdminUser(tx: DbTx) {
+  const existing = await tx.select().from(users).where(eq(users.displayName, ADMIN_DISPLAY_NAME));
   if (existing[0]) return existing[0];
 
   // The auth row must exist first — the FK points that way. `on conflict do nothing` keeps this
   // safe to re-run and safe against a row a previous seed already made.
-  await db.execute(sql`
+  await tx.execute(sql`
     insert into auth.users (id, email)
     values (${ADMIN_USER_ID}, 'admin@localhost')
     on conflict (id) do nothing
   `);
 
-  const [row] = await db
+  const [row] = await tx
     .insert(users)
     .values({ id: ADMIN_USER_ID, displayName: ADMIN_DISPLAY_NAME, email: "admin@localhost" })
     .returning();
@@ -47,13 +54,14 @@ export async function ensureAdminUser() {
 }
 
 async function main() {
-  const admin = await ensureAdminUser();
+  const admin = await withOwner("seeding the local development identity", ensureAdminUser);
   console.log(`admin user: ${admin.id}`);
+  await endOwnerPool();
   process.exit(0);
 }
 
 // Only run when invoked directly (`pnpm db:seed`) — `ensureAdminUser` is also imported by
-// backfill.ts and by API routes that need the admin id before real auth exists.
+// backfill.ts.
 if (require.main === module) {
   main().catch((err) => {
     console.error(err);

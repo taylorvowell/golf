@@ -2120,3 +2120,115 @@ must still be able to learn that it is too old.
 - The first `.github/workflows/` in the repo. CI runs the contract gate, both clients, and the
   analyzer's contract tests; it deliberately does not install the CV stack, which is gigabytes and
   GPU-shaped and whose tests need gitignored fixtures anyway.
+
+---
+
+## D42 — The application connects as a non-superuser; row-level security stops being decorative
+
+**Date:** 2026-08-11
+**Status:** ACTIVE — closes the gap D26 opened
+
+**Context:** D7 made row-level security *the* authorization boundary. D24 shipped the policies —
+eight tables, RLS enabled and FORCED, sixteen policies, coach access tested five phases before the
+coach feature. D26 then found that **none of it applied to the running product**: the app connected
+as `swingsage`, a superuser, and would have connected on Supabase as `postgres`, which is not a
+superuser but carries `BYPASSRLS`. Both are exempt from `FORCE ROW LEVEL SECURITY`. Nothing ever
+set `request.jwt.claims`, so `auth.uid()` was NULL as well. Ownership was enforced in application
+code — precisely what D7 rejected — and `src/db/rls.test.ts` passed throughout, because it opens
+its own connection and impersonates `authenticated` by hand.
+
+That is the shape of security bug this project should fear most: it looks *more* secure than what
+it replaced, and the test suite agrees with you.
+
+**Decision — four changes, none of which is optional on its own:**
+
+1. **`swingsage_app`** (migration 0008): a login role, **NOINHERIT**, no superuser, no `BYPASSRLS`,
+   member of `anon` and `authenticated` and deliberately **not** of `service_role`. NOINHERIT is
+   the design, mirroring Supabase's own `authenticator` — the role holds membership but none of
+   the privileges passively, so a query issued outside the seam reads *nothing at all* rather than
+   everything. The failure mode is a visible error, not a silent leak.
+2. **`withUser(userId, fn)`** (`src/db/session.ts`) is the only way the app reaches Postgres. It
+   opens a transaction, `set_config('request.jwt.claims', …, true)`, `set local role authenticated`,
+   and both revert on commit — which is why it is a transaction and not a `set` on a checked-out
+   connection. On a pooled connection anything else would carry one request's identity into the
+   next.
+3. **The ambient `db` export is deleted.** `src/db/client.ts` no longer exists. The data modules
+   (`views`, `scores`, `stages`, `markers`, `jobs`, `swings`) take the transaction as their first
+   argument, so there is nowhere else to run a query. Bypassing a seam that can be bypassed is
+   eventually done by someone in a hurry.
+4. **`withOwner(reason, fn)`** (`src/db/admin.ts`) is the privileged counterpart, and it **throws
+   at import time if `NEXT_RUNTIME` is set** — a route that imports it fails to build. Four call
+   sites, all command-line: `db:seed`, `db:backfill`, `db:claim-fixtures`, and the app-role setup.
+   The `reason` argument is unused at runtime on purpose: it forces each site to say in source why
+   it may skip the boundary.
+
+**The startup assertion is what makes a misconfiguration loud.** Pointing `APP_DATABASE_URL` at
+the owner would restore the whole defect and every test would still pass, so `withUser` asserts
+four properties against the live connection before serving anything: not a superuser, not
+`BYPASSRLS`, a member of `authenticated`, and **not** a member of `service_role`. Verified by
+running the boundary suite against the owner URL: 11 of 12 tests fail with the role named in the
+message. There is deliberately **no fallback** from `APP_DATABASE_URL` to `DATABASE_URL`.
+
+**`app.ensure_profile()` removes the last elevated write from a request path.** Mirroring a new
+auth identity into `public.users` is the one thing a request cannot do as `authenticated` —
+`users` has no INSERT policy and the local `auth.users` shim is not writable by a request role.
+Rather than an elevated connection "just for this", it is a `SECURITY DEFINER` function built like
+`private.has_coach_access`: `search_path = ''`, and the identity read from `auth.uid()`
+**internally**, so creating someone else's profile is not expressible.
+
+**Its schema was a real finding, not a detail.** In `public` it is a PostgREST endpoint —
+`/rest/v1/rpc/ensure_profile` — and Supabase's own default privileges grant EXECUTE on new public
+functions **directly to `anon`**, which `revoke … from public` does not remove. Supabase's advisor
+flagged it as EXTERNAL-facing. It now lives in a new `app` schema, which PostgREST does not serve,
+so it is unreachable from the internet by construction rather than by a grant that has to stay
+right. Advisors back to **zero findings**.
+
+**Also fixed along the way:**
+- **Default privileges.** 0003 and 0006 both granted point-in-time (`on all tables in schema
+  public`), and 0006 existed partly to repair 0005's miss. Harmless while RLS was inert; now a
+  missed grant is a table the product cannot read. 0008 sets `alter default privileges` so the
+  next table is covered by a rule rather than by remembering.
+- **The local shim diverged from Supabase in a way nothing could see.** `authenticated` had no
+  USAGE on the local `auth` schema, and it did not matter because a policy expression is parsed
+  when it is *created*, as the owner. The first line of application code to ask "who am I" failed
+  locally and would have worked hosted. 0008 grants what Supabase already grants — guarded so it
+  never fires against a real `auth` schema.
+- **`claimLegacyFixtures` is now `pnpm --filter web db:claim-fixtures <email>`.** It used to run
+  inside `requireUserId`, handing ten fixtures to whoever signed in first — a privilege grant, on
+  a server the runbook tells you to browse from a phone over the LAN. It also needed elevation on
+  a request path. `CLAIM_LEGACY_FIXTURES` is deleted.
+- **Re-analysis is owner-only.** `requireViewAccess` admits an approved coach, which is right for
+  reading and wrong for spending GPU time; `jobs_write` would have refused the insert, so the
+  coach path would have failed as a 500 rather than an answer. Now a 403.
+- **`ownedView(access)`.** Anything deriving a storage address must key off the OWNER, not the
+  caller. `jobs.ts` was passing the caller through `mediaAddress()`, which for an approved coach
+  addresses their own empty namespace — the exact mistake `ViewAccess.address` was added to avoid.
+
+**Consequences:**
+- **Two connection strings, and the difference is the boundary.** `DATABASE_URL` is the owner
+  (migrations and CLI); `APP_DATABASE_URL` is what serves requests. `pnpm --filter web db:migrate`
+  now chains `db:app-role`, which sets the role's password — refusing to invent a well-known one
+  for any non-loopback host. A password in a committed migration is a credential in git.
+- **The hosted project has the role but no password**, deliberately: setting one belongs with the
+  secret manager D10 specifies and step 10 builds. Until then nothing deploys, which is true
+  anyway.
+- **`src/db/appBoundary.test.ts`** proves the boundary through `withUser` and nothing else — the
+  question `rls.test.ts` structurally cannot answer, since it impersonates by hand. Both suites
+  stay: one proves the policies are right, the other that the product uses them.
+- **`service-role.test.ts` gained two checks**: no request-reachable import of `db/admin` or read
+  of `DATABASE_URL` (now covering `src/lib/` as well, since `lib/auth.ts` runs on every route), and
+  no module under `src/db/` other than the two seams may construct a client at all.
+- Vitest now aliases `server-only` to its empty module, so a `server-only` database module is
+  testable instead of being untestable by virtue of being correctly marked.
+- **The hosted project was three migrations behind, and nothing said so.** D24 applied 0000–0004
+  through the Supabase MCP; 0005 (equipment/sessions), 0006 (multi-view, D30) and 0007 (artifact
+  revision) were written afterwards and only ever ran against local Docker Postgres. The hosted
+  schema had eight tables while local had ten, and no check compared them — `drizzle-kit migrate`
+  tracks the local database only, and the app has never connected to the hosted one. All three are
+  applied now (the project is empty, so 0006's data migration moved nothing) and both databases
+  agree: ten tables, RLS enabled and forced, two policies each. **This is a standing hazard, not a
+  one-off**: while migrations reach production by hand, "applied" means "applied somewhere". The
+  automated path is step 10's.
+- **Still open and unchanged by this entry:** one Supabase project rather than three (D10, money,
+  step 10), and the analyzer's service role is still unscoped to specific tables because what it
+  needs is defined by the `analyzer-service` track.

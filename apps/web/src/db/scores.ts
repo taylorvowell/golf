@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { db } from "./client";
+import type { DbTx } from "./session";
 import { scores, swings, swingViews } from "./schema";
 import { getScorecard } from "../lib/scoring";
 import { mediaAddress, type ResolvedView } from "./views";
@@ -20,11 +20,11 @@ import { mediaAddress, type ResolvedView } from "./views";
  * A view with no `coach_report.json` yet (pre-Stage-8, or `--no-scoring`) is left alone —
  * this is a no-op, not a failure.
  */
-export async function syncSwingScore(view: ResolvedView): Promise<boolean> {
+export async function syncSwingScore(tx: DbTx, view: ResolvedView): Promise<boolean> {
   const card = await getScorecard(mediaAddress(view));
   if (!card || card.overall === null) return false;
 
-  await db.insert(scores).values({
+  await tx.insert(scores).values({
     viewId: view.viewId,
     scoringModelVersion: card.scoring_model_version,
     overall: card.overall,
@@ -53,7 +53,7 @@ export async function syncSwingScore(view: ResolvedView): Promise<boolean> {
     },
   });
 
-  await db.update(swingViews).set({
+  await tx.update(swingViews).set({
     overallScore: card.overall,
     band: card.band,
     scoringModelVersion: card.scoring_model_version,
@@ -61,10 +61,10 @@ export async function syncSwingScore(view: ResolvedView): Promise<boolean> {
 
   // Only the primary view rolls up to the swing. A second camera re-analysed on its own must not
   // silently replace the number the log has been showing for the swing.
-  const primary = await db.select({ id: swingViews.id }).from(swingViews)
+  const primary = await tx.select({ id: swingViews.id }).from(swingViews)
     .where(and(eq(swingViews.id, view.viewId), eq(swingViews.isPrimary, true)));
   if (primary.length) {
-    await db.update(swings).set({
+    await tx.update(swings).set({
       overallScore: card.overall,
       band: card.band,
       scoringModelVersion: card.scoring_model_version,

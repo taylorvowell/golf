@@ -27,15 +27,33 @@ From the **repo root**:
 ```bash
 docker compose up -d          # Postgres on :5433. Docker Desktop must be running.
 pnpm i                        # installs every workspace package
-pnpm --filter web db:migrate  # apply apps/web/drizzle/*.sql
+pnpm --filter web db:migrate  # apply apps/web/drizzle/*.sql, then give the app's non-superuser
+                              # role (swingsage_app) its password — both, in that order
 pnpm --filter web db:seed     # create the one seeded user every swing is owned by
 pnpm --filter web db:backfill # index every services/analyzer/out/<id>/ folder, PUBLISH its
                               # artifacts into the media store, and sync scores
 pnpm dev                      # http://127.0.0.1:3000
 ```
 
+**Two database URLs, and mixing them up is a security change, not a config typo.**
+`DATABASE_URL` is the schema OWNER — migrations and the `db:*` scripts. `APP_DATABASE_URL` is what
+the running app serves requests on: `swingsage_app`, a non-superuser with no `BYPASSRLS`, which is
+what makes row-level security actually apply (D42). Both are in `.env.example`. There is no
+fallback between them, and the app refuses to start if `APP_DATABASE_URL` turns out to be
+privileged — so "it works but the boundary is gone" is not a reachable state.
+
+If a fresh sign-in cannot see the ten development fixtures, they still belong to the pre-auth
+`admin` row: `pnpm --filter web db:claim-fixtures you@example.com` moves them, once.
+
 **Use `127.0.0.1`, not `localhost`** on this machine — `localhost` resolves to `::1` first and
 the dev server answers on IPv4.
+
+**`pnpm dev` run in the background reports a false failure.** The pnpm wrapper exits with code 1
+while `next dev` keeps running, detached — so a task monitor says "failed" about a server that is
+serving fine. Ask the port, never the exit code: `curl -s -o /dev/null -w "%{http_code}"
+http://127.0.0.1:3000/api/v1/client`, or `netstat -ano | grep ":3000 "` for the surviving PID.
+Starting a second one is what actually fails, with `Another next dev server is already running`
+and the PID to `taskkill /PID <pid> /F` if you want it gone.
 
 `db:backfill` is idempotent; re-run it any time. **A fixture analysed by hand from the CLI does
 not touch Postgres at all**, so its score stays stale in the swing list until backfill runs.
@@ -151,17 +169,26 @@ command rewrites the file and then fails the run deliberately — the same idiom
 A change that removes, retypes or newly requires a field is a break for a client already in
 someone's hands; see D41.
 
-**`pnpm --filter web test` now REQUIRES Postgres.** `src/db/rls.test.ts` is the authorization
-boundary — it proves a golfer cannot read another golfer's swing, and that an approved coach can,
-a pending one cannot, and a revoked one loses access immediately. It **fails rather than skips**
-without a database, deliberately: a security test that silently skips still reports the suite
-green, which is worse than not having it. `docker compose up -d` then
-`pnpm --filter web db:migrate`.
+**`pnpm --filter web test` now REQUIRES Postgres**, and needs BOTH database URLs set. Two suites
+cover the authorization boundary and they answer different questions:
+
+* `src/db/rls.test.ts` proves the **policies** are right — a golfer cannot read another golfer's
+  swing, an approved coach can, a pending one cannot, a revoked one loses access immediately. It
+  opens its own connection and impersonates `authenticated` by hand.
+* `src/db/appBoundary.test.ts` proves the **product uses them**, through `withUser` and the app's
+  own connection. That distinction is not academic: the first suite passed for the entire period
+  in which the app bypassed every policy it was checking (D26), because the app connected as a
+  superuser. Point `APP_DATABASE_URL` at an owner account and this suite fails immediately, naming
+  the role.
+
+Both **fail rather than skip** without a database, deliberately: a security test that silently
+skips still reports the suite green, which is worse than not having it. `docker compose up -d`
+then `pnpm --filter web db:migrate`.
 
 Those tests run against **local** Postgres, not the hosted Supabase project. Migration 0003
-creates an `auth` shim and the `anon`/`authenticated`/`service_role` roles locally — each guarded
-so nothing is attempted where the real ones exist — which is what lets the boundary be verified
-with no cloud credentials.
+creates an `auth` shim and the `anon`/`authenticated`/`service_role` roles locally, and 0008 adds
+`swingsage_app` and the grants Supabase already makes — each guarded so nothing is attempted where
+the real ones exist. That is what lets the boundary be verified with no cloud credentials.
 
 Web uses **Vitest**, mobile uses **jest-expo** — different runners because Expo's preset carries
 the React Native transform, and fighting that into Vitest bought nothing.
