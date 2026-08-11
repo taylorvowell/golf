@@ -1,6 +1,18 @@
 {
   "version": 1,
   "skills": {
+    "agent-device": {
+      "source": "callstack/agent-device",
+      "sourceType": "github",
+      "skillPath": "skills/agent-device/SKILL.md",
+      "computedHash": "15d55a741a2a97ee59c2f6ec46012e1750c5403646e07b8dfd89cfc3fbcce09d"
+    },
+    "dogfood": {
+      "source": "callstack/agent-device",
+      "sourceType": "github",
+      "skillPath": "skills/dogfood/SKILL.md",
+      "computedHash": "c83ed84a234bb8ea7a588635ace904e150429f83321024487c7dbcfd19c81575"
+    },
     "supabase": {
       "source": "supabase/agent-skills",
       "sourceType": "github",
@@ -12,6 +24,42 @@
       "sourceType": "github",
       "skillPath": "skills/supabase-postgres-best-practices/SKILL.md",
       "computedHash": "128fac78002d916c8ca908245d398e634f540d8bcf20915b2b2359aeb18eba59"
+    },
+    "upstash": {
+      "source": "upstash/skills",
+      "sourceType": "github",
+      "skillPath": "skills/upstash/SKILL.md",
+      "computedHash": "05855a088816d3b417ef63c451baf9b1aff234be47865209253b2a709e3baa75"
+    },
+    "upstash-box-js": {
+      "source": "upstash/skills",
+      "sourceType": "github",
+      "skillPath": "skills/upstash-box-js/SKILL.md",
+      "computedHash": "51396440794cb3007bcd26547d50c91315f7823097ebe2cf9ecf005220a60d6b"
+    },
+    "upstash-cli": {
+      "source": "upstash/skills",
+      "sourceType": "github",
+      "skillPath": "skills/upstash-cli/SKILL.md",
+      "computedHash": "84b0a7d6ff02c7a516084c5959f9135dde262c0801cf403059cac21f21ab87ce"
+    },
+    "upstash-qstash-js": {
+      "source": "upstash/skills",
+      "sourceType": "github",
+      "skillPath": "skills/upstash-qstash-js/SKILL.md",
+      "computedHash": "f424be4379efd2eff54be4c0b9f93d35e2d75aaec9fe7740b663cb1a41cf00e2"
+    },
+    "upstash-ratelimit-js": {
+      "source": "upstash/skills",
+      "sourceType": "github",
+      "skillPath": "skills/upstash-ratelimit-js/SKILL.md",
+      "computedHash": "2a37a13b265f48f302e3591082b070513dc97307dba55ac8e43eee7ddb64d0c1"
+    },
+    "upstash-redis-js": {
+      "source": "upstash/skills",
+      "sourceType": "github",
+      "skillPath": "skills/upstash-redis-js/SKILL.md",
+      "computedHash": "f170c81c26f7a45410377d04e9c3305bb238cc13f6f4b5daf7ae92896e89b458"
     }
   }
 }

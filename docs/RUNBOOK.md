@@ -369,6 +369,40 @@ pre-existing, both broke *every* Android build on this PC, and one is still only
    the build died on *"did not have a source.properties file"*. The empty stub was deleted so
    Gradle re-downloads it properly. **Already fixed**, no action needed.
 
+### The Android signing key — where it is, and what its fingerprint is for
+
+Google OAuth binds an Android client to a **package name + signing SHA-1**, so this comes up any
+time a native provider is wired. Two things are easy to get wrong:
+
+* **The keystore is NOT `~/.android/debug.keystore`.** Expo's prebuild writes its own into the
+  project, and that is what `expo run:android` and `gradlew assembleDebug` sign with. Nothing
+  created the user-level one, so pointing `keytool` there fails with a file-not-found that reads
+  like a `keytool` problem.
+* **`keytool` ships with the JDK**, not the Android SDK. It is on PATH here via Eclipse Adoptium 17
+  (`JAVA_HOME` is set), so the command works from any shell once the path is right.
+
+```bash
+cd apps/mobile
+keytool -list -v -keystore android/app/debug.keystore \
+        -alias androiddebugkey -storepass android -keypass android
+```
+
+| | |
+|---|---|
+| Package | `com.swingsage.spike` |
+| Keystore | `apps/mobile/android/app/debug.keystore` (committed) |
+| SHA-1 | `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25` |
+
+**That SHA-1 is React Native's stock debug key and it is public** — the same fingerprint appears in
+every React Native project on earth, and it is committed here. Anyone can sign an APK with it. For
+a development-only OAuth client that is the normal trade; **it must never be the fingerprint on a
+production client**, which uses the release key created at step 10. `build.gradle` currently signs
+*release* with the debug config too, which is fine while nothing ships and is a step-10 fix.
+
+Builds here are local, so this keystore really is the signing key. **An EAS build is signed by an
+EAS-managed keystore with a different SHA-1** (`npx eas credentials` prints it), so switching build
+routes means registering a second fingerprint on the OAuth client.
+
 ### Development build — via EAS (cloud, needed for iOS)
 
 `eas.json` is committed with `development` / `preview` / `production` profiles. This route needs
