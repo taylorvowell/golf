@@ -1179,3 +1179,41 @@ D4 stand.
   with a real user's video.
 - Step 09's dependency on 06 is real and unchanged — media addressing needs stable swing identity.
 - 07, 08 and 10's dependencies are real and unchanged.
+
+---
+
+## D28 — Step 06 is split: the additive model now, the multi-view restructure separately
+
+**Date:** 2026-08-11
+**Status:** ACTIVE
+
+**Context:** Step 06 asks for eight things at once, and one of them is not like the others. §7.1's
+restructure — a Swing owning several **views**, each with its own video and its own analysis
+artifact — changes what a swing *is*. Every query in `lib/swings.ts`, the media routes, the player
+and the analyzer's `out/<id>/` convention all assume one swing means one video.
+
+**Decision:** ship the **additive** model now and do the multi-view restructure as its own change.
+
+Delivered in migration 0005: the §6 equipment inventory (`clubs`), §8 session fields (goal,
+representative swing), §7.2 swing fields (club link, ball, coach-reviewed, analysis version) and
+§7.3 organization (favourite, tags, with a GIN index). Every one is additive — no existing column
+changes meaning, and the app kept serving throughout.
+
+**Why split rather than push through:** a half-finished identity change to the central table is
+the worst possible place to stop, and it is the kind of change that cannot be verified in pieces.
+Splitting keeps the tree green and makes the risky half a focused, reviewable change instead of a
+rider on six safe ones.
+
+**Two decisions inside the additive half worth recording:**
+- **`swings.club` (free text) is kept alongside `club_id`.** The ten analysed fixtures carry a
+  typed-in club name and no inventory row; dropping the column would lose it. Rule: `club_id` wins
+  when set, `club` is the fallback, nothing needs backfilling to keep working. Step 06 asks for
+  exactly this preservation.
+- **`clubs.analyzer_club_type` is stored, not derived.** It feeds `--club-type driver|irons`, and
+  storing it means the analyzer never has to learn that an equipment table exists — its input
+  stays a flag. Deriving it at analysis time would couple the CV pipeline to the product schema.
+
+**Outstanding for step 06:** §7.1 multi-view, §7.2's storage-independent swing identifier (today
+`swings.id` is still the analyzer's `out/<stem>` folder name), and §43's questions about session
+creation and raw-recording retention. Step 09 (media addressing) depends on the identifier work,
+so those two should be done together.

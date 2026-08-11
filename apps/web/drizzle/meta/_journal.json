@@ -36,6 +36,13 @@
       "when": 1786321000000,
       "tag": "0004_revoke_rls_auto_enable_execute",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786330000000,
+      "tag": "0005_equipment_sessions_organization",
+      "breakpoints": true
     }
   ]
 }

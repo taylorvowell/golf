@@ -1,5 +1,5 @@
 import {
-  pgTable, text, integer, real, timestamp, date, jsonb, uuid, uniqueIndex,
+  pgTable, text, integer, real, timestamp, date, jsonb, uuid, uniqueIndex, boolean,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -27,12 +27,45 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/**
+ * §6's equipment inventory. A club is a row, not a string typed into a field.
+ *
+ * `analyzerClubType` is the bridge to `--club-type driver|irons`: the analyzer's club-aware
+ * scoring bands need that flag, and it should come from the golfer's actual bag rather than being
+ * remembered at analysis time. Stored rather than derived so the analyzer never has to know this
+ * table exists — its input stays a flag.
+ */
+export const clubs = pgTable("clubs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  category: text("category", {
+    enum: ["wood", "hybrid", "iron", "wedge", "putter"],
+  }).notNull(),
+  /** Text, not a number — "PW", "SW", "3" and "A" all belong here. */
+  number: text("number"),
+  loft: real("loft"),
+  brand: text("brand"),
+  model: text("model"),
+  shaft: text("shaft"),
+  flex: text("flex"),
+  lengthIn: real("length_in"),
+  lieDeg: real("lie_deg"),
+  analyzerClubType: text("analyzer_club_type", { enum: ["driver", "irons"] }),
+  /** Retired rather than deleted: old swings keep pointing at the club they were hit with. */
+  retired: boolean("retired").notNull().default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const sessions = pgTable("sessions", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   date: date("date").notNull(),
   location: text("location"),
   notes: text("notes"),
+  /** §8 — what the golfer came to work on. */
+  goal: text("goal"),
+  /** The swing that represents this session in the log. */
+  representativeSwingId: text("representative_swing_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
@@ -47,7 +80,14 @@ export const swings = pgTable("swings", {
   sessionId: uuid("session_id").references(() => sessions.id, { onDelete: "set null" }),
 
   view: text("view", { enum: ["dtl", "face_on"] }).notNull(),
+  /**
+   * Legacy free-text club. `clubId` supersedes it when set; kept because the ten analysed
+   * fixtures carry a typed-in name and no inventory row, and dropping it would lose that.
+   * Rule: clubId wins when present, this is the fallback.
+   */
   club: text("club"),
+  clubId: uuid("club_id").references(() => clubs.id, { onDelete: "set null" }),
+  ball: text("ball"),
   handedness: text("handedness", { enum: ["right", "left"] }).notNull(),
   notes: text("notes"),
 
@@ -71,6 +111,14 @@ export const swings = pgTable("swings", {
   overallScore: real("overall_score"),
   band: text("band"),
   scoringModelVersion: text("scoring_model_version"),
+
+  /** §7.3 organization — what the swing log filters and sorts on. */
+  favourite: boolean("favourite").notNull().default(false),
+  tags: text("tags").array().notNull().default([]),
+  /** §7.2 — set when a coach has reviewed it, so "unreviewed" is a real filter. */
+  coachReviewedAt: timestamp("coach_reviewed_at", { withTimezone: true }),
+  /** Which analyzer produced the current artifact, distinct from scoringModelVersion. */
+  analysisVersion: text("analysis_version"),
 
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   analyzedAt: timestamp("analyzed_at", { withTimezone: true }),
@@ -195,6 +243,8 @@ export const coachLinks = pgTable("coach_links", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex("coach_links_pair").on(t.golferId, t.coachId)]);
 
+export type ClubRow = typeof clubs.$inferSelect;
+export type NewClubRow = typeof clubs.$inferInsert;
 export type User = typeof users.$inferSelect;
 export type CoachLinkRow = typeof coachLinks.$inferSelect;
 export type NewCoachLinkRow = typeof coachLinks.$inferInsert;
