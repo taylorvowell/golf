@@ -38,6 +38,9 @@ export const styles = StyleSheet.create({
   videoWrap: { position: "relative", borderRadius: 12, overflow: "hidden" },
   video: { width: "100%", aspectRatio: 9 / 16, backgroundColor: "#000" },
   marker: { position: "absolute", top: 0, bottom: 0, width: 2, backgroundColor: COLORS.text },
+  // Magenta because nothing else in the design system or the clip is anywhere near it, so the
+  // measurement script can find the edges without a tolerance that might also catch the marker.
+  calTick: { position: "absolute", top: 0, bottom: 0, width: 4, backgroundColor: "#ff00ff" },
   cardHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   cardTitle: { color: COLORS.text, fontSize: 15, fontWeight: "700", flexShrink: 1 },
   question: { color: COLORS.text, fontSize: 13, lineHeight: 19 },
@@ -73,6 +76,7 @@ export const styles = StyleSheet.create({
     paddingVertical: 9,
     alignItems: "center",
   },
+  transportActive: { borderColor: COLORS.acid, backgroundColor: "#1f2a17" },
   transportText: { color: COLORS.text, fontSize: 12, fontWeight: "600" },
   buttonText: { color: COLORS.text, fontSize: 13, fontWeight: "700" },
   footer: { color: COLORS.dim, fontSize: 11, lineHeight: 17, marginTop: 6 },

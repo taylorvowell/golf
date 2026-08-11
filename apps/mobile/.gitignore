@@ -18,3 +18,9 @@ web-build/
 modules/*/android/build/
 modules/*/android/.cxx/
 modules/*/ios/build/
+
+# Generated spike assets. `scripts/make_real_clip.py` rebuilds them from services/analyzer/out/,
+# which is itself gitignored — so these are reproducible, not source, and an 8MB binary does not
+# belong in history.
+assets/*-stamped.mp4
+assets/*-pose.json

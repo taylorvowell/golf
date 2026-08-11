@@ -1,5 +1,5 @@
 import { Asset } from "expo-asset";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Platform,
   Pressable,
@@ -20,6 +20,8 @@ import {
   type Probe,
   type ProbeStatus,
 } from "./probes";
+import { Skeleton } from "./Skeleton";
+import { buildIndex, frameAt, type PoseBundle } from "./pose";
 import { COLORS, styles } from "./styles";
 
 /**
@@ -34,10 +36,38 @@ import { COLORS, styles } from "./styles";
  * never need measuring and D5 reopens.
  */
 
-/** The reference clip: 600 frames, exactly 60fps CFR, GOP 10, frame number burned in. */
-const CLIP = require("../../assets/frameclock.mp4");
-const CLIP_FPS = 60;
-const CLIP_FRAMES = 600;
+/**
+ * The two clips, and why there are two.
+ *
+ * `synthetic` is the CORRECTNESS instrument: its pixels encode ground truth, so drift is
+ * measurable to a fraction of a frame. `real` is the COST test — 49 keypoints redrawn every frame
+ * is the actual workload, and a strategy that pins one marker line perfectly can still collapse
+ * on it. Neither replaces the other, so both ship and both get measured.
+ *
+ * The real clip carries the same machine-readable sweeping bar composited onto real footage
+ * (scripts/make_real_clip.py), so ground truth survives the move to real content instead of
+ * degrading into "looks about right".
+ */
+const CLIPS = {
+  synthetic: {
+    label: "Synthetic",
+    blurb: "Ground truth in the pixels. Measures whether the overlay lands on the right frame.",
+    module: require("../../assets/frameclock.mp4"),
+    fps: 60,
+    frames: 600,
+    pose: null as null | PoseBundle,
+  },
+  real: {
+    label: "Real swing",
+    blurb: "swing1, 49 keypoints from its own analysis.json. Measures what the overlay costs.",
+    module: require("../../assets/swing1-stamped.mp4"),
+    fps: 60,
+    frames: 396,
+    pose: require("../../assets/swing1-pose.json") as PoseBundle,
+  },
+} as const;
+
+type ClipKey = keyof typeof CLIPS;
 
 /**
  * Geometry of the burned-in sweeping bar. **Must match `scripts/make-frame-clip.mjs`.**
@@ -55,6 +85,8 @@ const CLIP_WIDTH_PX = 720;
 const BAR_WIDTH_PX = 12;
 /** Width of the JS marker, in screen px. Kept thin so a one-frame error is still visible. */
 const MARKER_WIDTH = 2;
+/** Width of each calibration tick. Wide enough to survive any resampling in the screen capture. */
+const CAL_TICK_WIDTH = 4;
 
 /** How long the overlay-sync probe plays for. 5s at 60fps is ~300 samples, over the n≥120 bar. */
 const OVERLAY_RUN_MS = 5_000;
@@ -76,6 +108,8 @@ export default function SpikeScreen() {
   const { width, height, scale, fontScale } = useWindowDimensions();
   const clock = useRef<FrameClockHandle>(null);
 
+  const [clipKey, setClipKey] = useState<ClipKey>("synthetic");
+  const clip = CLIPS[clipKey];
   const [clipUri, setClipUri] = useState<string | null>(null);
   const [probes, setProbes] = useState<Probe[]>(PROBES);
   const [ready, setReady] = useState<string | null>(null);
@@ -92,11 +126,29 @@ export default function SpikeScreen() {
   const measuring = useRef(false);
 
   useEffect(() => {
-    Asset.fromModule(CLIP)
+    let cancelled = false;
+    setClipUri(null);
+    setReady(null);
+    Asset.fromModule(clip.module)
       .downloadAsync()
-      .then((asset) => setClipUri(asset.localUri ?? asset.uri))
+      .then((asset) => {
+        if (!cancelled) setClipUri(asset.localUri ?? asset.uri);
+      })
       .catch((e: unknown) => setError(String(e)));
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [clip.module]);
+
+  // Name -> index once per bundle. The order is never assumed: it comes from the artifact.
+  const poseIndex = useMemo(
+    () => (clip.pose ? buildIndex(clip.pose.keypointNames) : {}),
+    [clip.pose],
+  );
+  const poseFrame = useMemo(
+    () => (clip.pose ? frameAt(clip.pose, overlayFrame) : null),
+    [clip.pose, overlayFrame],
+  );
 
   /**
    * Report the commit back to native, which scores it against the frame actually on the glass.
@@ -176,7 +228,7 @@ export default function SpikeScreen() {
   // The bar's left edge is (CLIP_WIDTH - BAR_WIDTH) * n / (frames - 1); add half the bar to get
   // its centre, then subtract half the marker so the two centres coincide.
   const barCentreInClipPx =
-    ((CLIP_WIDTH_PX - BAR_WIDTH_PX) * overlayFrame) / (CLIP_FRAMES - 1) + BAR_WIDTH_PX / 2;
+    ((CLIP_WIDTH_PX - BAR_WIDTH_PX) * overlayFrame) / (clip.frames - 1) + BAR_WIDTH_PX / 2;
   const markerLeft =
     (barCentreInClipPx * videoWidth) / CLIP_WIDTH_PX - MARKER_WIDTH / 2;
 
@@ -201,6 +253,20 @@ export default function SpikeScreen() {
         </View>
 
         <View style={styles.videoCard}>
+          <View style={styles.transport}>
+            {(Object.keys(CLIPS) as ClipKey[]).map((k) => (
+              <Pressable
+                key={k}
+                style={[styles.transportButton, k === clipKey && styles.transportActive]}
+                onPress={() => {
+                  setLooping(false);
+                  setClipKey(k);
+                }}
+              >
+                <Text style={styles.transportText}>{CLIPS[k].label}</Text>
+              </Pressable>
+            ))}
+          </View>
           <View
             style={styles.videoWrap}
             onLayout={(e) => setVideoWidth(e.nativeEvent.layout.width)}
@@ -209,7 +275,7 @@ export default function SpikeScreen() {
               ref={clock}
               style={styles.video}
               source={clipUri}
-              fps={CLIP_FPS}
+              fps={clip.fps}
               // Always on here, even though the module defaults it off. The overlay marker IS
               // driven by these events, so this is not instrumentation sitting beside the thing
               // under test — it is the architecture under test. Turning it on only while
@@ -224,17 +290,39 @@ export default function SpikeScreen() {
               onPlayerError={({ nativeEvent }) => setError(nativeEvent.message)}
               onFrameRendered={({ nativeEvent }) => {
                 setOverlayFrame(nativeEvent.frame);
-                if (looping && nativeEvent.frame >= CLIP_FRAMES - 2) {
+                if (looping && nativeEvent.frame >= clip.frames - 2) {
                   void clock.current?.seekToFrame(0);
                 }
               }}
             />
+            {/* The real overlay, when a clip carries pose data. This is the workload the cost
+                comparison is about — see Skeleton.tsx for why it is drawn with plain Views. */}
+            {videoWidth > 0 && clip.pose ? (
+              <Skeleton
+                frame={poseFrame}
+                width={videoWidth}
+                height={(videoWidth * 16) / 9}
+                index={poseIndex}
+              />
+            ) : null}
             {/* The JS overlay. Should sit exactly on the clip's own green bar. */}
             {videoWidth > 0 ? (
-              <View
-                pointerEvents="none"
-                style={[styles.marker, { left: markerLeft, width: MARKER_WIDTH }]}
-              />
+              <>
+                <View
+                  pointerEvents="none"
+                  style={[styles.marker, { left: markerLeft, width: MARKER_WIDTH }]}
+                />
+                {/* Calibration ticks at the video's exact left and right edges.
+                    scripts/measure_overlay.py needs the rendered video width to convert a pixel
+                    gap into frames, and it cannot infer it: the clip is 9:16 and taller than the
+                    screen, so the visible height is clipped and height x 9/16 is not the width.
+                    Letting the app state its own geometry beats the script guessing at it. */}
+                <View pointerEvents="none" style={[styles.calTick, { left: 0 }]} />
+                <View
+                  pointerEvents="none"
+                  style={[styles.calTick, { left: videoWidth - CAL_TICK_WIDTH }]}
+                />
+              </>
             ) : null}
           </View>
           <View style={styles.transport}>
@@ -258,8 +346,11 @@ export default function SpikeScreen() {
             </Pressable>
           </View>
           <Text style={styles.detail}>
-            Overlay frame {overlayFrame} · the white marker is drawn by JS, the green bar is burned
-            into the video. Any gap between them IS the drift.
+            Frame {overlayFrame} · {clip.blurb}
+          </Text>
+          <Text style={styles.detail}>
+            The white marker is drawn by JS, the green bar is burned into the video. Any gap
+            between them IS the drift.
           </Text>
         </View>
 

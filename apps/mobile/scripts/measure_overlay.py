@@ -49,6 +49,11 @@ CLIP_FRAMES = 600
 # from a dark background, not identify a shade.
 BAR_RGB = (0xA3, 0xE6, 0x35)
 MARKER_RGB = (0xF7, 0xF8, 0xF5)
+# Calibration ticks the app draws at the video's exact left and right edges. The rendered video
+# width cannot be inferred from the screenshot: the clip is 9:16 and taller than the phone, so the
+# bar's visible height is clipped and height x 9/16 understates the width badly. An early run
+# derived it that way and produced "gaps" of 18,000 frames.
+CAL_RGB = (0xFF, 0x00, 0xFF)
 
 
 @dataclass
@@ -133,11 +138,16 @@ def measure(img: np.ndarray) -> Sample | None:
         return None
     marker_x, _, _ = marker
 
-    # The clip is 9:16 and the view matches it, so width follows from the measured height.
-    height = bottom - top + 1
-    video_width = height * 9 / 16
-    video_left = bar_x - (bar_x % video_width) if video_width else 0
-    return Sample(bar_x=bar_x, marker_x=marker_x, video_left=video_left, video_width=video_width)
+    # Video geometry from the app's own calibration ticks, not inferred.
+    cal = near(band, CAL_RGB, 60)
+    cal_cols = np.where(cal.sum(axis=0) >= 0.6 * cal.sum(axis=0).max())[0] if cal.any() else []
+    if len(cal_cols) < 2:
+        return None
+    left, right = float(cal_cols.min()), float(cal_cols.max())
+    video_width = right - left + 1
+    if video_width < 50:
+        return None
+    return Sample(bar_x=bar_x, marker_x=marker_x, video_left=left, video_width=video_width)
 
 
 def main() -> int:
@@ -160,6 +170,12 @@ def main() -> int:
             continue
         samples.append(s)
 
+    # At the loop wrap the video jumps to frame 0 while the marker is still at the right-hand end;
+    # that is a genuine transient, not overlay drift, and it must be discarded rather than
+    # averaged in. Reported, never silent.
+    wrapped = [s for s in samples if abs(s.gap_frames) > 60]
+    samples = [s for s in samples if abs(s.gap_frames) <= 60]
+
     if not samples:
         print(
             "No sample found either mark. Is the spike in the foreground and playing?",
@@ -173,7 +189,7 @@ def main() -> int:
     p95 = abs_fr[min(int(np.ceil(0.95 * len(abs_fr))) - 1, len(abs_fr) - 1)]
 
     print(f"strategy      {args.label}")
-    print(f"samples       {len(samples)} ({misses} unreadable)")
+    print(f"samples       {len(samples)} ({misses} unreadable, {len(wrapped)} discarded at loop wrap)")
     print(f"video width   {statistics.mean(s.video_width for s in samples):.0f}px")
     print(f"gap px        mean {statistics.mean(gaps_px):+.2f}  median {statistics.median(gaps_px):+.2f}")
     print(f"gap frames    mean {statistics.mean(gaps_fr):+.2f}  median {statistics.median(gaps_fr):+.2f}")
