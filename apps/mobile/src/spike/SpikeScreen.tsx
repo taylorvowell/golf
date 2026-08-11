@@ -293,6 +293,68 @@ export default function SpikeScreen() {
     setBusy(false);
   }, [busy, deviceName, setProbe]);
 
+  /**
+   * Sweep every seek strategy in one run and report which one lands exactly.
+   *
+   * The off-by-one is constant (p50 1, max 1) on both the bundled and the streamed clip, so it is
+   * the seek target or the index math — not jitter and not the network. Compensating with a magic
+   * `-1` would bake in a fix without knowing which end was wrong, so instead each strategy is
+   * measured against the same targets and the winner is evidence rather than a guess.
+   */
+  const runSeekSweep = useCallback(async () => {
+    const handle = clock.current;
+    if (!handle || busy) return;
+    setBusy(true);
+
+    const modes = ["mid", "start", "early", "prevMid"];
+    const lines: string[] = [];
+    let best: { mode: string; max: number; p50: number } | null = null;
+
+    /**
+     * Everything below is wrapped, because the first version was not.
+     *
+     * An unhandled rejection inside an async probe leaves `busy` set, the button dead and NOTHING
+     * logged — indistinguishable from "the user never tapped it". That has now cost two rounds
+     * (the camera hang, then this), so a probe that fails must say so on the card.
+     */
+    try {
+    setProbe("seek-sweep", { status: "running" as ProbeStatus, measurement: undefined });
+
+    for (const mode of modes) {
+      await handle.setSeekMode(mode);
+      await handle.pause();
+      await handle.resetStats();
+      for (const target of SEEK_TARGETS.slice(0, 40)) {
+        await handle.seekToFrame(target);
+        await new Promise((r) => setTimeout(r, 160));
+      }
+      const stats: FrameClockStats = await handle.getStats();
+      const e = stats.seekErrorFrames;
+      lines.push(`${mode}: p50 ${e.p50} max ${e.max} exact ${(e.exactShare * 100).toFixed(0)}%`);
+      if (best === null || Math.abs(e.max) < Math.abs(best.max)) {
+        best = { mode, max: e.max, p50: e.p50 };
+      }
+    }
+
+    // Leave the player on whichever strategy won, so everything measured afterwards uses it.
+    await handle.setSeekMode(best?.mode ?? "mid");
+    setProbe("seek-sweep", {
+      status: best && best.max === 0 && best.p50 === 0 ? "pass" : "fail",
+      measurement: { value: best?.max ?? 99, device: deviceName },
+      detail: `${lines.join(" · ")} → best "${best?.mode}"`,
+    });
+    } catch (err) {
+      setProbe("seek-sweep", {
+        status: "fail",
+        measurement: { value: 99, device: deviceName },
+        detail:
+          `sweep threw: ${err instanceof Error ? err.message : String(err)}` +
+          (lines.length ? ` · completed: ${lines.join(" · ")}` : " · no strategy completed"),
+      });
+    }
+    setBusy(false);
+  }, [busy, deviceName, setProbe]);
+
   const runSeekProbe = useCallback(async () => {
     const handle = clock.current;
     if (!handle || busy) return;
@@ -667,6 +729,8 @@ export default function SpikeScreen() {
                         ? () => runScrubProbe(true)
                         : p.id === "remote-seek"
                           ? runRemoteSeekProbe
+                          : p.id === "seek-sweep"
+                            ? runSeekSweep
                           : p.id === "artifact-weight"
                             ? runArtifactProbe
                             : undefined

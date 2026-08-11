@@ -259,10 +259,13 @@ class FrameClockView(context: Context, appContext: AppContext) : ExpoView(contex
    * frame that subsequently reached the screen. Asking the player where it thinks it is would
    * measure the player's bookkeeping, not the picture.
    */
+  /** "start" by default — media3 resolves seeks forward, so the midpoint rule lands late (D40). */
+  var seekMode: String = "start"
+
   fun seekToFrame(frame: Int) {
     val exo = player ?: return
     pendingSeekFrame = frame
-    exo.seekTo(seekTargetMs(frame, fps))
+    exo.seekTo(seekTargetMs(frame, fps, seekMode))
   }
 
   /**

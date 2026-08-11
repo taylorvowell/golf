@@ -76,6 +76,8 @@ export interface FrameClockHandle {
   seekToFrame: (frame: number) => Promise<void>;
   /** Call immediately after committing an overlay, so native can score the drift. */
   markOverlayCommitted: (frame: number) => Promise<void>;
+  /** Which seek target to aim at: "mid" | "start" | "early" | "prevMid". See seekTargetMs. */
+  setSeekMode: (mode: string) => Promise<void>;
   /** 1 = real time, 0.25 = quarter speed. A 240fps clip at 0.25 plays at a true 60fps. */
   setPlaybackSpeed: (speed: number) => Promise<void>;
   getStats: () => Promise<FrameClockStats>;

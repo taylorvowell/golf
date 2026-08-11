@@ -76,7 +76,7 @@ export const PROBES: Probe[] = [
       "Stage 0 already forces GOP 10, which bounds that to 9 frames.",
     status: "pending",
     measures: "requested frame minus presented frame — target exactly 0",
-    settled: { verdict: "1 frame late, consistently (n=128)", decision: "D36" },
+    settled: { verdict: "FIXED — frame-exact once the seek target became frame/fps", decision: "D36, D40" },
   },
   {
     id: "scrub",
@@ -105,6 +105,19 @@ export const PROBES: Probe[] = [
     settled: { verdict: "unmeasurable — no lead exists on the seek path", decision: "D36" },
   },
   {
+    id: "seek-sweep",
+    title: "2d · Which seek target lands exactly?",
+    question: "Is the constant one-frame seek error the target, or the index math?",
+    why:
+      "Seek is one frame late on BOTH the bundled and the streamed clip (p50 1, max 1, n=128 and " +
+      "n=129), so it is neither jitter nor the network. Compensating with a magic -1 would bake in " +
+      "a fix without knowing which end is wrong. Each strategy is measured against the same " +
+      "targets instead, so the winner is evidence.",
+    status: "pending",
+    measures: "max seek error per strategy — target exactly 0",
+    settled: { verdict: "start=100% exact, mid=0% — media3 resolves seeks FORWARD", decision: "D40" },
+  },
+  {
     id: "remote-seek",
     title: "4 · Frame-exact seek over the NETWORK",
     question: "Does seeking stay frame-exact when the clip streams over HTTP instead of bundling?",
@@ -115,6 +128,7 @@ export const PROBES: Probe[] = [
       "nothing has tested it.",
     status: "pending",
     measures: "requested frame minus presented frame, streaming — target exactly 0",
+    settled: { verdict: "n=129, p50 1, max 1 — identical to bundled; the network costs nothing", decision: "D40" },
   },
   {
     id: "artifact-weight",

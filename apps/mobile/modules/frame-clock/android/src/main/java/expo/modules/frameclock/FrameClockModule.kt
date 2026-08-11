@@ -45,6 +45,9 @@ class FrameClockModule : Module() {
         view.markOverlayCommitted(frame)
       }
 
+      AsyncFunction("setSeekMode") { view: FrameClockView, mode: String ->
+        view.seekMode = mode
+      }
       AsyncFunction("setPlaybackSpeed") { view: FrameClockView, speed: Double ->
         view.setPlaybackSpeed(speed.toFloat())
       }

@@ -1974,3 +1974,57 @@ analyzer's Stage 0 normalizes to CFR anyway, so a small loss degrades rather tha
   that "fixes the deprecation" would remove the capability.
 - D38 stands as the record of how the answer was reached — CamcorderProfile empty, CameraX
   correctly refusing — but its conclusion that Camera2 was likely blocked is superseded.
+
+---
+
+## D40 — Seeking is frame-exact. media3 resolves seeks FORWARD, so the web player's rule is wrong on Android.
+
+**Date:** 2026-08-11
+**Status:** ACTIVE — resolves D36's outstanding one-frame seek error
+
+Four seek strategies, same 40 targets, one run:
+
+| target | p50 | max | exactly right |
+|---|---|---|---|
+| `(frame + 0.5) / fps` — the web player's rule | 1 | 1 | **0%** |
+| **`frame / fps`** | **0** | **0** | **100%** |
+| `(frame − 0.25) / fps` | 0 | 0 | 100% |
+| `(frame − 0.5) / fps` | 0 | 0 | 100% |
+
+**media3 with `SeekParameters.EXACT` resolves a seek forward to the frame boundary at or after the
+target time.** The midpoint of frame N is after N's start, so it lands on **N+1** — every time,
+which is why the error was a constant p50 1 rather than jitter. Any target at or before N's own
+presentation timestamp lands on N.
+
+**The web player's `(frame + 0.5) / fps` is correct on the web** and wrong here: HTML video seeks to
+the frame *containing* the time, so the midpoint avoids a boundary-rounding ambiguity there. The
+conventions are opposite, and porting the web rule to Android silently costs a frame on every seek.
+`seekTargetMs` now defaults to `frame / fps` with the reason written beside it.
+
+**`start` was chosen over the two other exact answers** because it is the frame's own timestamp
+rather than a fudge inside the previous frame. `early` and `prevMid` only work by relying on
+forward resolution with slack; if that behaviour ever changes they fail silently, while `start`
+stays correct under either convention.
+
+### Also settled: the network costs nothing
+
+Probe 4 ran the identical seek measurement against a clip streamed over HTTP with Range support
+instead of one bundled into the app:
+
+| source | n | p50 | max |
+|---|---|---|---|
+| bundled | 128 | 1 | 1 |
+| **streamed** | **129** | **1** | **1** |
+
+Identical. Frame-exact seeking survives the network path with **zero** added error, which is the
+property `mobile-player` most depended on and the one nothing had tested. Combined with D33's
+verified range support over the Supabase CDN, the media path from object storage to a frame-exact
+mobile player is now proven end to end rather than assumed.
+
+### The process finding, because it cost three rounds
+
+An async probe that throws with no `try`/`catch` leaves its busy flag set, its button dead and
+**nothing logged** — indistinguishable from the user never having tapped it. That shape cost a
+round three separate times here: the Camera2 session that never called back, the recording that
+left a 0-byte file, and this sweep. Every probe now reports its own failure on the card, and the
+native side has a watchdog. **A measurement harness that can fail silently is not a harness.**
