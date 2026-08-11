@@ -141,3 +141,73 @@ export function frameAt(bundle: PoseBundle, index: number): PoseFrame | null {
   if (direct && direct.f === index) return direct;
   return bundle.frames.find((fr) => fr.f === index) ?? null;
 }
+
+/* ------------------------------------------------------------------------------------------ */
+/* Strategy C: hand the whole thing over once                                                   */
+/* ------------------------------------------------------------------------------------------ */
+
+/** ARGB int for the native Paint, from a "#rrggbb" string. Opaque unless a joint is hidden. */
+export function argb(hex: string): number {
+  const v = parseInt(hex.replace("#", ""), 16);
+  // Kotlin Int is signed; `| 0` produces the same bit pattern Android expects for 0xAARRGGBB.
+  return (0xff000000 | v) | 0;
+}
+
+export interface FlatSkeleton {
+  /** Frame-major, `perFrame` points per frame, 3 numbers per point (x, y, conf). */
+  keypoints: number[];
+  perFrame: number;
+  /** Keypoint-index pairs. */
+  bones: number[];
+  /** One ARGB per bone. */
+  boneColors: number[];
+  /** One ARGB per keypoint; 0 means "no dot", matching HIDE_JOINT. */
+  jointColors: number[];
+}
+
+/**
+ * Flatten a pose bundle into the arrays strategy C ships across the bridge exactly once.
+ *
+ * This is the shape of the whole idea. Every frame's geometry is known before playback begins, so
+ * there is no reason for the per-frame path to contain a bridge crossing at all — the JS side's
+ * only job is this one hand-off, and the native side does the rest in the same vsync as the video.
+ *
+ * Frames are placed at their own `f` index rather than appended in order, so a gap in the pose
+ * data stays a gap. Compacting here would shift every later frame by one and mis-draw the entire
+ * remainder of the swing, which is the worst version of the bug this project keeps guarding
+ * against: plausible, silent, and everywhere.
+ */
+export function flattenSkeleton(bundle: PoseBundle): FlatSkeleton {
+  const perFrame = bundle.keypointNames.length;
+  const maxFrame = bundle.frames.reduce((m, fr) => Math.max(m, fr.f), -1);
+  const keypoints = new Array<number>((maxFrame + 1) * perFrame * 3).fill(0);
+
+  for (const fr of bundle.frames) {
+    const base = fr.f * perFrame * 3;
+    for (let i = 0; i < perFrame; i += 1) {
+      const p = fr.kp[i];
+      if (!p) continue;
+      keypoints[base + i * 3] = p[0];
+      keypoints[base + i * 3 + 1] = p[1];
+      keypoints[base + i * 3 + 2] = p[2];
+    }
+  }
+
+  const index = buildIndex(bundle.keypointNames);
+  const bones: number[] = [];
+  const boneColors: number[] = [];
+  for (const [from, to, side] of BONES) {
+    const a = index[from];
+    const b = index[to];
+    // A bone naming a joint this artifact does not have is skipped, not guessed at.
+    if (a === undefined || b === undefined) continue;
+    bones.push(a, b);
+    boneColors.push(argb(SIDE_COLOR[side] ?? SIDE_COLOR.M));
+  }
+
+  const jointColors = bundle.keypointNames.map((n) =>
+    HIDE_JOINT.test(n) ? 0 : argb(SIDE_COLOR[sideOf(n)] ?? SIDE_COLOR.M),
+  );
+
+  return { keypoints, perFrame, bones, boneColors, jointColors };
+}

@@ -52,6 +52,19 @@ class FrameClockView(context: Context, appContext: AppContext) : ExpoView(contex
   private var videoSurface: View? = null
 
   /**
+   * Strategy C's renderer, layered over the video surface. Present but idle unless
+   * `overlayMode` selects it, so the JS-state strategy is never charged for its existence.
+   */
+  private val overlay = OverlayCanvas(context).also {
+    it.frameProvider = { onScreenFrame() }
+    addView(it, ViewGroup.LayoutParams(
+      ViewGroup.LayoutParams.MATCH_PARENT,
+      ViewGroup.LayoutParams.MATCH_PARENT
+    ))
+    it.visibility = View.GONE
+  }
+
+  /**
    * Frames per second used for every index calculation.
    *
    * Supplied by JS rather than read from the container, matching how the web player gets it from
@@ -195,6 +208,32 @@ class FrameClockView(context: Context, appContext: AppContext) : ExpoView(contex
    * documented fix for the overlapping-views z-order bug. Step 02 asks which one an
    * overlay-on-video layout actually needs, so it is switchable and measured, not assumed.
    */
+  /**
+   * `native` draws the skeleton here; `js` leaves this view idle and lets React draw it. Nothing
+   * else changes between the two, so a comparison is measuring the strategy rather than two
+   * differently-built screens.
+   */
+  fun setOverlayMode(mode: String) {
+    if (mode == "native") {
+      overlay.visibility = View.VISIBLE
+      overlay.start()
+    } else {
+      overlay.stop()
+      overlay.visibility = View.GONE
+    }
+  }
+
+  fun setSkeleton(
+    keypoints: FloatArray,
+    perFrame: Int,
+    bones: IntArray,
+    boneColors: IntArray,
+    jointColors: IntArray,
+    minConf: Float
+  ) {
+    overlay.setGeometry(keypoints, perFrame, bones, boneColors, jointColors, minConf)
+  }
+
   fun setSurfaceType(type: String) {
     val exo = player ?: return
     videoSurface?.let { removeView(it) }
@@ -210,6 +249,9 @@ class FrameClockView(context: Context, appContext: AppContext) : ExpoView(contex
     )
     addView(surface, 0)
     videoSurface = surface
+    // The surface is (re)inserted beneath, but re-assert it so a surfaceType switch mid-session
+    // cannot leave the overlay hidden behind the video.
+    overlay.bringToFront()
   }
 
   fun setSource(uri: String?) {
@@ -277,6 +319,7 @@ class FrameClockView(context: Context, appContext: AppContext) : ExpoView(contex
   )
 
   fun release() {
+    overlay.stop()
     player?.release()
     player = null
   }

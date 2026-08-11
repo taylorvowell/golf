@@ -11,7 +11,11 @@ import {
 } from "react-native";
 
 import FrameClockView from "../../modules/frame-clock/src/FrameClockView";
-import type { FrameClockHandle, FrameClockStats } from "../../modules/frame-clock/src/FrameClock.types";
+import type {
+  FrameClockHandle,
+  FrameClockStats,
+  OverlayMode,
+} from "../../modules/frame-clock/src/FrameClock.types";
 import { ProbeCard } from "./ProbeCard";
 import {
   PROBES,
@@ -21,7 +25,7 @@ import {
   type ProbeStatus,
 } from "./probes";
 import { Skeleton } from "./Skeleton";
-import { buildIndex, frameAt, type PoseBundle } from "./pose";
+import { DRAWN_CONF, buildIndex, flattenSkeleton, frameAt, type PoseBundle } from "./pose";
 import { COLORS, styles } from "./styles";
 
 /**
@@ -123,6 +127,8 @@ export default function SpikeScreen() {
   /** Free-run playback for eyeballing the marker against the bar, and for the screenshot-based
    *  measurement in scripts/measure_overlay.py, which needs more than a probe's 5s to sample. */
   const [looping, setLooping] = useState(false);
+  /** Which overlay strategy is drawing. Runtime-switchable so one session compares both. */
+  const [overlayMode, setOverlayMode] = useState<OverlayMode>("js");
   const measuring = useRef(false);
 
   useEffect(() => {
@@ -149,6 +155,22 @@ export default function SpikeScreen() {
     () => (clip.pose ? frameAt(clip.pose, overlayFrame) : null),
     [clip.pose, overlayFrame],
   );
+
+  // Strategy C's one hand-off. Runs when the clip changes, never per frame — the moment this
+  // appears in a frame handler, the whole point of the strategy has been lost.
+  useEffect(() => {
+    const pose = clip.pose;
+    if (!pose || !clipUri) return;
+    const flat = flattenSkeleton(pose);
+    void clock.current?.setSkeleton(
+      flat.keypoints,
+      flat.perFrame,
+      flat.bones,
+      flat.boneColors,
+      flat.jointColors,
+      DRAWN_CONF,
+    );
+  }, [clip.pose, clipUri]);
 
   /**
    * Report the commit back to native, which scores it against the frame actually on the glass.
@@ -189,11 +211,11 @@ export default function SpikeScreen() {
 
     setProbe("overlay-sync", {
       status: verdict.status,
-      measurement: { value: verdict.value, device: deviceName },
+      measurement: { value: verdict.value, device: `${deviceName} · ${overlayMode}` },
       detail: `${verdict.detail} · JS lead p95 ${stats.leadTimeMs.p95.toFixed(1)}ms`,
     });
     setBusy(false);
-  }, [busy, deviceName, setProbe]);
+  }, [busy, deviceName, overlayMode, setProbe]);
 
   const runSeekProbe = useCallback(async () => {
     const handle = clock.current;
@@ -219,7 +241,51 @@ export default function SpikeScreen() {
       detail: verdict.detail,
     });
     setBusy(false);
-  }, [busy, deviceName, setProbe]);
+  }, [busy, deviceName, overlayMode, setProbe]);
+
+  /**
+   * Probe 2b: drag the scrubber, do not just seek to a list of targets.
+   *
+   * A drag is not a sequence of settled seeks. It is a stream of them arriving faster than the
+   * decoder can finish, each landing mid-GOP, and the overlay has to track the frames that
+   * actually reach the screen rather than the ones that were requested. Stepping politely
+   * through targets with a wait in between — which is what probe 2 does — measures seek accuracy
+   * and says nothing about this.
+   */
+  const runScrubProbe = useCallback(async () => {
+    const handle = clock.current;
+    if (!handle || busy) return;
+    setBusy(true);
+    setProbe("scrub", { status: "running" as ProbeStatus, measurement: undefined });
+
+    setLooping(false);
+    await handle.pause();
+    await handle.resetStats();
+    measuring.current = true;
+
+    // Sweep back and forth across the clip at roughly a finger's speed, without waiting for any
+    // seek to settle. 16ms between requests is deliberately faster than the decoder can serve.
+    const span = clip.frames - 1;
+    for (let pass = 0; pass < 3; pass += 1) {
+      for (let t = 0; t <= 1; t += 0.02) {
+        const target = Math.round((pass % 2 === 0 ? t : 1 - t) * span);
+        void handle.seekToFrame(target);
+        await new Promise((r) => setTimeout(r, 16));
+      }
+    }
+    // Let the last seek land before reading, or the final sample scores a frame still in flight.
+    await new Promise((r) => setTimeout(r, 300));
+
+    measuring.current = false;
+    const stats: FrameClockStats = await handle.getStats();
+    const verdict = judgeOverlayDrift(stats.overlayDriftFrames);
+    setProbe("scrub", {
+      status: verdict.status,
+      measurement: { value: verdict.value, device: `${deviceName} · ${overlayMode}` },
+      detail: verdict.detail,
+    });
+    setBusy(false);
+  }, [busy, clip.frames, deviceName, overlayMode, setProbe]);
 
   // The marker mirrors the clip's burned-in sweeping bar. If the two do not sit on top of each
   // other on a screen recording, something is wrong — this is the Gate 3 check, on the phone.
@@ -282,6 +348,7 @@ export default function SpikeScreen() {
               // measuring would measure a code path the product would never ship.
               emitFrames
               surfaceType="textureView"
+              overlayMode={overlayMode}
               onReady={({ nativeEvent }) => {
                 setReady(
                   `${nativeEvent.width}×${nativeEvent.height} · container ${nativeEvent.containerFps.toFixed(2)}fps`,
@@ -297,7 +364,7 @@ export default function SpikeScreen() {
             />
             {/* The real overlay, when a clip carries pose data. This is the workload the cost
                 comparison is about — see Skeleton.tsx for why it is drawn with plain Views. */}
-            {videoWidth > 0 && clip.pose ? (
+            {videoWidth > 0 && clip.pose && overlayMode === "js" ? (
               <Skeleton
                 frame={poseFrame}
                 width={videoWidth}
@@ -325,6 +392,19 @@ export default function SpikeScreen() {
                 />
               </>
             ) : null}
+          </View>
+          <View style={styles.transport}>
+            {(["js", "native"] as OverlayMode[]).map((m) => (
+              <Pressable
+                key={m}
+                style={[styles.transportButton, m === overlayMode && styles.transportActive]}
+                onPress={() => setOverlayMode(m)}
+              >
+                <Text style={styles.transportText}>
+                  {m === "js" ? "A · JS state" : "C · Native"}
+                </Text>
+              </Pressable>
+            ))}
           </View>
           <View style={styles.transport}>
             <Pressable
@@ -360,7 +440,13 @@ export default function SpikeScreen() {
             key={p.id}
             probe={p}
             onRun={
-              p.id === "overlay-sync" ? runOverlayProbe : p.id === "seek" ? runSeekProbe : undefined
+              p.id === "overlay-sync"
+                ? runOverlayProbe
+                : p.id === "seek"
+                  ? runSeekProbe
+                  : p.id === "scrub"
+                    ? runScrubProbe
+                    : undefined
             }
             disabled={busy || !clipUri}
           />

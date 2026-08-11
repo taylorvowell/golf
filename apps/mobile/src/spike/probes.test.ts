@@ -34,7 +34,7 @@ const stats = (over: Partial<StatSummary> = {}): StatSummary => ({
 
 describe("probe definitions", () => {
   it("covers the three questions step 02 must answer", () => {
-    expect(PROBES.map((p) => p.id)).toEqual(["overlay-sync", "seek", "capture"]);
+    expect(PROBES.map((p) => p.id)).toEqual(["overlay-sync", "seek", "scrub", "capture"]);
   });
 
   it("puts overlay-sync first, because it carries the unconfirmed Android risk", () => {
@@ -96,10 +96,15 @@ describe("spikeComplete — the step's exit condition", () => {
   it("is false when only some probes are answered", () => {
     const partial: Probe[] = [
       { ...PROBES[0], status: "pass", measurement: { value: 0, device: "Pixel 7a" } },
-      PROBES[1],
-      PROBES[2],
+      ...PROBES.slice(1),
     ];
     expect(spikeComplete(partial)).toBe(false);
+  });
+
+  it("covers scrubbing, not just playback", () => {
+    // The step file asks for the overlay lock 'during scrub'. A spike that only measured
+    // playback could pass while the interaction the lock exists for still fails.
+    expect(PROBES.map((p) => p.id)).toContain("scrub");
   });
 
   it("is true only when every probe carries a real measurement", () => {

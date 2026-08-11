@@ -53,6 +53,17 @@ export const PROBES: Probe[] = [
     measures: "requested frame minus presented frame — target exactly 0",
   },
   {
+    id: "scrub",
+    title: "2b · Overlay locked while scrubbing",
+    question: "Does the overlay stay on the right frame while the user drags the scrubber?",
+    why:
+      "The step file's words are 'during scrub', and scrubbing is the hard case: rapid seeks " +
+      "land mid-GOP, the decoder skips forward from a sync point, and frames arrive out of the " +
+      "cadence playback establishes. Measuring only playback tests the easy half of the problem.",
+    status: "pending",
+    measures: "drift in frames while seeking rapidly — target exactly 0",
+  },
+  {
     id: "capture",
     title: "3 · Sustained 60fps capture",
     question: "Does the device actually record at the rate it reports?",

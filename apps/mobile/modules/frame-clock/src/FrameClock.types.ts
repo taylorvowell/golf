@@ -57,11 +57,25 @@ export interface ReadyEvent {
  */
 export type SurfaceType = "surfaceView" | "textureView";
 
+/**
+ * Which overlay strategy is drawing.
+ *
+ * `js`  — React state drives a JS-drawn overlay. Per-frame path: native event -> JS -> setState
+ *         -> React commit -> view update.
+ * `native` — geometry is pushed once and the overlay is drawn here, in the same vsync as the
+ *         video frame. Per-frame path: nothing.
+ *
+ * Switchable at runtime on purpose: comparing two builds would let thermal state and Metro
+ * variance decide the result instead of the strategies.
+ */
+export type OverlayMode = "js" | "native";
+
 export type FrameClockViewProps = {
   source?: string | null;
   fps?: number;
   emitFrames?: boolean;
   surfaceType?: SurfaceType;
+  overlayMode?: OverlayMode;
   onFrameRendered?: (event: { nativeEvent: FrameRenderedEvent }) => void;
   onReady?: (event: { nativeEvent: ReadyEvent }) => void;
   onPlayerError?: (event: { nativeEvent: { message: string } }) => void;
@@ -77,4 +91,16 @@ export interface FrameClockHandle {
   markOverlayCommitted: (frame: number) => Promise<void>;
   getStats: () => Promise<FrameClockStats>;
   resetStats: () => Promise<void>;
+  /**
+   * Strategy C's single data transfer: every frame's geometry, before playback. Called once per
+   * clip — if this ends up in a per-frame path, the strategy has been misunderstood.
+   */
+  setSkeleton: (
+    keypoints: number[],
+    perFrame: number,
+    bones: number[],
+    boneColors: number[],
+    jointColors: number[],
+    minConf: number,
+  ) => Promise<void>;
 }

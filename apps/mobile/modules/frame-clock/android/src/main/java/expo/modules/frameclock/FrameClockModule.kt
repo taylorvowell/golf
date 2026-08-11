@@ -28,6 +28,26 @@ class FrameClockModule : Module() {
         view.setSurfaceType(type)
       }
 
+      Prop("overlayMode") { view: FrameClockView, mode: String ->
+        view.setOverlayMode(mode)
+      }
+
+      /**
+       * Strategy C's one and only data transfer. Everything the overlay will ever need for every
+       * frame crosses here once, before playback — which is the entire point, because it means
+       * the per-frame path contains no bridge at all.
+       */
+      AsyncFunction("setSkeleton") {
+        view: FrameClockView,
+        keypoints: FloatArray,
+        perFrame: Int,
+        bones: IntArray,
+        boneColors: IntArray,
+        jointColors: IntArray,
+        minConf: Double ->
+        view.setSkeleton(keypoints, perFrame, bones, boneColors, jointColors, minConf.toFloat())
+      }
+
       AsyncFunction("play") { view: FrameClockView ->
         view.play()
       }
