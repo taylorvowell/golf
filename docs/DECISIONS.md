@@ -1330,3 +1330,136 @@ omitting it silently regenerates the trace on the weaker classical path and over
 artifact. It is a real bug and it predates this step; fixing it changes analyzer invocation, and
 this step's Definition of Done requires `analysis.json`'s contract to be untouched. Recorded here
 so it is not rediscovered by accident.
+
+---
+
+## D31 — Sign-in becomes phone, Google and Apple; email OTP is demoted to a temporary path
+
+**Date:** 2026-08-11
+**Status:** ACTIVE — supersedes D25's provider choice, not its reasoning
+
+**Context:** Taylor directed that sign-in offer **phone number, Google and Apple, and only those
+three**, on mobile-friendliness grounds. D25 chose emailed OTP and deferred social sign-in; that
+deferral was about cost and sequencing, not about email being the better mobile experience — D25
+itself calls one-tap social "better UX still".
+
+**Decision:** the target sign-in surface is **phone OTP + Sign in with Apple + Google**. Email OTP
+survives only as the development and transition path and is **deleted, not disabled**, once all
+three are live — the same rule step 04 applied to the seeded admin, for the same reason.
+
+**Every account carries an email address regardless of how it signed in.** This is a recovery and
+delivery attribute, not a fourth login method. D25's stated objection to phone auth was account
+recovery, and it is correct: a golfer who changes carrier loses a phone-only account permanently.
+Google and Apple both supply an address at sign-in (Apple's may be a Hide My Email relay, which is
+deliverable and therefore sufficient); phone sign-up asks for one. §29 notifications and §27 coach
+messaging need an address anyway.
+
+**Consequences, in cost order:**
+- **Apple pulls $99/yr forward from step 10.** Sign in with Apple needs an Apple Developer Program
+  membership to issue the Service ID and key. It is not optional once Google ships — App Store
+  Review Guideline 4.8 requires an equivalent privacy-preserving option alongside any third-party
+  login, and Sign in with Apple is the one that qualifies.
+- **Phone is the expensive provider and the one with a registration gate.** Supabase brokers SMS
+  through Twilio/MessageBird/Vonage/Textlocal; none has a free production tier. US delivery
+  additionally requires A2P 10DLC brand and campaign registration, which is a business-verification
+  step with a lead time, not just a fee. Budget ~$0.012–0.013 per message all-in plus a monthly
+  campaign fee. **This is the piece to schedule earliest and ship latest.**
+- **The flow is buildable for free today.** `SMS_TEST_OTP` maps fixed phone numbers to fixed codes,
+  so the entire phone path — screens, session handling, identity reconciliation — is developed and
+  tested with no provider and no spend. Only real delivery needs Twilio.
+- **Identity linking becomes a real requirement, not a nicety.** The same person signing in with
+  Google and later with Apple must land on one account. Apple's relay address defeats
+  match-by-email, so linking is explicit rather than inferred.
+- Google is free but needs OAuth client IDs created interactively in Google Cloud Console
+  (separate clients for iOS, Android and web; Android needs the signing-key SHA-1).
+- §4.2's multi-device requirement is unchanged and still governs: sign-out stays `scope: "local"`.
+
+**What did not change:** D25's reasoning about magic links stands — nothing here reintroduces an
+app-switch. All three providers keep the user inside the app.
+
+### Amendment, same day — Android first; Apple is sequenced behind a working Android build
+
+Taylor has no Apple hardware to sign anything with, so **Sign in with Apple is deferred until the
+Android client is complete and working**, and Android is the priority platform for every sign-in
+surface built meanwhile. This is a sequencing decision, not a scope cut: D31's Guideline 4.8
+reasoning is unchanged and Apple remains mandatory before any iOS submission. iOS is testable
+on demand in the meantime, but nothing is gated on it.
+
+**Order of work, therefore:** Google (free, Android-native) → phone on test OTPs (free) → Apple
+(when there is a working Android build and the $99 membership is bought) → real SMS delivery
+(when A2P 10DLC registration clears). Email OTP survives until Google and phone are both live on
+Android, then goes.
+
+**The development phone number is a reserved test number, not Taylor's real one.** A test OTP
+never sends an SMS, so the number needs only to be well-formed — using a number from the reserved
+`+1 555 555 01xx` testing range gets an identical flow with no personal data in a config file and
+nothing to scrub later. Taylor's real number matters on exactly one day: the day real delivery is
+switched on.
+
+**This forces the local Supabase stack, and that is the right outcome anyway.** Test OTPs are a
+CLI/self-hosted feature (`[auth.sms.test_otp]` in `supabase/config.toml`, `SMS_TEST_OTP`
+self-hosted). A **hosted** project has no test-number setting — phone login there requires a real
+SMS provider. So the free phone path runs against `supabase start`, which the repo does not have
+yet (there is no `supabase/` directory) and which step 09 wants regardless for its
+credential-free local media path. One piece of setup, two steps unblocked.
+
+**Guard rail:** whenever a test OTP is configured, set `SMS_TEST_OTP_VALID_UNTIL` alongside it so
+it expires by date rather than by someone remembering. A test credential that merely *should* be
+removed before production is the same class of mistake as the fallback identity D27 built to throw
+at module load.
+
+---
+
+## D32 — One way in for everyone; what differs for coaches is onboarding and listing, never authentication
+
+**Date:** 2026-08-11
+**Status:** ACTIVE
+
+**Context:** Taylor asked for a simplified flow for standard users and "a different flow for coaches
+signing up, and even logging in", with an account that can be upgraded to coach later. The
+instinct is right and the requirement is real; the question is *which layer* forks. Getting that
+wrong is expensive in a way that is invisible until it isn't.
+
+**Decision:** **authentication is one system with one identity.** There is no coach sign-in and no
+coach sign-up. Three things fork instead, in increasing order of friction:
+
+1. **Sign-in — does not fork at all.** One screen, three buttons (phone, Google, Apple per D31),
+   no role question. Nobody should have to know what they are before they can log in.
+2. **Onboarding — forks, and defaults to golfer.** Everyone lands in the golfer flow and reaches a
+   swing fast. §4.4's role choice is offered but never blocks; a coach "just exploring" is a normal
+   account that has not claimed the coach role yet, and claiming it later costs nothing.
+3. **Appearing in the coach directory — a reviewed application, and the only real gate.** §23.1
+   carries credentials, certifications and verified status; §31.5 makes listing approval,
+   visibility, verification and suspension administrative functions. That is an application with an
+   admin decision attached, not a signup path.
+
+**The load-bearing split is between holding the coach role and being listed.** Holding the role is
+free and instant — it unlocks the coach workspace with an empty roster, which is exactly what an
+exploring coach needs. Being discoverable by strangers is what requires review. So the friction
+lands at the point where someone else's golf video becomes reachable, and nowhere earlier.
+
+**Why not a separate coach sign-in, explicitly:**
+- §3 opens with "a single account may have one or more roles" and §3.3 requires personal golfer
+  activity and coaching activity to be separated **"without requiring separate accounts"**. Two
+  auth paths produce two identities, and Taylor's own upgrade-later requirement then becomes a data
+  migration rather than a row change.
+- It is *more* resistance, not less. A separate coach login forces a user to classify themselves
+  before they have an account, and a coach who taps the golfer button and is told "no account
+  found" has had the worst possible first experience.
+- Session handling, RLS policy and the entitlement seam would each need a second shape. The RLS
+  work already shipped in step 03 keys off *roles and relationships*, which stays correct under
+  this decision and would not survive the other one.
+
+**Consequences:**
+- Roles are a set on one account (§3.3), never an account type. Step 05 already requires this; this
+  decision makes it load-bearing rather than incidental.
+- **A coach is a golfer too, by default.** Coaches film their own swings, and §3.3 anticipates
+  exactly this. The golfer surface is never hidden from a coach account.
+- Role checks stay server-side and in RLS policy (step 05's quality standard), so "upgrade" is a
+  role grant with no re-authentication and no new session.
+- The coach application and its admin review belong to `admin-surface` (§31.5) and
+  `coach-relationships` (§23), both phases away. Step 05 builds only the role model and the
+  public/private profile split those will need — step 05's own note already forbids more.
+- **Open, deliberately:** whether an unlisted coach may be attached by direct invite from a golfer
+  who already knows them, bypassing the directory. It is the natural least-resistance path for a
+  real coach's existing clients and it needs a decision before `coach-relationships`, not now.

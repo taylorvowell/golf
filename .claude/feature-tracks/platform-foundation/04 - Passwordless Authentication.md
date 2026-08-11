@@ -83,3 +83,36 @@ Manual: sign in on two devices with the same account; both stay signed in.
 
 Roles are deliberately **not** in this step — §3's golfer/coach/both model is step 05. Keeping
 authentication and authorization separate makes each verifiable on its own.
+
+### Amended 2026-08-11 (D31) — the provider set changed; Android leads
+
+Step 1 above says "magic link and/or OTP", and D25 resolved that to emailed OTP. **D31 supersedes
+that provider choice:** the target surface is **phone OTP + Google + Sign in with Apple, and only
+those three**. Email OTP is now the transition path and is deleted — not disabled — once Google and
+phone are live on Android, under the same rule step 5 applies to the seeded admin.
+
+Sequencing, per D31's amendment:
+
+1. **Google** — free; native `signInWithIdToken`, Android client first. Needs OAuth client IDs
+   created interactively in Google Cloud Console (Android needs the signing-key SHA-1).
+2. **Phone** — built against `[auth.sms.test_otp]` on a local `supabase start` stack, using a
+   reserved `+1 555 555 01xx` test number as the development identity. No provider, no spend, no
+   personal number in a config file. Always paired with `SMS_TEST_OTP_VALID_UNTIL`.
+3. **Apple** — deferred until the Android client is complete and working, because there is no Apple
+   hardware here to sign with. Still mandatory before any iOS submission (Guideline 4.8), so this
+   is sequencing, not descope. Pulls $99/yr forward from step 10 when it lands.
+4. **Real SMS delivery** — last, gated on A2P 10DLC registration clearing.
+
+Two additions to this step's Definition of Done follow from D31, and neither is in the checklist
+above:
+
+- **Every account carries an email address regardless of provider**, as a recovery and delivery
+  attribute. A phone-only account is lost permanently when the golfer changes carrier — which is
+  the objection D25 raised against phone auth and was right about.
+- **Explicit identity linking.** One person signing in with Google and later with Apple must land
+  on one account, and Apple's Hide My Email relay defeats match-by-email, so linking cannot be
+  inferred from the address.
+
+A hosted Supabase project has no test-number setting, so the free phone path requires the local
+stack. There is no `supabase/` directory in the repo yet; step 09 wants that same local stack for
+its credential-free media path.

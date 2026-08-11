@@ -85,3 +85,27 @@ Plus a test that a golfer-only account cannot reach a coach-role endpoint.
 
 Do not build the coach *profile* surface here beyond the role and the fields — the directory,
 listings and discovery are `coach-relationships`, in a much later phase.
+
+### Amended 2026-08-11 (D32) — the flow forks at onboarding, not at sign-in
+
+D32 settles how coaches enter the product, and it constrains step 2 above. **Authentication does
+not fork.** One sign-in screen, three buttons (D31), no role question — nobody classifies
+themselves before they have an account. Three things fork instead:
+
+- **Onboarding defaults to golfer.** Everyone reaches a swing fast; §4.4's role choice is offered
+  and never blocks. This is the "simplified flow" — it is the *default* flow, not a variant.
+- **Claiming the coach role is free and instant**, and unlocks the coach workspace with an empty
+  roster. That is what an exploring coach needs, and it is a role grant on the existing account —
+  no re-authentication, no new session, no migration.
+- **Being listed in the directory is a reviewed application** and the only real gate (§23.1
+  credentials/verified status, §31.5 approval/visibility/suspension). It belongs to `admin-surface`
+  and `coach-relationships`, not here.
+
+**What this step must therefore get right**, beyond what is already listed: the split between
+*holding a role* and *being listed* has to exist in the schema from the start, because the friction
+is supposed to land where a stranger's golf video becomes reachable and nowhere earlier. Step 1's
+"room for admin" and step 6's public/private split are both load-bearing for that.
+
+Also note **a coach is a golfer too by default** — coaches film their own swings, and §3.3 expects
+it. The golfer surface is never hidden from a coach account, so no part of this step should model
+roles as mutually exclusive.
