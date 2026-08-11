@@ -956,3 +956,80 @@ product judgement, not a measurement. Taylor made that call.
 - The native overlay is recoverable from git (commit `187d09b`) if this is revisited.
 - `scripts/measure_overlay.py` and both spike clips remain, so any future strategy can be judged
   by the same instrument rather than by its own self-report.
+
+---
+
+## D24 — Step 03 outcome: RLS is live, and the coach boundary is tested five phases early
+
+**Date:** 2026-08-11
+**Status:** ACTIVE
+
+**Context:** D7 chose Supabase Postgres with Drizzle retained and made **row-level security the
+authorization boundary**. Step 03 had to make that real on a hosted project.
+
+**What now exists** (project `golf-swing`, `xjcjqwcmwoouxczrrvar`, us-west-2, Postgres 17):
+
+- All four migrations applied. `users.id` is a foreign key onto `auth.users` with the default
+  dropped — the id comes from the auth system, never from the database, so it is impossible to
+  insert a user row that looks valid and can never be logged into.
+- RLS **enabled and FORCED** on all eight user-scoped tables, 16 policies. FORCE matters: without
+  it the table owner is exempt, and "it worked when I ran it as postgres" is how a missing policy
+  stays hidden.
+- `private.has_coach_access()` is `SECURITY DEFINER` with `search_path = ''` and an **internal**
+  `auth.uid()` check, so a caller can only ever ask "may *I* see this golfer", never about someone
+  else. It lives in `private` precisely so PostgREST does not expose it — confirmed by Supabase's
+  own advisor, which flags exposed definer functions and did not flag this one.
+- Supabase security advisors: **zero findings.** The one finding before this step was
+  `public.rls_auto_enable()` being EXECUTE-able by `anon`; migration 0004 revokes it.
+
+**The decision worth recording: one migration runs on both Supabase and local Docker Postgres.**
+Migration 0003 creates an `auth` schema shim, an `auth.uid()` that reads the same GUC Supabase's
+does, and the `anon`/`authenticated`/`service_role` roles — each guarded so that **nothing is
+attempted when the real ones are present**. `create table if not exists auth.users` was the first
+attempt and it fails on Supabase: CREATE TABLE IF NOT EXISTS still needs CREATE on the schema, so
+it errors before reaching the "if not exists" part.
+
+That shim is not a convenience. It is what lets the authorization boundary be **verified in CI
+with no cloud credentials**, which is the difference between a policy that is tested and one that
+is only tested where it is expensive to test.
+
+**Coach access is test-covered now, five phases before the feature.** `src/db/rls.test.ts` proves,
+against a synthetic relationship: an approved coach reads the linked golfer's swings; a pending
+request grants nothing; revocation ends access immediately; an approved coach can never *write*;
+and approval for one golfer leaks nothing about another. That last case is the mistake a policy
+written as "is this user a coach" rather than "is this user THIS golfer's coach" would make.
+
+**The suite fails rather than skips without a database.** A security test that silently skips
+still reports green, which is worse than not having it.
+
+**Deletion cascade in schema terms (D15, item 4c):**
+
+| Data | Mechanism |
+|---|---|
+| `auth.users` → `public.users` | FK `on delete cascade` |
+| `users` → `sessions`, `swings`, `coach_links` (both sides) | FK `on delete cascade` |
+| `swings` → `jobs`, `scores`, `head_markers`, `swing_stages` | FK `on delete cascade` |
+| `sessions` → `swings.session_id` | `on delete set null` — a swing outlives its session |
+| Object storage (source video, every derived artifact) | **explicit sweep required** — no FK reaches it |
+| AI conversation history | **explicit sweep**, once `ai-coach` exists |
+| Coach-authored annotations | **retained, detached from golfer identity** per D15 |
+| Backups | window-bound, not instant; stated in the privacy policy rather than over-promised |
+
+Deleting one `auth.users` row therefore removes every database trace of a golfer. **Everything
+outside Postgres needs a deliberate sweep**, and enforcement plus the retention scheduler belong
+to `production-readiness`. Every new table or bucket must declare its deletion behaviour when it
+is introduced.
+
+**Consequences and what is deliberately not done:**
+- The service-role boundary is checked by a **static** test (`src/db/service-role.test.ts`) that
+  greps the request surface for service-role credential names. It cannot prove absence — a
+  sufficiently indirect construction slips past — but it catches the realistic mistake, which is
+  someone importing the key into a route because it was convenient. A runtime check would only
+  notice after the credential is already in the request path.
+- **The hosted project has no `DATABASE_URL` in the repo and no secret manager yet.** Migrations
+  were applied through the Supabase MCP rather than `drizzle-kit migrate` against the hosted
+  database. D10's Infisical decision is unimplemented, so production migration remains a manual
+  step until it is.
+- `pnpm db:migrate`'s hardcoded `node_modules/drizzle-kit/bin.cjs` path broke under
+  `node-linker=hoisted` (D21) and is now a plain `drizzle-kit migrate`, with `.env` loaded inside
+  `drizzle.config.ts` via Node 22's built-in `process.loadEnvFile`. Still no dotenv dependency.

@@ -13,7 +13,7 @@ next, see [`../.claude/ROADMAP.md`](../.claude/ROADMAP.md).
 | | |
 |---|---|
 | Primary machine | Windows 11, repo at `C:\Users\taylo\development\golf` |
-| Phone available for testing | **Galaxy S25+**, Android 15 / One UI 7 — no iPhone on hand. A flagship, which matters for the step 02 spike (§6) |
+| Phone available for testing | **Galaxy S25+** (`SM-S936U1`), Android 16, Snapdragon 8 Elite — no iPhone on hand. A flagship, which matters for the step 02 spike (§6) |
 | LAN IP (DHCP, re-check after a router reboot) | `10.0.1.107` — `ipconfig \| grep IPv4` |
 | Analyzer Python | `services/analyzer/.venv/Scripts/python.exe` — always this interpreter, never a global `python` |
 | Postgres | Docker, port **5433** (not 5432) |
@@ -125,6 +125,18 @@ pnpm --filter mobile exec tsc --noEmit
 pnpm --filter web test:e2e                        # playwright, 1 path, headless
 ```
 
+**`pnpm --filter web test` now REQUIRES Postgres.** `src/db/rls.test.ts` is the authorization
+boundary — it proves a golfer cannot read another golfer's swing, and that an approved coach can,
+a pending one cannot, and a revoked one loses access immediately. It **fails rather than skips**
+without a database, deliberately: a security test that silently skips still reports the suite
+green, which is worse than not having it. `docker compose up -d` then
+`pnpm --filter web db:migrate`.
+
+Those tests run against **local** Postgres, not the hosted Supabase project. Migration 0003
+creates an `auth` shim and the `anon`/`authenticated`/`service_role` roles locally — each guarded
+so nothing is attempted where the real ones exist — which is what lets the boundary be verified
+with no cloud credentials.
+
 Web uses **Vitest**, mobile uses **jest-expo** — different runners because Expo's preset carries
 the React Native transform, and fighting that into Vitest bought nothing.
 
@@ -233,7 +245,7 @@ Useful keys while it runs: `r` reload · `j` open debugger · `m` toggle dev men
 through 36, NDK), JDK 17 and `adb`. An Expo/EAS account is **not** required for Android — that
 was recorded as a blocker in step 02's first pass and it was wrong.
 
-**No cable required.** The device is a **Galaxy S25+ (Android 15 / One UI 7)**, and `adb pair` is
+**No cable required.** The device is a **Galaxy S25+ (Android 16, Snapdragon 8 Elite)**, and `adb pair` is
 available here (adb 35.0.2). On the phone: *Developer options → Wireless debugging → on → Pair
 device with pairing code*, then with phone and PC on the same wifi:
 

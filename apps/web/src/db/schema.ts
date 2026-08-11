@@ -15,9 +15,11 @@ import {
  */
 
 export const users = pgTable("users", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  // Nullable: no auth provider is wired up yet (out of scope for this change — see the plan's
-  // "Explicitly out of scope"). A real auth integration fills this in without a schema change.
+  // NOT `defaultRandom()` any more. As of migration 0003 this is a foreign key onto Supabase's
+  // `auth.users` (D7 — one identity, no shadow table), so the id comes from the auth system and
+  // never from the database. A generated default would produce a row that looks valid and can
+  // never be logged into.
+  id: uuid("id").primaryKey(),
   email: text("email").unique(),
   displayName: text("display_name").notNull(),
   handedness: text("handedness", { enum: ["right", "left"] }),
@@ -172,7 +174,30 @@ export const swingStages = pgTable("swing_stages", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex("swing_stages_swing_stage").on(t.swingId, t.stage)]);
 
+/**
+ * The golfer-coach relationship, and the reason it exists this early.
+ *
+ * The coach FEATURE is five phases away in `coach-relationships`. What has to exist now is the
+ * shape the RLS policies reference, because D7 makes the database the authorization boundary and
+ * a boundary cannot be tested before the thing it depends on exists. `src/db/rls.test.ts`
+ * exercises linked, pending, revoked and cross-golfer access against these rows today.
+ *
+ * `revoked` is a real status rather than a deleted row: §24.4 requires the golfer to be able to
+ * end access, and knowing a coach *could* see a golfer's swings between two dates is worth more
+ * than a tidy table. Only the golfer may write this row — enforced in the policy, not the UI.
+ */
+export const coachLinks = pgTable("coach_links", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  golferId: uuid("golfer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  coachId: uuid("coach_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  status: text("status", { enum: ["pending", "approved", "revoked"] }).notNull().default("pending"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [uniqueIndex("coach_links_pair").on(t.golferId, t.coachId)]);
+
 export type User = typeof users.$inferSelect;
+export type CoachLinkRow = typeof coachLinks.$inferSelect;
+export type NewCoachLinkRow = typeof coachLinks.$inferInsert;
 export type NewUser = typeof users.$inferInsert;
 export type SwingRow = typeof swings.$inferSelect;
 export type NewSwingRow = typeof swings.$inferInsert;

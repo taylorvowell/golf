@@ -130,7 +130,7 @@ build and release story for every later mobile track.
 
 ## Note appended 2026-08-11 — the available Android is a flagship
 
-The device on hand is a **Samsung Galaxy S25+** (Android 15 / One UI 7). Step 2 of the `Steps`
+The device on hand is a **Samsung Galaxy S25+** (`SM-S936U1`, Android 16, Snapdragon 8 Elite `SM8750`). Step 2 of the `Steps`
 section above asks for a **mid-range** Android and explicitly says "not a flagship". That
 instruction is not satisfied by this device, and the `Steps` section is deliberately left
 unedited rather than relaxed to match what is available.

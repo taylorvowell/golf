@@ -54,6 +54,42 @@ pytest green.
 
 Next: **02 — Mobile Client Spike and Workspace**, running Android-first.
 
+## 03 — Supabase Project and Data Platform Migration 🔄 in progress
+
+**RLS is live on a real hosted project and the coach boundary is tested five phases early.**
+
+Project `golf-swing` (`xjcjqwcmwoouxczrrvar`, us-west-2, Postgres 17) — it already existed, empty.
+All four migrations applied. `users.id` is now a FK onto `auth.users` with the default dropped, so
+an id comes from the auth system and never from the database (D7). RLS **enabled and forced** on
+all eight user-scoped tables, 16 policies. Supabase security advisors: **zero findings** — the one
+finding before this step, `public.rls_auto_enable()` being callable by `anon`, is revoked in 0004.
+
+**The call worth knowing about: one migration runs on both Supabase and local Postgres.** 0003
+shims `auth`, `auth.uid()` and the three request roles, each guarded so nothing is attempted where
+the real ones exist. That is what lets the authorization boundary be proven **in CI with no cloud
+credentials** rather than only where it is expensive to test. (`create table if not exists
+auth.users` was the first attempt and fails on Supabase — it still needs CREATE on the schema.)
+
+**11 RLS tests, covering the coach feature that is five phases away**: approved coach reads;
+pending grants nothing; revoked ends access immediately; an approved coach can never write; and
+approval for one golfer leaks nothing about another — the mistake a policy written as "is this
+user a coach" instead of "is this user THIS golfer's coach" would make. The suite **fails rather
+than skips** without a database.
+
+Also: the service-role boundary has a static test over the request surface; the deletion cascade
+is mapped in D24 with the storage-side sweeps enumerated as explicit work; and `db:migrate`'s
+hardcoded drizzle-kit path — broken by D21's move to `node-linker=hoisted` — is now a plain
+`drizzle-kit migrate`.
+
+Oracles: web tsc/lint clean, 84 web tests, 51 mobile, analyzer pytest green.
+
+**Not done, and why the step stays open:** D10 wants a Supabase project **per environment** and
+only one exists — creating preview and production costs money and is Taylor's call. And the
+analyzer's service role is not yet scoped to specific tables, because what it actually needs is
+defined by the `analyzer-service` track. Decisions in D24.
+
+---
+
 ## 02 — Mobile Client Spike and Workspace 🔄 in progress
 
 Workspace done, measurements pending — they need hands on a device.
