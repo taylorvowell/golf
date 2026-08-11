@@ -463,6 +463,8 @@ D34–D39 carry the reasoning; this is the standing summary.
 | Capability | Result | Reach it with |
 |---|---|---|
 | **Overlay locked to the presented frame** | **99.2% exactly locked** (n=250), ~49 ms of lead to draw in | `modules/frame-clock` — `expo-video` exposes no frame callback |
+| **Frame-exact seeking** | **100% exact** once the target became `frame / fps` | `frame-clock`; media3 resolves seeks FORWARD, so the web rule is wrong here (D40) |
+| **Seeking over HTTP** | **identical to a bundled file** — the network adds zero error | any range-capable origin |
 | **True high-frame-rate capture** | **1080p 231 fps** (240 requested), **1080p 119 fps** (120 requested) | `modules/high-speed-camera` — Camera2 constrained-high-speed |
 | Sustained 60 fps capture | 59.5–60.0 fps at 1080p | either path |
 | Artifact parse on device | 13.7 MB `analysis.json` parses in **199 ms** | — |
@@ -488,8 +490,10 @@ D34–D39 carry the reasoning; this is the standing summary.
 
 ### Known limits and open items
 
-- **Seek lands one frame late, consistently** (p50 1, max 1, n=128, `SeekParameters.EXACT`). A
-  constant off-by-one, so `mobile-player` compensates and verifies rather than works around.
+- **Never port the web player's `(frame + 0.5) / fps` seek rule to Android.** HTML video seeks to
+  the frame *containing* a time; media3 resolves forward to the next boundary. The conventions are
+  opposite and the web rule costs exactly one frame on every seek (D40).
+
 - **231 fps against a requested 240** is 3.6% short (~50 frames over 5.8 s) — probably encoder ramp
   or the stop edge, not a rate cap. Needs one look before `in-app-capture` relies on an exact rate.
 - **Scrubbing is unmeasured.** Four instrument revisions could not measure it honestly; a seeked
