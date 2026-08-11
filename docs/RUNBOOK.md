@@ -220,6 +220,25 @@ is always two commands. Look at the diff before accepting it: a snapshot only pr
 
 ## 6. Mobile app — running the spike on your Android
 
+### First: ask the DEVICE what is installed, never the repo
+
+There are **two** SwingSage surfaces reachable from the phone — the web player over LAN (§3) and
+the native dev build — and the repository cannot tell you which is installed or running. Answer
+that from the device, in three commands:
+
+```bash
+adb devices -l                                   # wireless debugging shows up as adb-tls-connect
+adb shell pm list packages | grep swingsage      # com.swingsage.spike = the native dev build
+adb shell pidof com.swingsage.spike              # a pid means it is running right now
+adb shell dumpsys power | grep mWakefulness      # "Dozing" = screen asleep, screenshots come back black
+adb exec-out screencap -p > screen.png           # look at it rather than inferring
+```
+
+**This section exists because the question was once answered from `apps/mobile/`'s contents** —
+"it's a spike harness, so there is no mobile app" — while a working dev build was installed and in
+use on the S25+. The repo describes what the product *is*; only the device knows what is
+*installed*. The `agent-device` and `dogfood` skills automate the rest of this loop.
+
 `apps/mobile/` exists as of spine step 02: **Expo 57 / React Native 0.86 / React 19**, chosen in
 `DECISIONS.md` D5. Right now it is a **spike harness, not the product** — three probe cards for
 the questions that decide whether the framework choice holds.

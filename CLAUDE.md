@@ -263,7 +263,13 @@ looked healthy and were wrong. Build the debug view when the work starts, not af
 - **Verify on the Android phone whenever a change is visible.** There is an Android device and
   no iPhone; anything renderable should be checked there, and any instructions handed over
   should be concrete enough to follow without re-deriving them. See
-  [`docs/RUNBOOK.md`](docs/RUNBOOK.md) §3.
+  [`docs/RUNBOOK.md`](docs/RUNBOOK.md) §3 (web over LAN) and §6 (the native dev build).
+- **"What can I look at right now?" is a question about the RUNNING SYSTEM, not the repository.**
+  There are two SwingSage surfaces on the phone — the web player over LAN and the installed native
+  dev build — and source code knows about neither's state. Ask the device (`adb devices -l`,
+  `pm list packages | grep swingsage`, `pidof`, `screencap`), curl the route, query the database.
+  Answering "there is no mobile app" from `apps/mobile/` containing a spike harness, while that
+  spike was installed and in use on the S25+, is a mistake this project has already made once.
 - **Write down facts as they arrive.** A device, account, version, network detail or constraint
   mentioned in passing goes into the repo (RUNBOOK, step file, DECISIONS) in the same session —
   not just into the reply.
