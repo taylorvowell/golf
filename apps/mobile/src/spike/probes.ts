@@ -28,6 +28,14 @@ export interface Probe {
   measurement?: Measurement;
   /** Free-form supporting numbers (p50/p95/max, sample counts) shown under the verdict. */
   detail?: string;
+  /**
+   * Already answered on real hardware, with the answer recorded in `docs/DECISIONS.md`.
+   *
+   * Carried in the probe list rather than in a comment so the SCREEN can tell the difference
+   * between "not run yet" and "run, answered, and settled". A spike whose cards all read NOT RUN
+   * after the work is done is worse than useless — it hides the one question still open.
+   */
+  settled?: { verdict: string; decision: string };
 }
 
 export const PROBES: Probe[] = [
@@ -41,6 +49,7 @@ export const PROBES: Probe[] = [
       "if it cannot be done here, the framework choice is wrong.",
     status: "pending",
     measures: "drift in frames during scrub — target exactly 0",
+    settled: { verdict: "99.2% frame-locked, ~49ms draw budget", decision: "D36" },
   },
   {
     id: "overlay-ceiling",
@@ -56,6 +65,7 @@ export const PROBES: Probe[] = [
       "for the same reason: debugging both at once is miserable.",
     status: "pending",
     measures: "% of frames NOT exactly locked — target 0",
+    settled: { verdict: "99.0% — React is not the bottleneck", decision: "D36" },
   },
   {
     id: "seek",
@@ -66,6 +76,7 @@ export const PROBES: Probe[] = [
       "Stage 0 already forces GOP 10, which bounds that to 9 frames.",
     status: "pending",
     measures: "requested frame minus presented frame — target exactly 0",
+    settled: { verdict: "1 frame late, consistently (n=128)", decision: "D36" },
   },
   {
     id: "scrub",
@@ -77,6 +88,7 @@ export const PROBES: Probe[] = [
       "cadence playback establishes. Measuring only playback tests the easy half of the problem.",
     status: "pending",
     measures: "drift in frames while seeking rapidly — target exactly 0",
+    settled: { verdict: "unmeasurable by closed loop — reassigned to measure_overlay.py", decision: "D36" },
   },
   {
     id: "scrub-draw-first",
@@ -90,6 +102,7 @@ export const PROBES: Probe[] = [
       "orders, one for playback and one for scrub, and that is a design input rather than a bug.",
     status: "pending",
     measures: "% of frames NOT exactly locked — target 0",
+    settled: { verdict: "unmeasurable — no lead exists on the seek path", decision: "D36" },
   },
   {
     id: "remote-seek",
@@ -113,6 +126,7 @@ export const PROBES: Probe[] = [
       "so it has to be measured before the schema is authored rather than after.",
     status: "pending",
     measures: "download + parse milliseconds for the largest fixture",
+    settled: { verdict: "13.7MB parses in 199ms; transfer is the cost, not parsing", decision: "D37" },
   },
   {
     id: "high-speed",
@@ -126,6 +140,7 @@ export const PROBES: Probe[] = [
       "product, so it is worth its own native module rather than an accepted limitation.",
     status: "pending",
     measures: "achieved fps from the RECORDED FILE at 120 and 240",
+    settled: { verdict: "1080p @ 231fps via Camera2 constrained high-speed", decision: "D39" },
   },
 ];
 
@@ -144,6 +159,11 @@ export function unsupportedClaims(probes: readonly Probe[]): string[] {
 /** True once every probe has been answered by a real measurement — the step's exit condition. */
 export function spikeComplete(probes: readonly Probe[]): boolean {
   return probes.every((p) => (p.status === "pass" || p.status === "fail") && !!p.measurement);
+}
+
+/** The probes still genuinely open — everything without a recorded answer. */
+export function outstanding(probes: readonly Probe[]): Probe[] {
+  return probes.filter((p) => !p.settled);
 }
 
 /* ------------------------------------------------------------------------------------------ */

@@ -18,6 +18,7 @@ import type {
 import { ProbeCard } from "./ProbeCard";
 import {
   PROBES,
+  outstanding,
   judgeOverlayDrift,
   judgeArtifact,
   judgeSeekError,
@@ -644,7 +645,12 @@ export default function SpikeScreen() {
           ) : null}
         </View>
 
-        {probes.map((p) => (
+        {/*
+          * Only what is still OPEN gets a card. Everything already answered collapses to one line
+          * below, because a screen full of NOT RUN cards after the work is finished hides the one
+          * question that still matters — which is exactly what happened.
+          */}
+        {outstanding(probes).map((p) => (
           <ProbeCard
             key={p.id}
             probe={p}
@@ -676,6 +682,15 @@ export default function SpikeScreen() {
             ) : null}
           </ProbeCard>
         ))}
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Already answered — see docs/DECISIONS.md</Text>
+          {probes.filter((p) => p.settled).map((p) => (
+            <Text key={p.id} style={styles.detail}>
+              ✓ {p.title.split("·")[1]?.trim() ?? p.title} — {p.settled!.verdict} ({p.settled!.decision})
+            </Text>
+          ))}
+        </View>
 
         <Text style={styles.footer}>
           Probe 3 needs a camera path that can request 60fps; it is third because probes 1 and 2
