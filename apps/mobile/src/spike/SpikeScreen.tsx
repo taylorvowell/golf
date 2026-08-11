@@ -25,6 +25,7 @@ import {
   type ProbeStatus,
 } from "./probes";
 import { CaptureProbe } from "./CaptureProbe";
+import { HighSpeedProbe } from "./HighSpeedProbe";
 import { recordResult } from "./record";
 import { Skeleton } from "./Skeleton";
 import { buildIndex, frameAt, type PoseBundle } from "./pose";
@@ -323,6 +324,26 @@ export default function SpikeScreen() {
     });
   }, [deviceName, setProbe]);
 
+  const onHighSpeedRecorded = useCallback((info: {
+    path: string; requestedFps: number; grantedRange: string;
+  }) => {
+    setProbe(`high-speed@${info.requestedFps}`, {
+      status: "fail",
+      measurement: { value: info.requestedFps, device: deviceName },
+      detail:
+        `CameraX granted ${info.grantedRange} for a requested ${info.requestedFps} -> ${info.path}` +
+        ` · run: node scripts/measure-capture.mjs --expect ${info.requestedFps} ${info.path}`,
+    });
+  }, [deviceName, setProbe]);
+
+  const onHighSpeedError = useCallback((message: string) => {
+    setProbe("high-speed", {
+      status: "fail",
+      measurement: { value: 0, device: deviceName },
+      detail: `high-speed refused: ${message}`,
+    });
+  }, [deviceName, setProbe]);
+
   const onCaptureError = useCallback((message: string) => {
     setProbe("capture", {
       status: "fail",
@@ -611,6 +632,13 @@ export default function SpikeScreen() {
             }
             disabled={busy || !clipUri}
           >
+            {p.id === "high-speed" ? (
+              <HighSpeedProbe
+                onRecorded={onHighSpeedRecorded}
+                onError={onHighSpeedError}
+                disabled={busy}
+              />
+            ) : null}
             {p.id === "capture" ? (
               <CaptureProbe
                 onRecorded={onCaptureRecorded}

@@ -1,0 +1,36 @@
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+apply plugin: 'maven-publish'
+
+group = 'expo.modules.highspeedcamera'
+version = '0.1.0'
+
+def expoModulesCorePlugin = new File(project(":expo-modules-core").projectDir.absolutePath, "ExpoModulesCorePlugin.gradle")
+apply from: expoModulesCorePlugin
+applyKotlinExpoModulesCorePlugin()
+useCoreDependencies()
+useExpoPublishing()
+
+android {
+  namespace "expo.modules.highspeedcamera"
+  defaultConfig {
+    minSdkVersion 24
+    // CameraX high-speed sessions are Camera2 CONSTRAINED_HIGH_SPEED under the hood, which needs
+    // API 23+; 24 matches the rest of the app.
+  }
+  compileSdk 36
+  compileOptions {
+    sourceCompatibility JavaVersion.VERSION_17
+    targetCompatibility JavaVersion.VERSION_17
+  }
+  kotlinOptions { jvmTarget = "17" }
+}
+
+dependencies {
+  // 1.5.x is the first release with the high-speed API (HighSpeedVideoSessionConfig).
+  def cameraxVersion = "1.5.1"
+  implementation "androidx.camera:camera-core:$cameraxVersion"
+  implementation "androidx.camera:camera-camera2:$cameraxVersion"
+  implementation "androidx.camera:camera-lifecycle:$cameraxVersion"
+  implementation "androidx.camera:camera-video:$cameraxVersion"
+}

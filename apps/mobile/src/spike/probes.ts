@@ -115,6 +115,19 @@ export const PROBES: Probe[] = [
     measures: "download + parse milliseconds for the largest fixture",
   },
   {
+    id: "high-speed",
+    title: "3b · TRUE high-frame-rate capture (CameraX)",
+    question: "Can we actually get 120 or 240fps out of this device?",
+    why:
+      "D37: the S25+ advertises 1080p at 120 AND 240, but VisionCamera v5 opens an ordinary " +
+      "capture session and returned 60 for every request without an error. Android exposes those " +
+      "rates only through a constrained high-speed session, which CameraX 1.5 wraps. Impact is " +
+      "over inside one frame at 60fps — this is the highest-leverage capture decision in the " +
+      "product, so it is worth its own native module rather than an accepted limitation.",
+    status: "pending",
+    measures: "achieved fps from the RECORDED FILE at 120 and 240",
+  },
+  {
     id: "capture",
     title: "3 · Sustained 60fps capture",
     question: "Does the device actually record at the rate it reports?",

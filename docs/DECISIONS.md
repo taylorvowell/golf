@@ -1867,3 +1867,49 @@ is not, because it puts a launch-blocking capability outside our control.
 60fps. That is part of why `analysis.json` carries no impact face angle, why the club detector is
 weakest exactly where the swing is fastest, and why the trace refuses to draw through the strike on
 `pro_2`. 240fps eases all three at once. It is the highest-leverage capture decision in the product.
+
+---
+
+## D38 — 120/240 is real in Camera2 and invisible to every high-level API: only a direct constrained-high-speed session can reach it
+
+**Date:** 2026-08-11
+**Status:** ACTIVE — closes "is there a way around this?" from D37
+
+Three layers, and they disagree:
+
+| Layer | Says | Evidence |
+|---|---|---|
+| **Camera2 characteristics** | 1080p **120** and **240** available | `android.control.availableHighSpeedVideoConfigurations` lists `1920×1080 30–120`, `1920×1080 120`, `1920×1080 30–240`, `1920×1080 240`; capability set includes `CONSTRAINED_HIGH_SPEED_VIDEO` |
+| **CamcorderProfile** | nothing | `dumpsys media.profiles` and the vendor `media_profiles*.xml` contain **zero** high-speed entries |
+| **CameraX 1.5** | unsupported | `Recorder.getHighSpeedVideoCapabilities()` returns **null** → probe 3b logged `{"supported":false,"ranges":[]}` |
+
+**CameraX gates high-speed on `CamcorderProfile`, not on Camera2.** Google's own note says device
+support "relies on CamcorderProfile entries validated by Android CTS". This Samsung exposes the
+capability through Camera2 and publishes no CamcorderProfile high-speed profile for it, so every
+API layered on CamcorderProfile — CameraX 1.5 included — correctly concludes there is none.
+
+**So the option list is now exhausted down to one:**
+
+- ~~`react-native-vision-camera` v5~~ — ordinary `CameraCaptureSession`; returned 60 for every request (D37)
+- ~~CameraX 1.5 high-speed~~ — refuses outright on this device, for the reason above
+- **Camera2 `createConstrainedHighSpeedCaptureSession` directly** — the only API that reads
+  `availableHighSpeedVideoConfigurations`, and therefore the only one that can see what the sensor
+  actually offers. It is what Samsung's own slow-motion mode uses.
+- Accept 60.
+
+**The refusal is worth as much as a success.** CameraX declining is the correct behaviour and the
+opposite of D37's failure: VisionCamera accepted 240 and silently delivered 60, while CameraX said
+no. A library that refuses is safe to build on; one that quietly degrades is not, and that
+distinction now has evidence behind it rather than being a preference.
+
+**Decision:** build the Camera2 constrained-high-speed path in `in-app-capture`, not in the spike.
+It is a real component — `CameraDevice` + `createConstrainedHighSpeedCaptureSession` +
+`createHighSpeedRequestList` + `MediaRecorder`, a few hundred lines — and it is capture
+infrastructure rather than a measurement. The spike has done its job: it established that the
+hardware can do 240, that no off-the-shelf library will give it to us, and exactly which API must
+be used. `modules/high-speed-camera` stays as the seam that path will fill.
+
+**Cost of not doing it, restated because it is easy to defer:** impact is over inside a single
+frame at 60fps. That is why `analysis.json` carries no impact face angle, why the club detector is
+weakest exactly where the swing is fastest, and why the trace refuses to draw through the strike on
+`pro_2`. Every one of those eases at 240.

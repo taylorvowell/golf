@@ -41,6 +41,10 @@ function thresholdFor(probeId: string): number | null {
   if (probeId === "seek" || probeId === "remote-seek") return THRESHOLDS.seekErrorMax;
   if (probeId === "artifact-weight") return ARTIFACT_PARSE_BUDGET_MS;
   // capture@60 / capture@120 / capture@240 — each judged against its own request.
+  if (probeId.startsWith("high-speed")) {
+    const at = probeId.indexOf("@");
+    return at > -1 ? Number(probeId.slice(at + 1)) : 0;
+  }
   if (probeId.startsWith("capture")) {
     const at = probeId.indexOf("@");
     return at > -1 ? Number(probeId.slice(at + 1)) : THRESHOLDS.captureMinFps;

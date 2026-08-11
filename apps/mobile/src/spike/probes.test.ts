@@ -39,7 +39,7 @@ describe("probe definitions", () => {
     // "our renderer is too slow". It sits directly after the probe it diagnoses.
     expect(PROBES.map((p) => p.id)).toEqual([
       "overlay-sync", "overlay-ceiling", "seek", "scrub", "scrub-draw-first",
-      "remote-seek", "artifact-weight", "capture",
+      "remote-seek", "artifact-weight", "high-speed", "capture",
     ]);
   });
 
