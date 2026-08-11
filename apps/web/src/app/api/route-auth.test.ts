@@ -19,7 +19,7 @@ import { describe, expect, it } from "vitest";
 const API_DIR = join(process.cwd(), "src", "app", "api");
 
 /** Names that constitute resolving identity. Kept explicit so a lookalike does not satisfy it. */
-const GUARDS = ["requireSwingAccess", "requireUserIdOrNull", "requireUserId"];
+const GUARDS = ["requireViewAccess", "requireUserIdOrNull", "requireUserId"];
 
 function routeFiles(dir: string): string[] {
   let out: string[] = [];
@@ -56,16 +56,17 @@ describe("API route authentication", () => {
 
   it("checks ownership, not merely sign-in, on swing-scoped routes", () => {
     // `[id]` routes take a swing id from the URL. Knowing that a caller is signed in says nothing
-    // about whether the swing is theirs, so these need the ownership check specifically.
+    // about whether the swing is theirs, so these need the ownership check specifically —
+    // `requireViewAccess`, which checks ownership AND resolves which view is being asked for.
     const weak = files
       .filter((f) => f.includes(`[id]`))
-      .filter((f) => !readFileSync(f, "utf8").includes("requireSwingAccess"))
+      .filter((f) => !readFileSync(f, "utf8").includes("requireViewAccess"))
       .map((f) => f.replace(process.cwd(), "."));
 
     expect(
       weak,
       "These routes take a swing id but only check that SOMEONE is signed in. Any account could " +
-        "read any swing by id. Use requireSwingAccess.",
+        "read any swing by id. Use requireViewAccess.",
     ).toEqual([]);
   });
 });

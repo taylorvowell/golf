@@ -1,14 +1,11 @@
 import { isStage, listStages, setStage } from "@/db/stages";
-import { requireSwingAccess } from "@/lib/auth";
-
-/** Same guard the other id-off-the-URL routes apply. See `markers/route.ts` for why it is
- * repeated rather than shared. */
-function safeId(id: string): string | null {
-  return /^[A-Za-z0-9._-]+$/.test(id) ? id : null;
-}
+import { requireViewAccess, viewParam } from "@/lib/auth";
 
 /**
- * Hand-corrected swing-stage keyframes for one swing.
+ * Hand-corrected swing-stage keyframes for one swing VIEW.
+ *
+ * `?view=dtl|face_on` selects the camera, defaulting to the swing's primary view — a stage mark
+ * is a frame number, so it belongs to one video (migration 0006).
  *
  *   GET -> { stages: [{stage, frame}, ...] } in swing order
  *   PUT { stage, frame }        -> pins that stage to that frame, releasing whatever held it
@@ -18,18 +15,16 @@ function safeId(id: string): string | null {
  * choice rather than a drag that emits a position per pointer move, so there is nothing to
  * coalesce and no reason to make the user press save.
  */
-export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  const swingId = safeId(id);
-  if (!swingId) return Response.json({ error: "bad id" }, { status: 400 });
-  const stages = await listStages(swingId);
+  const access = await requireViewAccess(id, viewParam(req));
+  if ("error" in access) return access.error;
+  const stages = await listStages(access.viewId);
   return Response.json({ stages }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  const swingId = safeId(id);
-  if (!swingId) return Response.json({ error: "bad id" }, { status: 400 });
 
   let body: { stage?: unknown; frame?: unknown };
   try {
@@ -48,12 +43,11 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
 
   // Ownership, not merely sign-in. These write to a swing named in the URL, so checking only
   // that SOMEONE is signed in would let any account edit any swing's corrections.
-  const access = await requireSwingAccess(swingId);
+  const access = await requireViewAccess(id, viewParam(req));
   if ("error" in access) return access.error;
-  const { userId } = access;
   try {
-    await setStage(swingId, userId, stage, frame);
-    return Response.json({ stages: await listStages(swingId) });
+    await setStage(access.viewId, access.userId, stage, frame);
+    return Response.json({ stages: await listStages(access.viewId) });
   } catch (e) {
     return Response.json({ error: (e as Error).message }, { status: 404 });
   }

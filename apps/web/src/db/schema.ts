@@ -1,5 +1,6 @@
 import {
   pgTable, text, integer, real, timestamp, date, jsonb, uuid, uniqueIndex, boolean,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -64,22 +65,34 @@ export const sessions = pgTable("sessions", {
   notes: text("notes"),
   /** §8 — what the golfer came to work on. */
   goal: text("goal"),
-  /** The swing that represents this session in the log. */
-  representativeSwingId: text("representative_swing_id"),
+  /**
+   * The swing that represents this session in the log. `set null`, never cascade: D29 makes a
+   * session an organizing layer OVER swings, not an owner of them, so deleting a session must
+   * never take a swing with it — the single most likely destructive mistake in the swing log.
+   * The circular reference (swings.sessionId points back here) is why this needs the explicit
+   * return type; Drizzle cannot infer it.
+   */
+  representativeSwingId: uuid("representative_swing_id")
+    .references((): AnyPgColumn => swings.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
 /**
- * `id` is `text`, not `uuid` — it matches the analyzer's `out/<swingId>/` folder name
- * (`swings.ts`'s `safeId()`), so a swing's DB row and its on-disk artifact share one id with no
- * translation table between them.
+ * The SHOT: one golfer, one club, one moment. Not one video — that is `swingViews`.
+ *
+ * `id` was `text` and was literally the analyzer's `out/<stem>/` folder name, which coupled the
+ * database key to local disk layout and made a swing incapable of holding a second camera. As of
+ * migration 0006 it is a uuid the database mints, and the folder name lives on the view as
+ * `mediaKey`, where a storage key belongs.
+ *
+ * What is NOT here is as deliberate as what is: no fps, no frame count, no video dimensions, no
+ * per-analysis status. Two phones do not agree on any of them, so they are per-view facts.
  */
 export const swings = pgTable("swings", {
-  id: text("id").primaryKey(),
+  id: uuid("id").primaryKey().defaultRandom(),
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   sessionId: uuid("session_id").references(() => sessions.id, { onDelete: "set null" }),
 
-  view: text("view", { enum: ["dtl", "face_on"] }).notNull(),
   /**
    * Legacy free-text club. `clubId` supersedes it when set; kept because the ten analysed
    * fixtures carry a typed-in name and no inventory row, and dropping it would lose that.
@@ -91,10 +104,62 @@ export const swings = pgTable("swings", {
   handedness: text("handedness", { enum: ["right", "left"] }).notNull(),
   notes: text("notes"),
 
-  // Backend-agnostic on purpose: today this is `out/<id>` under SWINGSAGE_MEDIA_ROOT (local
-  // disk). Swapping to an S3-compatible object key later is a value change here, not a schema
-  // migration's "what this does not change" section.
-  mediaPath: text("media_path").notNull(),
+  // Denormalized from the PRIMARY view's `scores` row so the swing log can sort/filter without a
+  // join on the hot path. `scores.viewId` stays the source of truth for the full scorecard.
+  overallScore: real("overall_score"),
+  band: text("band"),
+  scoringModelVersion: text("scoring_model_version"),
+
+  /** §7.3 organization — what the swing log filters and sorts on. */
+  favourite: boolean("favourite").notNull().default(false),
+  tags: text("tags").array().notNull().default([]),
+  /** §7.2 — set when a coach has reviewed it, so "unreviewed" is a real filter. */
+  coachReviewedAt: timestamp("coach_reviewed_at", { withTimezone: true }),
+
+  /**
+   * Set on the tour-quality model swings bundled with the app (§20), null on a golfer's own.
+   *
+   * A property of the row, not of its id. It used to be inferred by matching the id against a
+   * hardcoded `["perfect", "pro_2"]`, which only worked while an id was a folder name.
+   * `comparison-and-reference` builds the real library on this column.
+   */
+  referenceLabel: text("reference_label"),
+
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * One camera's recording of a swing — §7.1's "down-the-line, face-on, or both", and what §12's
+ * multi-phone capture writes two of.
+ *
+ * This owns everything that is a fact about a VIDEO rather than about the shot: the clip, its
+ * frame geometry, its analysis artifact and its score. Everything frame-indexed in the schema
+ * (`jobs`, `scores`, `headMarkers`, `swingStages`) hangs off a view for that reason — a frame
+ * number is meaningless without knowing which video counts it, and two cameras never agree.
+ *
+ * At most one view per (swing, view type), so "the face-on view of this swing" is well defined.
+ */
+export const swingViews = pgTable("swing_views", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  swingId: uuid("swing_id").notNull().references(() => swings.id, { onDelete: "cascade" }),
+  view: text("view", { enum: ["dtl", "face_on"] }).notNull(),
+
+  /**
+   * The normalized clip's storage KEY — never a path. No root and no separators of its own; the
+   * app validates it and joins it to `MEDIA_ROOT` (`lib/swings.ts:swingFile`). Today it is the
+   * analyzer's `out/<stem>` folder name; step 09 makes it an object-storage prefix by changing
+   * values, not columns.
+   */
+  mediaKey: text("media_key").notNull(),
+
+  /**
+   * D29 — the untrimmed original, kept 30 days after a successful analysis so a bad trim is
+   * recoverable, then dropped. Its own key and expiry because it has its own lifecycle: the
+   * swing stays valid after the raw is gone, and the UI must say so rather than offering a
+   * re-trim that cannot work.
+   */
+  rawMediaKey: text("raw_media_key"),
+  rawExpiresAt: timestamp("raw_expires_at", { withTimezone: true }),
 
   fps: integer("fps"),
   frameCount: integer("frame_count"),
@@ -106,23 +171,21 @@ export const swings = pgTable("swings", {
   }).notNull().default("uploaded"),
   failureReason: text("failure_reason"),
 
-  // Denormalized from the latest `scores` row so the swing list can sort/filter without a join
-  // on the hot path. `scores.swingId` stays the source of truth for the full scorecard.
+  /** Which analyzer produced this view's artifact, distinct from `scoringModelVersion`. */
+  analysisVersion: text("analysis_version"),
+  scoringModelVersion: text("scoring_model_version"),
   overallScore: real("overall_score"),
   band: text("band"),
-  scoringModelVersion: text("scoring_model_version"),
 
-  /** §7.3 organization — what the swing log filters and sorts on. */
-  favourite: boolean("favourite").notNull().default(false),
-  tags: text("tags").array().notNull().default([]),
-  /** §7.2 — set when a coach has reviewed it, so "unreviewed" is a real filter. */
-  coachReviewedAt: timestamp("coach_reviewed_at", { withTimezone: true }),
-  /** Which analyzer produced the current artifact, distinct from scoringModelVersion. */
-  analysisVersion: text("analysis_version"),
+  /** The view the player opens by default and whose score rolls up to the swing. At most one. */
+  isPrimary: boolean("is_primary").notNull().default(false),
 
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   analyzedAt: timestamp("analyzed_at", { withTimezone: true }),
-});
+}, (t) => [
+  uniqueIndex("swing_views_swing_view").on(t.swingId, t.view),
+  uniqueIndex("swing_views_media_key").on(t.mediaKey),
+]);
 
 /**
  * Replaces the in-memory `Map<string, Job>` in `lib/jobs.ts` — same the architecture spec protocol (POST
@@ -131,7 +194,8 @@ export const swings = pgTable("swings", {
  */
 export const jobs = pgTable("jobs", {
   id: text("id").primaryKey(),
-  swingId: text("swing_id").notNull().references(() => swings.id, { onDelete: "cascade" }),
+  /** A job runs the analyzer over ONE clip, so it belongs to a view, not to the swing. */
+  viewId: uuid("view_id").notNull().references(() => swingViews.id, { onDelete: "cascade" }),
   type: text("type", { enum: ["analyze", "reanalyze"] }).notNull(),
   status: text("status", { enum: ["queued", "running", "done", "failed"] }).notNull(),
   stage: text("stage").notNull(),
@@ -153,7 +217,8 @@ export const jobs = pgTable("jobs", {
  */
 export const scores = pgTable("scores", {
   id: uuid("id").primaryKey().defaultRandom(),
-  swingId: text("swing_id").notNull().unique().references(() => swings.id, { onDelete: "cascade" }),
+  /** A scorecard is computed from ONE `analysis.json`, which belongs to one view. */
+  viewId: uuid("view_id").notNull().unique().references(() => swingViews.id, { onDelete: "cascade" }),
   scoringModelVersion: text("scoring_model_version").notNull(),
 
   overall: real("overall").notNull(),
@@ -191,13 +256,14 @@ export const scores = pgTable("scores", {
  */
 export const headMarkers = pgTable("head_markers", {
   id: uuid("id").primaryKey().defaultRandom(),
-  swingId: text("swing_id").notNull().references(() => swings.id, { onDelete: "cascade" }),
+  /** Frame-indexed, so it belongs to the VIEW — two cameras number the same swing differently. */
+  viewId: uuid("view_id").notNull().references(() => swingViews.id, { onDelete: "cascade" }),
   frame: integer("frame").notNull(),
   x: real("x").notNull(),
   y: real("y").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [uniqueIndex("head_markers_swing_frame").on(t.swingId, t.frame)]);
+}, (t) => [uniqueIndex("head_markers_view_frame").on(t.viewId, t.frame)]);
 
 /**
  * Hand-corrected swing-stage keyframes: "this frame is the top", "this one is impact".
@@ -213,14 +279,16 @@ export const headMarkers = pgTable("head_markers", {
  */
 export const swingStages = pgTable("swing_stages", {
   id: uuid("id").primaryKey().defaultRandom(),
-  swingId: text("swing_id").notNull().references(() => swings.id, { onDelete: "cascade" }),
+  /** Frame-indexed, so it belongs to the VIEW — the top of the backswing is a different frame
+   *  number in a face-on clip than in the down-the-line one shot beside it. */
+  viewId: uuid("view_id").notNull().references(() => swingViews.id, { onDelete: "cascade" }),
   /** One of `analysis.json`'s eight event names — `address`, `top`, `impact`, … — so an override
    * lands on the same vocabulary the analyzer and the scorecard already use. */
   stage: text("stage").notNull(),
   frame: integer("frame").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [uniqueIndex("swing_stages_swing_stage").on(t.swingId, t.stage)]);
+}, (t) => [uniqueIndex("swing_stages_view_stage").on(t.viewId, t.stage)]);
 
 /**
  * The golfer-coach relationship, and the reason it exists this early.
@@ -251,6 +319,10 @@ export type NewCoachLinkRow = typeof coachLinks.$inferInsert;
 export type NewUser = typeof users.$inferInsert;
 export type SwingRow = typeof swings.$inferSelect;
 export type NewSwingRow = typeof swings.$inferInsert;
+export type SwingViewRow = typeof swingViews.$inferSelect;
+export type NewSwingViewRow = typeof swingViews.$inferInsert;
+/** dtl | face_on — the camera angles §7.1 allows a swing to hold. */
+export type ViewType = SwingViewRow["view"];
 export type JobRow = typeof jobs.$inferSelect;
 export type NewJobRow = typeof jobs.$inferInsert;
 export type ScoreRow = typeof scores.$inferSelect;

@@ -1263,3 +1263,70 @@ rare, user-correctable mistake.
   (§30.1), which reuses the same mechanism on a schedule rather than an event.
 - A swing whose raw has expired must say so rather than offering a re-trim that cannot work.
 - Deleting a session is a safe operation by construction, which is worth keeping true.
+
+---
+
+## D30 — A swing owns views; identity is a uuid and a storage key is never an address
+
+**Date:** 2026-08-11
+**Status:** ACTIVE
+
+**Context:** D28 split step 06 and left the hard half: §7.1's restructure, where a Swing holds a
+down-the-line view, a face-on view, or both, each with its own video and its own analysis
+artifact. Before this, one `swings` row *was* one video, and `swings.id` *was* the analyzer's
+`out/<stem>/` folder name — so the database key was a disk path, and a second camera was not
+representable at all. Four later tracks (`mobile-player`, `swing-ingest`, `dual-device-capture`,
+`comparison-and-reference`) are blocked on this.
+
+**Decision:** migration 0006 introduces `swing_views` and moves swing identity to a uuid.
+
+- **A `swings` row is the shot** — one golfer, one club, one moment. It keeps owner, session,
+  club, ball, handedness, notes, tags, favourite, coach-reviewed and the primary view's
+  denormalized score.
+- **A `swing_views` row is one camera's recording of it** — the clip, its storage key, its raw
+  original (D29), its frame geometry, its status, its analysis version and its own score. At most
+  one view per (swing, view type), so "the face-on view of this swing" is a well-defined thing.
+- **Everything frame-indexed moved onto the view**: `jobs`, `scores`, `head_markers`,
+  `swing_stages`. This is the load-bearing part. A frame number means nothing without the video
+  that counts it, and two cameras on one swing never agree — leaving these on the swing would let
+  the second view silently overwrite the first's hand-placed corrections.
+- **`media_key` is a key, not a path.** No root, no separators, validated before it is joined to
+  `MEDIA_ROOT`. Step 09 turns it into an object-storage prefix by changing values, not columns.
+  The old `swings.media_path` held an absolute machine-local path and is gone.
+
+**Three consequences worth writing down, because each was a decision:**
+
+- **Routes still take a swing id, plus `?view=dtl|face_on`.** A golfer's URL names a swing, not a
+  camera. `db/views.ts:resolveView` is the one place that turns the pair into a view, and it
+  falls back to the primary view, then to the oldest — a swing whose `is_primary` flag was
+  somehow never set must still open rather than 404 with its video sitting right there. An
+  unrecognised view type is a **400**, not a silent default: quietly serving down-the-line for
+  `?view=overhead` would look like the parameter worked. A pre-0006 bookmark
+  (`/swing/perfect`) is a 404 rather than a 500, because a uuid column cannot be compared against
+  a folder name.
+- **The swing-level score is the primary view's, stated rather than averaged.** Averaging two
+  cameras' scores would invent a number neither analysis produced — the same reason this project
+  refuses to state a face-angle degree from video.
+- **"Is this a bundled reference swing?" became a column** (`swings.reference_label`). It used to
+  be answered by matching the id against a hardcoded `["perfect", "pro_2"]`, which only worked
+  while an id was a folder name. `lib/proSwings.ts` is now a catalogue keyed by storage key that
+  the backfill reads once; every other consumer asks the row. This is the minimal honest form of
+  §20's professional library, which `comparison-and-reference` builds on top.
+
+**What is NOT done here, deliberately:** no UI switches between views. The step file says to
+resist building the log, filters and session views, and a view switcher belongs to
+`mobile-player`. The capability is proven by `src/db/multiView.test.ts` — a swing with a 60fps
+DTL view and a 120fps face-on view, each addressable by name, each holding its own `impact`
+frame, with the second view of a kind and the second primary both refused by the database.
+
+**Also fixed on the way:** `clubs` had RLS policies from 0005 but no table grant, because 0003's
+`grant ... on all tables in schema public` is a snapshot rather than a rule. A policy decides
+which rows a role may touch, never whether it may touch the table at all, so those policies were
+inert. 0006 grants both `clubs` and `swing_views`.
+
+**Found and left alone:** `lib/jobs.ts` spawns `burnin.py` for a re-analysis **without**
+`--club-detector runs/clubhead/weights/best.pt`, which CLAUDE.md names as a standing trap —
+omitting it silently regenerates the trace on the weaker classical path and overwrites the better
+artifact. It is a real bug and it predates this step; fixing it changes analyzer invocation, and
+this step's Definition of Done requires `analysis.json`'s contract to be untouched. Recorded here
+so it is not rediscovered by accident.

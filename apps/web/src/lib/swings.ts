@@ -360,14 +360,46 @@ export interface Silhouette {
   frames: { f: number; p: [number, number][][] }[];
 }
 
-export interface SwingSummary {
+/** One camera's recording of a swing, as the log and the player need it. */
+export interface SwingViewSummary {
   id: string;
+  view: "dtl" | "face_on";
+  /** Storage key, not a path — what `swingFile()` resolves against `MEDIA_ROOT`. */
+  mediaKey: string;
+  fps: number;
+  frameCount: number;
+  width: number | null;
+  height: number | null;
+  status: string;
+  overallScore: number | null;
+  band: string | null;
+}
+
+export interface SwingSummary {
+  /** The swing's own uuid. Since migration 0006 this is NOT a folder name. */
+  id: string;
+  /**
+   * What to call this swing on screen. The id used to be the clip's stem and got rendered
+   * directly; a uuid is useless to a person, so the human-facing name is now explicit: a bundled
+   * reference's label, else the primary view's storage key (still the clip stem today).
+   */
+  label: string;
+  /** Set on the bundled model swings (§20); null on a golfer's own. */
+  referenceLabel: string | null;
+  /** Every camera on this swing — one today, two once §12's dual capture lands. */
+  views: SwingViewSummary[];
+  /** The view the player opens by default. Null only for a swing with no views at all. */
+  primaryViewId: string | null;
+
+  // The primary view's facts, flattened. The log renders one card per swing, not per camera.
   frameCount: number;
   fps: number;
   view: string;
+
   overallScore: number | null;
   band: string | null;
   scoringModelVersion: string | null;
+  /** Rolled up across views: `ready` only when every view is, `failed` if any failed. */
   status: string;
   createdAt: number;
   // Display-only extras still read from `analysis.json` (the CV artifact of record — see
@@ -381,65 +413,125 @@ export interface SwingSummary {
   poseCoverage: number;
 }
 
-/** Guard against `..` and absolute paths — ids come straight from the URL. */
-function safeId(id: string) {
-  if (!/^[A-Za-z0-9._-]+$/.test(id)) throw new Error("invalid swing id");
-  return id;
-}
-
-export function swingFile(id: string, name: string) {
-  return path.join(MEDIA_ROOT, safeId(id), name);
+/**
+ * Guard a storage key before it is joined to a filesystem root: no `..`, no separators, no
+ * absolute path. Keys reach this from the database, but the database got them from an upload, so
+ * they are treated as untrusted the whole way down.
+ */
+function safeKey(key: string) {
+  if (!/^[A-Za-z0-9._-]+$/.test(key)) throw new Error("invalid media key");
+  return key;
 }
 
 /**
- * The swing log, scoped to one user — the seeded admin user today, a real session's user id
- * once auth exists. Replaces the directory scan this used to be: identity, ownership and sort
- * order now come from Postgres, not from listing `MEDIA_ROOT` and hoping every folder has a
- * readable `analysis.json`.
+ * An artifact belonging to one VIEW, by its storage key — not by swing id, which since migration
+ * 0006 addresses a shot that may hold two videos and therefore two of everything below.
+ */
+export function swingFile(mediaKey: string, name: string) {
+  return path.join(MEDIA_ROOT, safeKey(mediaKey), name);
+}
+
+/**
+ * Roll a swing's per-view statuses up into one word for the log card.
+ *
+ * Deliberately pessimistic: a swing is only `ready` when every camera on it is, because a card
+ * that says "ready" while one of two views is still analysing sends the golfer to a player that
+ * can only show them half the swing. `failed` wins over "still working" for the same reason —
+ * the actionable state is the one worth surfacing.
+ */
+function rollUpStatus(views: { status: string }[]): string {
+  if (!views.length) return "uploaded";
+  if (views.some((v) => v.status === "failed")) return "failed";
+  if (views.every((v) => v.status === "ready")) return "ready";
+  return views.find((v) => v.status === "analyzing" || v.status === "queued")?.status ?? "uploaded";
+}
+
+/**
+ * The swing log, scoped to one user. Identity, ownership and sort order come from Postgres, not
+ * from listing `MEDIA_ROOT` and hoping every folder has a readable `analysis.json`.
+ *
+ * One query with a left join rather than an inner join on the primary view: a swing whose views
+ * exist but whose `is_primary` flag is somehow unset must still appear (falling back to its first
+ * view) instead of silently vanishing from the golfer's own log.
  */
 export async function listSwings(userId: string): Promise<SwingSummary[]> {
   // Imported lazily so this module (used by API routes that don't touch the DB, like the video
   // and thumb streamers) doesn't require DATABASE_URL to be set just to load.
   const { db } = await import("../db/client");
-  const { swings } = await import("../db/schema");
-  const { eq, desc } = await import("drizzle-orm");
+  const { swings, swingViews } = await import("../db/schema");
+  const { eq, desc, asc } = await import("drizzle-orm");
 
-  const rows = await db.select().from(swings)
+  const rows = await db.select({ swing: swings, view: swingViews }).from(swings)
+    .leftJoin(swingViews, eq(swingViews.swingId, swings.id))
     .where(eq(swings.userId, userId))
-    .orderBy(desc(swings.createdAt));
+    .orderBy(desc(swings.createdAt), asc(swingViews.createdAt));
+
+  // Grouped in JS rather than with an aggregate: the row count is one per camera, the log is one
+  // card per swing, and preserving the join's order keeps "first view" deterministic.
+  const grouped = new Map<string, { swing: typeof rows[number]["swing"]; views: SwingViewSummary[] }>();
+  for (const row of rows) {
+    let entry = grouped.get(row.swing.id);
+    if (!entry) {
+      entry = { swing: row.swing, views: [] };
+      grouped.set(row.swing.id, entry);
+    }
+    if (row.view) {
+      entry.views.push({
+        id: row.view.id,
+        view: row.view.view,
+        mediaKey: row.view.mediaKey,
+        fps: row.view.fps ?? 0,
+        frameCount: row.view.frameCount ?? 0,
+        width: row.view.width,
+        height: row.view.height,
+        status: row.view.status,
+        overallScore: row.view.overallScore,
+        band: row.view.band,
+      });
+    }
+  }
 
   const out: SwingSummary[] = [];
-  for (const row of rows) {
+  for (const { swing, views } of grouped.values()) {
+    const primaryRow = rows.find((r) => r.swing.id === swing.id && r.view?.isPrimary)?.view;
+    const primary = views.find((v) => v.id === primaryRow?.id) ?? views[0] ?? null;
+
     let model: string | null = null;
     let tempoRatio: number | null = null;
     let traceEnabled = false;
     let poseCoverage = 0;
-    try {
-      const a = JSON.parse(
-        await fs.readFile(path.join(row.mediaPath, "analysis.json"), "utf8")
-      ) as Analysis;
-      const joints = Object.values(a.quality?.per_joint ?? {});
-      model = a.pose.model;
-      tempoRatio = a.tempo?.ratio ?? null;
-      traceEnabled = !!a.club?.trace_enabled;
-      poseCoverage = joints.length
-        ? joints.reduce((s, j) => s + j.coverage, 0) / joints.length
-        : 0;
-    } catch {
-      // Row exists but the artifact isn't readable (mid-analysis, or media moved) — still show
-      // the row with its DB-known fields rather than dropping it from the log.
+    if (primary) {
+      try {
+        const a = JSON.parse(
+          await fs.readFile(swingFile(primary.mediaKey, "analysis.json"), "utf8")
+        ) as Analysis;
+        const joints = Object.values(a.quality?.per_joint ?? {});
+        model = a.pose.model;
+        tempoRatio = a.tempo?.ratio ?? null;
+        traceEnabled = !!a.club?.trace_enabled;
+        poseCoverage = joints.length
+          ? joints.reduce((s, j) => s + j.coverage, 0) / joints.length
+          : 0;
+      } catch {
+        // Row exists but the artifact isn't readable (mid-analysis, or media moved) — still show
+        // the row with its DB-known fields rather than dropping it from the log.
+      }
     }
 
     out.push({
-      id: row.id,
-      frameCount: row.frameCount ?? 0,
-      fps: row.fps ?? 0,
-      view: row.view,
-      overallScore: row.overallScore,
-      band: row.band,
-      scoringModelVersion: row.scoringModelVersion,
-      status: row.status,
-      createdAt: row.createdAt.getTime(),
+      id: swing.id,
+      label: swing.referenceLabel ?? primary?.mediaKey ?? swing.id,
+      referenceLabel: swing.referenceLabel,
+      views,
+      primaryViewId: primary?.id ?? null,
+      frameCount: primary?.frameCount ?? 0,
+      fps: primary?.fps ?? 0,
+      view: primary?.view ?? "dtl",
+      overallScore: swing.overallScore,
+      band: swing.band,
+      scoringModelVersion: swing.scoringModelVersion,
+      status: rollUpStatus(views),
+      createdAt: swing.createdAt.getTime(),
       model,
       tempoRatio,
       traceEnabled,
@@ -449,9 +541,10 @@ export async function listSwings(userId: string): Promise<SwingSummary[]> {
   return out;
 }
 
-export async function getAnalysis(id: string): Promise<Analysis | null> {
+/** By storage key — the caller resolves a swing id to a view first (`db/views.ts`). */
+export async function getAnalysis(mediaKey: string): Promise<Analysis | null> {
   try {
-    return JSON.parse(await fs.readFile(swingFile(id, "analysis.json"), "utf8"));
+    return JSON.parse(await fs.readFile(swingFile(mediaKey, "analysis.json"), "utf8"));
   } catch {
     return null;
   }
@@ -465,27 +558,27 @@ export async function getAnalysis(id: string): Promise<Analysis | null> {
  * Deliberately NOT folded into `getAnalysis`: this is up to a megabyte, the swing page loads
  * the analysis on every visit, and most visits never turn the silhouette on.
  */
-export async function getSilhouette(id: string): Promise<Silhouette | null> {
+export async function getSilhouette(mediaKey: string): Promise<Silhouette | null> {
   try {
-    return JSON.parse(await fs.readFile(swingFile(id, "silhouette.json"), "utf8"));
+    return JSON.parse(await fs.readFile(swingFile(mediaKey, "silhouette.json"), "utf8"));
   } catch {
     return null;
   }
 }
 
 /** Golfer+club rings (scripts/isolate.py) — silhouette.json's shape, so one reader. */
-export async function getIsolation(id: string): Promise<Silhouette | null> {
+export async function getIsolation(mediaKey: string): Promise<Silhouette | null> {
   try {
-    return JSON.parse(await fs.readFile(swingFile(id, "isolation.json"), "utf8"));
+    return JSON.parse(await fs.readFile(swingFile(mediaKey, "isolation.json"), "utf8"));
   } catch {
     return null;
   }
 }
 
 /** Club-only rings — the subtractive view (attached motion minus the body). */
-export async function getClubOnly(id: string): Promise<Silhouette | null> {
+export async function getClubOnly(mediaKey: string): Promise<Silhouette | null> {
   try {
-    return JSON.parse(await fs.readFile(swingFile(id, "club_only.json"), "utf8"));
+    return JSON.parse(await fs.readFile(swingFile(mediaKey, "club_only.json"), "utf8"));
   } catch {
     return null;
   }
@@ -498,9 +591,9 @@ export async function getClubOnly(id: string): Promise<Silhouette | null> {
  * The swing page needs this at render time to decide whether the overlay group is offered at
  * all; the data itself is fetched by the browser only once that toggle goes on.
  */
-export async function hasSilhouette(id: string): Promise<boolean> {
+export async function hasSilhouette(mediaKey: string): Promise<boolean> {
   try {
-    await fs.access(swingFile(id, "silhouette.json"));
+    await fs.access(swingFile(mediaKey, "silhouette.json"));
     return true;
   } catch {
     return false;

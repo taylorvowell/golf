@@ -244,17 +244,30 @@ cross-origin, so a phone gets a page that never hydrates); use `127.0.0.1`, not 
 ## 7. Persistence
 
 Postgres 16 via Drizzle ORM — local in Docker on **port 5433**, migrations in
-`apps/web/drizzle/`. Seven tables (`apps/web/src/db/schema.ts`):
+`apps/web/drizzle/`. Ten tables (`apps/web/src/db/schema.ts`):
 
 | Table | Holds |
 |---|---|
-| `users` | Real rows with FK'd ownership from the first migration; exactly one seeded "admin" user exists; no auth provider is wired |
-| `sessions` | Practice-session grouping (date/location/notes) — schema only, no UI |
-| `swings` | One row per `out/<id>/` folder — id **is** the folder name; view/club/handedness, media path, status enum, denormalized `overall_score`/`band`/`scoring_model_version` for the list's hot path |
+| `users` | `id` is the Supabase `auth.users` id (D7) — one identity, no shadow table |
+| `clubs` | §6 equipment inventory; `analyzer_club_type` feeds `--club-type driver\|irons` |
+| `sessions` | Practice-session grouping (date/location/notes/goal, representative swing) — schema only, no UI |
+| `swings` | **The shot**, keyed by uuid: owner, session, club, ball, handedness, notes, §7.3 favourite/tags, coach-reviewed, `reference_label` for the bundled model swings, and the primary view's denormalized `overall_score`/`band`/`scoring_model_version` for the list's hot path |
+| `swing_views` | **One camera's recording of it** (§7.1: DTL, face-on, or both — at most one of each): `media_key` (a storage key, never a path), raw-original key + expiry (D29), fps/frame count/dimensions, status, per-view score, `is_primary` |
 | `jobs` | Job protocol rows (stage, progress_pct, message, log), durable across hot-reloads; an in-process mirror serves the actively-running job so the per-frame stdout path never round-trips the DB |
-| `scores` | The full scorecard as jsonb + real columns for overall/band/version; source of truth behind the swings denormalization |
-| `head_markers` | Hand-placed club-head positions, normalized 0–1, unique per (swing, frame) — the project's only hand-labelled club-head truth |
-| `swing_stages` | Hand-corrected event keyframes, unique per (swing, stage) |
+| `scores` | The full scorecard as jsonb + real columns for overall/band/version; source of truth behind the swing's denormalization |
+| `head_markers` | Hand-placed club-head positions, normalized 0–1, unique per (view, frame) — the project's only hand-labelled club-head truth |
+| `swing_stages` | Hand-corrected event keyframes, unique per (view, stage) |
+| `coach_links` | The golfer↔coach relationship the RLS policies reference; pending/approved/revoked |
+
+**Everything frame-indexed hangs off a view, not off a swing** (`jobs`, `scores`,
+`head_markers`, `swing_stages`). A frame number is meaningless without knowing which video
+counts it, and two cameras on one swing never agree. A swing's id is a uuid the database mints:
+before migration 0006 it was literally the analyzer's `out/<stem>` folder name, which coupled the
+key to disk layout and made a second camera unrepresentable.
+
+API routes take a **swing** id plus an optional `?view=dtl|face_on`, defaulting to the primary
+view; `db/views.ts:resolveView` is the single resolution point. A `?view=` naming something that
+is not one of the two is a 400, not a silent default.
 
 Commands (repo root unless noted): `docker compose up -d`, then from `apps/web`:
 `pnpm db:migrate`, `pnpm db:seed`, `pnpm db:backfill` (idempotent — indexes every `out/` folder
@@ -460,7 +473,12 @@ Stated as fact, with no implied ordering or plan. See
   authoritative face-angle degrees exist anywhere in the system.
 - **No production deployment.** Postgres runs locally in Docker; no hosted environment is
   provisioned. Media is local disk (`SWINGSAGE_MEDIA_ROOT`), not object storage — the schema's
-  `media_path` is backend-agnostic by design.
+  `swing_views.media_key` is backend-agnostic by design, and step 09 turns it into an
+  object-storage prefix by changing values rather than columns.
+- **No dual-view swing exists yet.** The schema holds two views per swing and the routes address
+  them, but all ten analysed fixtures are single down-the-line clips, and no UI switches between
+  views — that is `mobile-player`'s. The capability is proven by `src/db/multiView.test.ts`, not
+  by a swing anyone has looked at.
 - **No analytics, observability, or error reporting.**
 - **No hand-labelled ground truth** for events or club-head position, beyond whatever
   `head_markers` rows have been placed by hand in the player.

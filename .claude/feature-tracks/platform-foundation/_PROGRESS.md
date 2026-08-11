@@ -20,6 +20,58 @@ closing.
 
 ---
 
+## 06 — Swing, Session, and Equipment Model ✅ 2026-08-11
+
+**A swing is no longer a video.** It is a shot that owns one or more **views**, each with its own
+clip, its own `analysis.json` and its own score — §7.1, and the thing four later tracks
+(`mobile-player`, `swing-ingest`, `dual-device-capture`, `comparison-and-reference`) were blocked
+on. Shipped in two halves per D28: the additive equipment/session/organization model (0005), then
+this — the half that changes what a swing *is*. Decisions in **D30**.
+
+**The load-bearing move is not the new table, it is where the frame-indexed data went.** `jobs`,
+`scores`, `head_markers` and `swing_stages` all moved from the swing onto the view. A frame number
+means nothing without the video that counts it, and two cameras on one swing never agree — left on
+the swing, a second view would silently overwrite the first's hand-placed corrections. That is now
+a test: one swing with a 60fps DTL view and a 120fps face-on view, each holding its own `impact`
+frame, and the database refusing both a second view of a kind and a second primary.
+
+**Identity stopped being a folder name.** `swings.id` was literally the analyzer's `out/<stem>`
+directory, and `swings.media_path` held an absolute Windows path. Now the id is a uuid the database
+mints and the folder name is the view's `media_key` — a key with no root and no separators,
+validated before it is joined to anything. Step 09 turns it into an object-storage prefix by
+changing values, not columns.
+
+**Ten fixtures, ten scores, 30 jobs and 5 stage marks all came through intact** — asserted, not
+assumed: `src/db/multiView.test.ts` walks the real database and fails if any ready view's artifact
+is missing from disk, if any swing lacks exactly one primary view, if any `media_key` looks like a
+path, or if a swing's denormalized score disagrees with its primary view's scorecard.
+
+**Two smaller calls worth knowing.** Routes still take a *swing* id plus `?view=dtl|face_on`,
+because a golfer's URL names a swing rather than a camera; an unrecognised view type is a 400, not
+a silent default, and a pre-0006 bookmark is a 404 rather than a 500. And "is this a bundled
+reference swing?" became a column — it used to be answered by matching the id against a hardcoded
+`["perfect", "pro_2"]`, which only meant anything while an id was a folder name.
+
+**Fixed on the way:** `clubs` had RLS policies from 0005 and no table grant, so they were inert —
+0003's `grant ... on all tables` is a snapshot, not a rule.
+
+Oracles: web tsc/lint clean, **103 vitest tests** (13 new), `db:migrate` idempotent, analyzer
+pytest green with **zero diff under `services/analyzer`** (a DoD requirement — the `analysis.json`
+contract is untouched), and the Playwright end-to-end path green: browser → Next.js → Postgres →
+video on disk, through the rebuilt schema.
+
+**Notes:** `lib/jobs.ts` spawns `burnin.py` for a re-analysis **without** `--club-detector
+runs/clubhead/weights/best.pt` — a standing trap CLAUDE.md names by hand ("this has actually
+happened"). Pre-existing, deliberately not fixed here because it changes analyzer invocation and
+this step's DoD requires the artifact contract untouched. Recorded in D30. Also: `docs/CURRENT-STATE.md`
+§7 and `.claude/rules/testing.md` were both stale — the latter still claimed no JS/TS test runner
+existed — and are corrected.
+
+Next: **09 — Media Storage and Artifact Addressing**, whose first step is provisioning buckets per
+environment.
+
+---
+
 ## 01 — Architecture Decisions ✅ 2026-08-08
 
 Closed the questions `PROJECT_MAIN.md` §44 left open. **13 decisions recorded as D5–D17** in

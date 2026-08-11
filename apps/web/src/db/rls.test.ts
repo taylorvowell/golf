@@ -27,7 +27,11 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 const GOLFER_A = "aaaaaaaa-0000-4000-8000-000000000001";
 const GOLFER_B = "aaaaaaaa-0000-4000-8000-000000000002";
 const COACH_C = "aaaaaaaa-0000-4000-8000-000000000003";
-const SWING_A = "rls-spec-swing-a";
+// Fixed uuids rather than generated ones: the suite has to name the same rows across cases, and
+// `swings.id` is a uuid since migration 0006 (it used to be the analyzer's folder name).
+const SWING_A = "bbbbbbbb-0000-4000-8000-000000000001";
+const SWING_B = "bbbbbbbb-0000-4000-8000-000000000002";
+const VIEW_A = "cccccccc-0000-4000-8000-000000000001";
 
 const url = process.env.DATABASE_URL;
 let sql: postgres.Sql;
@@ -50,6 +54,22 @@ async function countVisibleSwings(userId: string): Promise<number> {
   const rows = await asUser(userId, (tx) =>
     tx.unsafe<{ n: string }[]>(`select count(*)::text as n from public.swings where id = $1`, [
       SWING_A,
+    ]),
+  );
+  return Number(rows[0].n);
+}
+
+/**
+ * The same question one level down: can this user see the swing's VIEW?
+ *
+ * Migration 0006 put a table between a swing and everything frame-indexed about it, so the child
+ * policies now derive visibility through two hops instead of one. A policy that got the extra hop
+ * wrong would leak the video row itself — which is the row that holds the storage key.
+ */
+async function countVisibleViews(userId: string): Promise<number> {
+  const rows = await asUser(userId, (tx) =>
+    tx.unsafe<{ n: string }[]>(`select count(*)::text as n from public.swing_views where id = $1`, [
+      VIEW_A,
     ]),
   );
   return Number(rows[0].n);
@@ -87,8 +107,13 @@ beforeAll(async () => {
     on conflict (id) do nothing
   `;
   await sql`
-    insert into public.swings (id, user_id, view, handedness, media_path)
-    values (${SWING_A}, ${GOLFER_A}, 'dtl', 'right', 'out/rls-spec')
+    insert into public.swings (id, user_id, handedness)
+    values (${SWING_A}, ${GOLFER_A}, 'right')
+    on conflict (id) do nothing
+  `;
+  await sql`
+    insert into public.swing_views (id, swing_id, view, media_key, is_primary)
+    values (${VIEW_A}, ${SWING_A}, 'dtl', 'rls-spec', true)
     on conflict (id) do nothing
   `;
 });
@@ -119,19 +144,54 @@ describe("row-level security — golfer isolation", () => {
     expect(rows.length).toBe(0);
   });
 
+  it("lets a golfer read their own swing's view, and hides it from another", async () => {
+    // The view row holds the storage key, so leaking it is leaking where the video lives.
+    expect(await countVisibleViews(GOLFER_A)).toBe(1);
+    expect(await countVisibleViews(GOLFER_B)).toBe(0);
+  });
+
+  it("does not let another golfer write the view", async () => {
+    const rows = await asUser(GOLFER_B, (tx) =>
+      tx.unsafe(`update public.swing_views set media_key = 'stolen' where id = $1 returning id`, [
+        VIEW_A,
+      ]),
+    );
+    expect(rows.length).toBe(0);
+  });
+
   it("hides child rows when the parent swing is not visible", async () => {
-    // Child tables derive visibility from the swing rather than carrying their own user_id, so
-    // this proves the derivation rather than a second copy of the same rule.
+    // Child tables derive visibility through the VIEW rather than carrying their own user_id, so
+    // this proves the derivation — now two hops, child → view → swing — rather than a second copy
+    // of the same rule.
     await sql`
-      insert into public.swing_stages (swing_id, stage, frame)
-      values (${SWING_A}, 'top', 120)
-      on conflict (swing_id, stage) do update set frame = 120
+      insert into public.swing_stages (view_id, stage, frame)
+      values (${VIEW_A}, 'top', 120)
+      on conflict (view_id, stage) do update set frame = 120
     `;
     const forOwner = await asUser(GOLFER_A, (tx) =>
-      tx.unsafe(`select 1 from public.swing_stages where swing_id = $1`, [SWING_A]),
+      tx.unsafe(`select 1 from public.swing_stages where view_id = $1`, [VIEW_A]),
     );
     const forOther = await asUser(GOLFER_B, (tx) =>
-      tx.unsafe(`select 1 from public.swing_stages where swing_id = $1`, [SWING_A]),
+      tx.unsafe(`select 1 from public.swing_stages where view_id = $1`, [VIEW_A]),
+    );
+    expect(forOwner.length).toBe(1);
+    expect(forOther.length).toBe(0);
+  });
+
+  it("hides a scorecard through the same two hops", async () => {
+    // scores moved from the swing to the view in 0006 — a scorecard is computed from exactly one
+    // analysis.json. Its policy is the one most worth re-proving, because it carries the findings.
+    await sql`
+      insert into public.scores (view_id, scoring_model_version, overall, band,
+                                 categories, checkpoints, findings, priorities, primary_fix, drill)
+      values (${VIEW_A}, 'v2', 70, 'Solid', '{}', '{}', '[]', '[]', '{}', '{}')
+      on conflict (view_id) do update set overall = 70
+    `;
+    const forOwner = await asUser(GOLFER_A, (tx) =>
+      tx.unsafe(`select 1 from public.scores where view_id = $1`, [VIEW_A]),
+    );
+    const forOther = await asUser(GOLFER_B, (tx) =>
+      tx.unsafe(`select 1 from public.scores where view_id = $1`, [VIEW_A]),
     );
     expect(forOwner.length).toBe(1);
     expect(forOther.length).toBe(0);
@@ -179,12 +239,12 @@ describe("row-level security — coach access, before the coach feature exists",
     // as "is this user a coach" instead of "is this user THIS golfer's coach" would make.
     await setLink("approved");
     await sql`
-      insert into public.swings (id, user_id, view, handedness, media_path)
-      values ('rls-spec-swing-b', ${GOLFER_B}, 'dtl', 'right', 'out/rls-spec-b')
+      insert into public.swings (id, user_id, handedness)
+      values (${SWING_B}, ${GOLFER_B}, 'right')
       on conflict (id) do nothing
     `;
     const rows = await asUser(COACH_C, (tx) =>
-      tx.unsafe(`select 1 from public.swings where id = 'rls-spec-swing-b'`),
+      tx.unsafe(`select 1 from public.swings where id = $1`, [SWING_B]),
     );
     expect(rows.length).toBe(0);
   });

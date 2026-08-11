@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "featureName": "platform-foundation",
-  "currentStep": "06",
+  "currentStep": "09",
   "phase": "Platform Foundation",
-  "lastUpdated": "2026-08-11T02:00:00Z",
+  "lastUpdated": "2026-08-11T03:35:00Z",
   "steps": {
     "01": {
       "status": "complete",
@@ -25,8 +25,9 @@
       "status": "not-started"
     },
     "06": {
-      "status": "in-progress",
-      "startedAt": "2026-08-11T02:00:00Z"
+      "status": "complete",
+      "completedAt": "2026-08-11T03:35:00Z",
+      "note": "Shipped in two halves by D28: the additive equipment/session/organization model (migration 0005), then the §7.1 multi-view restructure and uuid swing identity (migration 0006, D30). All ten analysed fixtures survived with their scores; verified by src/db/multiView.test.ts and the Playwright end-to-end path."
     },
     "07": {
       "status": "not-started"

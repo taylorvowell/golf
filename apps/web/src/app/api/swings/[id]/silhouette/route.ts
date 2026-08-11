@@ -1,5 +1,5 @@
 import { getSilhouette } from "@/lib/swings";
-import { requireSwingAccess } from "@/lib/auth";
+import { requireViewAccess, viewParam } from "@/lib/auth";
 
 /**
  * GET /api/swings/:id/silhouette — the golfer's per-frame outline (Stage 2b).
@@ -13,13 +13,13 @@ import { requireSwingAccess } from "@/lib/auth";
  * to an existing `out/` folder without re-running the pipeline.
  */
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const access = await requireSwingAccess(id);
+  const access = await requireViewAccess(id, viewParam(req));
   if ("error" in access) return access.error;
-  const s = await getSilhouette(id);
+  const s = await getSilhouette(access.mediaKey);
   if (!s) return new Response("not found", { status: 404 });
   // Immutable for a day: the outline only changes when the swing is re-analysed, which mints
   // a fresh page load anyway. Costly to re-download on every toggle otherwise.

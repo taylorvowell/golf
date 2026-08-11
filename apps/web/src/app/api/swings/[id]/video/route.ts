@@ -2,7 +2,7 @@ import fs from "node:fs";
 import { stat } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { swingFile } from "@/lib/swings";
-import { requireSwingAccess } from "@/lib/auth";
+import { requireViewAccess, viewParam } from "@/lib/auth";
 
 /**
  * Streams the normalized clip with HTTP Range support.
@@ -15,7 +15,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const access = await requireSwingAccess(id);
+  const access = await requireViewAccess(id, viewParam(req));
   if ("error" in access) return access.error;
 
   /**
@@ -26,12 +26,12 @@ export async function GET(
 
   let file: string;
   try {
-    file = swingFile(id, "normalized.mp4");
+    file = swingFile(access.mediaKey, "normalized.mp4");
     // Falls back rather than 404s. A missing stamped clip is the normal state — it is written
     // by scripts/stampframes.py on demand — and answering "not found" blanked the player
     // entirely, which reads as the toggle having broken the video.
     if (want === "framestamp") {
-      const stamped = swingFile(id, "framestamp.mp4");
+      const stamped = swingFile(access.mediaKey, "framestamp.mp4");
       if (fs.existsSync(stamped)) file = stamped;
     }
   } catch {

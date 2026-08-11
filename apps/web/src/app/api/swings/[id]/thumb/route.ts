@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { swingFile } from "@/lib/swings";
-import { requireSwingAccess } from "@/lib/auth";
+import { requireViewAccess, viewParam } from "@/lib/auth";
 
 /**
  * The contact-frame still the analyzer already writes next to `analysis.json`.
@@ -11,16 +11,16 @@ import { requireSwingAccess } from "@/lib/auth";
  * to the card's placeholder.
  */
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const access = await requireSwingAccess(id);
+  const access = await requireViewAccess(id, viewParam(req));
   if ("error" in access) return access.error;
 
   let file: string;
   try {
-    file = swingFile(id, "contact.jpg");
+    file = swingFile(access.mediaKey, "contact.jpg");
   } catch {
     return new Response("bad id", { status: 400 });
   }

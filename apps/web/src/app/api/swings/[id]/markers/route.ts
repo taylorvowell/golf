@@ -1,36 +1,33 @@
 import { listMarkers, saveMarkers, type HeadMarker } from "@/db/markers";
-import { requireSwingAccess } from "@/lib/auth";
+import { requireViewAccess, viewParam } from "@/lib/auth";
 
 /**
- * Same guard `lib/swings.ts` applies to ids off the URL. Repeated here rather than exported
- * from there: that module reads the filesystem and pulls in the Postgres client, and the split
- * that keeps it away from client bundles (CLAUDE.md) is worth more than three saved lines.
- */
-function safeId(id: string): string | null {
-  return /^[A-Za-z0-9._-]+$/.test(id) ? id : null;
-}
-
-/**
- * Hand-placed club-head positions for one swing (the player's "modify head markers" mode).
+ * Hand-placed club-head positions for one swing VIEW (the player's "modify head markers" mode).
  *
  *   GET  -> { markers: [{frame, x, y}, ...] } ordered by frame
  *   PUT  { markers: [{frame, x, y}], deleted: [frame] } -> { saved, deleted }
  *
+ * `?view=dtl|face_on` selects the camera, defaulting to the swing's primary view. A marker is a
+ * frame number, and two cameras number the same swing differently, so these are per-view rows —
+ * not per-swing (migration 0006).
+ *
  * PUT is a batch and not idempotent-per-click on purpose — see `db/markers.ts`. Coordinates are
  * normalized 0–1 against the video frame, the same convention as `analysis.json`.
+ *
+ * GET is behind the same access check as PUT. It used to answer for any id without one, which
+ * returned an empty list for a stranger's swing rather than a 404 — harmless in content and
+ * still a disclosure of which ids exist.
  */
-export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> }) {
+export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  const swingId = safeId(id);
-  if (!swingId) return Response.json({ error: "bad id" }, { status: 400 });
-  const markers = await listMarkers(swingId);
+  const access = await requireViewAccess(id, viewParam(req));
+  if ("error" in access) return access.error;
+  const markers = await listMarkers(access.viewId);
   return Response.json({ markers }, { headers: { "Cache-Control": "no-store" } });
 }
 
 export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
-  const swingId = safeId(id);
-  if (!swingId) return Response.json({ error: "bad id" }, { status: 400 });
 
   let body: { markers?: unknown; deleted?: unknown };
   try {
@@ -46,11 +43,10 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
 
   // Ownership, not merely sign-in. These write to a swing named in the URL, so checking only
   // that SOMEONE is signed in would let any account edit any swing's corrections.
-  const access = await requireSwingAccess(swingId);
+  const access = await requireViewAccess(id, viewParam(req));
   if ("error" in access) return access.error;
-  const { userId } = access;
   try {
-    const result = await saveMarkers(swingId, userId, markers, deleted);
+    const result = await saveMarkers(access.viewId, access.userId, markers, deleted);
     return Response.json(result);
   } catch (e) {
     return Response.json({ error: (e as Error).message }, { status: 404 });

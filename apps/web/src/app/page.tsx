@@ -3,7 +3,6 @@ import { listSwings, MEDIA_ROOT } from "@/lib/swings";
 import type { SwingSummary } from "@/lib/swings";
 import { requireUserId } from "@/lib/auth";
 import { Chip, MicroHead, NotBuilt } from "@/components/ui/kiosk";
-import { PRO_SWINGS, proSwing } from "@/lib/proSwings";
 
 export const dynamic = "force-dynamic"; // the analyzer writes new swings while dev runs
 
@@ -22,17 +21,13 @@ export default async function Home() {
   // comparable) but they are not the golfer's own swings, so they get their own shelf below
   // rather than being mixed into the log — otherwise "3 analysed swings" counts two swings the
   // golfer never hit, and an empty log stops looking empty.
-  const swings = all.filter((s) => !proSwing(s.id));
-
-  // Ordered by the catalogue rather than by analysis date, so the shelf reads in the same
-  // fixed order as the comparison picker. A reference with no row yet (never analysed on this
-  // machine, or analysed but not `pnpm db:backfill`ed) simply doesn't appear.
-  const refs = PRO_SWINGS
-    .map((p) => {
-      const row = all.find((s) => s.id === p.id);
-      return row ? { row, label: p.label } : null;
-    })
-    .filter((r) => r !== null);
+  //
+  // Asked of the row (`referenceLabel`), not of the id. Before migration 0006 this matched the id
+  // against a hardcoded list of folder names, which stopped meaning anything once an id became a
+  // uuid. A reference with no row yet (never analysed on this machine, or analysed but not
+  // `pnpm db:backfill`ed) simply doesn't appear.
+  const swings = all.filter((s) => !s.referenceLabel);
+  const refs = all.filter((s) => s.referenceLabel);
 
   return (
     <main className="relative mx-auto max-w-[1800px] space-y-5 px-3 py-4 sm:px-5 sm:py-5 lg:px-8 lg:py-7">
@@ -99,9 +94,7 @@ export default async function Home() {
             </p>
           </div>
           <ul className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-            {refs.map(({ row, label }) => (
-              <SwingCard key={row.id} s={row} title={label} reference />
-            ))}
+            {refs.map((s) => <SwingCard key={s.id} s={s} reference />)}
           </ul>
         </section>
       )}
@@ -110,12 +103,13 @@ export default async function Home() {
 }
 
 /**
- * One swing in the log. `title` overrides the folder id for the bundled references, which have
- * a human name ("Pro 2") the golfer's own swings don't; `reference` swaps the accent so the two
- * shelves are distinguishable at a glance even once a card is out of its section's context.
+ * One swing in the log. The card is titled `s.label` — a bundled reference's human name ("Pro
+ * 2"), else the clip's storage key. Never the id, which is a uuid since migration 0006 and means
+ * nothing to a person. `reference` swaps the accent so the two shelves are distinguishable at a
+ * glance even once a card is out of its section's context.
  */
-function SwingCard({ s, title, reference }: {
-  s: SwingSummary; title?: string; reference?: boolean;
+function SwingCard({ s, reference }: {
+  s: SwingSummary; reference?: boolean;
 }) {
   const cov = s.poseCoverage * 100;
   return (
@@ -147,7 +141,7 @@ function SwingCard({ s, title, reference }: {
           )}
         </div>
         <div className="p-4">
-          <p className="truncate text-base font-semibold tracking-[-.02em]">{title ?? s.id}</p>
+          <p className="truncate text-base font-semibold tracking-[-.02em]">{s.label}</p>
           <div className="mt-2 flex items-center gap-3">
             <span className="qbar">
               <i style={{

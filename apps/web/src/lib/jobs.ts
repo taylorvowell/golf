@@ -4,8 +4,9 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { jobs as jobsTable, swings as swingsTable } from "@/db/schema";
+import { jobs as jobsTable, swingViews as viewsTable } from "@/db/schema";
 import { syncSwingScore } from "@/db/scores";
+import type { ResolvedView } from "@/db/views";
 import { MEDIA_ROOT, getAnalysis } from "@/lib/swings";
 
 /**
@@ -25,7 +26,8 @@ export type JobStatus = "queued" | "running" | "done" | "failed";
 
 export interface Job {
   id: string;
-  swingId: string;
+  /** The VIEW being analysed. One job runs the analyzer over one clip. */
+  viewId: string;
   status: JobStatus;
   stage: string;
   progressPct: number;
@@ -38,7 +40,7 @@ export interface Job {
 function toJob(row: typeof jobsTable.$inferSelect): Job {
   return {
     id: row.id,
-    swingId: row.swingId,
+    viewId: row.viewId,
     status: row.status as JobStatus,
     stage: row.stage,
     progressPct: row.progressPct,
@@ -49,7 +51,7 @@ function toJob(row: typeof jobsTable.$inferSelect): Job {
   };
 }
 
-/** In-process mirror of whatever job this process is actively running, keyed by swing id. */
+/** In-process mirror of whatever job this process is actively running, keyed by view id. */
 const live = new Map<string, Job>();
 const flushTimers = new Map<string, ReturnType<typeof setInterval>>();
 
@@ -106,9 +108,9 @@ async function persist(job: Job) {
  * *succeeded* is then a fact about the artifact: `analysis.json` newer than the job started.
  * Both are read rather than inferred, which is why this cannot mark a running job dead.
  */
-async function reconcile(job: Job): Promise<Job> {
+async function reconcile(job: Job, view: ResolvedView): Promise<Job> {
   if (job.status !== "running" && job.status !== "queued") return job;
-  const dir = path.join(MEDIA_ROOT, job.swingId);
+  const dir = path.join(MEDIA_ROOT, view.mediaKey);
   try {
     await fs.access(path.join(dir, ".analysis.lock"));
     return job;                        // lock still held — genuinely running elsewhere
@@ -126,32 +128,32 @@ async function reconcile(job: Job): Promise<Job> {
     job.stage = "complete";
     job.progressPct = 100;
     job.message = "analysis rewritten";
-    await db.update(swingsTable).set({ status: "ready", analyzedAt: new Date() })
-      .where(eq(swingsTable.id, job.swingId)).catch(() => {});
-    await syncSwingScore(job.swingId).catch(() => {});
+    await db.update(viewsTable).set({ status: "ready", analyzedAt: new Date() })
+      .where(eq(viewsTable.id, job.viewId)).catch(() => {});
+    await syncSwingScore(view).catch(() => {});
   } else {
     job.status = "failed";
     job.message = "the analyzer stopped without writing an analysis — see log";
-    await db.update(swingsTable).set({ status: "failed", failureReason: job.message })
-      .where(eq(swingsTable.id, job.swingId)).catch(() => {});
+    await db.update(viewsTable).set({ status: "failed", failureReason: job.message })
+      .where(eq(viewsTable.id, job.viewId)).catch(() => {});
   }
   await persist(job).catch(() => {});
   return job;
 }
 
-export async function getJob(swingId: string): Promise<Job | null> {
-  const inMemory = live.get(swingId);
+export async function getJob(view: ResolvedView): Promise<Job | null> {
+  const inMemory = live.get(view.viewId);
   if (inMemory) return inMemory;
 
   const rows = await db.select().from(jobsTable)
-    .where(eq(jobsTable.swingId, swingId))
+    .where(eq(jobsTable.viewId, view.viewId))
     .orderBy(desc(jobsTable.startedAt))
     .limit(1);
-  return rows[0] ? await reconcile(toJob(rows[0])) : null;
+  return rows[0] ? await reconcile(toJob(rows[0]), view) : null;
 }
 
-export async function startReanalysis(swingId: string): Promise<Job> {
-  const existing = await getJob(swingId);
+export async function startReanalysis(view: ResolvedView): Promise<Job> {
+  const existing = await getJob(view);
   if (existing && (existing.status === "running" || existing.status === "queued")) {
     return existing;
   }
@@ -159,7 +161,7 @@ export async function startReanalysis(swingId: string): Promise<Job> {
   // Every input comes from the swing's own stored artifact, never from the request body —
   // this route spawns a process, so the only path it will ever pass to it is one the
   // analyzer itself wrote.
-  const analysis = await getAnalysis(swingId);
+  const analysis = await getAnalysis(view.mediaKey);
   if (!analysis) throw new Error("no analysis.json for this swing");
   const src = analysis.video.source.path;
   if (!src) throw new Error("this analysis predates source-path recording; re-run by hand");
@@ -171,7 +173,7 @@ export async function startReanalysis(swingId: string): Promise<Job> {
 
   const job: Job = {
     id: randomUUID(),
-    swingId,
+    viewId: view.viewId,
     status: "running",
     stage: "queued",
     progressPct: 0,
@@ -180,23 +182,23 @@ export async function startReanalysis(swingId: string): Promise<Job> {
     startedAt: Date.now(),
     finishedAt: null,
   };
-  live.set(swingId, job);
+  live.set(view.viewId, job);
 
   await db.insert(jobsTable).values({
-    id: job.id, swingId, type: "reanalyze",
+    id: job.id, viewId: view.viewId, type: "reanalyze",
     status: job.status, stage: job.stage, progressPct: job.progressPct, message: job.message,
     log: job.log,
   });
-  await db.update(swingsTable).set({ status: "analyzing" }).where(eq(swingsTable.id, swingId));
+  await db.update(viewsTable).set({ status: "analyzing" }).where(eq(viewsTable.id, view.viewId));
 
   // Throttled durability: the fast path (below) mutates `job` in memory on every stdout line;
   // this flush is what makes that survive a hot-reload without a DB write per line.
   const timer = setInterval(() => { persist(job).catch(() => {}); }, 2000);
-  flushTimers.set(swingId, timer);
+  flushTimers.set(view.viewId, timer);
 
   const args = [
     path.join("scripts", "burnin.py"), src,
-    "--out", path.join(MEDIA_ROOT, swingId),
+    "--out", path.join(MEDIA_ROOT, view.mediaKey),
     "--view", analysis.video.view,
     "--handedness", analysis.video.handedness,
   ];
@@ -242,28 +244,28 @@ export async function startReanalysis(swingId: string): Promise<Job> {
     job.message = message;
     job.finishedAt = Date.now();
 
-    clearInterval(flushTimers.get(swingId));
-    flushTimers.delete(swingId);
-    live.delete(swingId);
+    clearInterval(flushTimers.get(view.viewId));
+    flushTimers.delete(view.viewId);
+    live.delete(view.viewId);
 
     await persist(job).catch(() => {});
     if (status === "done") {
       // Stage 8 writes coach_report.json alongside analysis.json — the web app re-reads
       // whatever the analyzer just produced, same pattern as everywhere else in this codebase
       // (analysis.json is the artifact of record, not a value passed around).
-      const fresh = await getAnalysis(swingId).catch(() => null);
-      await db.update(swingsTable).set({
+      const fresh = await getAnalysis(view.mediaKey).catch(() => null);
+      await db.update(viewsTable).set({
         status: "ready",
         analyzedAt: new Date(),
         fps: fresh?.video.fps,
         frameCount: fresh?.video.frame_count,
         width: fresh?.video.width,
         height: fresh?.video.height,
-      }).where(eq(swingsTable.id, swingId)).catch(() => {});
-      await syncSwingScore(swingId).catch(() => {});
+      }).where(eq(viewsTable.id, view.viewId)).catch(() => {});
+      await syncSwingScore(view).catch(() => {});
     } else {
-      await db.update(swingsTable).set({ status: "failed", failureReason: message })
-        .where(eq(swingsTable.id, swingId)).catch(() => {});
+      await db.update(viewsTable).set({ status: "failed", failureReason: message })
+        .where(eq(viewsTable.id, view.viewId)).catch(() => {});
     }
   };
 

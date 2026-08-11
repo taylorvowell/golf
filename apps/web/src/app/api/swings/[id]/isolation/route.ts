@@ -1,5 +1,5 @@
 import { getIsolation } from "@/lib/swings";
-import { requireSwingAccess } from "@/lib/auth";
+import { requireViewAccess, viewParam } from "@/lib/auth";
 
 /**
  * GET /api/swings/:id/isolation — golfer+club rings (body silhouette UNION attached
@@ -7,13 +7,13 @@ import { requireSwingAccess } from "@/lib/auth";
  * not been run for this swing — a normal state, not an error.
  */
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const access = await requireSwingAccess(id);
+  const access = await requireViewAccess(id, viewParam(req));
   if ("error" in access) return access.error;
-  const s = await getIsolation(id);
+  const s = await getIsolation(access.mediaKey);
   if (!s) return new Response("not found", { status: 404 });
   return Response.json(s, { headers: { "Cache-Control": "private, max-age=86400" } });
 }

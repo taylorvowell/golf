@@ -43,6 +43,13 @@
       "when": 1786330000000,
       "tag": "0005_equipment_sessions_organization",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786500000000,
+      "tag": "0006_multi_view_swings",
+      "breakpoints": true
     }
   ]
 }

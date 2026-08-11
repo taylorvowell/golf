@@ -1,6 +1,8 @@
 import { sql } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db } from "@/db/client";
+import { isUuid, isViewType } from "@/db/views";
+import type { ViewType } from "@/db/schema";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -154,12 +156,15 @@ export async function requireUserIdOrNull(): Promise<string | null> {
 
 
 /**
- * Identity AND authorization for one swing.
+ * Identity AND authorization for one swing, resolved down to the VIEW being asked for.
  *
  * "Is this caller signed in" is not enough for a swing-scoped route: it would let any account
  * fetch any swing by id, which for the video route means watching a stranger's footage of
  * themselves. So this answers the real question — may THIS user see THIS swing — using the same
  * rule as the `swings_select` policy: the owner, or a coach whose link is approved.
+ *
+ * It resolves the view in the same round trip rather than in a second query, because the video
+ * route runs this once per HTTP Range request and scrubbing issues a great many of them.
  *
  * The rule is duplicated here rather than delegated to RLS, and that is a **temporary** state
  * that must not be mistaken for the design. The app currently connects to Postgres as a
@@ -168,15 +173,30 @@ export async function requireUserIdOrNull(): Promise<string | null> {
  * connects as a non-superuser and sets the request context per transaction, this function is the
  * only thing actually enforcing the boundary. See docs/DECISIONS.md D26.
  */
-export async function requireSwingAccess(
+export async function requireViewAccess(
   swingId: string,
-): Promise<{ userId: string } | { error: Response }> {
+  viewType?: string | null,
+): Promise<ViewAccess | { error: Response }> {
   const userId = await requireUserIdOrNull();
   if (!userId) return { error: new Response("unauthorized", { status: 401 }) };
 
-  const rows = await db.execute(sql`
-    select 1 from public.swings s
+  const notFound = { error: new Response("not found", { status: 404 }) };
+  // A uuid column will not compare against `/swing/perfect` — a bookmark from before migration
+  // 0006 — so an unparseable id is answered here rather than raising a cast error as a 500.
+  if (!isUuid(swingId)) return notFound;
+  const wanted = viewType && isViewType(viewType) ? viewType : null;
+  // A view type that is not one of the two is a malformed request, not "give me the default":
+  // silently serving down-the-line for `?view=overhead` would look like the parameter worked.
+  if (viewType && !wanted) return { error: new Response("unknown view", { status: 400 }) };
+
+  const rows = await db.execute<{
+    view_id: string; view: ViewType; media_key: string;
+  }>(sql`
+    select v.id as view_id, v.view, v.media_key
+      from public.swings s
+      join public.swing_views v on v.swing_id = s.id
      where s.id = ${swingId}
+       and (${wanted}::text is null or v.view = ${wanted})
        and (
          s.user_id = ${userId}
          or exists (
@@ -186,11 +206,34 @@ export async function requireSwingAccess(
               and cl.status = 'approved'
          )
        )
+     order by v.is_primary desc, v.created_at asc
      limit 1
   `);
 
   // 404, not 403. Telling an unauthorized caller that a swing exists is itself a disclosure —
-  // it confirms an id is real and that someone owns it.
-  if (rows.length === 0) return { error: new Response("not found", { status: 404 }) };
-  return { userId };
+  // it confirms an id is real and that someone owns it. The same answer covers "no such view",
+  // which keeps the two indistinguishable from outside.
+  const row = rows[0];
+  if (!row) return notFound;
+  return {
+    userId,
+    swingId,
+    viewId: row.view_id,
+    view: row.view,
+    mediaKey: row.media_key,
+  };
+}
+
+export interface ViewAccess {
+  userId: string;
+  swingId: string;
+  viewId: string;
+  view: ViewType;
+  /** Storage key for this view's artifacts — resolve it with `lib/swings.ts:swingFile`. */
+  mediaKey: string;
+}
+
+/** `?view=dtl|face_on` off a request URL, or null when the caller did not ask for one. */
+export function viewParam(req: Request): string | null {
+  return new URL(req.url).searchParams.get("view");
 }

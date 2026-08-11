@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { SwingSummary } from "@/lib/swings";
-import { PRO_SWINGS, proSwing } from "@/lib/proSwings";
+import type { ReferenceSwing } from "@/lib/proSwings";
 
 /**
  * "Compare Swing" — laid over the top-right of the video, beside the overlay and full-bleed
@@ -37,11 +37,17 @@ export function CompareButton({ enabled, onToggle }: {
  * props carry only the ids either side of this one (for the prev/next links), and a comparison
  * wants the whole log.
  */
-export function SourcePicker({ sourceId, onPickSource, currentId }: {
+export function SourcePicker({ sourceId, onPickSource, currentId, references }: {
   sourceId: string;
   onPickSource: (id: string) => void;
   /** The swing being studied — never offered as its own comparison. */
   currentId: string;
+  /**
+   * The bundled model swings, resolved to real ids server-side. Passed in rather than imported:
+   * since migration 0006 which row is a reference is a database fact, and a client component
+   * cannot know it without being told.
+   */
+  references: ReferenceSwing[];
 }) {
   const [swings, setSwings] = useState<SwingSummary[] | null>(null);
   const [open, setOpen] = useState(false);
@@ -56,8 +62,10 @@ export function SourcePicker({ sourceId, onPickSource, currentId }: {
     return () => { cancelled = true; };
   }, [open, swings]);
 
-  const others = (swings ?? []).filter((s) => s.id !== currentId && !proSwing(s.id));
-  const label = proSwing(sourceId)?.label ?? sourceId;
+  const others = (swings ?? []).filter((s) => s.id !== currentId && !s.referenceLabel);
+  const label = references.find((r) => r.id === sourceId)?.label
+    ?? (swings ?? []).find((s) => s.id === sourceId)?.label
+    ?? "Reference";
 
   return (
     <div className="relative">
@@ -77,7 +85,7 @@ export function SourcePicker({ sourceId, onPickSource, currentId }: {
             className="fixed inset-0 z-40 cursor-default" onClick={() => setOpen(false)} />
           <div className="absolute left-0 z-50 mt-2 w-60 overflow-hidden rounded-2xl border
                           border-line bg-[#12141b] shadow-2xl">
-            {PRO_SWINGS.map((p) => (
+            {references.map((p) => (
               <MenuItem key={p.id} label={p.label} hint="Reference"
                 active={sourceId === p.id}
                 onClick={() => { onPickSource(p.id); setOpen(false); }} />
@@ -91,7 +99,7 @@ export function SourcePicker({ sourceId, onPickSource, currentId }: {
               <p className="px-3 py-2 text-[11px] text-neutral-500">No other analysed swings yet.</p>
             )}
             {others.map((s) => (
-              <MenuItem key={s.id} label={s.id}
+              <MenuItem key={s.id} label={s.label}
                 hint={s.overallScore !== null ? `Score ${Math.round(s.overallScore)}` : "Not scored"}
                 active={sourceId === s.id}
                 onClick={() => { onPickSource(s.id); setOpen(false); }} />

@@ -1,5 +1,5 @@
 import { getJob, startReanalysis } from "@/lib/jobs";
-import { requireSwingAccess } from "@/lib/auth";
+import { requireViewAccess, viewParam } from "@/lib/auth";
 
 /**
  * Re-run the analyzer over a swing's original clip.
@@ -14,14 +14,16 @@ import { requireSwingAccess } from "@/lib/auth";
 const noStore = { "Cache-Control": "no-store" };
 
 export async function POST(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const access = await requireSwingAccess(id);
+  const access = await requireViewAccess(id, viewParam(req));
   if ("error" in access) return access.error;
   try {
-    const job = await startReanalysis(id);
+    // One view at a time: re-analysis re-runs the analyzer over ONE clip, so a swing with two
+    // cameras is two jobs, not one job that quietly does half the work.
+    const job = await startReanalysis(access);
     return Response.json(job, { headers: noStore });
   } catch (err) {
     return Response.json(
@@ -32,13 +34,13 @@ export async function POST(
 }
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
-  const access = await requireSwingAccess(id);
+  const access = await requireViewAccess(id, viewParam(req));
   if ("error" in access) return access.error;
-  const job = await getJob(id);
+  const job = await getJob(access);
   if (!job) return Response.json({ status: "idle" }, { headers: noStore });
   return Response.json(job, { headers: noStore });
 }

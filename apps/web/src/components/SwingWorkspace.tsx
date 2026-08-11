@@ -21,7 +21,7 @@ import ComparisonPane from "./ComparisonPane";
 import { useSwingStages } from "@/lib/useSwingStages";
 import { phaseFrames, phaseNameAt } from "@/lib/swingPhases";
 import { CompareButton, SourcePicker } from "./ComparisonBar";
-import { PRO_SWING_ID, proSwing } from "@/lib/proSwings";
+import type { ReferenceSwing } from "@/lib/proSwings";
 import OverviewView from "./views/OverviewView";
 import CoachView from "./views/CoachView";
 import AdvancedView from "./views/AdvancedView";
@@ -51,12 +51,19 @@ const TABS: { key: ViewKey; icon: string; label: string }[] = [
  * nothing outside it reads them.
  */
 export default function SwingWorkspace({
-  id, analysis, scorecard, prevId, nextId, missing, currentSchema,
+  id, analysis, scorecard, prevId, nextId, missing, currentSchema, references,
 }: {
+  /** The SWING's id. Artifact routes resolve it to a view; `?view=` will pick between two. */
   id: string;
   analysis: Analysis;
   /** null when this swing predates Stage 8 or was analysed with `--no-scoring`. */
   scorecard: Scorecard | null;
+  /**
+   * The bundled model swings with their real ids, resolved by the server page. Empty when none
+   * have been analysed on this machine, in which case the comparison opens on nothing rather
+   * than on a hardcoded id that may not exist.
+   */
+  references: ReferenceSwing[];
   prevId: string | null;
   nextId: string | null;
   missing: string[];
@@ -121,7 +128,7 @@ export default function SwingWorkspace({
 
   // ---------------------------------------------------------------- comparison
   const [compareOn, setCompareOn] = useState(false);
-  const [compareId, setCompareId] = useState<string>(PRO_SWING_ID);
+  const [compareId, setCompareId] = useState<string>(references[0]?.id ?? "");
   /**
    * The fetched reference, tagged with the id it was fetched for.
    *
@@ -134,7 +141,9 @@ export default function SwingWorkspace({
     { id: string; analysis: Analysis | null; error: string | null } | null>(null);
 
   useEffect(() => {
-    if (!compareOn) return;
+    // No id to compare against is a real state — no reference has been analysed on this machine.
+    // Fetching `/api/swings//analysis` instead would 404 and read as the picker being broken.
+    if (!compareOn || !compareId) return;
     let cancelled = false;
     fetch(`/api/swings/${compareId}/analysis`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
@@ -143,17 +152,17 @@ export default function SwingWorkspace({
       })
       .catch(() => {
         if (cancelled) return;
-        const pro = proSwing(compareId);
+        const ref = references.find((r) => r.id === compareId);
         setRefData({
           id: compareId, analysis: null,
-          error: pro
-            ? `The ${pro.label} reference hasn't been analysed on this machine yet — run `
-              + `burnin.py over ${pro.source}, then \`pnpm db:backfill\`.`
-            : `Couldn't load ${compareId}.`,
+          error: ref
+            ? `The ${ref.label} reference has a row but no readable analysis — re-run burnin.py `
+              + `over its clip, then \`pnpm db:backfill\`.`
+            : "Couldn't load that swing's analysis.",
         });
       });
     return () => { cancelled = true; };
-  }, [compareOn, compareId]);
+  }, [compareOn, compareId, references]);
 
   const refCurrent = refData?.id === compareId ? refData : null;
   const refAnalysis = refCurrent?.analysis ?? null;
@@ -266,7 +275,8 @@ export default function SwingWorkspace({
                 toggles={toggles}
                 setToggles={setToggles}
                 sourcePicker={
-                  <SourcePicker sourceId={compareId} onPickSource={setCompareId} currentId={id} />
+                  <SourcePicker sourceId={compareId} onPickSource={setCompareId} currentId={id}
+                                references={references} />
                 }
               />
             )}
