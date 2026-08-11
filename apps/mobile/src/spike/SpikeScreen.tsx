@@ -24,7 +24,6 @@ import {
   type Probe,
   type ProbeStatus,
 } from "./probes";
-import { CaptureProbe } from "./CaptureProbe";
 import { HighSpeedProbe } from "./HighSpeedProbe";
 import { recordResult } from "./record";
 import { Skeleton } from "./Skeleton";
@@ -333,33 +332,16 @@ export default function SpikeScreen() {
    * (`scripts/measure-capture.mjs`). The camera cannot be the witness for whether the camera
    * degraded, so this side only reports what was requested and where the artifact landed.
    */
-  const onCaptureRecorded = useCallback((info: {
-    path: string; requestedFps: number; resolvedFps: number; seconds: number; supported: number[];
-  }) => {
-    // One result PER RATE. All three recordings previously shared the id "capture", so the
-    // puller's last-wins rule silently discarded 60 and 120 and reported only 240 — three
-    // measurements taken, one kept.
-    setLastCapture({ path: info.path, fps: info.requestedFps });
-    setProbe(`capture@${info.requestedFps}`, {
-      status: "fail",
-      measurement: { value: info.requestedFps, device: deviceName },
-      detail:
-        `recorded ${info.seconds.toFixed(1)}s, REQUESTED ${info.requestedFps}fps, ` +
-        `pipeline negotiated ${info.resolvedFps || "?"}fps, device claims ` +
-        `[${info.supported.join("/")}] -> ${info.path} · ` +
-        `run: node scripts/measure-capture.mjs --expect ${info.requestedFps}`,
-    });
-  }, [deviceName, setProbe]);
 
   const onHighSpeedRecorded = useCallback((info: {
-    path: string; requestedFps: number; grantedRange: string;
+    path: string; requestedFps: number; api: string;
   }) => {
     setLastCapture({ path: info.path, fps: info.requestedFps });
     setProbe(`high-speed@${info.requestedFps}`, {
       status: "fail",
       measurement: { value: info.requestedFps, device: deviceName },
       detail:
-        `CameraX granted ${info.grantedRange} for a requested ${info.requestedFps} -> ${info.path}` +
+        `${info.api} recorded a requested ${info.requestedFps}fps -> ${info.path}` +
         ` · run: node scripts/measure-capture.mjs --expect ${info.requestedFps} ${info.path}`,
     });
   }, [deviceName, setProbe]);
@@ -372,13 +354,6 @@ export default function SpikeScreen() {
     });
   }, [deviceName, setProbe]);
 
-  const onCaptureError = useCallback((message: string) => {
-    setProbe("capture", {
-      status: "fail",
-      measurement: { value: 0, device: deviceName },
-      detail: `capture failed: ${message}`,
-    });
-  }, [deviceName, setProbe]);
 
   /**
    * Probe 4 — the same seek measurement, against a clip arriving over HTTP.
@@ -696,13 +671,6 @@ export default function SpikeScreen() {
               <HighSpeedProbe
                 onRecorded={onHighSpeedRecorded}
                 onError={onHighSpeedError}
-                disabled={busy}
-              />
-            ) : null}
-            {p.id === "capture" ? (
-              <CaptureProbe
-                onRecorded={onCaptureRecorded}
-                onError={onCaptureError}
                 disabled={busy}
               />
             ) : null}

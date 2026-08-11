@@ -127,16 +127,6 @@ export const PROBES: Probe[] = [
     status: "pending",
     measures: "achieved fps from the RECORDED FILE at 120 and 240",
   },
-  {
-    id: "capture",
-    title: "3 · Sustained 60fps capture",
-    question: "Does the device actually record at the rate it reports?",
-    why:
-      "PROJECT_MAIN §2.3 makes 60fps non-negotiable and forbids silently degrading it. " +
-      "VisionCamera advertises 30–240fps; advertised is not achieved.",
-    status: "pending",
-    measures: "achieved fps from the RECORDED FILE — bar 59.5",
-  },
 ];
 
 /**

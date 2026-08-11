@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import HighSpeedCamera, {
-  type Camera2Capabilities,
-  type HighSpeedSupport,
-} from "../../modules/high-speed-camera/src";
+import HighSpeedCamera, { type Camera2Capabilities } from "../../modules/high-speed-camera/src";
 import { styles } from "./styles";
 
 /**
@@ -15,7 +12,7 @@ import { styles } from "./styles";
  */
 
 interface HighSpeedProbeProps {
-  onRecorded: (info: { path: string; requestedFps: number; grantedRange: string }) => void;
+  onRecorded: (info: { path: string; requestedFps: number; api: string }) => void;
   onError: (message: string) => void;
   disabled?: boolean;
 }
@@ -24,7 +21,6 @@ const RATES = [120, 240];
 const RECORD_SECONDS = 6;
 
 export function HighSpeedProbe({ onRecorded, onError, disabled }: HighSpeedProbeProps) {
-  const [support, setSupport] = useState<HighSpeedSupport | null>(null);
   const [busy, setBusy] = useState<number | null>(null);
 
   const [queryError, setQueryError] = useState<string | null>(null);
@@ -50,30 +46,13 @@ export function HighSpeedProbe({ onRecorded, onError, disabled }: HighSpeedProbe
       });
   }, []);
 
-  useEffect(() => {
-    HighSpeedCamera.getSupportedFrameRates()
-      .then((s) => {
-        // Logged as well as rendered: when the card would not respond, the screen could not say
-        // why and the phone is not somewhere to go reading state from.
-        console.log(`SWINGSAGE_HIGHSPEED ${JSON.stringify(s)}`);
-        setSupport(s);
-      })
-      .catch((e: unknown) => {
-        const msg = e instanceof Error ? e.message : String(e);
-        console.log(`SWINGSAGE_HIGHSPEED {"error":${JSON.stringify(msg)}}`);
-        setQueryError(msg);
-        onError(msg);
-      });
-  }, [onError]);
 
-  const record = useCallback(async (fps: number, api: "camerax" | "camera2") => {
+  const record = useCallback(async (fps: number) => {
     if (busy !== null) return;
     setBusy(fps);
-    setLast(`requesting ${fps}fps via ${api}…`);
+    setLast(`requesting ${fps}fps…`);
     try {
-      const result = api === "camera2"
-        ? await HighSpeedCamera.camera2Record(fps, RECORD_SECONDS)
-        : await HighSpeedCamera.record(fps, RECORD_SECONDS);
+      const result = await HighSpeedCamera.camera2Record(fps, RECORD_SECONDS);
       setLast(`✓ recorded ${fps}fps -> ${result.path.split("/").pop()}`);
       onRecorded(result);
     } catch (e) {
@@ -89,13 +68,7 @@ export function HighSpeedProbe({ onRecorded, onError, disabled }: HighSpeedProbe
   return (
     <View>
       <Text style={styles.detail}>
-        {queryError
-          ? `query failed: ${queryError}`
-          : support === null
-          ? "querying CameraX…"
-          : support.supported
-            ? `CameraX high-speed ranges: ${support.ranges.join(" · ")} (max ${support.maxFps})`
-            : "device reports NO constrained-high-speed capability"}
+        {queryError ? `query failed: ${queryError}` : "Camera2 constrained high-speed"}
       </Text>
       <Text style={styles.detail}>
         Camera2:{" "}
@@ -112,7 +85,7 @@ export function HighSpeedProbe({ onRecorded, onError, disabled }: HighSpeedProbe
         {RATES.map((fps) => (
           <Pressable
             key={fps}
-            onPress={() => void record(fps, "camera2")}
+            onPress={() => void record(fps)}
             /**
              * Deliberately NOT disabled by `support.supported`. The card went unclickable once and
              * the screen could not say whether that was the device, the query or the layout —

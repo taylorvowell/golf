@@ -452,6 +452,59 @@ per fixture, then `pnpm db:backfill`.
 
 ---
 
+## 11b. Measured Android device capability
+
+Everything here was measured on a **Galaxy S25+ (SM-S936U1, Android 36)** by the step 02 spike, and
+every number comes from decoding an artifact rather than from an API's self-report. Decisions
+D34–D39 carry the reasoning; this is the standing summary.
+
+### What works, and what to build on
+
+| Capability | Result | Reach it with |
+|---|---|---|
+| **Overlay locked to the presented frame** | **99.2% exactly locked** (n=250), ~49 ms of lead to draw in | `modules/frame-clock` — `expo-video` exposes no frame callback |
+| **True high-frame-rate capture** | **1080p 231 fps** (240 requested), **1080p 119 fps** (120 requested) | `modules/high-speed-camera` — Camera2 constrained-high-speed |
+| Sustained 60 fps capture | 59.5–60.0 fps at 1080p | either path |
+| Artifact parse on device | 13.7 MB `analysis.json` parses in **199 ms** | — |
+| Slow-motion playback | `setPlaybackSpeed`; 240 fps at 0.25× is a true 60 fps on screen | `frame-clock` |
+
+**Two modules are load-bearing and must survive the spike's deletion:**
+
+- **`modules/frame-clock`** — Media3 `VideoFrameMetadataListener`. `mobile-player` needs the same
+  frame callback, and no Expo/RN video component surfaces one.
+- **`modules/high-speed-camera`** — `Camera2HighSpeed`. The **deprecated**
+  `createConstrainedHighSpeedCaptureSession(surfaces, callback, handler)` is the call that works;
+  the modern `SessionConfiguration(SESSION_HIGH_SPEED, …)` is silently swallowed on this device
+  (no callback at all). Do not "fix" that deprecation — it removes 240 fps with no error.
+
+### What does NOT work, and is not worth retrying
+
+| Attempt | Outcome |
+|---|---|
+| `react-native-vision-camera` v5 for high speed | Accepted 120/240 and **silently delivered 60** |
+| CameraX 1.5 high-speed | Refuses — gates on `CamcorderProfile`, which this device leaves empty |
+| Skia for the overlay | Unnecessary. Plain rotated `View`s hit 99.2%; the retest `Skeleton.tsx` warned about is cancelled |
+| React state as the overlay paint path | Not the bottleneck — removing it entirely scored no better (99.0%) |
+
+### Known limits and open items
+
+- **Seek lands one frame late, consistently** (p50 1, max 1, n=128, `SeekParameters.EXACT`). A
+  constant off-by-one, so `mobile-player` compensates and verifies rather than works around.
+- **231 fps against a requested 240** is 3.6% short (~50 frames over 5.8 s) — probably encoder ramp
+  or the stop edge, not a rate cap. Needs one look before `in-app-capture` relies on an exact rate.
+- **Scrubbing is unmeasured.** Four instrument revisions could not measure it honestly; a seeked
+  frame is displayed on arrival so there is **no lead** on that path, unlike playback's 49 ms. Any
+  scrub design must draw for a target it already knows. Verification belongs to
+  `scripts/measure_overlay.py`, which compares the drawn marker and the burned-in bar within one
+  screenshot.
+- **Transfer, not parsing, is the artifact problem** — 13.7 MB took 2781 ms over LAN. A lean
+  per-view API payload is a step 07 input.
+- **iOS is entirely unmeasured** — no Mac, no device. Android leads by D31's amendment.
+- **Capability must be probed at runtime, never assumed.** This is a flagship; the mid-range
+  Android step 02 still wants may differ, and §2.3 forbids degrading silently.
+
+---
+
 ## 12. What does not exist
 
 Stated as fact, with no implied ordering or plan. See
