@@ -17,7 +17,11 @@ blocked until a Swing can hold more than one video.
 
 ## Dependencies
 
-- Step 05 complete (profiles exist; equipment and swings attach to a real golfer).
+- ~~Step 05 complete (profiles exist; equipment and swings attach to a real golfer).~~
+  **Amended 2026-08-11 (D27): this was overstated.** This step needs *a user id to attach rows
+  to*, which step 03 already provides — it does not need roles, onboarding or profile UI. Reading
+  it as a hard dependency put the product's core domain model behind two steps of identity
+  plumbing for no technical reason.
 
 ## Architectural Context
 

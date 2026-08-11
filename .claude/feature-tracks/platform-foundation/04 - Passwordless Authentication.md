@@ -17,7 +17,9 @@ session model has to support it from the start rather than be retrofitted.
 ## Dependencies
 
 - Step 03 complete (Supabase project, schema and RLS in place).
-- Step 02 complete (mobile workspace exists to host the sign-in flow).
+- ~~Step 02 complete~~ — **amended 2026-08-11 (D27):** only the mobile *workspace* is needed and
+  it exists. Step 02's open item is device *measurements*, which are blocked on hardware and have
+  nothing to do with sign-in. As written this made auth look blocked by a phone purchase.
 
 ## Architectural Context
 

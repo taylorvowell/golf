@@ -1134,3 +1134,48 @@ is the record that the gap is known rather than forgotten.
 
 **Also outstanding:** OTP expiry still defaults to one hour for a six-digit code (dashboard
 setting, should be 5-10 minutes).
+
+---
+
+## D27 — Function before identity: the foundation steps are resequenced, and two dependencies were overstated
+
+**Date:** 2026-08-11
+**Status:** ACTIVE
+
+**Context:** Step 04 (auth) was underway and the remaining foundation steps run in a strictly
+linear chain: 04 → 05 → 06 → 07/09 → 08 → 10. Taylor asked to get the product more functional
+before finishing logins. Auditing the chain to see whether that was even possible turned up two
+dependencies that are **stated as hard and are not**.
+
+**Finding 1 — step 06 does not depend on step 05.** 06 (Swing/Session/Equipment model) declares
+"Step 05 complete (profiles exist; equipment and swings attach to a real golfer)". What it
+actually needs is *a user id to attach rows to*, which step 03 already provides: `users` exists,
+every user-scoped table already carries a `user_id` FK, and RLS references it. Roles, onboarding
+and profile UI are not prerequisites for a data model. As written, this put the **core domain
+model of the product behind two steps of identity plumbing** for no technical reason.
+
+**Finding 2 — step 04 does not depend on step 02 completing.** 04 lists "Step 02 complete (mobile
+workspace exists to host the sign-in flow)". The workspace exists. Step 02's open item is device
+*measurements*, blocked on hardware that has not been bought. As written, authentication looked
+blocked by a phone purchase.
+
+**Decision:** resequence to **06 → 09 → 07**, then return to 04 → 05 → 08 → 10.
+
+Rationale: 06 (the real swing/session/equipment model) and 09 (media addressing) are the two
+remaining steps that make the product *do* anything, and both are as un-retrofittable as the
+identity work — D3's "build the platform first" argument applies to them just as strongly. This
+is a reorder **within** the foundation phase, not a move to product-before-platform, so D3 and
+D4 stand.
+
+**Consequences:**
+- A **development identity** (`DEV_USER_EMAIL`) resolves every request to one user so features
+  can be built ahead of sign-in. Step 04 warns that "a fallback identity that still exists will be
+  used by accident", which is correct, so it is built to make accidents impossible: no default,
+  a warning on every resolution, and **the app throws at module load if it is set in a production
+  build**. Deleted, not disabled, when 04 completes.
+- **Step 04 is left in-progress with a known security gap (D26): RLS is inert because the app
+  connects as a superuser.** Deferring auth also defers that fix, and the app is LAN-reachable per
+  the runbook. Acceptable while the data is ten development fixtures; it must not survive contact
+  with a real user's video.
+- Step 09's dependency on 06 is real and unchanged — media addressing needs stable swing identity.
+- 07, 08 and 10's dependencies are real and unchanged.

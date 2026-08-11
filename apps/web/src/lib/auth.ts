@@ -14,7 +14,36 @@ import { createClient } from "@/lib/supabase/server";
  * believes it; `getUser()` verifies the token with the auth server. On a server that decides who
  * may see a video of someone, the difference is the whole point.
  */
+/**
+ * Development identity, so the product can be built and used before sign-in is finished.
+ *
+ * Step 04 warns — correctly — that "a fallback identity that still exists will be used by
+ * accident". This is that fallback, so it is built to be impossible to use by accident:
+ *
+ *   * it requires `DEV_USER_EMAIL` to be set explicitly; there is no default
+ *   * it **throws at module load** if that variable is present in a production build, so a
+ *     mis-set environment fails loudly at boot rather than silently authenticating everyone as
+ *     one person
+ *   * it warns on every resolution, so it cannot run unnoticed in a long-lived dev server
+ *
+ * Deleted, not disabled, once step 04 completes.
+ */
+const DEV_USER_EMAIL = process.env.DEV_USER_EMAIL?.trim();
+/** Fixed so the dev golfer keeps their swings across restarts. Obviously a dev artifact on sight. */
+const DEV_USER_ID = "00000000-0000-4000-8000-0000000000de";
+
+if (DEV_USER_EMAIL && process.env.NODE_ENV === "production") {
+  throw new Error(
+    "DEV_USER_EMAIL is set in a production build. It bypasses authentication entirely and every " +
+      "request would resolve to the same identity. Refusing to start.",
+  );
+}
+
 export async function getCurrentUser() {
+  if (DEV_USER_EMAIL) {
+    console.warn(`[auth] DEV_USER_EMAIL active — every request is ${DEV_USER_EMAIL}`);
+    return { id: DEV_USER_ID, email: DEV_USER_EMAIL } as { id: string; email: string };
+  }
   const supabase = await createClient();
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) return null;
