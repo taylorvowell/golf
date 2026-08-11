@@ -97,6 +97,36 @@ class HighSpeedCameraModule : Module() {
       }, ContextCompat.getMainExecutor(context))
     }
 
+    /**
+     * Camera2 constrained-high-speed: the ONLY API that reads the configurations the sensor
+     * actually advertises (D38). Reported separately from the CameraX answer, because
+     * "CameraX says no" and "the device says no" are different findings.
+     */
+    AsyncFunction("camera2Capabilities") { promise: Promise ->
+      try {
+        promise.resolve(Camera2HighSpeed(context).capabilities())
+      } catch (e: Throwable) {
+        promise.reject("CAMERA2_QUERY", e.message ?: "failed to read camera2 characteristics", e)
+      }
+    }
+
+    AsyncFunction("camera2Record") { fps: Int, seconds: Int, promise: Promise ->
+      try {
+        Camera2HighSpeed(context).record(fps, seconds) { result ->
+          result.fold(
+            onSuccess = { path ->
+              promise.resolve(mapOf("path" to path, "requestedFps" to fps, "api" to "camera2"))
+            },
+            onFailure = { e ->
+              promise.reject("CAMERA2_RECORD", e.message ?: "high-speed record failed", null)
+            },
+          )
+        }
+      } catch (e: Throwable) {
+        promise.reject("CAMERA2_RECORD", e.message ?: "high-speed record failed", e)
+      }
+    }
+
     /** Record `seconds` of video at `fps`, returning the file path. */
     AsyncFunction("record") { fps: Int, seconds: Int, promise: Promise ->
       val future = ProcessCameraProvider.getInstance(context)

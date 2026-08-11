@@ -15,9 +15,22 @@ export interface HighSpeedRecording {
   grantedRange: string;
 }
 
+export interface Camera2Capabilities {
+  supported: boolean;
+  declaresCapability?: boolean;
+  /** e.g. "1920x1080@240-240" — straight from CameraCharacteristics. */
+  configurations?: string[];
+  /** The ORDINARY-session ceiling. Samsung is reported to cap third parties here (D38). */
+  normalFpsRanges?: string[];
+  reason?: string;
+}
+
 interface HighSpeedCameraModule {
   getSupportedFrameRates(): Promise<HighSpeedSupport>;
   record(fps: number, seconds: number): Promise<HighSpeedRecording>;
+  /** Camera2 constrained-high-speed — the only API that reads the sensor's real config list. */
+  camera2Capabilities(): Promise<Camera2Capabilities>;
+  camera2Record(fps: number, seconds: number): Promise<HighSpeedRecording>;
 }
 
 /**

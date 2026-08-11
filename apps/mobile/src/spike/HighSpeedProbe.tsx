@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { Pressable, Text, View } from "react-native";
-import HighSpeedCamera, { type HighSpeedSupport } from "../../modules/high-speed-camera/src";
+import HighSpeedCamera, {
+  type Camera2Capabilities,
+  type HighSpeedSupport,
+} from "../../modules/high-speed-camera/src";
 import { styles } from "./styles";
 
 /**
@@ -25,6 +28,18 @@ export function HighSpeedProbe({ onRecorded, onError, disabled }: HighSpeedProbe
   const [busy, setBusy] = useState<number | null>(null);
 
   const [queryError, setQueryError] = useState<string | null>(null);
+  const [cam2, setCam2] = useState<Camera2Capabilities | null>(null);
+
+  useEffect(() => {
+    HighSpeedCamera.camera2Capabilities()
+      .then((c) => {
+        console.log(`SWINGSAGE_CAMERA2 ${JSON.stringify(c)}`);
+        setCam2(c);
+      })
+      .catch((e: unknown) => {
+        console.log(`SWINGSAGE_CAMERA2 {"error":${JSON.stringify(String(e))}}`);
+      });
+  }, []);
 
   useEffect(() => {
     HighSpeedCamera.getSupportedFrameRates()
@@ -42,11 +57,13 @@ export function HighSpeedProbe({ onRecorded, onError, disabled }: HighSpeedProbe
       });
   }, [onError]);
 
-  const record = useCallback(async (fps: number) => {
+  const record = useCallback(async (fps: number, api: "camerax" | "camera2") => {
     if (busy !== null) return;
     setBusy(fps);
     try {
-      const result = await HighSpeedCamera.record(fps, RECORD_SECONDS);
+      const result = api === "camera2"
+        ? await HighSpeedCamera.camera2Record(fps, RECORD_SECONDS)
+        : await HighSpeedCamera.record(fps, RECORD_SECONDS);
       onRecorded(result);
     } catch (e) {
       // A rejection here is a GOOD outcome relative to the alternative: D37's failure was a
@@ -67,11 +84,21 @@ export function HighSpeedProbe({ onRecorded, onError, disabled }: HighSpeedProbe
             ? `CameraX high-speed ranges: ${support.ranges.join(" · ")} (max ${support.maxFps})`
             : "device reports NO constrained-high-speed capability"}
       </Text>
+      <Text style={styles.detail}>
+        Camera2:{" "}
+        {cam2 === null
+          ? "querying…"
+          : cam2.supported
+            ? `${cam2.configurations?.length ?? 0} high-speed configs · normal-session ranges ${
+                cam2.normalFpsRanges?.join(",") ?? "?"
+              }`
+            : `unsupported (${cam2.reason ?? "declares=" + cam2.declaresCapability})`}
+      </Text>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
         {RATES.map((fps) => (
           <Pressable
             key={fps}
-            onPress={() => void record(fps)}
+            onPress={() => void record(fps, "camera2")}
             /**
              * Deliberately NOT disabled by `support.supported`. The card went unclickable once and
              * the screen could not say whether that was the device, the query or the layout —
@@ -82,7 +109,7 @@ export function HighSpeedProbe({ onRecorded, onError, disabled }: HighSpeedProbe
             style={[styles.button, busy !== null && styles.buttonDisabled]}
           >
             <Text style={styles.buttonText}>
-              {busy === fps ? `Recording ${fps}…` : `Record ${RECORD_SECONDS}s @ ${fps}`}
+              {busy === fps ? `Recording ${fps}…` : `Camera2 ${RECORD_SECONDS}s @ ${fps}`}
             </Text>
           </Pressable>
         ))}
