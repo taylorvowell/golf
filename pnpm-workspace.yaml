@@ -7,3 +7,7 @@ packages:
 onlyBuiltDependencies:
   - sharp
   - unrs-resolver
+  # esbuild backs vitest and tsx; it needs its postinstall to place the platform binary.
+  # Only surfaced once node-linker=hoisted was set (see .npmrc) — under the symlinked layout
+  # pnpm resolved it without running the script.
+  - esbuild

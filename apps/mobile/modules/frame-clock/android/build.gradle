@@ -1,0 +1,27 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.frameclock'
+version = '0.1.0'
+
+android {
+  namespace "expo.modules.frameclock"
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+  }
+  lintOptions {
+    abortOnError false
+  }
+}
+
+dependencies {
+  // Pinned to the version expo-video resolves, so a single ExoPlayer lands in the APK.
+  // If expo-video moves, move this with it — two media3 versions on the classpath fail at
+  // runtime, not at build time.
+  def androidxMedia3Version = "1.9.0"
+  implementation "androidx.media3:media3-exoplayer:${androidxMedia3Version}"
+  implementation "androidx.media3:media3-common:${androidxMedia3Version}"
+}

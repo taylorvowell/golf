@@ -1,0 +1,73 @@
+import type { StyleProp, ViewStyle } from "react-native";
+
+/**
+ * Summary of one measured quantity.
+ *
+ * `p95` and `max` are the load-bearing fields, not `mean`. A mean hides the pathology the spike
+ * exists to find — an overlay that is perfect almost always and slips several frames a few times
+ * a second, which a viewer reads as the picture tearing away from the drawing.
+ */
+export interface StatSummary {
+  count: number;
+  mean: number;
+  p50: number;
+  p95: number;
+  max: number;
+  /** Share of samples that were exactly 0. The only outcome that counts as "locked". */
+  exactShare: number;
+}
+
+export interface FrameClockStats {
+  /** Frames between the overlay JS committed and the frame actually on the glass. */
+  overlayDriftFrames: StatSummary;
+  /** Milliseconds from native frame render to the JS handler running. */
+  eventDeliveryMs: StatSummary;
+  /** Requested frame minus presented frame, after a seek. */
+  seekErrorFrames: StatSummary;
+  presentedFrame: number;
+  fps: number;
+}
+
+export interface FrameRenderedEvent {
+  frame: number;
+  presentationTimeUs: number;
+  releaseTimeNs: number;
+}
+
+export interface ReadyEvent {
+  durationMs: number;
+  width: number;
+  height: number;
+  /** The container's own frame rate. Compare against the `fps` prop — a mismatch means every
+   *  frame index is wrong while each component looks individually correct. */
+  containerFps: number;
+}
+
+/**
+ * Android's default `surfaceView` is faster and lower-power; `textureView` composites
+ * conventionally and is the documented workaround for z-ordering problems with overlapping
+ * views. Which one an overlay-on-video layout needs is a measurement. No-op on iOS.
+ */
+export type SurfaceType = "surfaceView" | "textureView";
+
+export type FrameClockViewProps = {
+  source?: string | null;
+  fps?: number;
+  emitFrames?: boolean;
+  surfaceType?: SurfaceType;
+  onFrameRendered?: (event: { nativeEvent: FrameRenderedEvent }) => void;
+  onReady?: (event: { nativeEvent: ReadyEvent }) => void;
+  onPlayerError?: (event: { nativeEvent: { message: string } }) => void;
+  style?: StyleProp<ViewStyle>;
+};
+
+export interface FrameClockHandle {
+  play: () => Promise<void>;
+  pause: () => Promise<void>;
+  /** Seek to the middle of the frame's display interval — `(frame + 0.5) / fps`. */
+  seekToFrame: (frame: number) => Promise<void>;
+  /** Call immediately after committing an overlay, so native can score the drift. */
+  markOverlayCommitted: (frame: number) => Promise<void>;
+  getStats: () => Promise<FrameClockStats>;
+  resetStats: () => Promise<void>;
+}

@@ -731,3 +731,149 @@ callback** on both platforms. D5 stands and is no longer provisional on this que
   not a guess — and it may trade power for correctness.
 - D13's **0-frame overlay drift** target is now the acceptance criterion for the native module
   rather than an aspiration.
+
+---
+
+## D20 — The shoulder/hip orientation overlay is drawn as a rigid rod, not a fixed-length line
+
+**Date:** 2026-08-10
+**Status:** ACTIVE
+
+**Context:** A new player overlay ("Shoulder + hip lines") draws a red bar through the shoulder
+pair and another through the hip pair, extended about 100% of the pair's span past each joint so
+body rotation reads at a glance without the stick figure.
+
+**The trap:** down the line — which is every fixture we have — both pairs turn side-on to the
+camera through impact and their *projected* span collapses. On swing1 the hips span 9px at impact
+against an 882px body. At that separation the two keypoints sit inside each other's noise.
+Frame-to-frame change in a pair's angle, pooled over all ten fixtures:
+
+| span ÷ body height | n | median | p90 | max |
+|---|---|---|---|---|
+| <1% | 63 | 13.3° | 62.9° | 89.9° |
+| 1–2% | 506 | 0.8° | 6.1° | 73.1° |
+| 2–3% | 765 | 0.5° | 2.5° | 59.6° |
+| 4–6% | 1766 | 0.1° | 1.3° | 32.8° |
+| >10% | 7265 | 0.1° | 0.3° | 5.6° |
+
+**Rejected first attempt:** extend by `max(span, one foot)` so the bar never gets short, and
+abstain entirely below 1.5% of body height. It removed the wild rod, but it was wrong twice over.
+The floor held the bar at near-constant length through the whole swing, so it stopped reading as
+an object attached to the body and read as a label pinned over it — the rotation cue was gone.
+And the abstain made the hip bar vanish for a few frames around impact, which is the moment a
+coach is looking hardest.
+
+**Decision:** Extend by a **multiple of the projected span with no floor**, and cap each end with
+a **ball**. The bar then behaves as a rigid rod skewered through the body: it foreshortens as the
+golfer turns away from the lens, stretches back out as they come square, and collapses to its two
+end balls when the axis points straight at the camera. The noise problem solves itself — the
+frames whose direction is untrustworthy are exactly the frames drawn shortest, so a 60° error
+moves a 27px stub instead of swinging a foot-long bar across the picture. Nothing is fabricated
+and nothing is hidden: position, direction and length are all measured, and the "collapsed to a
+ball" state is a true reading of "this axis is pointing at you".
+
+**Also decided:** below 3% of body height the bar draws dimmed (the angle is real but soft), and
+the confidence-based dim sits at **0.4**, not the obvious 0.5. RTMW's confidences on these
+fixtures cluster around 0.55, so a 0.5 rule dims 24% of frames and flips state on 1.7% of frame
+steps — a rod strobing about once a second, which reads as a rendering fault rather than as a
+confidence signal. At 0.4 it dims 1.0% of frames.
+
+**Consequences:**
+- `scripts/checkorient.py` is the Gate 1 view and prints the span percentage and the dim decision
+  per frame. Its thresholds are mirrored in `apps/web/src/components/SwingStage.tsx`; changing one
+  without the other silently desyncs the debug view from the player.
+- Check it on **consecutive frames through impact**, not on the event sheet — the behaviour that
+  matters is the collapse and re-lengthening, and the eight events sample straight past it.
+- Untested against a **face-on** clip, where both pairs stay broad and the bar should never
+  collapse. There is still no face-on fixture (CLAUDE.md), so this is asserted from geometry only.
+- **The bars moving "before" the golfer is amplification, not lag** (verified 2026-08-10 with the
+  frame-stamp test below, which came back in sync). A rod tip travels **2.6×** as far as the joint
+  it hangs off, so setup movement that is invisible on the stick figure is obvious on the bars.
+  Measured on swing1: through the approach the shoulder joint wanders a 30px envelope and the rod
+  tip an 80px one. Averaging the endpoints over a centred window changes tip motion by 0.01px per
+  frame — the movement is real and coherent, not jitter, so there is nothing to filter. The only
+  lever is `ORIENT_EXTEND`.
+- `scripts/stampframes.py` burns ffmpeg's own frame number into a copy of `normalized.mp4`, and
+  the "Sync test → Frame stamp" overlay prints the index the canvas painted beside it. This is the
+  only frame check in the project that does not compare our work against our own idea of the
+  frame. Verified in sync at 0.25x.
+
+---
+
+## D21 — The frame lock gets its own native module, measured by a closed loop, not by self-report
+
+**Date:** 2026-08-10
+**Status:** ACTIVE
+
+**Context:** D19 established that both platforms expose a real per-frame callback and that the
+frame lock therefore needs one small native module. Step 02 has to turn that from a documented
+claim into a number, on hardware.
+
+**Decision:** `apps/mobile/modules/frame-clock` is a local Expo module wrapping Media3's
+`VideoFrameMetadataListener` on Android and `AVPlayerItemVideoOutput` + `CADisplayLink` on iOS.
+`expo-video` surfaces neither, so this is a peer of it rather than a wrapper. Media3 is pinned to
+**1.9.0**, the version `expo-video` resolves — two media3 versions on the classpath fail at
+runtime, not at build time.
+
+**The part that matters is how it measures.** Drift is a **closed loop timed entirely in native
+code**: the player reports the frame about to be rendered → JS draws its overlay and calls
+`markOverlayCommitted(frame)` back → native compares that against the frame actually on the glass
+at the instant the call lands. Neither end is a JS self-report, so the result cannot be flattered
+by a coalesced timer or a slow clock. The alternative — having JS timestamp its own work — was
+rejected because it measures the thing doing the measuring.
+
+**Stated bars, taken from D13 rather than invented here:** overlay drift **p95 = 0 frames** and
+seek error **max = 0 frames**. Exactly zero, not "small". A half-frame-late overlay is what a
+viewer perceives as the drawing sliding off the golfer, and the project would rather learn now
+that the overlay must be drawn natively than ship a player that is nearly synced. Percentiles are
+**nearest-rank on both platforms**, so every number reported is one that was actually observed and
+the two platforms' columns mean the same thing.
+
+**Also decided:**
+- **Both build routes, not one.** Local `npx expo run:android` is the day-to-day path and needs no
+  Expo account — this machine already has the Android SDK, NDK and JDK 17, which contradicts step
+  02's original note that a dev build was blocked on EAS. `eas.json` is committed alongside it
+  because EAS remains the *only* route to iOS (D5/D12).
+- **The reference clip is generated and committed** (`assets/frameclock.mp4`, 600 frames, exactly
+  60fps CFR, GOP 10, frame number burned in), with `scripts/make-frame-clip.mjs` to regenerate it.
+  GOP 10 matches Stage 0, which is what makes probe 2's worst case — a seek target just before a
+  keyframe — reachable at all. The burned-in number makes drift checkable by eye, the same
+  principle as the analyzer's Gate 1 burn-in.
+- **`surfaceType` is a measurement, not an assumption.** Android's default `surfaceView` is faster
+  and lower-power; `textureView` composites conventionally and is the documented fix for
+  z-ordering with overlapping views. The spike defaults to `textureView` because the layout is
+  overlay-on-video, and the choice is switchable so the power cost can be measured rather than
+  guessed.
+- **pnpm switches to `node-linker=hoisted`** (root `.npmrc`). React Native's Android build cannot
+  use the symlinked layout: `expo-modules-core` compiles C++ through CMake + ninja, which resolves
+  the same source through both its symlinked and its real `.pnpm/…` path, decides the manifest is
+  stale, regenerates, and dies on `ninja: error: manifest 'build.ninja' still dirty after 100
+  tries`. This is **not** the path-length problem it resembles — Windows long paths are already
+  enabled on this machine, and the `CMAKE_OBJECT_PATH_MAX` warnings alongside it are a symptom of
+  the same duplicated prefix. The cost is real and accepted: a hoisted tree is npm-shaped, so pnpm
+  no longer catches a package importing something it never declared. The alternative was that no
+  Android build works at all, which would block every mobile track in the roadmap.
+  *Trap for later:* switching the linker requires deleting every `node_modules` first. A leftover
+  `node_modules/.pnpm` keeps resolving and reproduces the identical failure.
+
+**Consequences:**
+- **No probe has been run yet, and that is the important caveat.** The Android half is *compiled*
+  — `./gradlew :app:assembleDebug` is green, `:frame-clock:compileDebugKotlin` executed, and the
+  debug APK exists — but compiling is not measuring. No Android device was attached during this
+  session, so every number is still absent. D5 stays provisional on probe 1 exactly as it was
+  before this work, and nothing here should be read as evidence that the frame lock holds.
+- **The iOS half has never been compiled.** There is no Mac. Treat `ios/FrameClockView.swift` as
+  unverified source until an EAS build runs.
+- Probe 3 (60fps capture) still has no camera path and is not measurable yet. It is third by
+  design: probes 1 and 2 carry the risk that could invalidate D5.
+- Two pre-existing machine faults were found while getting Android to build — a malformed
+  `ANDROID_SDK_ROOT` and a corrupt NDK 27.1.12297006 install. Both broke *every* Android build on
+  this PC, not just this one. See `docs/RUNBOOK.md` §6; the environment variable still needs a
+  manual fix.
+- **There is no jitter to filter.** Measured over each fixture's stillest pre-address window
+  (body moving 0.04–0.69px/frame), the rod tip travels 0.16–1.69px/frame at `ORIENT_EXTEND` 0.5 —
+  below visibility. Centred mean and median filters on the angle series, windows ±2 to ±7, change
+  the approach angle rate by 0.00–0.03°/frame, because the movement is a smooth ramp and not
+  noise: swing1's shoulder angle runs 138.6° → −160° monotonically from f125 to f175 while the
+  span grows 43 → 195px. The golfer really is turning through the approach. `ORIENT_EXTEND` is
+  therefore the only honest lever, and it was halved to 0.5 for that reason.

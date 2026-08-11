@@ -117,9 +117,12 @@ look at the frame before believing any club number.
 
 # clients — from the repo root
 pnpm --filter web test                            # vitest, 71 tests
-pnpm --filter mobile test                         # jest-expo, 12 tests
+pnpm --filter mobile test                         # jest-expo, 33 tests (logic + components)
 pnpm --filter web exec tsc --noEmit && pnpm --filter web lint
 pnpm --filter mobile exec tsc --noEmit
+
+# web end-to-end — needs Docker Postgres up and at least one analysed swing
+pnpm --filter web test:e2e                        # playwright, 1 path, headless
 ```
 
 Web uses **Vitest**, mobile uses **jest-expo** — different runners because Expo's preset carries
@@ -128,6 +131,17 @@ the React Native transform, and fighting that into Vitest bought nothing.
 The web tests deliberately assert **documented behaviour, not current coordinates**. That logic
 is being re-expressed on mobile, and a snapshot of numbers would lock in one implementation;
 behavioural assertions survive the port and become the oracle for the second one.
+
+**The repo uses `node-linker=hoisted`** (root `.npmrc`), not pnpm's default symlinked layout.
+React Native's Android build cannot use the symlinked one: `expo-modules-core` compiles C++
+through CMake + ninja, which sees the same source through both its symlinked and its real
+`.pnpm/…` path, decides the generated manifest is stale, regenerates, and dies on
+`ninja: error: manifest 'build.ninja' still dirty after 100 tries`. The cost is that a hoisted
+tree is npm-shaped, so pnpm no longer catches a package importing something it did not declare.
+See `docs/DECISIONS.md` D21.
+
+If you ever switch the linker back, **delete every `node_modules` first** — a leftover
+`node_modules/.pnpm` keeps resolving and reproduces the exact failure you were trying to fix.
 
 Two pnpm-specific gotchas already handled in `apps/mobile/package.json`, both of which produce
 baffling errors if they regress:
@@ -138,10 +152,38 @@ baffling errors if they regress:
 - `tsconfig.json` needs `types: ["jest"]`, or `tsc` fails on test files while `jest` itself
   passes — the kind of split where CI stays green and the editor lies.
 
-**Component rendering is not wired up on mobile.** `@testing-library/react-native`'s `render()`
-kept returning an object with no query functions across two dependency-pinning attempts. Logic
-is tested instead, which is where the value is anyway; revisit when there is a component worth
-rendering in a test.
+**Component rendering on mobile now works** — it was previously recorded here as unusable, with
+`render()` "returning an object with no query functions" across two dependency-pinning attempts.
+That object was a **Promise**: `@testing-library/react-native` v14 made `render` and `fireEvent`
+async. Destructuring a Promise succeeds and hands back `undefined` for every name, which is why
+the symptom pointed nowhere near the cause. Component tests must therefore be `async`:
+
+```tsx
+const { getByText } = await render(<ProbeCard probe={probe} />);
+await fireEvent.press(getByText("Run probe"));
+```
+
+Two supporting details, both silent when wrong:
+
+- v14 peer-depends on a package called **`test-renderer`**, *not* `react-test-renderer`. It was
+  simply absent, and nothing warned.
+- Take queries from `render()`'s return value rather than the exported `screen` singleton.
+  jest-expo resolves the library's TypeScript `src/` via the `react-native` export condition while
+  its `main` points at `dist/`, so `screen` can land in a different module instance than the
+  `render` meant to populate it — and then insists `render` was never called.
+
+**Playwright is the end-to-end path, and it is deliberately un-mocked.** It drives a real browser
+against the real Next.js server, which reads Postgres and streams video off disk, so a pass means
+the whole chain works and a failure can be any link in it. That is the trade it exists to make:
+every other test in this repo stops at the edge of one layer, and the gaps *between* the layers —
+a stale `analysis.json`, a media root pointing elsewhere, a swing row whose artifacts were never
+backfilled — all produce a page that renders and a player that never shows a frame. None of those
+are visible to a unit test. It asserts the video reaches `HAVE_METADATA` with real dimensions,
+which is the first point at which the media route is proven to have served decodable video rather
+than a 404 body.
+
+It does **not** check that the overlay is drawn on the correct frame — that is Gate 3, needs pixel
+comparison against the analyzer's burn-in, and belongs to `analysis-ground-truth`.
 
 If `tsc` reports errors inside `.next/dev/types/` or `.next/types/`, those are stale generated
 files, not real errors — `rm -rf apps/web/.next/dev/types apps/web/.next/types` and re-run.
@@ -158,7 +200,20 @@ is always two commands. Look at the diff before accepting it: a snapshot only pr
 `DECISIONS.md` D5. Right now it is a **spike harness, not the product** — three probe cards for
 the questions that decide whether the framework choice holds.
 
-### Run it on the phone (2 minutes, works today)
+### Which of the two ways to run it you need
+
+| | Expo Go | Development build |
+|---|---|---|
+| Setup | install an app, scan a QR | one build, then same as Expo Go |
+| Runs the UI | yes | yes |
+| **Runs the probes** | **no** | **yes** |
+
+Expo Go cannot host native modules, and all three probes are native-module questions. So Expo Go
+is only useful for confirming the toolchain reaches the phone; **the measurements need a
+development build.** After that build is installed once, the day-to-day loop is identical —
+save a file, the phone reloads.
+
+### Expo Go (2 minutes, no build)
 
 ```bash
 # 1. On the phone: install "Expo Go" from the Play Store.
@@ -166,70 +221,105 @@ the questions that decide whether the framework choice holds.
 pnpm --filter mobile start
 ```
 
-A QR code appears in the terminal. **Scan it with the Expo Go app** (not the camera app) — phone
-and PC on the same wifi. The spike loads.
+Scan the QR with the Expo Go app (not the camera app); phone and PC on the same wifi. If the QR
+route fails, press `s` in the terminal to switch modes, or type the `exp://10.0.1.107:8081` URL
+shown. The IP is DHCP, and Windows Firewall may need to allow Node on private networks.
 
-If the QR route fails, press `s` in the terminal to switch modes, or open Expo Go and type the
-`exp://10.0.1.107:8081` URL shown. Same LAN caveat as the web app: the IP is DHCP, and Windows
-Firewall may need to allow Node on private networks.
+Useful keys while it runs: `r` reload · `j` open debugger · `m` toggle dev menu.
 
-Useful terminal keys while it runs: `r` reload · `j` open debugger · `m` toggle dev menu.
+### Development build — locally, no Expo account (the fast path)
+
+**This machine already has everything needed**: Android SDK (platforms 33–35, build-tools
+through 36, NDK), JDK 17 and `adb`. An Expo/EAS account is **not** required for Android — that
+was recorded as a blocker in step 02's first pass and it was wrong.
+
+```bash
+# phone on USB, USB debugging on, "Allow" the RSA prompt
+adb devices                       # must list a device, not "unauthorized"
+
+cd apps/mobile
+npx expo run:android              # first build ~5-10 min; later ones are fast
+```
+
+That compiles the APK, installs it, and starts Metro. After the first install you can just run
+`pnpm --filter mobile start` and open the app.
+
+**Two machine-level faults were found and fixed while getting this to build** — both were
+pre-existing, both broke *every* Android build on this PC, and one is still only worked around:
+
+1. **`ANDROID_SDK_ROOT` is malformed.** Its value is
+   `ANDROID_SDK_ROOT=C:\Users\taylo\AppData\Local\Android\Sdk` — the variable name got included
+   in its own value. Android Gradle Plugin prefers `ANDROID_SDK_ROOT` over the (correct)
+   `ANDROID_HOME`, so it fails with the unhelpful *"The filename, directory name, or volume label
+   syntax is incorrect"*.
+   **Not yet fixed permanently** — it needs a change to your Windows user environment variables,
+   which is yours to make:
+   *Settings → System → About → Advanced system settings → Environment Variables → User
+   variables → `ANDROID_SDK_ROOT` → set the value to exactly*
+   `C:\Users\taylo\AppData\Local\Android\Sdk`.
+   Until then, prefix builds with it:
+   ```bash
+   ANDROID_SDK_ROOT="C:\\Users\\taylo\\AppData\\Local\\Android\\Sdk" ./gradlew :app:assembleDebug
+   ```
+2. **NDK `27.1.12297006` was a broken partial install** — an empty directory containing only a
+   `.installer` marker, dated May 2025. React Native 0.86 asks for that exact version by name, so
+   the build died on *"did not have a source.properties file"*. The empty stub was deleted so
+   Gradle re-downloads it properly. **Already fixed**, no action needed.
+
+### Development build — via EAS (cloud, needed for iOS)
+
+`eas.json` is committed with `development` / `preview` / `production` profiles. This route needs
+a free Expo account and an interactive login, so it cannot be set up unattended:
+
+```bash
+cd apps/mobile
+npx eas login                     # you must do this part
+npx eas build --profile development --platform android
+```
+
+It builds in the cloud and gives a QR to install the APK — no USB, no local toolchain. Slower per
+build (~10-15 min) but it is the **only** route to iOS, since there is no Mac (D5/D12).
 
 ### What you will see, and what it means
 
-A **Device** card with platform, screen and a live UI frame rate. That number is JS-driven
-`requestAnimationFrame` — **not** video or capture rate. It exists to prove the toolchain reaches
-your phone from a Windows machine, nothing more.
+A **Device** card, then a video panel playing `assets/frameclock.mp4` — a generated 600-frame,
+exactly-60fps, GOP-10 clip with its own frame number burned into every frame, plus a green bar
+that advances 1/599 of the width per frame. A **white marker drawn by JS** sits on top of it.
 
-Then three probe cards, all currently **NEEDS DEV BUILD**:
+> **The white marker and the green bar should be exactly on top of each other.** Any visible gap
+> between them *is* the overlay drift, readable by eye and on a screen recording. That is the
+> phone-side equivalent of the analyzer's Gate 1 burn-in: the truth drawn onto the pixels it
+> describes. Regenerate the clip with `node scripts/make-frame-clip.mjs`.
 
-1. **Overlay locked to the presented frame** — the one that matters. The web player does this
-   with `requestVideoFrameCallback`; iOS has a clean analogue and the Android equivalent is
-   unconfirmed. If this fails on Android, D5 reopens and the framework choice changes.
-2. **Frame-exact seeking.**
-3. **Sustained 60 fps capture.**
+Then the three probe cards:
 
-They are blocked because **Expo Go cannot host native modules**, and all three need one. That is
-expected at this stage, not a bug.
+1. **Overlay locked to the presented frame** — the one that matters. Press *Run probe*: it plays
+   for 5s and reports drift in frames (p50/p95/max) plus the share of frames exactly locked. The
+   bar is **p95 = 0**, which is D13's stated criterion, not a rounding of "close enough".
+2. **Frame-exact seeking** — seeks to 20 fixed targets chosen to sit on, just after, and just
+   before a keyframe, since Android decodes-and-skips from the preceding sync point and a target
+   just *before* one is the worst case. Bar is **max error = 0 frames**.
+3. **Sustained 60fps capture** — still **NEEDS CAMERA**: no camera path is wired yet, and it is
+   third because probes 1 and 2 carry the risk that could invalidate D5.
 
-### Next: the development build
-
-To actually measure the three probes, Android needs a **development build** (a real APK with the
-native modules compiled in) instead of Expo Go:
-
-```bash
-pnpm --filter mobile exec expo install expo-dev-client
-# then, once an Expo account + EAS is set up:
-pnpm --filter mobile exec eas build --profile development --platform android
-```
-
-EAS builds in the cloud, which is what makes a **Windows machine viable** — there is no local
-Android SDK requirement this way, and iOS is impossible locally at all (no Xcode on Windows,
-D5/D12). The resulting APK installs directly on the phone.
+A probe cannot display PASS or FAIL without a measurement attached to it — that invariant is
+enforced in `src/spike/probes.ts` and covered by the mobile test suite, because a card claiming
+PASS with nothing behind it would quietly convert "untested" into "validated".
 
 ### iOS
 
 **No iOS device and no Mac**, so iOS is unbuildable locally under any framework — this is why
 EAS is mandatory rather than convenient (D5, D12). It does not block progress: step 02 runs
-**Android first**, because the unconfirmed risk sits on the device you already have. If Android
-fails, iOS never needs measuring.
+**Android first**, because the risk that could invalidate the framework choice sits on the device
+you already have. If Android fails, iOS never needs measuring.
+
+The iOS half of the native module (`AVPlayerItemVideoOutput` + `CADisplayLink`) is written and
+committed, but **has never been compiled** — there is no Mac to compile it on. Treat it as
+unverified source until an EAS build runs.
 
 iOS is needed to *finish* step 02 and for step 10's TestFlight verification. Options: a borrowed
 or second-hand device, or a cloud device farm for the measurement pass. The iOS simulator cannot
 exercise camera capture and is not a substitute.
-
-When it lands, the Android device above covers Android testing. **iOS has no device**, which
-matters for two steps — but neither is blocked on it starting:
-
-- **Step 02's spike** measures capture rate, dropped frames and seek accuracy on both an iPhone
-  and a mid-range Android. It runs **Android first**: the per-frame overlay callback is confirmed
-  on iOS and unconfirmed on Android, so the device already on hand carries the risk that could
-  actually invalidate the framework choice. iOS is needed to finish the step, not to begin it.
-- **Step 10** needs signed builds through TestFlight, verified on a real iOS device.
-
-Options are a borrowed/second-hand iPhone, a cloud device farm for the measurement pass, or —
-weakest — the iOS simulator, which cannot validate camera capture at all and so cannot answer
-the spike's actual question.
 
 Store developer accounts are **not** needed until around step 10; enrolling on day one only
 starts Apple's annual $99 clock early. Begin enrolment around step 07 for buffer. The account

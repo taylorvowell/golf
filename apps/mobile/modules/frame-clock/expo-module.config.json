@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["FrameClockModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.frameclock.FrameClockModule"]
+  }
+}

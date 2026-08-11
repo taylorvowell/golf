@@ -14,7 +14,8 @@
     "db:seed": "node --env-file-if-exists=.env --import tsx src/db/seed.ts",
     "db:backfill": "node --env-file-if-exists=.env --import tsx src/db/backfill.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.2",
@@ -24,6 +25,7 @@
     "react-dom": "19.2.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

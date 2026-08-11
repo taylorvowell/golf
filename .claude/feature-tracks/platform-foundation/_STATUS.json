@@ -3,7 +3,7 @@
   "featureName": "platform-foundation",
   "currentStep": "02",
   "phase": "Platform Foundation",
-  "lastUpdated": "2026-08-08T23:35:00Z",
+  "lastUpdated": "2026-08-11T00:08:29Z",
   "steps": {
     "01": {
       "status": "complete",
@@ -38,6 +38,16 @@
       "status": "not-started"
     }
   },
-  "blockers": [],
+  "blockers": [
+    {
+      "step": "02",
+      "classification": "EXTERNAL-DEPENDENCY",
+      "raisedAt": "2026-08-11T00:08:29Z",
+      "summary": "Probes 1 and 2 are built, compiled and installable, but no Android device was attached, so the step's Definition of Done (measured numbers per device) cannot be met.",
+      "needed": "Connect the Android phone by USB with USB debugging enabled and accept the RSA prompt, then run `npx expo run:android` from apps/mobile and press Run probe on the first two cards.",
+      "alsoNeeded": "ANDROID_SDK_ROOT is malformed at the Windows user level (its value contains its own name). Builds work only when it is overridden per-invocation until that is corrected. See docs/RUNBOOK.md section 6.",
+      "iosNote": "Probe measurement on iOS additionally needs hardware that does not exist (no iPhone, no Mac). The iOS source is written but has never been compiled. This is a known, pre-existing constraint recorded in D5/D12, not new."
+    }
+  ],
   "skipped": []
 }

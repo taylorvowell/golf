@@ -12,6 +12,10 @@
 
 # testing
 /coverage
+/test-results
+/playwright-report
+/blob-report
+/playwright/.cache
 
 # next.js
 /.next/
@@ -32,6 +36,10 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# ...except the template, which is the whole point of having one. Without this negation
+# `.env*` swallowed .env.example too, so it was never actually tracked and nobody else
+# could see which variables the app needs.
+!.env.example
 
 # vercel
 .vercel

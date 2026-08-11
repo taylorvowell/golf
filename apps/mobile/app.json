@@ -1,15 +1,17 @@
 {
   "expo": {
-    "name": "mobile",
-    "slug": "mobile",
+    "name": "SwingSage",
+    "slug": "swingsage",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.swingsage.spike"
     },
     "android": {
+      "package": "com.swingsage.spike",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -20,6 +22,11 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-dev-client",
+      "expo-video",
+      "expo-asset"
+    ]
   }
 }
