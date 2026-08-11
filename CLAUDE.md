@@ -186,6 +186,7 @@ python scripts/checkclub.py out/<stem>    the club drawn over the real frame at 
 python scripts/checktrace.py out/<stem>   the drawn TRACE: reach to the ball, unmeasured gaps
 python scripts/clubdebug.py out/<stem>    motion mask | candidates | chosen shaft
 python scripts/checkangles.py out/<stem>  every angle DRAWN vs the value it is LABELLED with
+python scripts/checkorient.py out/<stem> the shoulder/hip orientation rods + where they abstain
 python scripts/checktop.py out/<stem>     every candidate top-of-backswing signal, side by side
 python scripts/kpdebug.py <video>         RTMW's 133 sub-indices on a real frame
 python scripts/checkball.py out/<stem>    ball, Address club head, disappearance image
@@ -234,6 +235,27 @@ looked healthy and were wrong. Build the debug view when the work starts, not af
   decision and rationale in `docs/DECISIONS.md` and the track's `_PROGRESS.md`. A question is
   warranted only when proceeding under any assumption would be unsafe, or would waste
   significant work if wrong.
+- **Standing authorizations — do NOT ask about these. Decide, log, continue.**
+  - **Dependencies.** Adding a mainstream library is tactical. Pick it, record why in
+    `DECISIONS.md`, move on. Only a *vendor* choice (a paid service, a data processor, anything
+    holding user data) is strategic.
+  - **UX and product defaults.** Sign-in method, control layout, wording, which of two reasonable
+    designs — decide on the product's stated principles and record it. Presenting two options and
+    waiting is the wrong move; a recommendation acted on is recoverable, a stalled build is not.
+  - **Tooling and workflow.** Build routes, test runners, script layout, local vs cloud for a dev
+    task. Just pick the one that needs least from Taylor.
+  - **Anything reversible in one commit.** If a wrong call is a revert, it is not worth a question.
+- **Do stop for: money, hardware, credentials, and irreversibility.** Spending, buying a device,
+  anything needing an interactive login or a dashboard setting, deleting user data, or a
+  production deploy. These are the only routine interrupts.
+- **Checkpoint at feature boundaries, not at decisions.** Run to the end of a step, or to the
+  point where something is genuinely testable by hand — then stop and say so. Do not stop
+  mid-step to confirm an approach.
+- **Prefer one step per session.** The practical limit on a long autonomous run is context, not
+  judgement. A step that ends committed and green is a clean handoff; a large refactor abandoned
+  half-done is the one outcome worse than asking. If a unit cannot be finished and verified,
+  say so and do the piece that must come first instead.
+
 - **Still stop for genuinely external blockers** — missing credentials, interactive auth,
   hardware that does not exist. Those are not approval gates.
 - **Keep autonomy reversible.** Contract and schema changes stay append-only and logged, so a
