@@ -1217,3 +1217,49 @@ rider on six safe ones.
 `swings.id` is still the analyzer's `out/<stem>` folder name), and §43's questions about session
 creation and raw-recording retention. Step 09 (media addressing) depends on the identifier work,
 so those two should be done together.
+
+---
+
+## D29 — §43's swing-data questions: sessions are manual, swings move freely, raw video is kept for 30 days
+
+**Date:** 2026-08-11
+**Status:** ACTIVE
+
+**Context:** Step 06 item 8 requires answering the §43 questions the data model forces. These are
+being answered **before** the multi-view restructure rather than after, because each one changes
+what that schema has to look like — deciding them afterwards would mean migrating swing identity
+twice.
+
+**1. Sessions are created manually, with the app proposing one.**
+Automatic grouping by time window guesses wrong in both directions: a range session interrupted by
+a coffee break becomes two, and two evenings at the same course become one. Both are annoying in a
+way the golfer cannot correct without understanding the rule. So a session is created by the
+golfer, and the app *suggests* one when swings cluster in time and place — a suggestion is
+correctable, an inference is not.
+
+**2. A swing can move between sessions, and exists without one.**
+`swings.session_id` stays nullable and mutable, with `on delete set null` (already the case).
+Sessions are an **organizing layer over swings, not an owner of them** — deleting a session must
+never delete the swings in it, which is the single most likely destructive mistake in the whole
+swing log. A swing recorded before its session exists gets attached later.
+
+**3. Raw recordings are retained for 30 days after successful analysis, then dropped.**
+The normalized clip is the record of truth, but it is a *derived* artifact: it has been trimmed,
+and a bad trim is only recoverable from the original. Until automatic swing isolation exists (D2
+defers it, so `in-app-capture` ships a manual trim), a mis-trimmed swing is a realistic and
+unrecoverable loss if the raw is gone immediately.
+
+30 days covers noticing and re-trimming, and bounds the cost: raw phone video is 270-330MB per
+swing against a normalized clip an order of magnitude smaller, and
+[`SCALE-10K-MAU.md`](SCALE-10K-MAU.md) already makes storage and egress the dominant line item.
+Retaining raw indefinitely would multiply the largest cost in the product to insure against a
+rare, user-correctable mistake.
+
+**Consequences:**
+- The swing model needs a raw-artifact reference with its own lifecycle, distinct from the
+  normalized clip — so step 09's addressing must treat "the original" as a first-class artifact
+  that can disappear while the swing remains valid.
+- The 30-day sweep is machinery `production-readiness` owns, alongside tier-driven retention
+  (§30.1), which reuses the same mechanism on a schedule rather than an event.
+- A swing whose raw has expired must say so rather than offering a re-trim that cannot work.
+- Deleting a session is a safe operation by construction, which is worth keeping true.
