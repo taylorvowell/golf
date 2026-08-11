@@ -909,3 +909,50 @@ which are drawn and both of which rest on far more reliable keypoints.
   reasoning holds there too, it should follow.
 - No scoring check reads these keypoints, so nothing measured changes. This is a rendering
   decision only.
+
+---
+
+## D23 — The overlay stays in TypeScript. Drawing it natively is rejected on cost, not on merit
+
+**Date:** 2026-08-11
+**Status:** ACTIVE
+
+**Context:** Step 02's first real measurement on an S25+ found the JS-state overlay sits **~3.8
+frames (≈64ms) behind the video during playback** — median -3.82, p95 4.82, 30/30 samples behind,
+measured from device screenshots by `scripts/measure_overlay.py`. That fails D13's stated bar of
+p95 = 0. A native-drawn overlay was built to see whether zero was reachable.
+
+**Decision:** **Do not draw the overlay natively.** The native path (`OverlayCanvas.kt`) is removed
+rather than left dormant. The overlay stays a single TypeScript implementation.
+
+**Why — the cost was under-weighted when it was built:** drawing natively means writing every
+overlay feature **twice, in Kotlin and Swift**: not just the skeleton but the club trace and its
+nine smoothing variants, angle arcs, silhouette, butt line and isolation. That logic already exists
+as tuned TypeScript, and *"the rendering rules worth keeping are already TypeScript"* was a stated
+reason for choosing React Native in **D5**. Drawing natively discards that benefit for the overlay,
+doubles every future overlay change permanently, and does so on a project with no Mac to compile
+half of it.
+
+**The reframing that decided it:** the lag exists **only while the picture is moving**. The instant
+scrubbing stops, JS catches up and drift goes to zero — so a golfer studying a position sees a
+perfectly aligned skeleton, and the 64ms is visible only mid-drag and during playback. The
+question was never "is 3.8 frames bad" but "does anyone read a *moving* overlay", which is a
+product judgement, not a measurement. Taylor made that call.
+
+**Alternatives, and the one still open:**
+- *Native draw.* Rejected above. Its zero drift was also only ever **claimed by construction and
+  never measured** — the overlay View and the video surface composite through different paths on
+  Android, so it might not have been zero at all.
+- *UI-thread JS (Skia or a Reanimated worklet).* **Not rejected.** It removes the per-frame bridge
+  while keeping the drawing logic in TypeScript, written once. This is the next thing to try if the
+  lag turns out to matter, and it should be tried before native is reconsidered.
+- *Accept the lag.* The current state. Costs nothing and is correct at rest.
+
+**Consequences:**
+- **D13's p95 = 0 overlay-drift target does not hold for playback as written.** It is met at rest
+  and missed in motion by ~4 frames. That target needs restating with the at-rest / in-motion
+  distinction rather than being quietly missed — this entry is the record that it is knowingly
+  unmet, not forgotten.
+- The native overlay is recoverable from git (commit `187d09b`) if this is revisited.
+- `scripts/measure_overlay.py` and both spike clips remain, so any future strategy can be judged
+  by the same instrument rather than by its own self-report.

@@ -14,7 +14,6 @@ import FrameClockView from "../../modules/frame-clock/src/FrameClockView";
 import type {
   FrameClockHandle,
   FrameClockStats,
-  OverlayMode,
 } from "../../modules/frame-clock/src/FrameClock.types";
 import { ProbeCard } from "./ProbeCard";
 import {
@@ -25,7 +24,7 @@ import {
   type ProbeStatus,
 } from "./probes";
 import { Skeleton } from "./Skeleton";
-import { DRAWN_CONF, buildIndex, flattenSkeleton, frameAt, type PoseBundle } from "./pose";
+import { buildIndex, frameAt, type PoseBundle } from "./pose";
 import { COLORS, styles } from "./styles";
 
 /**
@@ -127,8 +126,6 @@ export default function SpikeScreen() {
   /** Free-run playback for eyeballing the marker against the bar, and for the screenshot-based
    *  measurement in scripts/measure_overlay.py, which needs more than a probe's 5s to sample. */
   const [looping, setLooping] = useState(false);
-  /** Which overlay strategy is drawing. Runtime-switchable so one session compares both. */
-  const [overlayMode, setOverlayMode] = useState<OverlayMode>("js");
   const measuring = useRef(false);
 
   useEffect(() => {
@@ -156,21 +153,6 @@ export default function SpikeScreen() {
     [clip.pose, overlayFrame],
   );
 
-  // Strategy C's one hand-off. Runs when the clip changes, never per frame — the moment this
-  // appears in a frame handler, the whole point of the strategy has been lost.
-  useEffect(() => {
-    const pose = clip.pose;
-    if (!pose || !clipUri) return;
-    const flat = flattenSkeleton(pose);
-    void clock.current?.setSkeleton(
-      flat.keypoints,
-      flat.perFrame,
-      flat.bones,
-      flat.boneColors,
-      flat.jointColors,
-      DRAWN_CONF,
-    );
-  }, [clip.pose, clipUri]);
 
   /**
    * Report the commit back to native, which scores it against the frame actually on the glass.
@@ -211,11 +193,11 @@ export default function SpikeScreen() {
 
     setProbe("overlay-sync", {
       status: verdict.status,
-      measurement: { value: verdict.value, device: `${deviceName} · ${overlayMode}` },
+      measurement: { value: verdict.value, device: deviceName },
       detail: `${verdict.detail} · JS lead p95 ${stats.leadTimeMs.p95.toFixed(1)}ms`,
     });
     setBusy(false);
-  }, [busy, deviceName, overlayMode, setProbe]);
+  }, [busy, deviceName, setProbe]);
 
   const runSeekProbe = useCallback(async () => {
     const handle = clock.current;
@@ -241,7 +223,7 @@ export default function SpikeScreen() {
       detail: verdict.detail,
     });
     setBusy(false);
-  }, [busy, deviceName, overlayMode, setProbe]);
+  }, [busy, deviceName, setProbe]);
 
   /**
    * Probe 2b: drag the scrubber, do not just seek to a list of targets.
@@ -281,11 +263,11 @@ export default function SpikeScreen() {
     const verdict = judgeOverlayDrift(stats.overlayDriftFrames);
     setProbe("scrub", {
       status: verdict.status,
-      measurement: { value: verdict.value, device: `${deviceName} · ${overlayMode}` },
+      measurement: { value: verdict.value, device: deviceName },
       detail: verdict.detail,
     });
     setBusy(false);
-  }, [busy, clip.frames, deviceName, overlayMode, setProbe]);
+  }, [busy, clip.frames, deviceName, setProbe]);
 
   // The marker mirrors the clip's burned-in sweeping bar. If the two do not sit on top of each
   // other on a screen recording, something is wrong — this is the Gate 3 check, on the phone.
@@ -348,7 +330,6 @@ export default function SpikeScreen() {
               // measuring would measure a code path the product would never ship.
               emitFrames
               surfaceType="textureView"
-              overlayMode={overlayMode}
               onReady={({ nativeEvent }) => {
                 setReady(
                   `${nativeEvent.width}×${nativeEvent.height} · container ${nativeEvent.containerFps.toFixed(2)}fps`,
@@ -364,7 +345,7 @@ export default function SpikeScreen() {
             />
             {/* The real overlay, when a clip carries pose data. This is the workload the cost
                 comparison is about — see Skeleton.tsx for why it is drawn with plain Views. */}
-            {videoWidth > 0 && clip.pose && overlayMode === "js" ? (
+            {videoWidth > 0 && clip.pose ? (
               <Skeleton
                 frame={poseFrame}
                 width={videoWidth}
@@ -392,19 +373,6 @@ export default function SpikeScreen() {
                 />
               </>
             ) : null}
-          </View>
-          <View style={styles.transport}>
-            {(["js", "native"] as OverlayMode[]).map((m) => (
-              <Pressable
-                key={m}
-                style={[styles.transportButton, m === overlayMode && styles.transportActive]}
-                onPress={() => setOverlayMode(m)}
-              >
-                <Text style={styles.transportText}>
-                  {m === "js" ? "A · JS state" : "C · Native"}
-                </Text>
-              </Pressable>
-            ))}
           </View>
           <View style={styles.transport}>
             <Pressable
