@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Analysis, RawBox } from "@/lib/swings";
 import { BONES, HIDE_JOINT, SIDE_COLOR, TRACE_COLOR } from "@/lib/skeleton";
-import { ANGLE_COLORS, drawAngle, drawAngleTarget } from "@/lib/angleOverlay";
+import { ANGLE_COLORS, MIN_CONF, drawAngle, drawAngleTarget } from "@/lib/angleOverlay";
 import { computeViewBox, fullView } from "@/lib/viewbox";
 import { CLEARED_TOGGLES, type ToggleKey, type Toggles } from "@/lib/overlays";
 import type { Player } from "@/lib/usePlayer";
@@ -20,6 +20,137 @@ import SettingsMenu from "./SettingsMenu";
 
 /** How much heavier the downswing draws than the backswing (user directive). */
 const DOWNSWING_WEIGHT = 1.25;
+
+/**
+ * How far each shoulder/hip orientation rod runs PAST the joint it starts from, as a multiple of
+ * that pair's on-screen span (user directive: "about 100%", ≈ a foot either side).
+ *
+ * A multiple of the *projected* span, never a fixed length — that is what makes the rod behave
+ * like a rigid steel bar skewered through the body rather than a label pinned to it. A real bar
+ * pointing at the lens foreshortens to nothing, and the rate at which it shortens as the golfer
+ * turns is the whole rotation cue; extending by a fixed number of pixels instead holds it at
+ * roughly constant length through the entire swing, which is exactly the flat, un-rotating look
+ * this replaced (user directive 2026-08-10: "it should appear almost 3d").
+ *
+ * **0.5, down from the 1.0 first asked for.** Extension is amplification: at 1.0 a rod tip travels
+ * 2.6x as far as the joint it hangs off, so the small real movements of a golfer settling over the
+ * ball — invisible on the stick figure — swung the bars around and read as the overlay running
+ * ahead of the picture. It is not lag; the frame-stamp test came back in sync. Measured on swing1
+ * through the approach, tip travel against joint travel:
+ *
+ * ```
+ *   1.00   x2.6     bar 332px at address, 621px at the top
+ *   0.75   x2.2     277 / 518
+ *   0.50   x1.8     221 / 414
+ *   0.25   x1.4     166 / 311
+ * ```
+ *
+ * 0.5 is where the bar still reaches well past the shoulders — 221px across a 1080px frame at
+ * address, twice the shoulder span — while the tips no longer move at nearly three times body
+ * speed. Below about 0.35 it stops reading as a bar through the body at all.
+ */
+const ORIENT_EXTEND = 0.5;
+
+/**
+ * The ball on each end of the rod, as a share of body height.
+ *
+ * This is what keeps the overlay alive when a pair goes perfectly side-on. A bar aimed at the
+ * camera projects to a point and vanishes, which is geometrically right and useless to look at —
+ * but a *barbell* aimed at the camera still shows its end ball, and the two balls converging into
+ * one is itself a clean read of "this axis is pointing at you". Nothing is invented: the balls
+ * sit at the ends of a rod whose direction and length are both measured.
+ */
+const ORIENT_CAP = 0.011;
+
+/** The two pairs the orientation rods run through. Anatomical names — these are keypoints. */
+const ORIENT_PAIRS: [string, string][] = [
+  ["left_shoulder", "right_shoulder"],
+  ["left_hip", "right_hip"],
+];
+
+/**
+ * The projected span, as a share of body height, below which the rod draws dimmed.
+ *
+ * Frame-to-frame change in a pair's angle, pooled over all ten fixtures and bucketed by
+ * projected span ÷ body height:
+ *
+ * ```
+ *   span      n     median   p90     max
+ *   <1%       63     13.3°   62.9°   89.9°
+ *   1-2%     506      0.8°    6.1°   73.1°
+ *   2-3%     765      0.5°    2.5°   59.6°
+ *   4-6%    1766      0.1°    1.3°   32.8°
+ *   >10%    7265      0.1°    0.3°    5.6°
+ * ```
+ *
+ * Below a couple of percent the two keypoints sit inside each other's noise and the rod's
+ * direction is whichever way the jitter fell. Proportional extension already contains the damage
+ * — a 9px span draws a 27px stub, so a 60° error moves its ends by a few pixels rather than
+ * swinging a foot-long bar across the frame — but the angle is still not to be trusted at that
+ * length, and the overlay says so rather than looking equally certain throughout.
+ *
+ * **Raised 0.03 -> 0.06.** Down the line the FAR shoulder and hip are behind the body, so the
+ * model is inferring them — their confidences run well below the near side's on every fixture.
+ * An inferred joint does not jump, it slides, so no filter removes it: swing1's shoulder angle
+ * ramps 138.6° to -160° smoothly across f125-175 while its span grows 43 to 195px, which draws as
+ * a big confident turn the golfer is not making. Foreshortening is what makes the projected angle
+ * hypersensitive to that slide — a 3px error across a 43px span is 4° — so the span is the
+ * available proxy for "one end of this bar is a guess". At 6% the approach dims on 8 of 10
+ * fixtures while the swing itself stays bright (0-19% of address-to-top dimmed, and every
+ * fixture's top sits at 19-24%).
+ *
+ * A confidence gate was measured as the alternative and rejected: 0.55 keeps only 34-53% of the
+ * address-to-top frames on half the fixtures, so it would delete the swing to fix the setup.
+ */
+const ORIENT_WEAK_SPAN = 0.06;
+
+/**
+ * The keypoint confidence below which the rod also draws dimmed.
+ *
+ * Just above `MIN_CONF`, and deliberately not at the obvious 0.5: RTMW's confidences on these
+ * fixtures sit around 0.55, so a 0.5 rule dims 24% of frames and flips state on 1.7% of frame
+ * steps — a rod strobing roughly once a second, which reads as a rendering fault rather than as
+ * a confidence signal. At 0.4 it dims 1.0% of frames and flips on 0.2% of steps, so a dim rod
+ * means something happened. Angular reliability is governed by the projected span above, not by
+ * confidence in this range, which is why the span thresholds carry most of the work.
+ */
+const ORIENT_WEAK_CONF = 0.4;
+
+/**
+ * The span, as a share of body height, at which a bar starts following its pair's angle again,
+ * and the one at which it stops. Hysteresis, so a span hovering on a single threshold cannot
+ * flicker between held and live - which it did, and each re-entry committed the whole accumulated
+ * drift in one jump.
+ *
+ * **Not a phase gate.** Nothing here knows where the swing is; the test is whether this pair, on
+ * this frame, is open enough to the camera to be measured. Hips that turn before the takeaway
+ * still show, provided they are turned far enough to see - which is the same bar every other part
+ * of this overlay is held to.
+ *
+ * Down the line the far shoulder and hip sit behind the body and the model is inferring them.
+ * That inference slides rather than jitters, and foreshortening multiplies it: across a 43px
+ * shoulder span a 3px slip is 4 degrees. The result is an overlay that turns hard while the
+ * golfer stands still over the ball. Measured as angle travelled, approach vs the whole backswing:
+ *
+ * ```
+ *            shoulders            hips
+ *            raw     held         raw     held
+ *   swing1    83  ->   6    |     129  ->   1
+ *   pro_2    110  ->   0    |     179  ->   0
+ *   swing2   119  ->   0    |      27  ->   0
+ * ```
+ *
+ * - against backswings of 15, 29 and 33 degrees. The setup was moving the bars four to eight
+ * times as far as the swing does. Holding below these thresholds leaves the real rotation intact
+ * (swing1 15 -> 15, pro_3 32 -> 32).
+ *
+ * A plain deadband on the angle was tried first and does nothing: the drift is a smooth ramp, so
+ * every step clears the threshold and total travel is unchanged (83 -> 84). So was a stillness
+ * gate on the near shoulder - it does not separate the cases, since two fixtures move more before
+ * address than during the backswing.
+ */
+const ORIENT_LIVE_SPAN = 0.09;
+const ORIENT_HOLD_SPAN = 0.06;
 
 /**
  * The video stage: picture and overlay canvas.
@@ -92,7 +223,7 @@ export default function SwingStage({
   clubVar?: string;
 }) {
   const { videoRef, canvasRef, stageRef, frame, playing,
-          seek, seekFile, toggle, onSeeked, win, nFrames } = player;
+          seek, seekFile, toggle, onSeeked, onPresentedFrame, win, nFrames } = player;
   const [w0, w1] = win;
 
   const t = toggles;
@@ -310,6 +441,44 @@ export default function SwingStage({
   }, [club, spans, marks, smoothing, analysis]);
 
   /**
+   * The direction each orientation bar is drawn along, per frame - the pair's own angle wherever
+   * it is trustworthy, and the last trustworthy one everywhere else. See `ORIENT_LIVE_SPAN`.
+   *
+   * Computed over the whole clip in one forward pass rather than from the frames around the
+   * playhead, so it is a pure function of the artifact: scrubbing backwards, jumping to a
+   * checkpoint and playing through all give the same bar on the same frame. A running filter fed
+   * by the playhead would not.
+   *
+   * Angles are in VIDEO pixel space. The canvas preserves the frame's aspect ratio, so the same
+   * angle is correct there without rescaling.
+   */
+  const orientHold = useMemo(() => {
+    const n = analysis.pose.frames.length;
+    const bodyN = (analysis.metrics?.body_height_norm || 0.4) * analysis.video.height;
+    const vw = analysis.video.width, vh = analysis.video.height;
+    return ORIENT_PAIRS.map(([ln, rn]) => {
+      const dir = new Float64Array(n);
+      const held = new Uint8Array(n);
+      let live = false, last = NaN;
+      for (let f = 0; f < n; f++) {
+        const kp = analysis.pose.frames[f]?.kp;
+        const a = kp?.[idx[ln]], b = kp?.[idx[rn]];
+        let ang = NaN, span = 0;
+        if (a && b && a[2] >= MIN_CONF && b[2] >= MIN_CONF) {
+          const dx = (b[0] - a[0]) * vw, dy = (b[1] - a[1]) * vh;
+          span = Math.hypot(dx, dy) / bodyN;
+          ang = Math.atan2(dy, dx);
+        }
+        live = live ? span >= ORIENT_HOLD_SPAN : span >= ORIENT_LIVE_SPAN;
+        if (live && !Number.isNaN(ang)) last = ang;
+        dir[f] = last;
+        held[f] = live ? 0 : 1;
+      }
+      return { dir, held };
+    });
+  }, [analysis, idx]);
+
+  /**
    * The club head this frame is currently showing — the hand-placed one if there is one, else
    * the analyzer's own answer, else nothing (the detector had nothing to say here).
    *
@@ -370,7 +539,7 @@ export default function SwingStage({
 
 
   // ---------- drawing ----------
-  const draw = useCallback(() => {
+  const draw = useCallback((at: number) => {
     const cv = canvasRef.current;
     const stage = stageRef.current;
     if (!cv || !stage) return;
@@ -394,7 +563,7 @@ export default function SwingStage({
     const w = r.width / view.cw, h = r.height / view.ch;
     ctx.translate(-view.x0 * w, -view.y0 * h);
 
-    const fr = analysis.pose.frames[frame];
+    const fr = analysis.pose.frames[at];
     if (!fr) return;
 
     /**
@@ -411,9 +580,9 @@ export default function SwingStage({
      * back as scrim too. No second path, no clip, no compositing mode.
      */
     const bodyRings = (t.isolate || t.outline)
-      ? silhouette.byFrame.get(frame) : undefined;
-    const isoRings = t.isolateClub ? isolation.byFrame.get(frame) : undefined;
-    const clubOnlyRings = t.clubOnly ? clubOnly.byFrame.get(frame) : undefined;
+      ? silhouette.byFrame.get(at) : undefined;
+    const isoRings = t.isolateClub ? isolation.byFrame.get(at) : undefined;
+    const clubOnlyRings = t.clubOnly ? clubOnly.byFrame.get(at) : undefined;
     const ringsToPath = (p: Path2D, rr: [number, number][][]) => {
       for (const ring of rr) {
         p.moveTo(ring[0][0] * w, ring[0][1] * h);
@@ -442,7 +611,7 @@ export default function SwingStage({
     }
     if (scrimOn) {
       const full = new Path2D();
-      // The whole frame at this zoom, not the visible crop — a rect stopping at the crop
+      // The whole at at this zoom, not the visible crop — a rect stopping at the crop
       // window would leave the picture un-dimmed anywhere the window is later widened.
       full.rect(0, 0, w, h);
       full.addPath(scrim);
@@ -541,7 +710,7 @@ export default function SwingStage({
           // Reveal the finished curve up to the playhead. The tip is interpolated onto the exact
           // frame, so it still sits on the club as you scrub — the difference from before
           // is only that the curve it is cutting was smoothed as a whole.
-          const P = growing ? cutAt(piece, frame) : piece.pts;
+          const P = growing ? cutAt(piece, at) : piece.pts;
           if (!P) continue;
           stroke(P, { alpha: 1, peak: wgt, dashed, dash: [peak * 1.25, peak * 2.1] });
         }
@@ -584,8 +753,8 @@ export default function SwingStage({
     }
 
     if (club && t.club) {
-      const cf = club.frames[frame];
-      const mk = marks.get(frame);
+      const cf = club.frames[at];
+      const mk = marks.get(at);
       // A hand-placed head replaces the solved one, and the shaft is re-drawn to it from the
       // hands so the club stays one rigid body attached to the grip rather than a line pointing
       // at where the detector used to think the head was.
@@ -631,15 +800,21 @@ export default function SwingStage({
     // head a few pixels across, and a dot would cover the thing you are aiming at.
     if (markers.editing) {
       const R = Math.max(9, w / 70);
-      if (handle) {
-        const cx = handle.x * w, cy = handle.y * h;
+      // Recomputed for `at` rather than read off the `handle` memo, which is keyed to React
+      // state — the memo stays for hit-testing, where the pointer event and the state agree.
+      const mk = marks.get(at);
+      const auto = club?.frames[at]?.head;
+      const handleAt = mk ? { x: mk.x, y: mk.y, manual: true }
+        : auto ? { x: auto[0], y: auto[1], manual: false } : null;
+      if (handleAt) {
+        const cx = handleAt.x * w, cy = handleAt.y * h;
         // Rose while the point is still the analyzer's, green once it is yours — rose is the
         // same colour the club overlay draws its head in, so "what the pipeline currently
         // thinks" reads the same in both places. Dashed until you own it: an unconfirmed
         // suggestion you are being shown so you can judge it, not a correction you made.
-        ctx.strokeStyle = handle.manual ? "#34D399" : "#FB7185";
+        ctx.strokeStyle = handleAt.manual ? "#34D399" : "#FB7185";
         ctx.lineWidth = 2;
-        ctx.setLineDash(handle.manual ? [] : [4, 3]);
+        ctx.setLineDash(handleAt.manual ? [] : [4, 3]);
         ctx.beginPath();
         ctx.arc(cx, cy, R, 0, Math.PI * 2);
         ctx.stroke();
@@ -657,7 +832,7 @@ export default function SwingStage({
       // forming rather than one isolated point at a time.
       ctx.fillStyle = "rgba(52,211,153,.55)";
       for (const m of marks.values()) {
-        if (m.frame === frame || Math.abs(m.frame - frame) > 30) continue;
+        if (m.frame === at || Math.abs(m.frame - at) > 30) continue;
         ctx.beginPath();
         ctx.arc(m.x * w, m.y * h, Math.max(2, w / 300), 0, Math.PI * 2);
         ctx.fill();
@@ -668,7 +843,7 @@ export default function SwingStage({
     // no confidence floor, no size filter, no dependence on the solved club. Every box the
     // model returned for this frame, exactly as it returned it.
     if (t.rawDet && rawBoxes) {
-      const boxes = rawBoxes.get(frame);
+      const boxes = rawBoxes.get(at);
       if (boxes) {
         ctx.lineWidth = 2;
         ctx.font = `${Math.max(10, Math.round(w / 46))}px ui-monospace, monospace`;
@@ -695,6 +870,101 @@ export default function SwingStage({
     }
 
     if (t.skeleton) drawSkel(fr.kp);
+
+    /**
+     * The frame this canvas pass is painting, printed beside ffmpeg's own number burned into the
+     * picture (scripts/stampframes.py). Same `at` every other overlay on this pass used, so the
+     * readout cannot flatter the thing it is certifying. Two different numbers, at 0.25x, IS the
+     * offset — in frames, with a direction.
+     */
+    if (t.stamp) {
+      const fs = Math.max(28, w / 12);
+      ctx.font = `700 ${fs}px ui-monospace, monospace`;
+      // Bottom-right, clear of the overlay menu that hangs down over the top-right corner.
+      ctx.textAlign = "right";
+      ctx.textBaseline = "bottom";
+      const x = w - 24, y = h - 24;
+      ctx.fillStyle = "rgba(0,0,0,.75)";
+      const tw = ctx.measureText(String(at)).width;
+      ctx.fillRect(x - tw - 14, y - fs - 10, tw + 28, fs + 20);
+      ctx.fillStyle = "#4ADE80";
+      ctx.fillText(String(at), x, y);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "top";
+    }
+
+    /**
+     * Shoulder rod and hip rod — rotation, with nothing else in the frame.
+     *
+     * Two red bars with a ball on each end, skewered through the shoulder pair and the hip pair
+     * and run well past the body on both sides. Long is the point: a segment that stops at the
+     * joints is two short marks inside a torso, while a bar crossing the frame turns "how far
+     * has he turned, and are the hips ahead of the shoulders" into an angle read at a glance.
+     * Independent of the stick figure — the menu hint says to switch that off, which is the
+     * view this was asked for.
+     *
+     * It reads as a solid object rather than as a drawn line because it is projected like one:
+     * length scales with the pair's on-screen span, so the bar foreshortens as the golfer turns
+     * away from the lens and stretches back out as they come square, and the end balls stay put
+     * when it is aimed straight at the camera. See `ORIENT_EXTEND` and `ORIENT_CAP`.
+     *
+     * Gated at `metrics.MIN_CONF` rather than at the skeleton's `conf > 0`: this reads as a
+     * measurement, and a rod hung off a keypoint the analyzer treated as missing is the
+     * confident-looking fabrication the project forbids. Nothing here is a new measurement — it
+     * is the two keypoint pairs, drawn.
+     */
+    if (t.orient) {
+      // The 0.4 fallback mirrors the analyzer's own in `metrics._body_height`.
+      const bodyPx = (analysis.metrics?.body_height_norm || 0.4) * h;
+      const lw = Math.max(3, w / 300);
+      const cap = Math.max(lw, bodyPx * ORIENT_CAP);
+      ctx.setLineDash([]);
+      ctx.lineCap = "round";
+      ORIENT_PAIRS.forEach(([ln, rn], pi) => {
+        const a = fr.kp[idx[ln]], b = fr.kp[idx[rn]];
+        if (!a || !b || a[2] < MIN_CONF || b[2] < MIN_CONF) return;
+        const dir = orientHold[pi].dir[at];
+        if (Number.isNaN(dir)) return;
+        // Pixel space, so the bar follows its true on-screen direction. Offsetting in normalized
+        // units would run short vertically and long horizontally on any frame that is not square.
+        const ax = a[0] * w, ay = a[1] * h, bx = b[0] * w, by = b[1] * h;
+        const span = Math.hypot(bx - ax, by - ay);
+        // LENGTH is always this frame's own, even while the direction is held: how far the bar
+        // reaches is the foreshortening read, and freezing that too would stop it looking like a
+        // rod in space. Only the aim is held.
+        const ux = Math.cos(dir), uy = Math.sin(dir);
+        const half = span / 2 + span * ORIENT_EXTEND;
+        // Centred on the measured midpoint. While held the bar no longer runs exactly through
+        // both joints - which is the honest picture, since one of them is a guess.
+        const mx = (ax + bx) / 2, my = (ay + by) / 2;
+        const x0 = mx - ux * half, y0 = my - uy * half;
+        const x1 = mx + ux * half, y1 = my + uy * half;
+        // Dimmed when either end is weakly detected, or when the bar is foreshortened far enough
+        // that its angle is guesswork. Both rods stay red either way — they are the same kind of
+        // reference, and colouring them apart would imply one is measured differently.
+        // A held bar is dim by definition - it is showing the last angle it could measure, not
+        // this frame's.
+        const weak = !!orientHold[pi].held[at]
+          || Math.min(a[2], b[2]) < ORIENT_WEAK_CONF || span < bodyPx * ORIENT_WEAK_SPAN;
+        // Dark underlay then red, the same two-stroke treatment as the butt line below and for
+        // the same reason: one red line vanishes into a red shirt on one clip and into shadow on
+        // the next, and the overlay cannot know which it is on.
+        for (const [style, width, grow] of [
+          ["rgba(0,0,0,.55)", lw + 2.5, 1.6],
+          [weak ? "rgba(239,68,68,.6)" : "#EF4444", lw, 0],
+        ] as const) {
+          ctx.strokeStyle = style;
+          ctx.fillStyle = style;
+          ctx.lineWidth = width;
+          ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+          for (const [cx, cy] of [[x0, y0], [x1, y1]]) {
+            ctx.beginPath();
+            ctx.arc(cx, cy, cap + grow, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      });
+    }
 
     /**
      * The butt line — a vertical tangent to the rear of the seat, measured over the address
@@ -727,27 +997,27 @@ export default function SwingStage({
     }
 
     // Selected angles, drawn last so the arc and its label sit above the skeleton they are
-    // measured from. The value in each label comes from `metrics.series` at this frame, not
+    // measured from. The value in each label comes from `metrics.series` at this at, not
     // from anything recomputed here — so the overlay reads the same number as the table, and
     // updates as you scrub rather than being pinned to a checkpoint.
     if (angles.length && angleFields) {
       angles.forEach((field, i) => {
         const spec = angleFields.find((f) => f.field === field);
-        if (spec) drawAngle(ctx, spec, analysis, frame, w, h, ANGLE_COLORS[i % ANGLE_COLORS.length]);
+        if (spec) drawAngle(ctx, spec, analysis, at, w, h, ANGLE_COLORS[i % ANGLE_COLORS.length]);
       });
     }
 
     // The checkpoint card being inspected on Overview, if any — its target ray on top of
-    // everything else, since it's the reason the video paused on this exact frame.
+    // everything else, since it's the reason the video paused on this exact at.
     if (targetOverlay && angleFields) {
       const spec = angleFields.find((f) => f.field === targetOverlay.field);
       if (spec) {
-        drawAngleTarget(ctx, spec, analysis, frame, w, h,
+        drawAngleTarget(ctx, spec, analysis, at, w, h,
           targetOverlay.band, targetOverlay.absValue);
       }
     }
-  }, [analysis, frame, idx, spans, t, rawBoxes, club, angles, angleFields, view,
-      canvasRef, stageRef, targetOverlay, marks, markers.editing, handle, tracePath,
+  }, [analysis, idx, spans, t, rawBoxes, club, angles, angleFields, view,
+      canvasRef, stageRef, targetOverlay, marks, markers.editing, tracePath, orientHold,
       silhouette.byFrame, isolation.byFrame, clubOnly.byFrame, buttLine]);
 
   /**
@@ -826,13 +1096,44 @@ export default function SwingStage({
     if (!isCompare) onEditingChange?.(markers.editing);
   }, [markers.editing, isCompare, onEditingChange]);
 
-  useEffect(() => { draw(); }, [draw]);
+  /**
+   * The last frame the canvas actually painted, and the `draw` that painted it.
+   *
+   * Playback paints from the video-frame callback below, which runs *before* the matching React
+   * commit — so by the time the commit's effect runs, the canvas is already correct and redrawing
+   * would be a second full canvas pass per frame for nothing. This is how the effect tells the
+   * two apart: same `draw`, same frame means it has already been done. `draw` no longer depends
+   * on `frame`, so a toggle, a resize or a new artifact changes its identity and forces the
+   * repaint, while ordinary playback does not.
+   */
+  const painted = useRef<{ by: unknown; at: number }>({ by: null, at: -1 });
+  const paint = useCallback((at: number) => {
+    draw(at);
+    painted.current = { by: draw, at };
+  }, [draw]);
+
+  /**
+   * Playback: paint the frame the browser has just presented, in the same rendering step it was
+   * presented in. Waiting for `frame` to come back through React puts the overlay a paint behind
+   * the picture — see `onPresentedFrame` in usePlayer for why.
+   *
+   * Held through a ref so the subscription survives every re-render: `draw` changes identity
+   * whenever any input to it does, and re-subscribing on that would churn the Set on the hot path.
+   */
+  const paintRef = useRef(paint);
+  useEffect(() => { paintRef.current = paint; }, [paint]);
+  useEffect(() => onPresentedFrame((f) => paintRef.current(f)), [onPresentedFrame]);
+
+  // Everything that is not playback — scrubbing, a toggle, a resize, the first frame.
+  useEffect(() => {
+    if (painted.current.by !== draw || painted.current.at !== frame) paint(frame);
+  }, [draw, paint, frame]);
 
   useEffect(() => {
-    const ro = new ResizeObserver(() => draw());
+    const ro = new ResizeObserver(() => paint(frame));
     if (stageRef.current) ro.observe(stageRef.current);
     return () => ro.disconnect();
-  }, [draw, stageRef]);
+  }, [paint, frame, stageRef]);
 
   return (
     <div className={`video-shell ${full ? "fixed inset-0 z-[110] bg-canvas p-3" : ""}`}>
@@ -856,7 +1157,7 @@ export default function SwingStage({
               does the clipping. `max-w-none` is load-bearing: Tailwind's preflight caps video
               at max-width 100%, which would silently defeat any width above it. The rendered
               aspect ratio still equals the video's own, so nothing is stretched. */}
-          <video ref={videoRef} src={`/api/swings/${id}/video`} playsInline muted preload="auto"
+          <video ref={videoRef} src={`/api/swings/${id}/video${t.stamp ? "?v=framestamp" : ""}`} playsInline muted preload="auto"
                  className="absolute max-w-none"
                  style={{
                    width: `${100 / view.cw}%`,
@@ -865,7 +1166,7 @@ export default function SwingStage({
                    top: `${(-view.y0 / view.ch) * 100}%`,
                  }}
                  onLoadedData={onVideoReady}
-                 onSeeked={() => { onSeeked(); draw(); }} />
+                 onSeeked={() => { onSeeked(); paint(frame); }} />
           <canvas ref={canvasRef} className="pointer-events-none absolute inset-0 h-full w-full" />
 
           {/* In marker-editing mode the picture is a placement target, not a play/pause

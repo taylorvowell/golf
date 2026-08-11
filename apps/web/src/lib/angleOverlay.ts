@@ -15,7 +15,7 @@ import type { AngleField, Analysis, Keypoint, PointExpr } from "@/lib/swings";
 
 /** Matches metrics.MIN_CONF — below this the analyzer treated the point as missing, so
  *  drawing it would put a confident-looking arc on a keypoint the number never used. */
-const MIN_CONF = 0.35;
+export const MIN_CONF = 0.35;
 
 /** Distinguishable at small sizes against the skeleton's green / yellow / cyan. */
 export const ANGLE_COLORS = ["#FB923C", "#F472B6", "#A78BFA", "#38BDF8", "#FACC15"];

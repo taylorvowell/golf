@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Analysis } from "@/lib/swings";
 import { SIDE_COLOR, TRACE_COLOR } from "@/lib/skeleton";
-import { OVERLAY_GROUPS, type ToggleKey, type Toggles } from "@/lib/overlays";
+import { BUILD_TAG, OVERLAY_GROUPS, type ToggleKey, type Toggles } from "@/lib/overlays";
 import { MicroHead } from "./ui/kiosk";
 
 /**
@@ -70,24 +70,6 @@ export default function OverlayMenu({
   // previous one — invisible here, but real, and "clear all" has to be able to reach it.
   const anyOn = Object.values(t).some(Boolean);
 
-  const Row = ({ k, label, hint, disabled, why }: {
-    k: ToggleKey; label: string; hint?: string; disabled?: boolean; why?: string;
-  }) => (
-    <button type="button" title={why} disabled={disabled}
-      onClick={() => setT(k, !t[k])}
-      className={`overlay-toggle${t[k] && !disabled ? " on" : ""}`}>
-      <span className="overlay-check" aria-hidden>✓</span>
-      <span className="min-w-0">
-        <span className="block leading-tight">{label}</span>
-        {(why ?? hint) && (
-          <span className="mt-0.5 block text-[10px] font-normal leading-3 text-neutral-500">
-            {why ?? hint}
-          </span>
-        )}
-      </span>
-    </button>
-  );
-
   return (
     <div ref={wrap} className="relative">
       {/* Icon only, and the same dark chrome as full-bleed beside it — a labelled, lit button
@@ -133,7 +115,8 @@ export default function OverlayMenu({
             <div key={g.title}>
               <p className="overlay-menu-head">{g.title}</p>
               {g.items.map((i) => (
-                <Row key={i.key} k={i.key} label={i.label} hint={i.hint}
+                <OverlayRow key={i.key} on={t[i.key]} onToggle={() => setT(i.key, !t[i.key])}
+                  label={i.label} hint={i.hint}
                   disabled={i.key === "trace" && traceLocked}
                   why={i.key === "trace" && traceLocked
                     ? `disabled — swing coverage ${((club?.coverage.swing ?? 0) * 100).toFixed(0)}% is below the 50% quality gate`
@@ -182,10 +165,52 @@ export default function OverlayMenu({
             <p className="mt-1 text-[10px] leading-4 text-neutral-600">
               ← → step a frame · shift ×10 · space play/pause · click a phase to loop it
             </p>
+            {/* Which build is actually running. HMR can leave a stale bundle behind, and this
+                is the difference between "the fix did not work" and "the fix is not loaded". */}
+            <p className="mt-2 text-[10px] leading-4 text-neutral-700">build {BUILD_TAG}</p>
           </div>
         </div>
       )}
     </div>
+  );
+}
+
+interface OverlayRowProps {
+  label: string;
+  hint?: string;
+  on: boolean;
+  onToggle: () => void;
+  disabled?: boolean;
+  /** Replaces the hint when the row's state needs explaining (locked, loading, low confidence). */
+  why?: string;
+}
+
+/**
+ * One overlay row.
+ *
+ * **Module scope, deliberately — this was a bug.** It used to be declared inside `OverlayMenu`,
+ * which made it a new component *type* on every render: React then unmounted and remounted every
+ * row rather than updating it. During playback the workspace re-renders on every presented video
+ * frame (~60/s), so a row's `<button>` was routinely destroyed between the mousedown and the
+ * mouseup of a single click — and a click whose press and release land on different elements
+ * fires no `click` event at all. The symptom was exactly that: overlays could only be switched
+ * while the video was PAUSED. Hoisted, the element type is stable and the row is updated in
+ * place, so a click lands mid-playback like any other.
+ */
+function OverlayRow({ label, hint, on, onToggle, disabled, why }: OverlayRowProps) {
+  return (
+    <button type="button" title={why} disabled={disabled} onClick={onToggle}
+      className={`overlay-toggle${on && !disabled ? " on" : ""}`}>
+      <span className="overlay-check" aria-hidden>✓</span>
+      <span className="min-w-0">
+        <span className="block leading-tight">{label}</span>
+        {(why ?? hint) && (
+          <span className="mt-0.5 block text-[10px] font-normal leading-3 text-neutral-500">
+            {why ?? hint}
+          </span>
+        )}
+      </span>
+    </button>
   );
 }
 

@@ -15,9 +15,22 @@ export async function GET(
 ) {
   const { id } = await params;
 
+  /**
+   * `?v=framestamp` serves the frame-numbered copy instead — the sync test's reference picture.
+   * A fixed whitelist, not the raw parameter: this resolves to a path on disk.
+   */
+  const want = new URL(req.url).searchParams.get("v");
+
   let file: string;
   try {
     file = swingFile(id, "normalized.mp4");
+    // Falls back rather than 404s. A missing stamped clip is the normal state — it is written
+    // by scripts/stampframes.py on demand — and answering "not found" blanked the player
+    // entirely, which reads as the toggle having broken the video.
+    if (want === "framestamp") {
+      const stamped = swingFile(id, "framestamp.mp4");
+      if (fs.existsSync(stamped)) file = stamped;
+    }
   } catch {
     return new Response("bad id", { status: 400 });
   }

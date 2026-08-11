@@ -1,5 +1,5 @@
 import { listMarkers, saveMarkers, type HeadMarker } from "@/db/markers";
-import { getCurrentUserId } from "@/lib/auth";
+import { requireUserIdOrNull } from "@/lib/auth";
 
 /**
  * Same guard `lib/swings.ts` applies to ids off the URL. Repeated here rather than exported
@@ -44,7 +44,9 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
     return Response.json({ saved: 0, deleted: 0 });
   }
 
-  const userId = await getCurrentUserId();
+  const userId = await requireUserIdOrNull();
+  // 401, never a redirect: a fetch cannot do anything useful with sign-in HTML.
+  if (!userId) return new Response("unauthorized", { status: 401 });
   try {
     const result = await saveMarkers(swingId, userId, markers, deleted);
     return Response.json(result);

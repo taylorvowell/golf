@@ -1033,3 +1033,45 @@ is introduced.
 - `pnpm db:migrate`'s hardcoded `node_modules/drizzle-kit/bin.cjs` path broke under
   `node-linker=hoisted` (D21) and is now a plain `drizzle-kit migrate`, with `.env` loaded inside
   `drizzle.config.ts` via Node 22's built-in `process.loadEnvFile`. Still no dotenv dependency.
+
+---
+
+## D25 — Passwordless sign-in is an emailed CODE, not a magic link
+
+**Date:** 2026-08-11
+**Status:** ACTIVE
+
+**Context:** §4.1 requires passwordless authentication. Step 04's file says "magic link and/or OTP
+per step 01's decision" — but **step 01 never recorded one**, so the choice was still open when
+step 04 needed it.
+
+**Decision:** email **OTP** — a six-digit code typed inside the app. Not a magic link.
+
+**Why:** a magic link forces an app-switch on the primary platform. Leave the app, open a mail
+client, tap a link, and hope the correct app reopens — with deep links that break and links that
+open in the wrong browser. For a mobile-first product (§2.1) that is the single biggest drop-off
+in onboarding. A code is the same email and the same `signInWithOtp` call, except the user never
+leaves the screen. The input carries `autocomplete="one-time-code"`, so iOS and Android offer the
+code straight from the notification and the mail app is never opened at all.
+
+There is also no separate sign-up: `signInWithOtp` creates the account on first use. One screen,
+one field, no password to choose or forget.
+
+**Alternatives:**
+- *Magic link.* Rejected above. Still viable on desktop web, but not worth two flows.
+- *Google / Apple social.* Better UX still — one tap. Deferred rather than rejected: Google needs
+  an OAuth client, and **Apple is mandatory on iOS if any other social provider ships** (App Store
+  guideline 4.8) which pulls the $99/yr developer account forward from step 10. Add both together,
+  later, with OTP remaining as the no-account fallback.
+- *Phone/SMS OTP.* Per-message cost and worse for account recovery.
+
+**Consequences:**
+- **The Supabase email template must contain `{{ .Token }}`.** The stock "Magic Link" template
+  contains only `{{ .ConfirmationURL }}`, so out of the box a user receives a link and the code
+  field cannot be completed. This is a dashboard setting and is not reachable from the MCP.
+- Sign-out uses `scope: "local"`, deliberately: §4.2 requires one account signed in on several
+  phones at once because multi-phone capture (§12) depends on it, and a global sign-out would end
+  the other device's session.
+- The seeded-admin identity is **deleted, not disabled**, per step 04. A one-shot claim hands the
+  ten pre-auth development fixtures to the first account that signs in, then removes the admin
+  row, so the fixtures stay usable without a fallback identity surviving.

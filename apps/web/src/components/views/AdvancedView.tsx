@@ -39,7 +39,7 @@ export default function AdvancedView({
   angles: string[];
   onToggleAngle: (field: string) => void;
 }) {
-  const { frame, drift, jumpTo, playRange, fps, nFrames, win } = player;
+  const { frame, presentation, jumpTo, playRange, fps, nFrames, win } = player;
   const [open, setOpen] = useState(true);
   const [sort, setSort] = useState<Sort>("change");
   // The explorer is a fixed-height window onto ~30 rows — grab it and pull, same as the
@@ -306,17 +306,20 @@ export default function AdvancedView({
         <KioskPanel className="p-5">
           <MicroHead tone="acid">Frame sync</MicroHead>
           <div className="mt-2">
-            {drift.n === 0 ? (
+            {presentation.n === 0 ? (
               <p className="text-xs text-neutral-500">
-                Press play to measure. This compares the frame the browser reports as presented
-                against the index we computed — non-zero drift means the overlay would slip.
+                Press play to measure. The overlay is drawn from the frame the browser reports as
+                presented, in the same rendering step — so what is left to watch is whether the
+                decoder kept up. Dropped frames make the swing stutter; they do not unstick the
+                overlay from the picture.
               </p>
             ) : (
               <>
-                <DataRow label="frames checked" value={drift.n} />
-                <DataRow label="mean drift" value={(drift.sum / drift.n).toFixed(2)}
-                         tone={drift.sum / drift.n > 0.5 ? "warn" : "plain"} />
-                <DataRow label="max drift" value={drift.max} tone={drift.max > 1 ? "warn" : "plain"} />
+                <DataRow label="frames presented" value={presentation.n} />
+                <DataRow label="frames dropped" value={presentation.dropped}
+                         tone={presentation.dropped > presentation.n * 0.02 ? "warn" : "plain"} />
+                <DataRow label="worst gap" value={presentation.maxGap}
+                         tone={presentation.maxGap > 2 ? "warn" : "plain"} />
               </>
             )}
             <p className="mt-2 text-[10px] leading-4 text-neutral-600">

@@ -10,7 +10,7 @@
  */
 
 export type ToggleKey =
-  | "skeleton"
+  | "skeleton" | "orient" | "stamp"
   | "club" | "trace" | "grow" | "allHeads" | "rawDet" | "crop"
   | "isolate" | "isolateClub" | "clubOnly" | "outline" | "butt";
 
@@ -26,7 +26,7 @@ export type Toggles = Record<ToggleKey, boolean>;
  * first render is uncluttered; a viewer can layer them back in.
  */
 export const DEFAULT_TOGGLES: Toggles = {
-  skeleton: true,
+  skeleton: true, orient: false, stamp: false,
   club: false, trace: true, grow: true, allHeads: false, rawDet: false, crop: false,
   isolate: false, isolateClub: false, clubOnly: false, outline: false, butt: false,
 };
@@ -58,11 +58,37 @@ export interface OverlayGroup {
   needs?: Capability;
 }
 
+/**
+ * Bumped by hand on every change to the player's drawing or sync path, and printed at the foot
+ * of the overlay menu. Dev-server HMR can leave a stale bundle running, and "is this even the
+ * new code" has to be answerable without guessing.
+ */
+export const BUILD_TAG = "2026-08-10 orient-9";
+
 export const OVERLAY_GROUPS: OverlayGroup[] = [
   {
     title: "Body",
     items: [
       { key: "skeleton", label: "Stick figure" },
+      {
+        // Independent of the stick figure rather than replacing it — every other overlay in
+        // this menu is an independent layer, and one toggle that silently switches another
+        // off is the kind of control that reads as a bug. The hint says how to get the clean
+        // view it was asked for.
+        key: "orient", label: "Shoulder + hip lines",
+        hint: "rotation at a glance - dim means the bar is holding its last trusted angle",
+      },
+    ],
+  },
+  {
+    // Objective frame sync: the number in the pixels was put there by ffmpeg, so it is the one
+    // reference the player did not produce. Needs scripts/stampframes.py to have been run.
+    title: "Sync test",
+    items: [
+      {
+        key: "stamp", label: "Frame stamp",
+        hint: "run scripts/stampframes.py first — white number is ffmpeg's, green is ours; compare at 0.25x",
+      },
     ],
   },
   {

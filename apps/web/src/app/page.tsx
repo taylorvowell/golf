@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { listSwings, MEDIA_ROOT } from "@/lib/swings";
 import type { SwingSummary } from "@/lib/swings";
-import { getCurrentUserId } from "@/lib/auth";
+import { requireUserId } from "@/lib/auth";
 import { Chip, MicroHead, NotBuilt } from "@/components/ui/kiosk";
 import { PRO_SWINGS, proSwing } from "@/lib/proSwings";
 
@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic"; // the analyzer writes new swings while 
  * gate).
  */
 export default async function Home() {
-  const userId = await getCurrentUserId();
+  const userId = await requireUserId();
   const all = await listSwings(userId);
 
   // The bundled pro references live in the same table (they need real rows to be fetchable and

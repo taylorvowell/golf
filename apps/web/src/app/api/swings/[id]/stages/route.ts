@@ -1,5 +1,5 @@
 import { isStage, listStages, setStage } from "@/db/stages";
-import { getCurrentUserId } from "@/lib/auth";
+import { requireUserIdOrNull } from "@/lib/auth";
 
 /** Same guard the other id-off-the-URL routes apply. See `markers/route.ts` for why it is
  * repeated rather than shared. */
@@ -46,7 +46,9 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
     return Response.json({ error: "frame must be a number or null" }, { status: 400 });
   }
 
-  const userId = await getCurrentUserId();
+  const userId = await requireUserIdOrNull();
+  // 401, never a redirect: a fetch cannot do anything useful with sign-in HTML.
+  if (!userId) return new Response("unauthorized", { status: 401 });
   try {
     await setStage(swingId, userId, stage, frame);
     return Response.json({ stages: await listStages(swingId) });
