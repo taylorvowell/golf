@@ -233,9 +233,9 @@ Useful keys while it runs: `r` reload · `j` open debugger · `m` toggle dev men
 through 36, NDK), JDK 17 and `adb`. An Expo/EAS account is **not** required for Android — that
 was recorded as a blocker in step 02's first pass and it was wrong.
 
-**No cable required.** Android 11+ pairs over wifi, and `adb pair` is available here (adb
-35.0.2). On the phone: *Developer options → Wireless debugging → on → Pair device with pairing
-code*, then with phone and PC on the same wifi:
+**No cable required.** The device is a **Galaxy S25 (Android 15 / One UI 7)**, and `adb pair` is
+available here (adb 35.0.2). On the phone: *Developer options → Wireless debugging → on → Pair
+device with pairing code*, then with phone and PC on the same wifi:
 
 ```bash
 adb pair 192.168.x.x:PORT         # the PAIRING dialog's port + its 6-digit code
@@ -319,6 +319,12 @@ Then the three probe cards:
 A probe cannot display PASS or FAIL without a measurement attached to it — that invariant is
 enforced in `src/spike/probes.ts` and covered by the mobile test suite, because a card claiming
 PASS with nothing behind it would quietly convert "untested" into "validated".
+
+> **The S25 is a flagship, and step 02 asks for a mid-range Android.** Read its result
+> asymmetrically: a **failure** is decisive and kills the framework choice outright, but a
+> **pass** does not close the step — a flagship has the headroom to absorb exactly the dropped
+> frames a mid-range device would expose. Label S25 numbers as flagship data and keep a mid-range
+> measurement outstanding. See the note appended to the step 02 file.
 
 ### iOS
 

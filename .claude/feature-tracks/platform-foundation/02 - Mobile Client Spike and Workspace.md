@@ -125,3 +125,32 @@ measurements are recorded in `docs/DECISIONS.md`.
 If the chosen framework needs a native module to hit 60 fps capture, that is an expected
 outcome under §2.2, not a reason to switch — but it must be recorded, because it changes the
 build and release story for every later mobile track.
+
+---
+
+## Note appended 2026-08-11 — the available Android is a flagship
+
+The device on hand is a **Samsung Galaxy S25** (Android 15 / One UI 7). Step 2 of the `Steps`
+section above asks for a **mid-range** Android and explicitly says "not a flagship". That
+instruction is not satisfied by this device, and the `Steps` section is deliberately left
+unedited rather than relaxed to match what is available.
+
+**This makes the S25 result asymmetric, and it should be read that way:**
+
+- A **failure** on the S25 is decisive. If the overlay cannot be locked to the presented frame on
+  a Snapdragon 8 Elite, it will not hold anywhere, D5 reopens, and no further device is needed.
+  This is the cheapest available way to invalidate the framework choice, which is why the S25 run
+  should happen first regardless.
+- A **pass** on the S25 does **not** close this step. A flagship has the thermal and compute
+  headroom to absorb precisely the dropped frames a mid-range device would expose, and §40 states
+  the compatibility goal in terms of ordinary devices. Recording a flagship pass as "probe 1
+  answered" would be the same class of error as the coverage percentages that overstated club
+  quality three times.
+
+**Therefore:** record S25 numbers as flagship data, clearly labelled with the device, and keep
+"mid-range Android measured" as outstanding alongside "iOS measured". The Definition of Done is
+unchanged; this note only records that one of its devices is not yet available, in the same way
+the iPhone is not.
+
+A mid-range device is a smaller ask than the iPhone — it does not need to be new, and a
+borrowed or second-hand mid-tier Android from the last three years is sufficient.
