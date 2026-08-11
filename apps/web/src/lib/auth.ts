@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/db/client";
 import { isUuid, isViewType } from "@/db/views";
 import type { ViewType } from "@/db/schema";
+import type { ViewAddress } from "@/lib/media/keys";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -191,8 +192,10 @@ export async function requireViewAccess(
 
   const rows = await db.execute<{
     view_id: string; view: ViewType; media_key: string;
+    owner_id: string; artifact_revision: number;
   }>(sql`
-    select v.id as view_id, v.view, v.media_key
+    select v.id as view_id, v.view, v.media_key,
+           s.user_id as owner_id, v.artifact_revision
       from public.swings s
       join public.swing_views v on v.swing_id = s.id
      where s.id = ${swingId}
@@ -217,20 +220,37 @@ export async function requireViewAccess(
   if (!row) return notFound;
   return {
     userId,
+    ownerId: row.owner_id,
     swingId,
     viewId: row.view_id,
     view: row.view,
     mediaKey: row.media_key,
+    revision: row.artifact_revision,
+    // Built from the OWNER's id, never the caller's. An approved coach reading a golfer's swing
+    // is the case that makes this load-bearing: keying the prefix off `userId` would send them to
+    // their own empty namespace and 404 a swing they are entitled to see.
+    address: {
+      userId: row.owner_id,
+      swingId,
+      viewId: row.view_id,
+      revision: row.artifact_revision,
+    },
   };
 }
 
 export interface ViewAccess {
+  /** Who is asking. May be the owner, or an approved coach. */
   userId: string;
+  /** Who owns the swing — whose namespace the media lives in. */
+  ownerId: string;
   swingId: string;
   viewId: string;
   view: ViewType;
-  /** Storage key for this view's artifacts — resolve it with `lib/swings.ts:swingFile`. */
+  /** The analyzer's working-directory name, not an address (D33). */
   mediaKey: string;
+  revision: number;
+  /** Where this view's artifacts live. Pass to `lib/media` — never build a key by hand. */
+  address: ViewAddress;
 }
 
 /** `?view=dtl|face_on` off a request URL, or null when the caller did not ask for one. */

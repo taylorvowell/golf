@@ -5,8 +5,8 @@ import { db } from "./client";
 import { swings, swingViews } from "./schema";
 import { ensureAdminUser } from "./seed";
 import { syncSwingScore } from "./scores";
-import { viewByMediaKey } from "./views";
-import { MEDIA_ROOT } from "../lib/swings";
+import { mediaAddress, viewByMediaKey } from "./views";
+import { ANALYZER_OUT_ROOT, publishFromWorkingDir, workingDirFor } from "../lib/media/publish";
 import { proSwingByKey } from "../lib/proSwings";
 import type { Analysis } from "../lib/swings";
 
@@ -26,21 +26,27 @@ import type { Analysis } from "../lib/swings";
  * Dual-view swings are created by the capture and upload paths, which know.
  *
  * Safe to re-run: insert is skip-if-the-view-exists, score sync is upsert-on-view-id.
+ *
+ * Since step 09 it also **publishes** each folder into the media store, which is what makes a
+ * CLI-analysed fixture visible to the app at all — the routes no longer read `out/` directly.
+ * Publishing here writes the view's CURRENT revision rather than minting a new one: unlike the
+ * re-analyze route, a backfill is a developer bridge run from a terminal, so there is no session
+ * mid-scrub to protect and bumping the revision on every run would leave a trail of dead copies.
  */
 async function main() {
   const admin = await ensureAdminUser();
 
   let entries: string[];
   try {
-    entries = await fs.readdir(MEDIA_ROOT);
+    entries = await fs.readdir(ANALYZER_OUT_ROOT);
   } catch {
-    console.log(`no ${MEDIA_ROOT} — nothing to backfill`);
+    console.log(`no ${ANALYZER_OUT_ROOT} — nothing to backfill`);
     process.exit(0);
   }
 
-  let inserted = 0, skipped = 0, scored = 0;
+  let inserted = 0, skipped = 0, scored = 0, published = 0;
   for (const mediaKey of entries) {
-    const analysisPath = path.join(MEDIA_ROOT, mediaKey, "analysis.json");
+    const analysisPath = path.join(ANALYZER_OUT_ROOT, mediaKey, "analysis.json");
     let analysis: Analysis;
     try {
       analysis = JSON.parse(await fs.readFile(analysisPath, "utf8"));
@@ -77,6 +83,7 @@ async function main() {
       view = {
         swingId: swing.id, userId: admin.id,
         viewId: row.id, view: analysis.video.view, mediaKey,
+        revision: 1,
       };
       inserted++;
       console.log(`backfilled ${mediaKey} -> swing ${swing.id}`);
@@ -93,13 +100,19 @@ async function main() {
       }).where(eq(swingViews.id, view.viewId));
     }
 
+    const result = await publishFromWorkingDir(mediaAddress(view), workingDirFor(mediaKey));
+    published += result.published.length;
+
     if (await syncSwingScore(view)) {
       scored++;
       console.log(`synced score for ${mediaKey}`);
     }
   }
 
-  console.log(`done: ${inserted} inserted, ${skipped} already present, ${scored} scores synced`);
+  console.log(
+    `done: ${inserted} inserted, ${skipped} already present, ${scored} scores synced, ` +
+    `${published} artifacts published`,
+  );
   process.exit(0);
 }
 

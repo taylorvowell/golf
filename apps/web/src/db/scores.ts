@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "./client";
 import { scores, swings, swingViews } from "./schema";
 import { getScorecard } from "../lib/scoring";
-import type { ResolvedView } from "./views";
+import { mediaAddress, type ResolvedView } from "./views";
 
 /**
  * Reads this VIEW's `coach_report.json` (if any) and upserts it into the `scores` table, onto the
@@ -21,7 +21,7 @@ import type { ResolvedView } from "./views";
  * this is a no-op, not a failure.
  */
 export async function syncSwingScore(view: ResolvedView): Promise<boolean> {
-  const card = await getScorecard(view.mediaKey);
+  const card = await getScorecard(mediaAddress(view));
   if (!card || card.overall === null) return false;
 
   await db.insert(scores).values({

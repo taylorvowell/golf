@@ -19,7 +19,7 @@ export async function GET(
   const { id } = await params;
   const access = await requireViewAccess(id, viewParam(req));
   if ("error" in access) return access.error;
-  const s = await getSilhouette(access.mediaKey);
+  const s = await getSilhouette(access.address);
   if (!s) return new Response("not found", { status: 404 });
   // Immutable for a day: the outline only changes when the swing is re-analysed, which mints
   // a fresh page load anyway. Costly to re-download on every toggle otherwise.

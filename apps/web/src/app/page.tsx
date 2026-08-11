@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { listSwings, MEDIA_ROOT } from "@/lib/swings";
+import { listSwings } from "@/lib/swings";
+import { ANALYZER_OUT_ROOT } from "@/lib/media/publish";
 import type { SwingSummary } from "@/lib/swings";
 import { requireUserId } from "@/lib/auth";
 import { Chip, MicroHead, NotBuilt } from "@/components/ui/kiosk";
@@ -72,7 +73,7 @@ export default async function Home() {
 {`cd services/analyzer
 .venv\\Scripts\\python.exe scripts\\burnin.py <video> --view dtl --handedness right`}
           </pre>
-          <p className="mt-3 text-[11px] text-neutral-600">Looking in {MEDIA_ROOT}</p>
+          <p className="mt-3 text-[11px] text-neutral-600">Analyzer output: {ANALYZER_OUT_ROOT}</p>
           <div className="mt-4"><NotBuilt what="upload + job queue" /></div>
         </section>
       ) : (

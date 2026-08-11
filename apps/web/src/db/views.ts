@@ -1,6 +1,7 @@
 import { and, asc, desc, eq } from "drizzle-orm";
 import { db } from "./client";
 import { swings, swingViews, type ViewType } from "./schema";
+import type { ViewAddress } from "@/lib/media/keys";
 
 /**
  * Resolving a swing to the video the caller actually means.
@@ -19,8 +20,24 @@ export interface ResolvedView {
   userId: string;
   viewId: string;
   view: ViewType;
-  /** Storage key, never a path. Join it with `lib/swings.ts:swingFile`, which validates it. */
+  /**
+   * The analyzer's working-directory name (`out/<stem>/`) — NOT an address. Media is addressed by
+   * `mediaAddress()` below, which derives a storage key from identity (D33).
+   */
   mediaKey: string;
+  /** Which analysis run's artifacts to address. See `swing_views.artifact_revision`. */
+  revision: number;
+}
+
+/**
+ * The storage address of this view's media.
+ *
+ * Deliberately a one-line projection rather than a field: `ViewAddress` is what `lib/media`
+ * consumes and it must not import the database, while `ResolvedView` is what routes already hold.
+ * Keeping the mapping explicit is what stops a storage key from being smuggled into a database row.
+ */
+export function mediaAddress(v: ResolvedView): ViewAddress {
+  return { userId: v.userId, swingId: v.swingId, viewId: v.viewId, revision: v.revision };
 }
 
 /**
@@ -49,6 +66,7 @@ export async function resolveView(
       viewId: swingViews.id,
       view: swingViews.view,
       mediaKey: swingViews.mediaKey,
+      revision: swingViews.artifactRevision,
     })
     .from(swings)
     .innerJoin(swingViews, eq(swingViews.swingId, swings.id))
@@ -79,6 +97,7 @@ export async function viewByMediaKey(mediaKey: string): Promise<ResolvedView | n
       viewId: swingViews.id,
       view: swingViews.view,
       mediaKey: swingViews.mediaKey,
+      revision: swingViews.artifactRevision,
     })
     .from(swingViews)
     .innerJoin(swings, eq(swings.id, swingViews.swingId))
@@ -98,6 +117,7 @@ export async function viewById(viewId: string): Promise<ResolvedView | null> {
       viewId: swingViews.id,
       view: swingViews.view,
       mediaKey: swingViews.mediaKey,
+      revision: swingViews.artifactRevision,
     })
     .from(swingViews)
     .innerJoin(swings, eq(swings.id, swingViews.swingId))

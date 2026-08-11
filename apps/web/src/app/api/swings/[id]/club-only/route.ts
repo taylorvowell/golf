@@ -13,7 +13,7 @@ export async function GET(
   const { id } = await params;
   const access = await requireViewAccess(id, viewParam(req));
   if ("error" in access) return access.error;
-  const s = await getClubOnly(access.mediaKey);
+  const s = await getClubOnly(access.address);
   if (!s) return new Response("not found", { status: 404 });
   return Response.json(s, { headers: { "Cache-Control": "private, max-age=86400" } });
 }

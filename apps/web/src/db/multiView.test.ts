@@ -1,9 +1,8 @@
-import fs from "node:fs";
-import path from "node:path";
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { resolveView, viewByMediaKey } from "./views";
-import { MEDIA_ROOT } from "../lib/swings";
+import { ARTIFACT_BUCKET, artifactKey } from "../lib/media/keys";
+import { getMediaStore } from "../lib/media/store";
 
 /**
  * The §7.1 multi-view rebuild, checked against the database it actually ran on.
@@ -99,16 +98,34 @@ describe("every pre-existing swing survived the rebuild", () => {
     }
   });
 
-  it("resolves every ready view to a readable analysis.json on disk", async () => {
-    const views = await sql<{ id: string; media_key: string }[]>`
-      select id, media_key from public.swing_views where status = 'ready'
+  /**
+   * Step 09 moved the goalposts here on purpose. This used to assert the artifact was on disk under
+   * the analyzer's `out/<stem>/`; now it asserts the artifact is **in the store, at the revision
+   * the row says is current** — which is the thing the player will actually ask for. A view marked
+   * ready whose artifact was never published is exactly the failure the media move could introduce,
+   * and it would look identical to a healthy row from the database side.
+   */
+  it("resolves every ready view to a published analysis.json at its current revision", async () => {
+    const views = await sql<{
+      id: string; media_key: string; user_id: string; swing_id: string; artifact_revision: number;
+    }[]>`
+      select v.id, v.media_key, v.artifact_revision, s.id as swing_id, s.user_id
+        from public.swing_views v
+        join public.swings s on s.id = v.swing_id
+       where v.status = 'ready'
     `;
     expect(views.length, "no analysed views — run `pnpm db:backfill`").toBeGreaterThan(0);
 
-    const missing = views
-      .filter((v) => !fs.existsSync(path.join(MEDIA_ROOT, v.media_key, "analysis.json")))
-      .map((v) => v.media_key);
-    expect(missing, "views marked ready whose artifact is not on disk").toEqual([]);
+    const store = await getMediaStore();
+    const missing: string[] = [];
+    for (const v of views) {
+      const key = artifactKey(
+        { userId: v.user_id, swingId: v.swing_id, viewId: v.id, revision: v.artifact_revision },
+        "analysis.json",
+      );
+      if (!(await store.exists(ARTIFACT_BUCKET, key))) missing.push(`${v.media_key} -> ${key}`);
+    }
+    expect(missing, "views marked ready whose artifact is not published").toEqual([]);
   });
 
   it("keeps every scorecard attached to the view it was computed from", async () => {

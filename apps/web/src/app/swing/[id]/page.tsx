@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import SwingWorkspace from "@/components/SwingWorkspace";
 import { CURRENT_SCHEMA, getAnalysis, listSwings, missingCapabilities } from "@/lib/swings";
 import { requireUserId } from "@/lib/auth";
-import { isViewType, resolveView } from "@/db/views";
+import { isViewType, mediaAddress, resolveView } from "@/db/views";
 import { getScorecard } from "@/lib/scoring";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +32,7 @@ export default async function SwingPage({
   if (!resolved || resolved.userId !== userId) notFound();
 
   const [analysis, swings, scorecard] = await Promise.all([
-    getAnalysis(resolved.mediaKey), listSwings(userId), getScorecard(resolved.mediaKey),
+    getAnalysis(mediaAddress(resolved)), listSwings(userId), getScorecard(mediaAddress(resolved)),
   ]);
   if (!analysis) notFound();
 

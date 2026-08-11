@@ -20,6 +20,56 @@ closing.
 
 ---
 
+## 09 — Media Storage and Artifact Addressing ✅ 2026-08-11
+
+**Media is no longer bolted to this laptop.** `SWINGSAGE_MEDIA_ROOT` was the single hardest blocker
+to the analyzer running anywhere else; it now names only the analyzer's working directory, and no
+route reads the filesystem for media at all. Decisions in **D33**.
+
+**The plan said rewrite `media_key` into a storage prefix. The better answer was not to store one.**
+A key is derived from identity the database already owns — `u/<userId>/s/<swingId>/v/<viewId>/r<n>/`
+— so it cannot drift from what it encodes, needs no backfill, and makes "is this artifact where it
+should be" a pure function. That leaves `media_key` holding its one real meaning: the analyzer's
+folder name. Conflating those two is what made the media unmovable to begin with.
+
+**Three properties are load-bearing, and each is a test.** The owner leads the key, so a storage
+policy can express ownership at all (`storage.foldername(name)[2] = auth.uid()`). The revision
+separates analysis runs, because object storage has no rename-into-place — a re-analysis writes
+`r<n+1>` and only *then* does the row point at it, so a golfer mid-scrub finishes on what they
+started with. And the source sits outside the revision, since re-analysis produces new artifacts
+from the same upload.
+
+**The analyzer was not touched — publishing is a separate act.** `burnin.py` still writes
+`out/<stem>/`; `lib/media/publish.ts` copies that into the store. That satisfies "change where
+artifacts land, not what the analyzer produces" more literally than editing the analyzer would have,
+keeps the credential-free CLI loop the pipeline's development depends on, and makes the
+`analyzer-service` track a deployment rather than a redesign. **Zero diff under `services/analyzer`.**
+
+**Verified over the real network path, not just compiled.** Both buckets are live in `golf-swing`,
+private, with source and artifacts split because D29 expires one and not the other. 11 artifacts
+published in 6.1s, `analysis.json` read back, and a signed URL answered `Range: bytes=1000-2999`
+with **206 `bytes 1000-2999/5496355`** — frame-accurate scrubbing survives the CDN path, which is
+the one property this step could not afford to get wrong. Locally the driver hard-links from the
+analyzer's output, so publishing all ten fixtures (104 artifacts) cost ~0 extra disk.
+
+Oracles: web tsc/lint clean, **121 vitest** (18 new), Playwright e2e green, analyzer pytest green,
+`db:migrate` idempotent.
+
+**Two findings worth carrying forward.** The Free plan caps uploads at **50 MB per file**, below a
+270–330 MB phone video — so `media-pipeline`'s on-device compression is a *fit* requirement, not a
+bandwidth optimization, and the provisioning script now says `CAPPED BY PLAN` rather than silently
+accepting a default that would fail first on a real golfer's upload. And **storage-level RLS is
+deliberately not shipped**: the driver bypasses `storage.objects`, so writing policies now would
+ship a second inert boundary — the exact mistake D26 and D30's `clubs` grant each cost a debugging
+session. It lands with D24's service-role scoping.
+
+**Open against the DoD:** buckets exist in one environment, not the three D10 wants. A preview
+project is free; the third needs Pro at $25/mo. Recorded as a deviation, not a decision.
+
+Next: **07 — API Contract and Shared Schema**.
+
+---
+
 ## 06 — Swing, Session, and Equipment Model ✅ 2026-08-11
 
 **A swing is no longer a video.** It is a shot that owns one or more **views**, each with its own

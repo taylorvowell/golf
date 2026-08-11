@@ -15,7 +15,7 @@ export async function GET(
   const { id } = await params;
   const access = await requireViewAccess(id, viewParam(req));
   if ("error" in access) return access.error;
-  const a = await getAnalysis(access.mediaKey);
+  const a = await getAnalysis(access.address);
   if (!a) return new Response("not found", { status: 404 });
   return Response.json(a, { headers: { "Cache-Control": "no-store" } });
 }

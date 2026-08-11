@@ -86,3 +86,30 @@ frame, and confirm the overlay stays locked to the video — the Gate 3 check fr
 
 This step and step 08 together are what make the `analyzer-service` track possible. Until media
 is addressable from anywhere, the analyzer cannot leave this machine.
+
+### Completed 2026-08-11 — one deviation and two findings (D33)
+
+**Deviation from the plan as written.** Sub-step 2 and D30 both expected `media_key` to be rewritten
+into an object-storage prefix. It was not: a key is now **derived** from identity
+(`users.id`/`swings.id`/`swing_views.id`/`artifact_revision`) and never stored, so it cannot drift
+from what it encodes and there was nothing to backfill. `media_key` keeps its one real meaning — the
+analyzer's working-directory name. Rationale in D33.
+
+Sub-step 4 ("change the analyzer's output destination") landed as a **publish step** rather than a
+change inside `burnin.py`: the analyzer still writes `out/<stem>/` and `lib/media/publish.ts` copies
+that into the store. That satisfies "only where it lands, not what it produces" more literally than
+editing the analyzer would have, keeps the credential-free CLI loop intact (sub-step 6), and makes
+the hosted worker a deployment rather than a redesign. **Zero diff under `services/analyzer`.**
+
+**Finding 1 — the Free plan caps uploads at 50 MB per file**, which is below a 270–330 MB phone
+video. Blocks nothing now (nothing uploads from a device until `media-pipeline`) but makes that
+track's on-device compression a *fit* requirement, not an optimization. See `infra/storage/README.md`.
+
+**Finding 2 — storage-level RLS is deliberately not shipped.** The driver holds a credential that
+bypasses `storage.objects`, so media authorization still rests on `requireViewAccess`. Writing
+policies while a bypassing credential does the reading would ship a second inert boundary — the
+mistake D26 and D30's `clubs` grant already cost this project once each. It lands with D24's
+service-role scoping.
+
+**Still open against the DoD:** buckets exist in one environment rather than per environment (D10
+wants three; a preview project is free, the third needs Pro). Recorded as a deviation from D10.

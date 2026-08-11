@@ -1463,3 +1463,104 @@ lands at the point where someone else's golf video becomes reachable, and nowher
 - **Open, deliberately:** whether an unlisted coach may be attached by direct invite from a golfer
   who already knows them, bypassing the directory. It is the natural least-resistance path for a
   real coach's existing clients and it needs a decision before `coach-relationships`, not now.
+
+---
+
+## D33 — A storage key is derived from identity, not stored; the analyzer keeps its folders
+
+**Date:** 2026-08-11
+**Status:** ACTIVE — amends D30's prediction about `media_key`
+
+**Context:** Step 09 had to get media off `SWINGSAGE_MEDIA_ROOT`, the single hardest blocker to the
+analyzer running anywhere but this laptop. D30 predicted the mechanism: rewrite `swing_views.media_key`
+from the analyzer's `out/<stem>` folder name into an object-storage prefix, "changing values, not
+columns".
+
+**Decision:** the values were not changed either. A storage key is **derived** from identity the
+database already owns — `users.id` / `swings.id` / `swing_views.id` / `artifact_revision`, assembled
+in `apps/web/src/lib/media/keys.ts` — and never stored.
+
+**Why deriving beat storing.** A stored key is a second source of truth for something the row
+already encodes, and it can drift: a wrong value is a silently unreachable swing, and nothing in the
+schema can catch it. A derived key cannot disagree with the identity it encodes, needs no backfill,
+and makes "is this artifact where it should be" a pure function rather than a lookup. The step's own
+words were "stable keys derived from swing/view identity" — *derived* turned out to be the whole
+instruction.
+
+That leaves `media_key` holding exactly one meaning, which it always really had: **the analyzer's
+working-directory name.** `burnin.py` has never heard of this database and still writes `out/<stem>/`.
+Conflating that folder with the product's addressing is what made the media unmovable in the first
+place, so the two are now separate concepts with separate names.
+
+**The scheme** (`infra/storage/README.md` has the full table):
+
+```
+swing-artifacts:  u/<userId>/s/<swingId>/v/<viewId>/r<revision>/<artifact>
+swing-source:     u/<userId>/s/<swingId>/v/<viewId>/source/<filename>
+```
+
+- **The owner leads** so a Supabase Storage policy can express ownership at all — a policy can only
+  reason about path segments, and `storage.foldername(name)[2] = auth.uid()` is the door this keeps
+  open.
+- **The revision separates analysis runs.** Object storage has no rename-into-place, so a
+  re-analysis writes `r<n+1>` alongside `r<n>` and only then does the row point at it. A golfer
+  mid-scrub finishes the session on the artifacts they started it with. That is an *ordering*, not a
+  lock, and it is what makes the step's "does not orphan or overwrite artifacts another session is
+  reading" true rather than aspirational.
+- **The source sits outside the revision** — re-analysis produces new artifacts from the same
+  upload, so a source that moved with the revision would be copied for nothing and hand D29's 30-day
+  expiry several objects to chase instead of one.
+
+**Two buckets, not one**, because D29 expires the raw upload after 30 days while its artifacts live
+as long as the swing. A single bucket needs a single retention rule, and the only rule satisfying
+both is the longer one — which would quietly keep every raw upload forever and break D29 without
+anything appearing to go wrong.
+
+**Publishing is a separate act from analysing.** `burnin.py` still writes `out/<stem>/` exactly as
+before — the pipeline is untouched and the CLI workflow the analyzer's development depends on needs
+no cloud anything. `lib/media/publish.ts` then copies that directory into the store. This is what
+step 09 meant by "change where artifacts land, not what the analyzer produces", and it is also what
+makes the `analyzer-service` track a deployment rather than a redesign: a hosted worker publishes
+from its own scratch directory through the same function.
+
+**Consequences:**
+- **Cloud is opt-in.** `MEDIA_DRIVER` selects the driver and is never inferred from the Supabase
+  env vars, because this environment has those set for *auth* while its media is local — inference
+  would point every read at a bucket that does not exist and report it as a missing swing.
+- The local driver **hard-links** from the analyzer's output, so publishing ten fixtures cost ~0
+  extra disk (verified: link count 2, 104 artifacts published). It falls back to a copy across
+  volumes.
+- Video playback on the cloud driver is a **307 to a signed URL**, so range requests are answered by
+  the CDN. Proxying every seek's byte range through Next.js would put a round trip in front of the
+  one interaction this product is judged on. The URL TTL is six hours, chosen to outlive a viewing
+  session rather than as a security parameter — a URL that expires mid-scrub breaks seeking in a way
+  indistinguishable from the frame-sync bugs this project spends its effort avoiding.
+- `multiView.test.ts`'s artifact assertion was deliberately re-aimed: it used to check the file was
+  on disk under `out/<stem>/`, and now checks it is **published at the revision the row says is
+  current** — a view marked ready but never published is the failure this move could introduce, and
+  from the database side it looks identical to a healthy row.
+
+**Deferred, loudly:** storage-level RLS policies. The driver holds a credential that bypasses
+`storage.objects`, exactly as the hosted worker will need to, so media authorization still rests on
+`requireViewAccess` in the route — where it rested when media came off local disk, so no regression,
+but not the end state. Writing policies while a bypassing credential does the reading would ship a
+second inert boundary, and this project has already paid for that twice (D26's superuser connection;
+D30's `clubs` policies with no table grant behind them). It lands with D24's "scope the analyzer's
+service role to specific tables", which is the same problem.
+
+**Verified, not merely written:** both buckets exist in `golf-swing` and the cloud path was exercised
+end to end — 11 artifacts published in 6.1s, `analysis.json` read back, and a signed URL answering
+`Range: bytes=1000-2999` with **206 `bytes 1000-2999/5496355`**. Range requests survive the network
+path, which is the one property this step could not afford to get wrong.
+
+**Found while provisioning, and it matters to `media-pipeline`:** the Free plan caps uploads at
+**50 MB per file** — a project-level setting, not a bucket one, which is why a 2 GB bucket limit was
+refused. A phone swing video is 270–330 MB, so the source bucket cannot hold one today. Nothing
+uploads from a device until `media-pipeline`, so this blocks nothing now, but it makes that track's
+on-device trim and compression a *fit* requirement rather than a bandwidth optimization. The
+alternative is Pro, which raises the ceiling to 500 GB. Recorded so it is not discovered late.
+
+**Also outstanding:** buckets exist per *environment* only in the sense that one environment exists.
+A preview Supabase project is free (the Free plan allows 2 active projects per organization, and
+`golf-swing` is the only active one), so this is a deviation from D10 waiting on a decision, not on
+money.

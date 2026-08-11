@@ -1,5 +1,5 @@
-import fs from "node:fs/promises";
-import { swingFile } from "./swings";
+import { ARTIFACT_BUCKET, artifactKey, type ViewAddress } from "@/lib/media/keys";
+import { getJson, getMediaStore } from "@/lib/media/store";
 import type { Scorecard } from "./scoreDisplay";
 
 /**
@@ -18,12 +18,9 @@ import type { Scorecard } from "./scoreDisplay";
  * `null` rather than throwing, and every consumer renders its "not scored" state instead of
  * crashing (the same degrade-don't-crash pattern as `missingCapabilities()`).
  */
-export async function getScorecard(id: string): Promise<Scorecard | null> {
-  try {
-    return JSON.parse(await fs.readFile(swingFile(id, "coach_report.json"), "utf8"));
-  } catch {
-    return null;
-  }
+export async function getScorecard(address: ViewAddress): Promise<Scorecard | null> {
+  const store = await getMediaStore();
+  return getJson<Scorecard>(store, ARTIFACT_BUCKET, artifactKey(address, "coach_report.json"));
 }
 
 export type { Scorecard } from "./scoreDisplay";

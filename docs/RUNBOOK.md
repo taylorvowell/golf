@@ -29,7 +29,8 @@ docker compose up -d          # Postgres on :5433. Docker Desktop must be runnin
 pnpm i                        # installs every workspace package
 pnpm --filter web db:migrate  # apply apps/web/drizzle/*.sql
 pnpm --filter web db:seed     # create the one seeded user every swing is owned by
-pnpm --filter web db:backfill # index every services/analyzer/out/<id>/ folder + sync scores
+pnpm --filter web db:backfill # index every services/analyzer/out/<id>/ folder, PUBLISH its
+                              # artifacts into the media store, and sync scores
 pnpm dev                      # http://127.0.0.1:3000
 ```
 
@@ -38,6 +39,17 @@ the dev server answers on IPv4.
 
 `db:backfill` is idempotent; re-run it any time. **A fixture analysed by hand from the CLI does
 not touch Postgres at all**, so its score stays stale in the swing list until backfill runs.
+
+**Since step 09 no route reads `services/analyzer/out/` directly.** Media is served through
+`lib/media`, addressed by identity rather than by folder name (D33), and `db:backfill` is what
+publishes a CLI-analysed fixture into the store. If a swing appears in the log but its video or
+overlays are missing, that is almost always an unpublished fixture — re-run backfill.
+
+The default driver is **local** and needs no credentials: it writes `.media/` at the repo root,
+hard-linked from `services/analyzer/out`, so it costs essentially no disk. Delete `.media/` and
+re-run backfill to rebuild it. To use Supabase Storage instead, run
+`pnpm --filter web media:provision` once and set `MEDIA_DRIVER=supabase`. Cloud is never inferred
+from the Supabase auth vars — see [`infra/storage/README.md`](../infra/storage/README.md).
 
 ---
 

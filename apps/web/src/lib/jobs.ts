@@ -6,8 +6,9 @@ import { desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
 import { jobs as jobsTable, swingViews as viewsTable } from "@/db/schema";
 import { syncSwingScore } from "@/db/scores";
-import type { ResolvedView } from "@/db/views";
-import { MEDIA_ROOT, getAnalysis } from "@/lib/swings";
+import { mediaAddress, type ResolvedView } from "@/db/views";
+import { getAnalysis } from "@/lib/swings";
+import { publishFromWorkingDir, workingDirFor } from "@/lib/media/publish";
 
 /**
  * Re-analysis jobs, persisted in Postgres — replacing the
@@ -110,7 +111,7 @@ async function persist(job: Job) {
  */
 async function reconcile(job: Job, view: ResolvedView): Promise<Job> {
   if (job.status !== "running" && job.status !== "queued") return job;
-  const dir = path.join(MEDIA_ROOT, view.mediaKey);
+  const dir = workingDirFor(view.mediaKey);
   try {
     await fs.access(path.join(dir, ".analysis.lock"));
     return job;                        // lock still held — genuinely running elsewhere
@@ -161,7 +162,7 @@ export async function startReanalysis(view: ResolvedView): Promise<Job> {
   // Every input comes from the swing's own stored artifact, never from the request body —
   // this route spawns a process, so the only path it will ever pass to it is one the
   // analyzer itself wrote.
-  const analysis = await getAnalysis(view.mediaKey);
+  const analysis = await getAnalysis(mediaAddress(view));
   if (!analysis) throw new Error("no analysis.json for this swing");
   const src = analysis.video.source.path;
   if (!src) throw new Error("this analysis predates source-path recording; re-run by hand");
@@ -198,7 +199,7 @@ export async function startReanalysis(view: ResolvedView): Promise<Job> {
 
   const args = [
     path.join("scripts", "burnin.py"), src,
-    "--out", path.join(MEDIA_ROOT, view.mediaKey),
+    "--out", workingDirFor(view.mediaKey),
     "--view", analysis.video.view,
     "--handedness", analysis.video.handedness,
   ];
@@ -250,19 +251,48 @@ export async function startReanalysis(view: ResolvedView): Promise<Job> {
 
     await persist(job).catch(() => {});
     if (status === "done") {
-      // Stage 8 writes coach_report.json alongside analysis.json — the web app re-reads
-      // whatever the analyzer just produced, same pattern as everywhere else in this codebase
-      // (analysis.json is the artifact of record, not a value passed around).
-      const fresh = await getAnalysis(view.mediaKey).catch(() => null);
-      await db.update(viewsTable).set({
-        status: "ready",
-        analyzedAt: new Date(),
-        fps: fresh?.video.fps,
-        frameCount: fresh?.video.frame_count,
-        width: fresh?.video.width,
-        height: fresh?.video.height,
-      }).where(eq(viewsTable.id, view.viewId)).catch(() => {});
-      await syncSwingScore(view).catch(() => {});
+      /**
+       * Publish before the row moves, and publish to the NEXT revision.
+       *
+       * The analyzer has just rewritten its working directory in place; nothing the player is
+       * currently reading has changed yet, because the player addresses `r<n>` and this writes
+       * `r<n+1>`. Only the row update below makes the new revision current, so a golfer mid-scrub
+       * finishes their session on the artifacts they started it with rather than having the video
+       * swapped underneath them — step 09's "does not orphan or overwrite artifacts another
+       * session is reading", made true by an ordering rather than by a lock.
+       *
+       * If publishing fails the row is left alone: `r<n>` is still complete and still current, so
+       * a failed publish costs the re-analysis, not the swing.
+       */
+      const revision = view.revision + 1;
+      const address = { ...mediaAddress(view), revision };
+      let publishError: string | null = null;
+      try {
+        await publishFromWorkingDir(address, workingDirFor(view.mediaKey));
+      } catch (err) {
+        publishError = err instanceof Error ? err.message : String(err);
+      }
+
+      if (publishError) {
+        await db.update(viewsTable).set({
+          status: "failed",
+          failureReason: `analysis succeeded but publishing failed: ${publishError}`,
+        }).where(eq(viewsTable.id, view.viewId)).catch(() => {});
+      } else {
+        // Read back through the store rather than off disk: it is the published copy the player
+        // will get, so anything wrong with the publish shows up here rather than at playback.
+        const fresh = await getAnalysis(address).catch(() => null);
+        await db.update(viewsTable).set({
+          status: "ready",
+          analyzedAt: new Date(),
+          artifactRevision: revision,
+          fps: fresh?.video.fps,
+          frameCount: fresh?.video.frame_count,
+          width: fresh?.video.width,
+          height: fresh?.video.height,
+        }).where(eq(viewsTable.id, view.viewId)).catch(() => {});
+        await syncSwingScore({ ...view, revision }).catch(() => {});
+      }
     } else {
       await db.update(viewsTable).set({ status: "failed", failureReason: message })
         .where(eq(viewsTable.id, view.viewId)).catch(() => {});

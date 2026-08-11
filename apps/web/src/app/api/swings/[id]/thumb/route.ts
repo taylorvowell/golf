@@ -1,5 +1,5 @@
-import { readFile } from "node:fs/promises";
-import { swingFile } from "@/lib/swings";
+import { ARTIFACT_BUCKET, artifactKey } from "@/lib/media/keys";
+import { getMediaStore } from "@/lib/media/store";
 import { requireViewAccess, viewParam } from "@/lib/auth";
 
 /**
@@ -18,26 +18,22 @@ export async function GET(
   const access = await requireViewAccess(id, viewParam(req));
   if ("error" in access) return access.error;
 
-  let file: string;
-  try {
-    file = swingFile(access.mediaKey, "contact.jpg");
-  } catch {
-    return new Response("bad id", { status: 400 });
-  }
+  const store = await getMediaStore();
+  const bytes = await store.getBytes(
+    ARTIFACT_BUCKET,
+    artifactKey(access.address, "contact.jpg"),
+  );
+  if (!bytes) return new Response("not found", { status: 404 });
 
-  try {
-    const buf = await readFile(file);
-    return new Response(new Uint8Array(buf), {
-      status: 200,
-      headers: {
-        "Content-Type": "image/jpeg",
-        "Content-Length": String(buf.byteLength),
-        // The analyzer rewrites this on every re-analysis, and a stale thumbnail beside a
-        // fresh analysis is exactly the confusion the Re-analyze button exists to avoid.
-        "Cache-Control": "no-store",
-      },
-    });
-  } catch {
-    return new Response("not found", { status: 404 });
-  }
+  return new Response(new Uint8Array(bytes), {
+    status: 200,
+    headers: {
+      "Content-Type": "image/jpeg",
+      "Content-Length": String(bytes.byteLength),
+      // Addressed by revision, so a re-analysis mints a different URL rather than changing what
+      // this one returns. The no-store that used to be needed here is therefore obsolete — but a
+      // private cache only: this is a picture of a person mid-swing.
+      "Cache-Control": "private, max-age=86400",
+    },
+  });
 }

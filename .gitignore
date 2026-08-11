@@ -38,3 +38,7 @@ apps/web/next-env.d.ts
 # --- OS ---
 Thumbs.db
 .DS_Store
+
+# The local media store (lib/media/localStore.ts). Hard-linked from services/analyzer/out,
+# so it costs no real disk — but it is media, and it is rebuildable with `pnpm db:backfill`.
+.media/

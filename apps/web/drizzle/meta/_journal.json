@@ -50,6 +50,13 @@
       "when": 1786500000000,
       "tag": "0006_multi_view_swings",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1786510000000,
+      "tag": "0007_artifact_revision",
+      "breakpoints": true
     }
   ]
 }

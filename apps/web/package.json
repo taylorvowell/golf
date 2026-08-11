@@ -15,7 +15,8 @@
     "db:backfill": "node --env-file-if-exists=.env --import tsx src/db/backfill.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "media:provision": "node --env-file-if-exists=.env --import tsx src/db/provisionStorage.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

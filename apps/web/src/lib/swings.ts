@@ -1,14 +1,14 @@
-import fs from "node:fs/promises";
-import path from "node:path";
+import { ARTIFACT_BUCKET, artifactKey, type ViewAddress } from "@/lib/media/keys";
+import { getJson, getMediaStore } from "@/lib/media/store";
 
 /**
  * The web app never runs CV — it reads what the Python analyzer wrote (the master plan principle 2).
- * Until the v1 job queue and SQLite land, "the database" is the analyzer's output folder:
- * one directory per swing, each containing analysis.json plus its normalized video.
+ *
+ * Since step 09 it reads those artifacts through `lib/media`, addressed by identity rather than by
+ * the analyzer's folder name. No route touches the filesystem for media any more; the local driver
+ * still puts bytes on disk, but that is a driver's business and not an assumption anything above
+ * it may make.
  */
-export const MEDIA_ROOT =
-  process.env.SWINGSAGE_MEDIA_ROOT ??
-  path.resolve(process.cwd(), "..", "..", "services", "analyzer", "out");
 
 /**
  * The schema this player is written against. Keep in step with `SCHEMA_VERSION` in
@@ -364,8 +364,10 @@ export interface Silhouette {
 export interface SwingViewSummary {
   id: string;
   view: "dtl" | "face_on";
-  /** Storage key, not a path — what `swingFile()` resolves against `MEDIA_ROOT`. */
+  /** The analyzer's working-directory stem. Not an address — see `lib/media/keys.ts` (D33). */
   mediaKey: string;
+  /** Which analysis run's artifacts this view currently addresses. */
+  revision: number;
   fps: number;
   frameCount: number;
   width: number | null;
@@ -414,21 +416,12 @@ export interface SwingSummary {
 }
 
 /**
- * Guard a storage key before it is joined to a filesystem root: no `..`, no separators, no
- * absolute path. Keys reach this from the database, but the database got them from an upload, so
- * they are treated as untrusted the whole way down.
+ * One artifact belonging to one VIEW — not to a swing id, which since migration 0006 addresses a
+ * shot that may hold two videos and therefore two of everything below.
  */
-function safeKey(key: string) {
-  if (!/^[A-Za-z0-9._-]+$/.test(key)) throw new Error("invalid media key");
-  return key;
-}
-
-/**
- * An artifact belonging to one VIEW, by its storage key — not by swing id, which since migration
- * 0006 addresses a shot that may hold two videos and therefore two of everything below.
- */
-export function swingFile(mediaKey: string, name: string) {
-  return path.join(MEDIA_ROOT, safeKey(mediaKey), name);
+async function readArtifact<T>(address: ViewAddress, name: Parameters<typeof artifactKey>[1]) {
+  const store = await getMediaStore();
+  return getJson<T>(store, ARTIFACT_BUCKET, artifactKey(address, name));
 }
 
 /**
@@ -480,6 +473,7 @@ export async function listSwings(userId: string): Promise<SwingSummary[]> {
         id: row.view.id,
         view: row.view.view,
         mediaKey: row.view.mediaKey,
+        revision: row.view.artifactRevision,
         fps: row.view.fps ?? 0,
         frameCount: row.view.frameCount ?? 0,
         width: row.view.width,
@@ -501,10 +495,15 @@ export async function listSwings(userId: string): Promise<SwingSummary[]> {
     let traceEnabled = false;
     let poseCoverage = 0;
     if (primary) {
-      try {
-        const a = JSON.parse(
-          await fs.readFile(swingFile(primary.mediaKey, "analysis.json"), "utf8")
-        ) as Analysis;
+      const a = await getAnalysis({
+        userId: swing.userId,
+        swingId: swing.id,
+        viewId: primary.id,
+        revision: primary.revision,
+      }).catch(() => null);
+      // Null when the artifact isn't readable (mid-analysis, or never published) — still show the
+      // row with its DB-known fields rather than dropping it from the golfer's own log.
+      if (a) {
         const joints = Object.values(a.quality?.per_joint ?? {});
         model = a.pose.model;
         tempoRatio = a.tempo?.ratio ?? null;
@@ -512,9 +511,6 @@ export async function listSwings(userId: string): Promise<SwingSummary[]> {
         poseCoverage = joints.length
           ? joints.reduce((s, j) => s + j.coverage, 0) / joints.length
           : 0;
-      } catch {
-        // Row exists but the artifact isn't readable (mid-analysis, or media moved) — still show
-        // the row with its DB-known fields rather than dropping it from the log.
       }
     }
 
@@ -541,13 +537,9 @@ export async function listSwings(userId: string): Promise<SwingSummary[]> {
   return out;
 }
 
-/** By storage key — the caller resolves a swing id to a view first (`db/views.ts`). */
-export async function getAnalysis(mediaKey: string): Promise<Analysis | null> {
-  try {
-    return JSON.parse(await fs.readFile(swingFile(mediaKey, "analysis.json"), "utf8"));
-  } catch {
-    return null;
-  }
+/** By address — the caller resolves a swing id to a view first (`db/views.ts`). */
+export async function getAnalysis(address: ViewAddress): Promise<Analysis | null> {
+  return readArtifact<Analysis>(address, "analysis.json");
 }
 
 /**
@@ -558,44 +550,29 @@ export async function getAnalysis(mediaKey: string): Promise<Analysis | null> {
  * Deliberately NOT folded into `getAnalysis`: this is up to a megabyte, the swing page loads
  * the analysis on every visit, and most visits never turn the silhouette on.
  */
-export async function getSilhouette(mediaKey: string): Promise<Silhouette | null> {
-  try {
-    return JSON.parse(await fs.readFile(swingFile(mediaKey, "silhouette.json"), "utf8"));
-  } catch {
-    return null;
-  }
+export async function getSilhouette(address: ViewAddress): Promise<Silhouette | null> {
+  return readArtifact<Silhouette>(address, "silhouette.json");
 }
 
 /** Golfer+club rings (scripts/isolate.py) — silhouette.json's shape, so one reader. */
-export async function getIsolation(mediaKey: string): Promise<Silhouette | null> {
-  try {
-    return JSON.parse(await fs.readFile(swingFile(mediaKey, "isolation.json"), "utf8"));
-  } catch {
-    return null;
-  }
+export async function getIsolation(address: ViewAddress): Promise<Silhouette | null> {
+  return readArtifact<Silhouette>(address, "isolation.json");
 }
 
 /** Club-only rings — the subtractive view (attached motion minus the body). */
-export async function getClubOnly(mediaKey: string): Promise<Silhouette | null> {
-  try {
-    return JSON.parse(await fs.readFile(swingFile(mediaKey, "club_only.json"), "utf8"));
-  } catch {
-    return null;
-  }
+export async function getClubOnly(address: ViewAddress): Promise<Silhouette | null> {
+  return readArtifact<Silhouette>(address, "club_only.json");
 }
-
 
 /**
  * Whether the silhouette artifact exists, without reading a megabyte to find out.
  *
  * The swing page needs this at render time to decide whether the overlay group is offered at
- * all; the data itself is fetched by the browser only once that toggle goes on.
+ * all; the data itself is fetched by the browser only once that toggle goes on. Over the network
+ * driver this is a metadata listing rather than a download, which is the reason it stayed a
+ * separate call instead of becoming `!!(await getSilhouette(...))`.
  */
-export async function hasSilhouette(mediaKey: string): Promise<boolean> {
-  try {
-    await fs.access(swingFile(mediaKey, "silhouette.json"));
-    return true;
-  } catch {
-    return false;
-  }
+export async function hasSilhouette(address: ViewAddress): Promise<boolean> {
+  const store = await getMediaStore();
+  return store.exists(ARTIFACT_BUCKET, artifactKey(address, "silhouette.json"));
 }

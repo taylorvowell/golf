@@ -145,12 +145,28 @@ export const swingViews = pgTable("swing_views", {
   view: text("view", { enum: ["dtl", "face_on"] }).notNull(),
 
   /**
-   * The normalized clip's storage KEY — never a path. No root and no separators of its own; the
-   * app validates it and joins it to `MEDIA_ROOT` (`lib/swings.ts:swingFile`). Today it is the
-   * analyzer's `out/<stem>` folder name; step 09 makes it an object-storage prefix by changing
-   * values, not columns.
+   * The analyzer's WORKING-DIRECTORY name for this view — `services/analyzer/out/<stem>/`.
+   *
+   * Step 09 was expected to overwrite this with an object-storage prefix (D30). It did not, and
+   * the reason is worth keeping: a storage key is now **derived** from `users.id` + `swings.id` +
+   * this row's `id` + `artifactRevision` (`lib/media/keys.ts`), so there is nothing to store and
+   * nothing that can drift out of agreement with the identity it is supposed to encode. What
+   * remains is the analyzer's own folder name, which is a genuinely separate concept — `burnin.py`
+   * has never heard of this database and still writes by stem. New views get their own id as the
+   * stem; the ten fixtures keep their human-readable ones. See D33.
    */
   mediaKey: text("media_key").notNull(),
+
+  /**
+   * Which analysis run produced the artifacts currently addressed, incremented per successful
+   * re-analysis and never reused.
+   *
+   * Object storage has no rename-into-place, so overwriting artifacts a player is mid-scrub on is
+   * a real failure mode rather than a theoretical one. Writing the next run to `r<n+1>` alongside
+   * is what makes step 09's "does not orphan or overwrite artifacts another session is reading"
+   * true instead of aspirational.
+   */
+  artifactRevision: integer("artifact_revision").notNull().default(1),
 
   /**
    * D29 — the untrimmed original, kept 30 days after a successful analysis so a bad trim is
