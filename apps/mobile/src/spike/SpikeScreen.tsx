@@ -23,6 +23,7 @@ import {
   type Probe,
   type ProbeStatus,
 } from "./probes";
+import { recordResult } from "./record";
 import { Skeleton } from "./Skeleton";
 import { buildIndex, frameAt, type PoseBundle } from "./pose";
 import { COLORS, styles } from "./styles";
@@ -167,8 +168,20 @@ export default function SpikeScreen() {
     void clock.current?.markOverlayCommitted(overlayFrame);
   }, [overlayFrame]);
 
+  /**
+   * Apply a patch AND, once a probe reaches a terminal state, emit it to logcat so the number
+   * outlives the screen. Recording here rather than at each call site means a probe added later
+   * cannot forget to do it.
+   */
   const setProbe = useCallback((id: string, patch: Partial<Probe>) => {
-    setProbes((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+    setProbes((prev) => {
+      const next = prev.map((p) => (p.id === id ? { ...p, ...patch } : p));
+      const changed = next.find((p) => p.id === id);
+      if (changed && (changed.status === "pass" || changed.status === "fail")) {
+        recordResult(changed);
+      }
+      return next;
+    });
   }, []);
 
   const deviceName = `${Platform.OS} ${String(Platform.Version)}`;
