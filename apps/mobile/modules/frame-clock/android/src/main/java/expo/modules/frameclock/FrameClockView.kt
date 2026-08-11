@@ -335,6 +335,18 @@ class FrameClockView(context: Context, appContext: AppContext) : ExpoView(contex
     overlayDrift.add(ceil(lateNs / frameNs))
   }
 
+  /**
+   * Playback rate. 0.25 plays a 240fps clip at true 60fps on screen — four times as many frames
+   * across the same motion, which is the entire point of capturing at 240.
+   *
+   * ExoPlayer resamples timestamps rather than dropping frames, so every captured frame is still
+   * presented and `onFrameRendered` still reports the real frame index. Slowing playback therefore
+   * does NOT change what the overlay is measured against.
+   */
+  fun setPlaybackSpeed(speed: Float) {
+    player?.setPlaybackSpeed(speed)
+  }
+
   fun resetStats() {
     synchronized(pendingLock) { pendingCommits.clear() }
     overlayDrift.reset()

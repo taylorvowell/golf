@@ -45,6 +45,9 @@ class FrameClockModule : Module() {
         view.markOverlayCommitted(frame)
       }
 
+      AsyncFunction("setPlaybackSpeed") { view: FrameClockView, speed: Double ->
+        view.setPlaybackSpeed(speed.toFloat())
+      }
       AsyncFunction("getStats") { view: FrameClockView ->
         view.stats()
       }

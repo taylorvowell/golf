@@ -145,6 +145,32 @@ export default function SpikeScreen() {
   const [clipUri, setClipUri] = useState<string | null>(null);
   /** Set while a network probe runs; overrides the bundled clip as the player's source. */
   const [remoteSource, setRemoteSource] = useState<string | null>(null);
+  /**
+   * The most recent capture, so it can be played in the SAME player the probes measure.
+   *
+   * Worth more than convenience: a 240fps clip played through the frame-clock is the first end-to-
+   * end check that a high-rate file survives the path the product actually uses, rather than only
+   * ffprobe on a desktop. The fps prop follows the recording, because the player derives every
+   * frame index from it and a 240fps file read at 60 lands every overlay on the wrong frame.
+   */
+  const [lastCapture, setLastCapture] = useState<{ path: string; fps: number } | null>(null);
+  /** The capture currently loaded into the player, or null while the reference clip is loaded. */
+  const [playingCapture, setPlayingCapture] = useState<{ path: string; fps: number } | null>(null);
+  const [speed, setSpeed] = useState(1);
+
+  /**
+   * Loading a capture starts it at quarter speed.
+   *
+   * A 240fps clip at 0.25x plays at a true 60fps — the same wall-clock motion the eye is used to,
+   * with four times the frames through it. Playing it at 1x would run four times faster than life
+   * and hide exactly the detail it was captured for, so the useful default is slow, not real time.
+   */
+  useEffect(() => {
+    if (!clock.current) return;
+    const next = playingCapture ? Math.min(1, 60 / playingCapture.fps) : 1;
+    setSpeed(next);
+    void clock.current.setPlaybackSpeed(next);
+  }, [playingCapture]);
   const [probes, setProbes] = useState<Probe[]>(PROBES);
   const [ready, setReady] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -313,6 +339,7 @@ export default function SpikeScreen() {
     // One result PER RATE. All three recordings previously shared the id "capture", so the
     // puller's last-wins rule silently discarded 60 and 120 and reported only 240 — three
     // measurements taken, one kept.
+    setLastCapture({ path: info.path, fps: info.requestedFps });
     setProbe(`capture@${info.requestedFps}`, {
       status: "fail",
       measurement: { value: info.requestedFps, device: deviceName },
@@ -327,6 +354,7 @@ export default function SpikeScreen() {
   const onHighSpeedRecorded = useCallback((info: {
     path: string; requestedFps: number; grantedRange: string;
   }) => {
+    setLastCapture({ path: info.path, fps: info.requestedFps });
     setProbe(`high-speed@${info.requestedFps}`, {
       status: "fail",
       measurement: { value: info.requestedFps, device: deviceName },
@@ -523,8 +551,8 @@ export default function SpikeScreen() {
             <FrameClockView
               ref={clock}
               style={styles.video}
-              source={remoteSource ?? clipUri}
-              fps={clip.fps}
+              source={playingCapture ? `file://${playingCapture.path}` : (remoteSource ?? clipUri)}
+              fps={playingCapture ? playingCapture.fps : clip.fps}
               // Always on here, even though the module defaults it off. The overlay marker IS
               // driven by these events, so this is not instrumentation sitting beside the thing
               // under test — it is the architecture under test. Turning it on only while
@@ -607,6 +635,38 @@ export default function SpikeScreen() {
             The white marker is drawn by JS, the green bar is burned into the video. Any gap
             between them IS the drift.
           </Text>
+          {lastCapture ? (
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+              <Pressable
+                onPress={() => setPlayingCapture(playingCapture ? null : lastCapture)}
+                style={styles.button}
+              >
+                <Text style={styles.buttonText}>
+                  {playingCapture
+                    ? "Back to reference clip"
+                    : `Play my ${lastCapture.fps}fps capture`}
+                </Text>
+              </Pressable>
+              <Text style={styles.detail}>
+                {playingCapture
+                  ? `${playingCapture.path.split("/").pop()} · ${playingCapture.fps}fps · ` +
+                    `${speed}x = ${Math.round(playingCapture.fps * speed)}fps on screen`
+                  : `last capture: ${lastCapture.path.split("/").pop()}`}
+              </Text>
+              {[1, 0.5, 0.25, 0.125].map((rate) => (
+                <Pressable
+                  key={rate}
+                  onPress={() => {
+                    setSpeed(rate);
+                    void clock.current?.setPlaybackSpeed(rate);
+                  }}
+                  style={[styles.button, speed !== rate && styles.buttonDisabled]}
+                >
+                  <Text style={styles.buttonText}>{rate}x</Text>
+                </Pressable>
+              ))}
+            </View>
+          ) : null}
         </View>
 
         {probes.map((p) => (
