@@ -401,7 +401,30 @@ production client**, which uses the release key created at step 10. `build.gradl
 
 Builds here are local, so this keystore really is the signing key. **An EAS build is signed by an
 EAS-managed keystore with a different SHA-1** (`npx eas credentials` prints it), so switching build
-routes means registering a second fingerprint on the OAuth client.
+routes means another OAuth client.
+
+**Play App Signing does not apply yet, and its console page does not exist yet.** Google's OAuth
+setup guide points at Play Console → Release → Setup → **App Integrity** for the SHA-1, and every
+provider doc repeats it. That page only appears once an app has been created in Play Console and a
+build uploaded; SwingSage has neither, so there is nothing there to read and nothing to configure.
+It is a **step 10 / `launch-readiness`** concern, not a prerequisite for wiring a provider.
+
+What it will mean when it does apply, so it is not rediscovered under submission pressure:
+
+* **An Android OAuth client holds exactly ONE package + SHA-1 pair.** Supporting more than one
+  certificate means more than one client, not more fingerprints on one client. Every client id
+  then goes in Supabase's *Authorized Client IDs* list.
+* **Play App Signing introduces a second key you do not hold.** You sign with an *upload* key;
+  Google re-signs with an *app signing* key it holds, and that is the certificate the installed
+  app actually carries — so it is Google's fingerprint, not the upload key's, that OAuth must
+  trust. Registering only the upload key is the classic "works in debug, broken in production"
+  sign-in failure.
+* So the eventual set is: one client on the debug fingerprint above (development), and one on the
+  Play app-signing fingerprint (production). The debug client must not be what production trusts —
+  its key is public.
+
+Sources: [Client authentication](https://developers.google.com/android/guides/client-auth),
+[Use Play App Signing](https://support.google.com/googleplay/android-developer/answer/9842756).
 
 ### Development build — via EAS (cloud, needed for iOS)
 
