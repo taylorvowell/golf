@@ -104,9 +104,25 @@ const OVERLAY_RUN_MS = 5_000;
  * target just before a keyframe is the worst case and has to be in the set or the probe measures
  * only the easy half of the problem.
  */
-const SEEK_TARGETS = [
-  150, 151, 149, 300, 299, 301, 7, 13, 88, 97, 210, 219, 444, 455, 512, 523, 66, 74, 380, 391,
-];
+const SEEK_TARGETS = (() => {
+  /**
+   * D34: this ran on 20 targets against a `minSamples` of 120, so its FAIL was real but
+   * under-sampled — and `judgeSeekError` did not apply the too-few gate that `judgeOverlayDrift`
+   * does, so nothing said so. Both are fixed.
+   *
+   * The hand-picked worst cases stay FIRST and unchanged, so runs remain comparable; the rest of
+   * the clip is then swept at every offset within the GOP of 10, which is what actually gets the
+   * count over the bar without inventing easy targets.
+   */
+  const handPicked = [
+    150, 151, 149, 300, 299, 301, 7, 13, 88, 97, 210, 219, 444, 455, 512, 523, 66, 74, 380, 391,
+  ];
+  const swept: number[] = [];
+  for (let frame = 20; frame < 590 && handPicked.length + swept.length < 130; frame += 5) {
+    if (!handPicked.includes(frame)) swept.push(frame);
+  }
+  return [...handPicked, ...swept];
+})();
 
 export default function SpikeScreen() {
   const { width, height, scale, fontScale } = useWindowDimensions();
@@ -128,6 +144,21 @@ export default function SpikeScreen() {
    *  measurement in scripts/measure_overlay.py, which needs more than a probe's 5s to sample. */
   const [looping, setLooping] = useState(false);
   const measuring = useRef(false);
+  /**
+   * Which overlay paint path is being measured (D34).
+   *
+   *   "react-state"  the frame event sets React state, an effect marks the overlay after commit.
+   *                  This is what produced D34's p50 = -1, and it is the architecture
+   *                  apps/web/src/lib/usePlayer.ts abandoned for exactly that reason.
+   *   "sync-ack"     the frame event marks the overlay SYNCHRONOUSLY, drawing nothing. This is the
+   *                  platform CEILING: the best a JS-driven overlay could ever do on this device.
+   *                  If it cannot reach zero, no renderer can save it and D5 is genuinely in
+   *                  question; if it can, the renderer is the suspect and Skia is the next probe.
+   *
+   * Keeping both rather than replacing is the point — a ceiling is only meaningful next to the
+   * baseline it improves on.
+   */
+  const paintStrategy = useRef<"react-state" | "sync-ack">("react-state");
 
   useEffect(() => {
     let cancelled = false;
@@ -164,7 +195,7 @@ export default function SpikeScreen() {
    * real overlay would suffer.
    */
   useEffect(() => {
-    if (!measuring.current) return;
+    if (!measuring.current || paintStrategy.current !== "react-state") return;
     void clock.current?.markOverlayCommitted(overlayFrame);
   }, [overlayFrame]);
 
@@ -186,12 +217,16 @@ export default function SpikeScreen() {
 
   const deviceName = `${Platform.OS} ${String(Platform.Version)}`;
 
-  const runOverlayProbe = useCallback(async () => {
+  const runOverlayProbe = useCallback(async (
+    strategy: "react-state" | "sync-ack" = "react-state",
+  ) => {
     const handle = clock.current;
     if (!handle || busy) return;
     setBusy(true);
-    setProbe("overlay-sync", { status: "running" as ProbeStatus, measurement: undefined });
+    const probeId = strategy === "sync-ack" ? "overlay-ceiling" : "overlay-sync";
+    setProbe(probeId, { status: "running" as ProbeStatus, measurement: undefined });
 
+    paintStrategy.current = strategy;
     await handle.resetStats();
     measuring.current = true;
     await handle.seekToFrame(0);
@@ -204,11 +239,14 @@ export default function SpikeScreen() {
     const stats: FrameClockStats = await handle.getStats();
     const verdict = judgeOverlayDrift(stats.overlayDriftFrames);
 
-    setProbe("overlay-sync", {
+    setProbe(probeId, {
       status: verdict.status,
       measurement: { value: verdict.value, device: deviceName },
-      detail: `${verdict.detail} · JS lead p95 ${stats.leadTimeMs.p95.toFixed(1)}ms`,
+      detail:
+        `${verdict.detail} · JS lead p95 ${stats.leadTimeMs.p95.toFixed(1)}ms · ` +
+        `paint=${strategy}`,
     });
+    paintStrategy.current = "react-state";
     setBusy(false);
   }, [busy, deviceName, setProbe]);
 
@@ -350,6 +388,11 @@ export default function SpikeScreen() {
               }}
               onPlayerError={({ nativeEvent }) => setError(nativeEvent.message)}
               onFrameRendered={({ nativeEvent }) => {
+                // Marked here, before React hears about the frame at all. This is the whole
+                // difference the ceiling probe measures: no Scheduler task, no commit, no effect.
+                if (measuring.current && paintStrategy.current === "sync-ack") {
+                  void clock.current?.markOverlayCommitted(nativeEvent.frame);
+                }
                 setOverlayFrame(nativeEvent.frame);
                 if (looping && nativeEvent.frame >= clip.frames - 2) {
                   void clock.current?.seekToFrame(0);
@@ -422,12 +465,14 @@ export default function SpikeScreen() {
             probe={p}
             onRun={
               p.id === "overlay-sync"
-                ? runOverlayProbe
-                : p.id === "seek"
-                  ? runSeekProbe
-                  : p.id === "scrub"
-                    ? runScrubProbe
-                    : undefined
+                ? () => runOverlayProbe("react-state")
+                : p.id === "overlay-ceiling"
+                  ? () => runOverlayProbe("sync-ack")
+                  : p.id === "seek"
+                    ? runSeekProbe
+                    : p.id === "scrub"
+                      ? runScrubProbe
+                      : undefined
             }
             disabled={busy || !clipUri}
           />

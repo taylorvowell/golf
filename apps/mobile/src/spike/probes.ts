@@ -43,6 +43,21 @@ export const PROBES: Probe[] = [
     measures: "drift in frames during scrub — target exactly 0",
   },
   {
+    id: "overlay-ceiling",
+    title: "1b · Platform ceiling — acknowledge without drawing",
+    question:
+      "Can JS acknowledge the presented frame WITHIN that frame, drawing nothing at all?",
+    why:
+      "D34: probe 1 measured a React state commit, which apps/web abandoned because the commit " +
+      "lands after the browser has painted the frame it describes. This removes the renderer " +
+      "and the commit entirely and marks synchronously inside the native frame event, so it " +
+      "measures the best case the platform allows. It separates 'Expo/RN cannot hold sync' from " +
+      "'our renderer is too slow' — the same split the analyzer uses for pose versus sync, and " +
+      "for the same reason: debugging both at once is miserable.",
+    status: "pending",
+    measures: "% of frames NOT exactly locked — target 0",
+  },
+  {
     id: "seek",
     title: "2 · Frame-exact seeking",
     question: "Does seeking land on the requested frame, not within ~100ms of it?",
@@ -186,6 +201,11 @@ export function judgeSeekError(stats: StatSummary): Verdict {
   if (stats.count === 0) {
     return { status: "fail", value: 0, detail: `${detail} — no seeks were measured` };
   }
+  // D34: this judge did not apply the too-few gate that judgeOverlayDrift does, so a 20-sample
+  // run reported a verdict as though it were settled. A threshold that only some judges honour
+  // is not a threshold.
+  const short = tooFew(stats);
+  if (short) return { status: "fail", value: stats.max, detail: `${detail} — ${short}` };
   return {
     status: Math.abs(stats.max) <= THRESHOLDS.seekErrorMax ? "pass" : "fail",
     value: stats.max,

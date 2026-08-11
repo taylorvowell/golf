@@ -34,7 +34,9 @@ export interface RecordedResult {
 }
 
 function thresholdFor(probeId: string): number | null {
-  if (probeId === "overlay-sync" || probeId === "scrub") return THRESHOLDS.overlayDriftP95;
+  if (probeId === "overlay-sync" || probeId === "overlay-ceiling" || probeId === "scrub") {
+    return THRESHOLDS.overlayDriftP95;
+  }
   if (probeId === "seek") return THRESHOLDS.seekErrorMax;
   if (probeId === "capture") return THRESHOLDS.captureMinFps;
   return null;

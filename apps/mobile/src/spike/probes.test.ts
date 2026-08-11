@@ -33,8 +33,13 @@ const stats = (over: Partial<StatSummary> = {}): StatSummary => ({
 });
 
 describe("probe definitions", () => {
-  it("covers the three questions step 02 must answer", () => {
-    expect(PROBES.map((p) => p.id)).toEqual(["overlay-sync", "seek", "scrub", "capture"]);
+  it("covers the questions step 02 must answer", () => {
+    // `overlay-ceiling` joined the set in D34: probe 1 measured a React state commit rather than
+    // the platform, so the ceiling probe is what separates "Expo/RN cannot hold sync" from
+    // "our renderer is too slow". It sits directly after the probe it diagnoses.
+    expect(PROBES.map((p) => p.id)).toEqual([
+      "overlay-sync", "overlay-ceiling", "seek", "scrub", "capture",
+    ]);
   });
 
   it("puts overlay-sync first, because it carries the unconfirmed Android risk", () => {
@@ -76,7 +81,10 @@ describe("the honesty invariant", () => {
   });
 
   it("catches a probe that claims fail with no measurement", () => {
-    const lying: Probe[] = [{ ...PROBES[1], status: "fail" }];
+    // By id, not by index — an index made this test quietly depend on probe ORDER, which D34
+    // changed underneath it.
+    const seek = PROBES.find((p) => p.id === "seek")!;
+    const lying: Probe[] = [{ ...seek, status: "fail" }];
     expect(unsupportedClaims(lying)).toEqual(["seek"]);
   });
 
@@ -167,11 +175,22 @@ describe("judgeOverlayDrift", () => {
 
 describe("judgeSeekError", () => {
   it("passes when every seek landed on the requested frame", () => {
-    expect(judgeSeekError(stats({ count: 40, max: 0 })).status).toBe("pass");
+    expect(judgeSeekError(stats({ count: 140, max: 0 })).status).toBe("pass");
   });
 
   it("fails when any seek missed", () => {
-    expect(judgeSeekError(stats({ count: 40, max: 3 })).status).toBe("fail");
+    expect(judgeSeekError(stats({ count: 140, max: 3 })).status).toBe("fail");
+  });
+
+  /**
+   * D34: the real S25+ run reported a verdict off 20 samples against a stated minimum of 120,
+   * because this judge did not apply the gate `judgeOverlayDrift` did. A threshold only some
+   * judges honour is not a threshold.
+   */
+  it("refuses to answer at all on too few samples, however clean they look", () => {
+    const verdict = judgeSeekError(stats({ count: 20, max: 0 }));
+    expect(verdict.status).toBe("fail");
+    expect(verdict.detail).toContain("only 20 samples");
   });
 
   it("fails a negative miss too — landing early is still landing wrong", () => {
