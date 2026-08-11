@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { swingFile } from "@/lib/swings";
+import { requireSwingAccess } from "@/lib/auth";
 
 /**
  * The contact-frame still the analyzer already writes next to `analysis.json`.
@@ -14,6 +15,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  const access = await requireSwingAccess(id);
+  if ("error" in access) return access.error;
 
   let file: string;
   try {

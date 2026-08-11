@@ -1075,3 +1075,62 @@ one field, no password to choose or forget.
 - The seeded-admin identity is **deleted, not disabled**, per step 04. A one-shot claim hands the
   ten pre-auth development fixtures to the first account that signs in, then removes the admin
   row, so the fixtures stay usable without a fallback identity surviving.
+
+---
+
+## D26 — The RLS boundary is not yet enforced in the running app; ownership is checked in code meanwhile
+
+**Date:** 2026-08-11
+**Status:** ACTIVE — with a named gap that must close
+
+**Context:** A security audit of the step 04 login work found two critical defects, both in code
+written the same night, and both invisible to review and to a green test suite.
+
+**Finding 1 — RLS is inert in the application.** The app connects to Postgres as `swingsage`,
+which is a **superuser**. Superusers bypass row-level security entirely; `FORCE ROW LEVEL
+SECURITY` does not apply to them. The app also never sets `request.jwt.claims` or `set role
+authenticated`, so `auth.uid()` would be NULL even if the policies did apply. The eleven RLS tests
+in `src/db/rls.test.ts` pass because they impersonate correctly — they prove the *policies* are
+right, not that the *product* uses them.
+
+This is the most dangerous shape a security bug can take: it looks more secure than what it
+replaced, and the tests agree with you.
+
+**Finding 2 — seven of ten API routes had no authentication at all**, including
+`/api/swings/[id]/video` (footage of a user), `/analysis`, and `/reanalyze` (an unauthenticated
+trigger for GPU work). Identity had been wired into the three routes that already carried the old
+seeded-admin shim; the rest were never enumerated. The runbook actively instructs browsing the dev
+server from a phone over the LAN, so this was live exposure, not a theoretical one.
+
+**Decisions taken now:**
+
+1. **Every swing-scoped route goes through `requireSwingAccess`**, which checks *ownership*, not
+   merely sign-in — "is someone signed in" would let any account read any swing by id. It answers
+   **404, not 403**, for an unauthorized swing: confirming that an id exists and belongs to
+   somebody is itself a disclosure.
+2. **`src/app/api/route-auth.test.ts` enumerates the route files and fails the build** on any that
+   does not resolve identity, plus any `[id]` route that checks sign-in without ownership. This
+   caught two more routes (`markers`, `stages`) the moment it was written, which is exactly the
+   class of miss that produced the incident.
+3. **An app-boundary allowlist** (`AUTH_ALLOWED_EMAILS`). Signup is open by construction — public
+   project, publishable key in the client bundle — so account creation is separated from
+   permission to use the application, and enforced server-side on every identity resolution.
+4. **The legacy-fixture claim is gated** behind `CLAIM_LEGACY_FIXTURES`. Giving every fixture to
+   whoever signs in first is a privilege grant, and on a LAN-exposed dev server "first" is not
+   necessarily the owner.
+
+**The gap that remains, stated plainly:** ownership is currently enforced in *application code*,
+which is precisely what D7 rejected. That is acceptable only as a bridge. The fix is architectural:
+
+- create a **non-superuser** application role and connect as it;
+- wrap every request in a transaction that does `set local role authenticated` and
+  `set local request.jwt.claims`, so `auth.uid()` is real and the 0003 policies actually fire;
+- **delete the ambient `db` export** so a query cannot be written outside that helper — if
+  bypassing the seam is possible, it will eventually happen;
+- then `requireSwingAccess`'s SQL becomes defence in depth rather than the only defence.
+
+Until that lands, **the database is not the authorization boundary D7 says it is**, and this entry
+is the record that the gap is known rather than forgotten.
+
+**Also outstanding:** OTP expiry still defaults to one hour for a six-digit code (dashboard
+setting, should be 5-10 minutes).

@@ -2,6 +2,7 @@ import fs from "node:fs";
 import { stat } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { swingFile } from "@/lib/swings";
+import { requireSwingAccess } from "@/lib/auth";
 
 /**
  * Streams the normalized clip with HTTP Range support.
@@ -14,6 +15,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  const access = await requireSwingAccess(id);
+  if ("error" in access) return access.error;
 
   /**
    * `?v=framestamp` serves the frame-numbered copy instead — the sync test's reference picture.

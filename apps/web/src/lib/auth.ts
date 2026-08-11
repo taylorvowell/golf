@@ -18,7 +18,32 @@ export async function getCurrentUser() {
   const supabase = await createClient();
   const { data, error } = await supabase.auth.getUser();
   if (error || !data.user) return null;
+  if (!isAllowed(data.user.email)) return null;
   return data.user;
+}
+
+/**
+ * Registration allowlist, enforced at the APP boundary rather than at signup.
+ *
+ * Sign-up is open by construction: the Supabase project is on the public internet and the
+ * publishable key ships in the client bundle, so anyone who has both can create an account. That
+ * is fine — creating an account is not the same as being allowed into this application.
+ *
+ * `AUTH_ALLOWED_EMAILS` unset means no restriction, which is the right default for a deployed
+ * product. Set it while the app holds only development fixtures and is reachable over the LAN.
+ *
+ * Deliberately not a client-side check: those are a suggestion. This runs on every identity
+ * resolution, so a stranger with a valid Supabase session still resolves to "nobody" here.
+ */
+function isAllowed(email: string | undefined): boolean {
+  const raw = process.env.AUTH_ALLOWED_EMAILS?.trim();
+  if (!raw) return true;
+  if (!email) return false;
+  return raw
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean)
+    .includes(email.toLowerCase());
 }
 
 /**
@@ -63,6 +88,11 @@ export async function requireUserId(): Promise<string> {
  * On a fresh Supabase database there is no admin row and this does nothing at all.
  */
 async function claimLegacyFixtures(userId: string) {
+  // Gated behind an explicit opt-in. Handing every fixture to whoever signs in first is a
+  // privilege grant, and the runbook tells you to browse this dev server from your phone over
+  // the LAN — so "first" is not necessarily you. Off unless deliberately turned on.
+  if (process.env.CLAIM_LEGACY_FIXTURES !== "true") return;
+
   await db.execute(sql`
     with legacy as (
       delete from public.users where display_name = 'admin' returning id
@@ -91,4 +121,47 @@ export async function requireUserIdOrNull(): Promise<string | null> {
     on conflict (id) do nothing
   `);
   return user.id;
+}
+
+
+/**
+ * Identity AND authorization for one swing.
+ *
+ * "Is this caller signed in" is not enough for a swing-scoped route: it would let any account
+ * fetch any swing by id, which for the video route means watching a stranger's footage of
+ * themselves. So this answers the real question — may THIS user see THIS swing — using the same
+ * rule as the `swings_select` policy: the owner, or a coach whose link is approved.
+ *
+ * The rule is duplicated here rather than delegated to RLS, and that is a **temporary** state
+ * that must not be mistaken for the design. The app currently connects to Postgres as a
+ * superuser, and superusers bypass RLS entirely — `FORCE ROW LEVEL SECURITY` does not apply to
+ * them — so the policies in migration 0003 are inert in the running application. Until the app
+ * connects as a non-superuser and sets the request context per transaction, this function is the
+ * only thing actually enforcing the boundary. See docs/DECISIONS.md D26.
+ */
+export async function requireSwingAccess(
+  swingId: string,
+): Promise<{ userId: string } | { error: Response }> {
+  const userId = await requireUserIdOrNull();
+  if (!userId) return { error: new Response("unauthorized", { status: 401 }) };
+
+  const rows = await db.execute(sql`
+    select 1 from public.swings s
+     where s.id = ${swingId}
+       and (
+         s.user_id = ${userId}
+         or exists (
+           select 1 from public.coach_links cl
+            where cl.golfer_id = s.user_id
+              and cl.coach_id = ${userId}
+              and cl.status = 'approved'
+         )
+       )
+     limit 1
+  `);
+
+  // 404, not 403. Telling an unauthorized caller that a swing exists is itself a disclosure —
+  // it confirms an id is real and that someone owns it.
+  if (rows.length === 0) return { error: new Response("not found", { status: 404 }) };
+  return { userId };
 }

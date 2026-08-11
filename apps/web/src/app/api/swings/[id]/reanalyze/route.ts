@@ -1,4 +1,5 @@
 import { getJob, startReanalysis } from "@/lib/jobs";
+import { requireSwingAccess } from "@/lib/auth";
 
 /**
  * Re-run the analyzer over a swing's original clip.
@@ -17,6 +18,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  const access = await requireSwingAccess(id);
+  if ("error" in access) return access.error;
   try {
     const job = await startReanalysis(id);
     return Response.json(job, { headers: noStore });
@@ -33,6 +36,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  const access = await requireSwingAccess(id);
+  if ("error" in access) return access.error;
   const job = await getJob(id);
   if (!job) return Response.json({ status: "idle" }, { headers: noStore });
   return Response.json(job, { headers: noStore });

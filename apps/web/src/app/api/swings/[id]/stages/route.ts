@@ -1,5 +1,5 @@
 import { isStage, listStages, setStage } from "@/db/stages";
-import { requireUserIdOrNull } from "@/lib/auth";
+import { requireSwingAccess } from "@/lib/auth";
 
 /** Same guard the other id-off-the-URL routes apply. See `markers/route.ts` for why it is
  * repeated rather than shared. */
@@ -46,9 +46,11 @@ export async function PUT(req: Request, ctx: { params: Promise<{ id: string }> }
     return Response.json({ error: "frame must be a number or null" }, { status: 400 });
   }
 
-  const userId = await requireUserIdOrNull();
-  // 401, never a redirect: a fetch cannot do anything useful with sign-in HTML.
-  if (!userId) return new Response("unauthorized", { status: 401 });
+  // Ownership, not merely sign-in. These write to a swing named in the URL, so checking only
+  // that SOMEONE is signed in would let any account edit any swing's corrections.
+  const access = await requireSwingAccess(swingId);
+  if ("error" in access) return access.error;
+  const { userId } = access;
   try {
     await setStage(swingId, userId, stage, frame);
     return Response.json({ stages: await listStages(swingId) });
