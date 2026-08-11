@@ -233,16 +233,30 @@ Useful keys while it runs: `r` reload · `j` open debugger · `m` toggle dev men
 through 36, NDK), JDK 17 and `adb`. An Expo/EAS account is **not** required for Android — that
 was recorded as a blocker in step 02's first pass and it was wrong.
 
+**No cable required.** Android 11+ pairs over wifi, and `adb pair` is available here (adb
+35.0.2). On the phone: *Developer options → Wireless debugging → on → Pair device with pairing
+code*, then with phone and PC on the same wifi:
+
 ```bash
-# phone on USB, USB debugging on, "Allow" the RSA prompt
+adb pair 192.168.x.x:PORT         # the PAIRING dialog's port + its 6-digit code
+adb connect 192.168.x.x:PORT      # the OTHER port, on the main Wireless debugging screen
 adb devices                       # must list a device, not "unauthorized"
 
 cd apps/mobile
 npx expo run:android              # first build ~5-10 min; later ones are fast
 ```
 
-That compiles the APK, installs it, and starts Metro. After the first install you can just run
-`pnpm --filter mobile start` and open the app.
+Those are two different ports and mixing them up is the usual failure: the pairing port is
+single-use, the connect port is the persistent one. Pairing survives reboots — normally you just
+re-run `adb connect`.
+
+USB works too (plug in, enable USB debugging, accept the RSA prompt) but is never *required*.
+
+That compiles the APK, installs it, and starts Metro. **After the first install nothing needs a
+cable or a rebuild**: `pnpm --filter mobile start`, edit a file, Metro pushes it over wifi and the
+phone reloads. Only a change to the module's **native** code (`modules/frame-clock/**.kt|.swift`)
+needs `npx expo run:android` again — JS and TS changes never do. Running the probes is just
+tapping buttons in the app.
 
 **Two machine-level faults were found and fixed while getting this to build** — both were
 pre-existing, both broke *every* Android build on this PC, and one is still only worked around:
