@@ -1772,3 +1772,62 @@ That is a real constraint and it survives the measurement problem.
   which is reassigned rather than blocked.
 - The `frame-clock` module has earned its keep and should NOT be deleted with the rest of the
   spike: `mobile-player` needs the same frame callback, and `expo-video` still does not expose one.
+
+---
+
+## D37 — Capture: 60fps holds and is verified from the file; 120 and 240 exist in silicon and silently degrade to 60
+
+**Date:** 2026-08-11
+**Status:** ACTIVE
+
+Five recordings on the S25+, every one measured by decoding the file rather than by asking the
+camera:
+
+| requested | decoded frames | duration | **achieved** |
+|---|---|---|---|
+| 60 | 411 | 6.902 s | **59.55** |
+| 60 | 270 | 4.502 s | **59.98** |
+| 120 | 594 | 9.920 s | **59.88** |
+| 240 | 590 | 9.920 s | **59.48** |
+| 240 | 597 | 9.953 s | **59.98** |
+
+**60 fps holds.** 1920×1080, sustained across a full ten seconds, at or fractionally above the
+59.5 bar. §2.3's floor is met on this device.
+
+**120 and 240 return 60 without an error.** That is the silent degrade §2.3 names, and it is the
+entire reason this probe judges the artifact instead of the request: every clip *claimed* to be
+what was asked for, and only the decoded frame count said otherwise.
+
+### The hardware is not the limit — the library is
+
+`adb shell dumpsys media.camera` reports `CONSTRAINED_HIGH_SPEED_VIDEO` in the back camera's
+capability set, plus a populated `android.control.availableHighSpeedVideoConfigurations`
+(int32[50] — ten configurations). The silicon does high-speed capture; Samsung's own slow-motion
+mode uses it.
+
+VisionCamera v5's `device.supportsFPS()` answers **false** for 120 and 240, and reports `[60]` as
+the full set. It configures an ordinary `CameraCaptureSession`, and Android exposes high frame
+rates only through `CameraConstrainedHighSpeedCaptureSession`, which v5 does not surface.
+
+**So the finding is:** *this device can shoot 240; this library cannot ask it to.* That is a
+`in-app-capture` problem with three known options — contribute high-speed session support
+upstream, drop to a Camera2/CameraX path for capture alone, or accept 60 — and it is recorded now
+rather than discovered when the capture screen is being built.
+
+**Why it matters beyond spec compliance:** impact is over inside a single frame at 60 fps. That is
+part of why `analysis.json` carries no impact face angle, why the club detector is weakest exactly
+where the swing is fastest, and why `checktrace.py` exists at all. 240 fps would ease every one of
+those. It is not a nice-to-have; it is the highest-leverage capture decision in the product.
+
+### Two instrument bugs found and fixed while measuring this
+
+- **The recordings were pulled with `adb shell`,** which allocates a PTY and translates newlines on
+  Windows. Every file was corrupted — and ffprobe still parsed enough header to return a
+  plausible-looking duration while `-count_frames` failed. A corrupted artifact that still answers
+  questions is worse than one that fails outright. `adb exec-out` now, everywhere binary moves.
+- **All three rates wrote to one probe id,** so the puller's last-wins rule silently discarded the
+  60 and 120 results and reported only 240. Three measurements taken, one kept. Ids are now
+  `capture@60` / `capture@120` / `capture@240`, each judged against its own request.
+
+Both are the same class of mistake this project keeps paying for: a measurement that looks healthy
+and is not.

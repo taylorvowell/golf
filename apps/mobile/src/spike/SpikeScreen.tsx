@@ -309,7 +309,10 @@ export default function SpikeScreen() {
   const onCaptureRecorded = useCallback((info: {
     path: string; requestedFps: number; resolvedFps: number; seconds: number; supported: number[];
   }) => {
-    setProbe("capture", {
+    // One result PER RATE. All three recordings previously shared the id "capture", so the
+    // puller's last-wins rule silently discarded 60 and 120 and reported only 240 — three
+    // measurements taken, one kept.
+    setProbe(`capture@${info.requestedFps}`, {
       status: "fail",
       measurement: { value: info.requestedFps, device: deviceName },
       detail:

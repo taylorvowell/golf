@@ -56,9 +56,17 @@ if (!devicePath) {
 const dir = mkdtempSync(join(tmpdir(), "swingsage-capture-"));
 const local = join(dir, "capture.mp4");
 
-// run-as + cat, because the app's cache dir is not readable by adb pull directly.
+/**
+ * `adb exec-out`, never `adb shell`, for binary.
+ *
+ * `adb shell` allocates a PTY and translates newlines on Windows, which silently corrupts an mp4 —
+ * ffprobe then reports "missing mandatory atoms, broken header" while still parsing enough of the
+ * header to hand back a plausible-looking duration. A corrupted file that still answers questions
+ * is worse than one that fails outright, and this cost a full measurement round.
+ * `run-as` is still needed because the app's cache dir is not readable by `adb pull`.
+ */
 execFileSync("sh", ["-c",
-  `adb shell run-as com.swingsage.spike cat '${devicePath}' > '${local.replace(/\\/g, "/")}'`,
+  `adb exec-out run-as com.swingsage.spike cat '${devicePath}' > '${local.replace(/\\/g, "/")}'`,
 ]);
 
 const duration = parseFloat(sh("ffprobe", [
