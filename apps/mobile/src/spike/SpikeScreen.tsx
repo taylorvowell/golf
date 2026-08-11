@@ -307,15 +307,16 @@ export default function SpikeScreen() {
    * degraded, so this side only reports what was requested and where the artifact landed.
    */
   const onCaptureRecorded = useCallback((info: {
-    path: string; requestedFps: number; resolvedFps: number; seconds: number;
+    path: string; requestedFps: number; resolvedFps: number; seconds: number; supported: number[];
   }) => {
     setProbe("capture", {
       status: "fail",
       measurement: { value: info.requestedFps, device: deviceName },
       detail:
         `recorded ${info.seconds.toFixed(1)}s, REQUESTED ${info.requestedFps}fps, ` +
-        `pipeline negotiated ${info.resolvedFps || "?"}fps -> ${info.path} · ` +
-        `run scripts/measure-capture.mjs for the achieved rate`,
+        `pipeline negotiated ${info.resolvedFps || "?"}fps, device claims ` +
+        `[${info.supported.join("/")}] -> ${info.path} · ` +
+        `run: node scripts/measure-capture.mjs --expect ${info.requestedFps}`,
     });
   }, [deviceName, setProbe]);
 

@@ -20,14 +20,22 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const MIN_FPS = 59.5; // THRESHOLDS.captureMinFps
+/**
+ * The rate to judge against. §2.3's floor is 60, but the probe also records at 120 and 240, and
+ * each clip must be judged against its OWN request — a device that sustains 60 and silently
+ * halves 240 has told us two different things, and one bar would hide the second.
+ */
+const expectArg = process.argv.indexOf("--expect");
+const EXPECT_FPS = expectArg > -1 ? parseFloat(process.argv[expectArg + 1]) : 60;
+/** Same 0.5fps slack the 59.5 bar encodes, scaled to whatever was asked for. */
+const MIN_FPS = EXPECT_FPS - 0.5;
 
 function sh(cmd, args) {
   return execFileSync(cmd, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).trim();
 }
 
-const target = process.argv[2];
-let devicePath = target;
+const positional = process.argv.slice(2).find((a) => !a.startsWith("--") && !/^\d+$/.test(a));
+let devicePath = positional;
 
 if (!devicePath) {
   // VisionCamera writes to the app's cache dir. Newest .mp4 wins.
@@ -74,9 +82,10 @@ console.log(`stream      ${claimed}`);
 console.log(`duration    ${duration.toFixed(3)}s`);
 console.log(`frames      ${frames}  (decoded, not the container's claim)`);
 console.log(`achieved    ${achieved.toFixed(2)} fps`);
+console.log(`requested   ${EXPECT_FPS} fps`);
 console.log(`bar         ${MIN_FPS} fps`);
 console.log(`\n${pass ? "PASS" : "FAIL"} — ${pass
   ? "records at the rate it reports"
-  : `SILENT DEGRADE: ${(MIN_FPS - achieved).toFixed(2)} fps short of the bar`}\n`);
+  : `SILENT DEGRADE: ${(MIN_FPS - achieved).toFixed(2)} fps short of a requested ${EXPECT_FPS}`}\n`);
 
 process.exit(pass ? 0 : 1);
