@@ -21,7 +21,7 @@ const json = (status: number, body: unknown) =>
  * instance makes the second call in a test see an already-consumed stream — which shows up as a
  * missing body rather than as an error, and reads like a bug in the client.
  */
-function clientWith(respond: () => Response) {
+function clientWith(respond: () => Response, accessToken?: () => Promise<string | null>) {
   const calls: { url: string; init?: RequestInit }[] = [];
   const fetchImpl = (async (url: string | URL | Request, init?: RequestInit) => {
     calls.push({ url: String(url), init });
@@ -34,6 +34,7 @@ function clientWith(respond: () => Response) {
       clientVersion: "1.2.3",
       platform: "android",
       fetchImpl,
+      accessToken,
     }),
   };
 }
@@ -88,6 +89,38 @@ describe("ApiClient", () => {
     expect(err.isUpgradeRequired).toBe(false);
     expect(err.code).toBe("not_found");
     expect(err.status).toBe(404);
+  });
+
+  it("sends the session as a bearer token", async () => {
+    const { api, calls } = clientWith(() => json(200, {}), async () => "jwt-abc");
+    await api.request("swings");
+    expect(new Headers(calls[0].init?.headers).get("Authorization")).toBe("Bearer jwt-abc");
+  });
+
+  it("sends no Authorization header when signed out", async () => {
+    // An empty credential is not the same as none: `Bearer ` reaches the server as a malformed
+    // token and answers 401 where the honest answer is "this caller is anonymous".
+    const { api, calls } = clientWith(() => json(200, {}), async () => null);
+    await api.request("client");
+    expect(new Headers(calls[0].init?.headers).has("Authorization")).toBe(false);
+  });
+
+  it("reads the token per request, not once at construction", async () => {
+    // supabase-js refreshes in the background. A token captured when the client was built is
+    // stale by the first long upload, and the request 401s for no reason the golfer can see.
+    let token = "first";
+    const { api, calls } = clientWith(() => json(200, {}), async () => token);
+    await api.request("swings");
+    token = "second";
+    await api.request("swings");
+    expect(new Headers(calls[0].init?.headers).get("Authorization")).toBe("Bearer first");
+    expect(new Headers(calls[1].init?.headers).get("Authorization")).toBe("Bearer second");
+  });
+
+  it("leaves a caller's own Authorization header alone", async () => {
+    const { api, calls } = clientWith(() => json(200, {}), async () => "session-token");
+    await api.request("swings", { headers: { Authorization: "Bearer explicit" } });
+    expect(new Headers(calls[0].init?.headers).get("Authorization")).toBe("Bearer explicit");
   });
 
   it("asks for the client config at the versioned path", async () => {

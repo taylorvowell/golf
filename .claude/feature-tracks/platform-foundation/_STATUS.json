@@ -3,7 +3,7 @@
   "featureName": "platform-foundation",
   "currentStep": "04",
   "phase": "Platform Foundation",
-  "lastUpdated": "2026-08-11T16:45:00Z",
+  "lastUpdated": "2026-08-11T23:40:00Z",
   "steps": {
     "01": {
       "status": "complete",
@@ -21,7 +21,8 @@
     },
     "04": {
       "status": "in-progress",
-      "startedAt": "2026-08-11T01:20:00Z"
+      "startedAt": "2026-08-11T01:20:00Z",
+      "note": "D43 (2026-08-11): Google native sign-in is live on Android and the server accepts a native session as a bearer token; web tsc/lint clean, 157 vitest, 84 jest, 100 schema vitest, Android assembleDebug SUCCESSFUL with RNGoogleSigninPackage linked, and a real Supabase session proven end-to-end against the running server (valid token 200, garbage token 401 rather than the dev fallback, new account sees 0 swings). Two traps found by inspection: the DEV_USER_EMAIL fallback would have answered the phone's requests regardless of its token, and the development identity squatted Taylor's real address against a UNIQUE users.email so the first real Google sign-in would have raised a unique violation. Still open: on-device verification (phone not reachable - wireless debugging off; procedure in RUNBOOK section 6), phone OTP (needs the local Supabase stack), Apple ($99 + hardware), real SMS (A2P 10DLC), account deletion, identity linking, and the deletion of email OTP / seeded admin / DEV_USER_EMAIL which D31 gates on phone also being live."
     },
     "05": {
       "status": "not-started"

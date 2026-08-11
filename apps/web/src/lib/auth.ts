@@ -1,6 +1,8 @@
 import { sql } from "drizzle-orm";
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { withUser } from "@/db/session";
+import { DEV_USER_ID, DEV_USER_STORED_EMAIL } from "@/lib/devIdentity";
 import { isUuid, isViewType, type ResolvedView } from "@/db/views";
 import type { ViewType } from "@/db/schema";
 import type { ViewAddress } from "@/lib/media/keys";
@@ -32,8 +34,6 @@ import { createClient } from "@/lib/supabase/server";
  * Deleted, not disabled, once step 04 completes.
  */
 const DEV_USER_EMAIL = process.env.DEV_USER_EMAIL?.trim();
-/** Fixed so the dev golfer keeps their swings across restarts. Obviously a dev artifact on sight. */
-const DEV_USER_ID = "00000000-0000-4000-8000-0000000000de";
 
 if (DEV_USER_EMAIL && process.env.NODE_ENV === "production") {
   throw new Error(
@@ -43,15 +43,55 @@ if (DEV_USER_EMAIL && process.env.NODE_ENV === "production") {
 }
 
 export async function getCurrentUser() {
-  if (DEV_USER_EMAIL) {
-    console.warn(`[auth] DEV_USER_EMAIL active — every request is ${DEV_USER_EMAIL}`);
-    return { id: DEV_USER_ID, email: DEV_USER_EMAIL } as { id: string; email: string };
+  const bearer = await bearerToken();
+
+  // **A presented identity always beats the fallback.** Without this the development identity
+  // would answer the phone's requests too, and every native sign-in test would pass whatever the
+  // token said — the app would look authenticated while nothing about the token had been checked.
+  // That is not a hypothetical: it is the shape of D26, where a security path passed its own tests
+  // because the thing under test was never on the path.
+  if (DEV_USER_EMAIL && !bearer) {
+    console.warn(`[auth] DEV_USER_EMAIL active — this request is ${DEV_USER_EMAIL}`);
+    return { id: DEV_USER_ID, email: DEV_USER_STORED_EMAIL } as { id: string; email: string };
   }
+
   const supabase = await createClient();
-  const { data, error } = await supabase.auth.getUser();
+  // A native client has no cookie jar, so its session arrives as a bearer token. `getUser(jwt)`
+  // takes that token instead of the cookie the client was built with — the verification path is
+  // otherwise identical, which is the point: one identity resolution, two transports.
+  const { data, error } = bearer
+    ? await supabase.auth.getUser(bearer)
+    : await supabase.auth.getUser();
   if (error || !data.user) return null;
   if (!isAllowed(data.user.email)) return null;
   return data.user;
+}
+
+/**
+ * The access token a native client sends, or null for a browser.
+ *
+ * Only `Authorization: Bearer` is honoured — never a query parameter and never a custom header.
+ * A token in a URL ends up in server logs, browser history and `Referer`, and this one grants
+ * access to a person's video of themselves.
+ *
+ * The header is read even when a cookie session also exists, and it wins. Anything else would
+ * mean a request that explicitly presents an identity could be served as somebody else's.
+ */
+async function bearerToken(): Promise<string | null> {
+  return parseBearer((await headers()).get("authorization"));
+}
+
+/**
+ * `Authorization: Bearer <jwt>` → the jwt, and anything else → null.
+ *
+ * Split out from the header read so it is testable without a request. The failure that matters is
+ * a *near* match — `Bearer` with no token, a `Basic` credential, a stray newline — returning some
+ * truthy string that is then handed to the auth server as if it were a session.
+ */
+export function parseBearer(header: string | null | undefined): string | null {
+  if (!header) return null;
+  const match = /^Bearer[ \t]+(\S+)$/i.exec(header.trim());
+  return match ? match[1] : null;
 }
 
 /**

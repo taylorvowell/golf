@@ -49,6 +49,15 @@ export interface ApiClientOptions {
   clientVersion?: string;
   platform?: string;
   fetchImpl?: typeof fetch;
+  /**
+   * The current access token, resolved per request. A function, not a string: supabase-js
+   * refreshes tokens in the background, so a token captured when the client was constructed is
+   * stale by the first long upload and the request comes back 401 for no visible reason.
+   *
+   * Returning null is normal — it is what "signed out" looks like — and produces a request with
+   * no Authorization header rather than one with an empty credential.
+   */
+  accessToken?: () => Promise<string | null>;
 }
 
 const isUpgradeBody = (b: unknown): b is UpgradeRequired =>
@@ -59,12 +68,14 @@ export class ApiClient {
   private readonly clientVersion: string;
   private readonly platform: string;
   private readonly doFetch: typeof fetch;
+  private readonly accessToken: () => Promise<string | null>;
 
-  constructor({ baseUrl, clientVersion, platform, fetchImpl }: ApiClientOptions) {
+  constructor({ baseUrl, clientVersion, platform, fetchImpl, accessToken }: ApiClientOptions) {
     this.baseUrl = baseUrl.replace(/\/+$/, "");
     this.clientVersion = clientVersion ?? CLIENT_VERSION;
     this.platform = platform ?? Platform.OS;
     this.doFetch = fetchImpl ?? fetch;
+    this.accessToken = accessToken ?? (async () => null);
   }
 
   /** `swings` -> `<base>/api/v1/swings`. Callers never write the version themselves; that is
@@ -73,18 +84,25 @@ export class ApiClient {
     return `${this.baseUrl}/api/${CURRENT_API_VERSION}/${path.replace(/^\/+/, "")}`;
   }
 
-  private headers(extra?: HeadersInit): Headers {
+  private async headers(extra?: HeadersInit): Promise<Headers> {
     const h = new Headers(extra);
     h.set(CLIENT_VERSION_HEADER, this.clientVersion);
     h.set("x-swingsage-platform", this.platform);
     if (!h.has("Accept")) h.set("Accept", "application/json");
+    // A native client has no cookie jar, so the session travels as a bearer token. A caller that
+    // set its own Authorization header keeps it — that is how a one-off signed request stays
+    // possible without a second client.
+    if (!h.has("Authorization")) {
+      const token = await this.accessToken();
+      if (token) h.set("Authorization", `Bearer ${token}`);
+    }
     return h;
   }
 
   async request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const res = await this.doFetch(this.url(path), {
       ...init,
-      headers: this.headers(init.headers),
+      headers: await this.headers(init.headers),
     });
 
     if (res.status === 426) {

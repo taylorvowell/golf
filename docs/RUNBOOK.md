@@ -440,6 +440,55 @@ npx eas build --profile development --platform android
 It builds in the cloud and gives a QR to install the APK — no USB, no local toolchain. Slower per
 build (~10-15 min) but it is the **only** route to iOS, since there is no Mac (D5/D12).
 
+### Signing in on the phone (step 04, D43)
+
+The app is behind sign-in now. The first screen is **Sign in**, with a Google button; the spike
+harness is behind it.
+
+**Before the first run**, `apps/mobile/.env` must carry four values — copy them from
+`apps/mobile/.env.example`, which holds the real (public) ones for this project:
+
+| | |
+|---|---|
+| `EXPO_PUBLIC_SUPABASE_URL` | `https://xjcjqwcmwoouxczrrvar.supabase.co` |
+| `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | `sb_publishable_…` |
+| `EXPO_PUBLIC_API_BASE_URL` | **this PC's LAN address**, e.g. `http://10.0.1.107:3000` — never `localhost`, which on a phone means the phone |
+| `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` | the **web** client id, not the Android one |
+
+Expo inlines `EXPO_PUBLIC_*` at **build** time, so after editing `.env` restart the bundler
+(`pnpm --filter mobile start --clear`). A value added while Metro is running does not reach the app.
+
+Sign-in needs the **native** build (`npx expo run:android`), not Expo Go — Google Sign-In is a
+native module. The `.env` values are read by JS, so changing one only needs a bundler restart; only
+the first install after adding the module needs a rebuild.
+
+**What proves it worked, in order:**
+
+1. The **Sign in** screen appears (not the spike) — the gate is on.
+2. Tapping *Sign in with Google* opens the account chooser **inside the app**, no browser.
+3. The app swaps to the harness, with an **account bar** at the top showing the Google address.
+4. The **Server** card reads `authenticated — N swings on this account`. That is the whole chain
+   proven: Google → Supabase session → bearer token → `/api/v1/swings` → row-level security. A new
+   account correctly shows **0 swings** — the fixtures belong to the development identity until
+   `pnpm --filter web db:claim-fixtures <email>` moves them.
+5. Force-stop and reopen the app: it goes straight to the harness, no sign-in. That is §4.2's
+   session-survives-restart requirement.
+6. *Sign out* returns to the sign-in screen, and tapping Google again offers the **chooser** rather
+   than silently reusing the last account.
+
+The **Server** card is the diagnostic, and each failure means something different:
+
+| It says | What is actually wrong |
+|---|---|
+| `Network request failed` | `EXPO_PUBLIC_API_BASE_URL` is wrong or `pnpm dev` is not running. The phone must reach this PC — check `ipconfig`, and that Next is bound to `0.0.0.0` (see §3). |
+| `401 — the server did not accept this session` | The request arrived and was declined. Usually `AUTH_ALLOWED_EMAILS` in `apps/web/.env` not listing the Google address you signed in with. |
+| `Google returned no ID token` | `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` is the Android id, or the build's signing SHA-1 does not match the Android OAuth client. |
+| `DEVELOPER_ERROR` from Google | Same fingerprint mismatch, reported by Google instead. Check the SHA-1 table above. |
+
+**Two devices at once (§4.2, and §12 depends on it):** sign in on the phone, then sign in as the
+same account in a desktop browser at `http://127.0.0.1:3000`. Both must stay signed in, and signing
+out of one must not sign out the other — both paths use `scope: "local"` precisely for this.
+
 ### What you will see, and what it means
 
 A **Device** card, then a video panel playing `assets/frameclock.mp4` — a generated 600-frame,

@@ -2232,3 +2232,89 @@ right. Advisors back to **zero findings**.
 - **Still open and unchanged by this entry:** one Supabase project rather than three (D10, money,
   step 10), and the analyzer's service role is still unscoped to specific tables because what it
   needs is defined by the `analyzer-service` track.
+
+---
+
+## D43 — Google sign-in is native, and a native session reaches the API as a bearer token
+
+**Date:** 2026-08-11
+**Status:** ACTIVE — implements D31's first sequenced provider; supersedes nothing
+
+**Context:** D31 ordered the sign-in work Google → phone → Apple → real SMS, Android first. Google
+is the free one and the one with no registration gate, so it goes first. The hosted project already
+has the provider enabled (`/auth/v1/settings` reports `google: true`, `phone: false`) and both OAuth
+client ids exist; what did not exist was a line of client code.
+
+**Decision: the phone asks Google for an ID token and hands that token to Supabase**
+(`signInWithIdToken`), rather than opening the system browser through `signInWithOAuth`. Supabase's
+own Expo guide demonstrates the browser flow; it is rejected here. An OAuth round trip through the
+system browser is the app-switch D25 rejected magic links over, wearing a different hat — leave the
+app, return through a deep link, hope the right app reopens. `@react-native-google-signin/google-signin`
+keeps the whole flow inside the app, and D31's stated reason for choosing these three providers was
+mobile-friendliness.
+
+**Only the WEB client id is in the bundle, and that is correct.** Google mints the ID token with
+`aud` = the web client and `azp` = the Android client; Supabase validates `aud` against the client
+id configured on its Google provider, which is the web one. The Android OAuth client is still
+required — it binds `com.swingsage.spike` plus the signing SHA-1 to the Google Cloud project — but
+it is matched by the *calling app's signature*, never by a value in the bundle. Passing the Android
+id to `GoogleSignin.configure` produces a token Supabase rejects with no useful error, and Google
+returns a perfectly good user object with `idToken: null` rather than failing, so the code checks
+for it explicitly and says which of the two mistakes it is.
+
+**The library's Expo config plugin is deliberately NOT in `app.json`.** Read its source: the
+non-Firebase branch does exactly one thing, append a URL scheme to `Info.plist`, and it *throws*
+without an `iosUrlScheme`. Android needs nothing from it — autolinking finds the module. There is no
+iOS OAuth client because there is no Apple hardware to sign with (D31), so adding the plugin would
+mean inventing a placeholder for a client that does not exist. It goes in, with the real reversed
+iOS client id, on the day iOS is first prebuilt.
+
+**A native session reaches our API as `Authorization: Bearer <jwt>`.** `lib/auth.ts` now reads that
+header and passes the token to `getUser(jwt)`; with no header it falls back to the cookie session
+exactly as before. One identity resolution, two transports — the alternative, a second auth path for
+native clients, is two places for a boundary to be wrong.
+
+Three properties of that seam are deliberate:
+
+- **The header wins over a cookie.** A request that explicitly presents an identity must never be
+  served as somebody else's.
+- **Bearer only** — never a query parameter, never a custom header. A token in a URL lands in server
+  logs, browser history and `Referer`, and this one grants access to video of a person.
+- **A near-miss parses to null.** `Bearer` with no credential, a `Basic` header, a token containing
+  a space: all resolve to anonymous rather than to some truthy string handed upstream as a session.
+  `parseBearer` is split out and tested for precisely those cases.
+
+**Consequences:**
+- **One auth-server round trip per authenticated API request.** `getUser(jwt)` verifies with
+  Supabase rather than trusting the token locally. Correct, and measurably slower than it needs to
+  be; `SUPABASE_JWKS_URL` is already named in `apps/web/.env.example` for the local-verification
+  path, and that is an optimisation to make once there is a latency budget to hold it to
+  (`observability-and-slos`), not before.
+- **`scope: "local"` on both sign-out paths**, web and mobile. §4.2 requires the same account to
+  stay signed in on several phones at once, because §12's multi-phone synchronized capture depends
+  on it; a global sign-out would end the other phone's session and break the differentiator
+  silently. Google's own cached credential is cleared alongside, or the next tap on "Sign in with
+  Google" silently reuses the previous account with no chooser.
+- **Session storage is `AsyncStorage`, not SecureStore.** SecureStore warns above 2048 bytes per
+  value and a Supabase session with Google identity data can exceed that; a truncated session is a
+  sign-out with no explanation. The token is a short-lived credential on a device already protected
+  by a lock screen, and the boundary that matters is the server's — RLS, re-verified per request.
+  Revisit if SwingSage ever stores something on-device that is worth more than a refreshable session.
+- **`lock: processLock`** is passed explicitly. React Native has no `navigator.locks`, so without it
+  two screens refreshing an expiring token both spend the same single-use refresh token and the
+  loser is signed out.
+- **`AuthGate` has three states, not two.** "We do not know yet" renders a spinner; collapsing it
+  into "signed out" flashes the sign-in screen past a returning golfer on every cold start, which
+  reads as the app having forgotten them.
+- **No role question on the sign-in screen** — D32. A coach signs in through this exact screen and
+  is a golfer by default.
+- `apps/mobile` gains four dependencies: `@supabase/supabase-js`,
+  `@react-native-google-signin/google-signin`, `@react-native-async-storage/async-storage`,
+  `react-native-url-polyfill`. All mainstream, all covered by the standing authorization.
+
+**What this does NOT close.** Step 04 stays open, and deliberately: phone OTP still needs the local
+Supabase stack D31 describes (a hosted project has no test-number setting), Apple is still behind
+$99 and Apple hardware, and **the seeded admin and `DEV_USER_EMAIL` are still in the tree**. D31's
+rule is that email OTP dies once Google *and* phone are live on Android — deleting the development
+identity before the second provider works would leave no way to use the app on the days in between.
+It is deleted, not disabled, when 04 closes.

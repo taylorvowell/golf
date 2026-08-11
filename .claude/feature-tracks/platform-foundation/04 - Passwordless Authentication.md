@@ -116,3 +116,43 @@ above:
 A hosted Supabase project has no test-number setting, so the free phone path requires the local
 stack. There is no `supabase/` directory in the repo yet; step 09 wants that same local stack for
 its credential-free media path.
+
+### Progress note 2026-08-11 (D43) — Google is live on Android; the step stays open
+
+D31's first sequenced provider is built and the automated oracles are green, but this step is not
+finished and is not being marked so. What landed:
+
+- **Google native sign-in** (`apps/mobile/src/features/auth/`): `signInWithIdToken` against
+  `@react-native-google-signin/google-signin`, not `signInWithOAuth` — no browser, no app-switch.
+  Session persisted in `AsyncStorage` with `processLock` and foreground-only auto-refresh.
+- **`AuthGate`** in front of the whole app, with a three-state status so a cold start does not
+  flash the sign-in screen at a returning golfer. No role question on the screen (D32).
+- **The server accepts a native session**: `lib/auth.ts` reads `Authorization: Bearer` and passes
+  the token to `getUser(jwt)`; a cookie request is unchanged. `parseBearer` is split out and tested
+  against the near-miss cases.
+- **The bearer path beats `DEV_USER_EMAIL`.** With the fallback in front, every native sign-in test
+  would have passed whatever the token said. This was found by looking, not by a failure.
+- **A collision that would have broken the first real sign-in**, found the same way: the
+  development identity held Taylor's real address and `users.email` is UNIQUE, so
+  `app.ensure_profile()` would have raised a unique violation the moment he signed in with Google.
+  The fallback now stores `dev@swingsage.invalid` (`lib/devIdentity.ts`), and `db:claim-fixtures`
+  claims from the development identity as well as the legacy `admin` row — otherwise the ten local
+  fixtures strand on an identity that disappears with the fallback.
+
+Verified: web tsc/lint clean, **157 vitest** (8 new), mobile tsc clean, **84 jest** (14 new),
+**100 schema vitest**, Android `assembleDebug` **BUILD SUCCESSFUL** with
+`com.reactnativegooglesignin.RNGoogleSigninPackage` in the generated `PackageList.java`. A real
+Supabase session was minted against the hosted project and driven through the running server: a
+valid token authenticates (200), a garbage token is **401 rather than the dev fallback**, and a
+brand-new account sees zero swings.
+
+**Not done, and each has a named reason:**
+
+| | |
+|---|---|
+| On-device verification | Needs the phone. `adb mdns services` finds nothing — wireless debugging is off. The procedure is written out in `docs/RUNBOOK.md` §6. |
+| Phone OTP | Needs the local Supabase stack (a hosted project has no test-number setting, D31). No `supabase/` directory exists yet; the CLI is installed (2.104.0). |
+| Sign in with Apple | $99 + Apple hardware (D31). Sequencing, not descope. |
+| Real SMS delivery | A2P 10DLC registration (D31). |
+| Deleting email OTP, the seeded admin and `DEV_USER_EMAIL` | D31's rule is that email OTP dies once Google **and** phone are live on Android. Deleting the development identity now would leave no way to use the app in between. |
+| Account deletion (§4.3) and explicit identity linking (D31) | Untouched. Deletion needs the D15 cascade and an admin-API path; linking needs a second provider to link *to*. |
