@@ -142,15 +142,41 @@ function tooFew(stats: StatSummary): string | null {
     : null;
 }
 
+/**
+ * Verdict on overlay drift, judged on **exactly-locked share** rather than on a signed percentile.
+ *
+ * ## The bug this replaces, because it is the instructive part
+ *
+ * This used to read `stats.p95 <= 0`. `FrameStats.percentile` sorts **signed** samples, so a run
+ * that sat mostly at −1 (overlay one frame BEHIND) produced p95 = 0 and **passed** — while the
+ * same numbers reported p50 = −1 and 10.5% exactly locked. It reported PASS on a real S25+ run in
+ * which the overlay was on the correct frame 24 times out of 229.
+ *
+ * A signed percentile cannot express "how far off are we", because being early and being late
+ * cancel instead of accumulating. `judgeSeekError` never had this problem — it always used
+ * `Math.abs`. The two judges disagreeing about that was the whole defect.
+ *
+ * `exactShare` is used as the gate because it is the only exported statistic that is unambiguous
+ * under a threshold of zero: the overlay is on the right frame, or it is not. The signed spread is
+ * still reported, since which DIRECTION the overlay lags is the diagnostic that matters.
+ *
+ * Note the native side exports no `min`, so the absolute worst case is not reconstructible from a
+ * negative-skewed run. That is a real limitation of the instrument and it is why the gate is
+ * `exactShare` rather than an absolute max.
+ */
 export function judgeOverlayDrift(stats: StatSummary): Verdict {
   const short = tooFew(stats);
+  const lockedPct = stats.exactShare * 100;
   const detail =
     `n=${stats.count} · p50 ${stats.p50} · p95 ${stats.p95} · max ${stats.max} frames · ` +
-    `${(stats.exactShare * 100).toFixed(1)}% exactly locked`;
+    `${lockedPct.toFixed(1)}% exactly locked`;
   if (short) return { status: "fail", value: stats.p95, detail: `${detail} — ${short}` };
   return {
-    status: stats.p95 <= THRESHOLDS.overlayDriftP95 ? "pass" : "fail",
-    value: stats.p95,
+    // Every sample on the right frame, or it is not locked. D13's bar is zero, not "small".
+    status: stats.exactShare >= 1 ? "pass" : "fail",
+    // The reported value is the share NOT locked, in percent — a number that moves the right way
+    // and cannot read as healthy while the overlay is adrift.
+    value: Number((100 - lockedPct).toFixed(1)),
     detail,
   };
 }

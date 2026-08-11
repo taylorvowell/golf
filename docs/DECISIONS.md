@@ -1564,3 +1564,79 @@ alternative is Pro, which raises the ceiling to 500 GB. Recorded so it is not di
 A preview Supabase project is free (the Free plan allows 2 active projects per organization, and
 `golf-swing` is the only active one), so this is a deviation from D10 waiting on a decision, not on
 money.
+
+---
+
+## D34 — Step 02's probes measured on a Galaxy S25+: all three frame-exactness probes FAIL, and one of them was reporting a false PASS
+
+**Date:** 2026-08-11
+**Status:** ACTIVE — resolves D5's "provisional on probe 1" to **not confirmed**, for a reason that
+is about architecture rather than about the platform
+
+**The measurements**, on `SM-S936U1` (Galaxy S25+, Android 36), pulled from logcat by
+`apps/mobile/scripts/pull-probe-results.mjs` rather than read off the screen:
+
+| Probe | Reported | Honest | Distribution |
+|---|---|---|---|
+| 1 · overlay locked to presented frame | ~~PASS~~ | **FAIL** | n=229 · p50 **−1** · p95 0 · max 1 · **10.5% exactly locked** · JS lead p95 48.6 ms |
+| 2 · frame-exact seeking | FAIL | FAIL | n=20 · p50 1 · max 1 frame |
+| 2b · overlay locked while scrubbing | FAIL | FAIL | n=136 · p50 0 · p95 **12** · max 12 · 55.9% exactly locked |
+| 3 · sustained 60 fps capture | — | unanswered | still `blocked-dev-build` |
+
+### Probe 1 was passing a run in which the overlay was correct 24 times out of 229
+
+`judgeOverlayDrift` gated on `stats.p95 <= 0`, and `FrameStats.percentile` sorts **signed**
+samples. A run sitting mostly at −1 therefore produced a p95 of 0 and passed — while the very same
+detail line said `p50 −1` and `10.5% exactly locked`.
+
+A signed percentile cannot express "how far off are we", because early and late cancel instead of
+accumulating. `judgeSeekError` never had the bug; it always used `Math.abs`. **The two judges
+disagreeing about that was the entire defect**, and the tests never caught it because every case
+they exercised had a positive p95.
+
+This is the standing trap in CLAUDE.md, in a new domain: *a check that scores well is not evidence
+the check works*. Nine rotation checks once shipped reading a quantity that moved the wrong way and
+one of them scored 100. Same shape, different file. The gate is now `exactShare >= 1` and the
+reported value is the share NOT locked, so the number cannot read as healthy while the overlay is
+adrift. The real S25+ distribution is now a regression test.
+
+### The failure is the architecture the WEB player already abandoned
+
+`SpikeScreen` marks the overlay committed inside a `useEffect` on `overlayFrame` — that is, when
+React commits state. `apps/web/src/lib/usePlayer.ts` documents exactly what that costs, from having
+paid it:
+
+> *"the commit and its effects land after the browser has already painted the video frame they
+> describe. The canvas then catches up on the next paint and the overlay sits permanently one frame
+> behind the picture."*
+
+`p50 = −1` is that sentence as a number. The web fix was to paint **synchronously inside
+`requestVideoFrameCallback`** from the presented index (`onPresentedFrame`), bypassing React state
+for the canvas alone, so "the canvas and the picture now agree by construction".
+
+**So probe 1 has not yet tested whether Expo/React Native can hold frame sync on Android.** It
+tested whether driving an overlay through a React state commit can, and reproduced the known answer
+to the frame. That distinction is the difference between "the mobile framework choice is wrong" —
+which would change the whole mobile plan — and "we drove it wrong".
+
+### What is genuinely learned
+
+- **Seek (probe 2) is a real `expo-video` finding**, independent of the overlay path: seeking lands
+  consistently **one frame late** (p50 1, max 1, n=20). Stage 0's GOP 10 bounds it, but the bar is
+  zero. Note n=20 is below `THRESHOLDS.minSamples` (120) and `judgeSeekError` does not apply the
+  too-few gate that `judgeOverlayDrift` does — a second inconsistency between the judges, and the
+  seek verdict should be re-measured with more targets before it is treated as settled.
+- **Scrub (probe 2b) at p95 12 frames** is the most alarming number, and it conflates seek accuracy
+  with overlay paint, so it cannot be attributed until probe 1 is re-run on the corrected
+  architecture.
+- **D5 remains provisional**, and is now provisional on a *sharper* question: can a synchronously
+  painted overlay hold zero drift on Android under Expo 57 / RN 0.86?
+
+### Decision
+
+Re-run probes 1 and 2b with the overlay painted synchronously from the native frame callback rather
+than through a React commit, before `mobile-player` is designed. That is one more spike iteration
+and it is worth it: the alternative is building the largest single piece of UI risk in the product
+on an unknown, having already built the instrument that can answer it.
+
+Probe 2 additionally needs more seek targets to clear `minSamples`.

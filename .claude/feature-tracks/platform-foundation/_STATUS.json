@@ -3,7 +3,7 @@
   "featureName": "platform-foundation",
   "currentStep": "07",
   "phase": "Platform Foundation",
-  "lastUpdated": "2026-08-11T10:05:00Z",
+  "lastUpdated": "2026-08-11T11:20:00Z",
   "steps": {
     "01": {
       "status": "complete",
@@ -47,13 +47,13 @@
   "blockers": [
     {
       "step": "02",
-      "classification": "EXTERNAL-DEPENDENCY",
-      "raisedAt": "2026-08-11T00:08:29Z",
-      "summary": "Probes 1 and 2 are built, compiled and installable, but no Android device was attached, so the step's Definition of Done (measured numbers per device) cannot be met.",
-      "needed": "Connect the Android phone by USB with USB debugging enabled and accept the RSA prompt, then run `npx expo run:android` from apps/mobile and press Run probe on the first two cards.",
-      "alsoNeeded": "ANDROID_SDK_ROOT is malformed at the Windows user level (its value contains its own name). Builds work only when it is overridden per-invocation until that is corrected. See docs/RUNBOOK.md section 6.",
-      "iosNote": "Probe measurement on iOS additionally needs hardware that does not exist (no iPhone, no Mac). The iOS source is written but has never been compiled. This is a known, pre-existing constraint recorded in D5/D12, not new.",
-      "note": "Step 02 left in-progress deliberately on 2026-08-11: it cannot close without a mid-range Android and an iPhone, so the track moved on to 03 rather than idling. Everything buildable in 02 is built, committed and green."
+      "classification": "AUTONOMOUS-FIX",
+      "raisedAt": "2026-08-11T11:20:00Z",
+      "summary": "Probes 1, 2 and 2b are now MEASURED on a Galaxy S25+ (D34) and all three fail. The hardware blocker is gone - wireless debugging works and no USB is needed, correcting the previous note. What remains is a code change, not an external dependency.",
+      "needed": "Re-run probes 1 and 2b with the overlay painted synchronously from the native frame callback instead of through a React state commit. The current numbers measure the architecture apps/web/src/lib/usePlayer.ts already abandoned, and reproduce its known one-frame-behind signature exactly (p50 -1, 10.5% exactly locked). Probe 2 also needs more seek targets to clear THRESHOLDS.minSamples (n=20 vs 120).",
+      "alsoNeeded": "Probe 3 (sustained 60fps capture) is still unanswered and remains blocked-dev-build; it needs a camera path that does not exist in the harness yet.",
+      "iosNote": "Unchanged and still external: no iPhone and no Mac, so the iOS half of frame-clock has never been compiled. Per D31's amendment Android leads and iOS is not gating.",
+      "note": "A false PASS was found and fixed while recording these: judgeOverlayDrift gated on a SIGNED p95, so a run sitting mostly one frame behind scored p95=0 and passed. Fixed to gate on exactShare, with the real S25+ distribution as a regression test."
     }
   ],
   "skipped": []

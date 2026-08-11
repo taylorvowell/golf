@@ -123,14 +123,32 @@ describe("spikeComplete — the step's exit condition", () => {
 });
 
 describe("judgeOverlayDrift", () => {
-  it("passes only when p95 drift is exactly zero", () => {
-    expect(judgeOverlayDrift(stats({ p95: 0 })).status).toBe("pass");
+  it("passes only when every sample is exactly locked", () => {
+    expect(judgeOverlayDrift(stats({ p95: 0, exactShare: 1 })).status).toBe("pass");
   });
 
   it("fails a single frame of p95 drift", () => {
     // The bar is 0, not 'small'. One frame late is what a viewer sees as the drawing sliding
     // off the golfer, and D13 chose to learn that now rather than ship it.
     expect(judgeOverlayDrift(stats({ p95: 1, exactShare: 0.9 })).status).toBe("fail");
+  });
+
+  /**
+   * The regression that matters. A run sitting mostly at -1 -- the overlay one frame BEHIND --
+   * yields a signed p95 of 0, because percentiles are computed on sorted SIGNED samples. The old
+   * `p95 <= 0` gate passed exactly this shape, and it is not hypothetical: it is the real S25+
+   * measurement of 2026-08-11, 24 locked samples out of 229, reported as PASS.
+   */
+  it("fails a run that is mostly one frame BEHIND, despite a signed p95 of zero", () => {
+    const real = stats({ count: 229, p50: -1, p95: 0, max: 1, exactShare: 0.105 });
+    const verdict = judgeOverlayDrift(real);
+    expect(verdict.status).toBe("fail");
+    expect(verdict.detail).toContain("10.5% exactly locked");
+  });
+
+  it("reports the share NOT locked, so the value moves the right way", () => {
+    expect(judgeOverlayDrift(stats({ exactShare: 0.105 })).value).toBe(89.5);
+    expect(judgeOverlayDrift(stats({ exactShare: 1 })).value).toBe(0);
   });
 
   it("refuses to pass on too few samples, however good they look", () => {
