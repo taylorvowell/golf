@@ -1697,3 +1697,78 @@ provisional until it does.
 **Requires a rebuild** — this is Kotlin, not JS. The iOS half needs the mirror change and still
 cannot be compiled here (no Mac), so it is written but unverified, exactly as D31's amendment
 allows for Android-first.
+
+---
+
+## D36 — Overlay sync on Android WORKS: 99.2% frame-locked. Seek is one frame late. Scrub is unresolved.
+
+**Date:** 2026-08-11
+**Status:** ACTIVE — resolves D5's core question; supersedes D34/D35's provisional readings
+
+Measured on `SM-S936U1` (Galaxy S25+, Android 36), driven from this machine over wireless
+debugging, on the instrument corrected in D35.
+
+| Probe | Result | n | Verdict |
+|---|---|---|---|
+| 1 · overlay during playback, React state | **99.2% locked**, p50 0, p95 0, max 1 | 250 | works |
+| 1b · ceiling, synchronous ack, no drawing | **99.0% locked**, p50 0, p95 0, max 2 | 301 | works |
+| 2 · frame-exact seek | p50 **1**, max 1 | 128 | one frame late, consistently |
+| 2b · scrub, seek-then-react | 0.0% locked, p95 25 | 126 | not measurable — see below |
+| 2c · scrub, draw-then-seek | 2.0% locked, p95 25 | 50 | not measurable — see below |
+| 3 · 60 fps capture | — | — | unbuilt; needs a camera dependency |
+
+### The headline: D5 survives, and the web player's architecture ports
+
+**A JS-drawn overlay holds the presented frame 99.2% of the time on Android**, with a **~49 ms
+lead** — about three frames at 60 fps — as the budget to draw in. Two things follow, and both are
+design inputs for `mobile-player`:
+
+- **React state is not the bottleneck.** The ceiling probe removed React and the renderer entirely
+  and scored *no better* (99.0% vs 99.2%). The synchronous-paint discipline `usePlayer.ts` needs on
+  the web is not required here; the lead absorbs it.
+- **Plain rotated `View`s are fast enough.** `Skeleton.tsx` warned that if the JS strategy failed
+  on cost, the renderer was a suspect and "the retest is Skia before concluding that JS drawing
+  cannot keep up". It did not fail. **Skia is not needed**, and that probe is cancelled rather than
+  deferred.
+
+The residual ~1% is a handful of samples at 1–2 frames out of 250–301. Under a bar of exactly zero
+these still read FAIL, and that is left standing rather than softened: the bar was set deliberately
+in D13 and moving it to accommodate the first measurement that nearly clears it is how a threshold
+stops meaning anything. Whether 99.2% is shippable is a `mobile-player` judgement made with eyes on
+a real swing, not a number to re-legislate here.
+
+### Seek lands one frame late, consistently
+
+p50 1, max 1, over 128 samples including every GOP-offset worst case, with
+`SeekParameters.EXACT` set explicitly. It is not jitter and not a GOP artifact — it is a constant
+off-by-one, which means it is **correctable**: `mobile-player` can request `N−1`, or offset the
+overlay by one frame on the seek path. Verify the compensation rather than assuming it.
+
+### Scrub is unresolved, and the instrument is why
+
+Four revisions in, scrubbing still cannot be measured honestly. The current confound: the sweep
+passes back and forth over the same frames, so `markOverlayCommitted` matches a **stale schedule
+entry from an earlier pass** and scores a fresh commit against a display time from seconds ago.
+That is why 2c reads p50 13 while doing the ideal thing, and why only 50 of ~153 seeks scored at
+all — during a fast scrub most target frames are never decoded, because a newer seek cancels them.
+
+**Deliberately stopped here.** The instrument has been wrong in three different directions already
+(D35), each time convincingly, and a fourth attempt to measure scrubbing by closed loop is worse
+value than the alternative: `scripts/measure_overlay.py` reads the drawn marker and the burned-in
+bar out of the *same screenshot*, after compositing, which is the one measurement that cannot be
+argued with. Scrub belongs to that tool and to `mobile-player`'s own verification, not to this
+spike.
+
+**What is genuinely known about scrubbing:** a seeked frame is displayed essentially on arrival, so
+there is **no lead** on the scrub path — unlike playback's 49 ms. Any mobile scrub design must
+therefore commit the overlay for a target it already knows, rather than react to a frame event.
+That is a real constraint and it survives the measurement problem.
+
+### Consequences
+
+- **D5 is no longer provisional on probe 1.** Expo 57 / React Native 0.86 holds frame-locked
+  overlay during playback on Android. It remains unverified on iOS, where no hardware exists.
+- Step 02's remaining gaps are probe 3 (capture, needs `react-native-vision-camera`) and scrub,
+  which is reassigned rather than blocked.
+- The `frame-clock` module has earned its keep and should NOT be deleted with the rest of the
+  spike: `mobile-player` needs the same frame callback, and `expo-video` still does not expose one.

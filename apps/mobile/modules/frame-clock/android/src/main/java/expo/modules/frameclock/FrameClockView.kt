@@ -84,6 +84,16 @@ class FrameClockView(context: Context, appContext: AppContext) : ExpoView(contex
   private val scheduled = ArrayDeque<Pair<Int, Long>>()
   private val scheduleLock = Any()
 
+  /**
+   * Overlay commits for frames the decoder has not produced yet — frame index to commit time.
+   *
+   * A scrub commits its overlay for the target frame BEFORE asking for the seek, because it
+   * already knows the target. Those commits are as early as an overlay can be, and they are
+   * scored when the frame finally arrives rather than against whatever is on screen meanwhile.
+   */
+  private val pendingCommits = HashMap<Int, Long>()
+  private val pendingLock = Any()
+
   /** The most recent callback, i.e. the newest frame the decoder has queued. Not on screen yet. */
   @Volatile private var queuedFrame: Int = -1
 
@@ -140,6 +150,15 @@ class FrameClockView(context: Context, appContext: AppContext) : ExpoView(contex
       val displayAtNs = if (releaseTimeNs == C.TIME_UNSET) System.nanoTime() else releaseTimeNs
 
       queuedFrame = frame
+      // Score any overlay that was committed for this frame before it existed. Committed before
+      // its display time is locked; the lead makes that the normal case for a draw-then-seek.
+      val committedAt = synchronized(pendingLock) { pendingCommits.remove(frame) }
+      if (committedAt != null) {
+        val lateNs = committedAt - displayAtNs
+        overlayDrift.add(
+          if (lateNs <= 0L) 0.0 else ceil(lateNs / (1_000_000_000.0 / fps))
+        )
+      }
       synchronized(scheduleLock) {
         scheduled.addLast(frame to displayAtNs)
         // A seek or a stall can strand entries whose time never arrives relative to newer ones.
@@ -281,12 +300,29 @@ class FrameClockView(context: Context, appContext: AppContext) : ExpoView(contex
     }
 
     if (displayAtNs == null) {
-      // Not in the schedule: either it was drained (already displayed, so JS is late and the
-      // gap to what is on screen is the honest cost) or it was never seen. A frame ahead of
-      // what is on screen with no schedule entry is not measurable, so it is not counted.
       val current = onScreenFrame()
-      if (current < 0 || current < frame) return
-      overlayDrift.add((current - frame).toDouble())
+      if (current >= 0 && current > frame) {
+        // Already displayed and drained: JS is genuinely late, and the gap is the honest cost.
+        overlayDrift.add((current - frame).toDouble())
+        return
+      }
+      /**
+       * The frame has not been scheduled yet — the overlay was committed for a frame the decoder
+       * has not produced. That is the EARLIEST possible commit, not a late one, and scoring it
+       * against whatever happens to be on screen is how the draw-then-seek scrub probe first
+       * measured p50 13 while doing the ideal thing.
+       *
+       * So it is parked, and scored when the frame actually arrives (see the metadata listener).
+       * This is the pattern a scrub must use — the app knows its target before the decoder does —
+       * so the instrument has to be able to express it.
+       */
+      synchronized(pendingLock) {
+        pendingCommits[frame] = now
+        if (pendingCommits.size > 64) {
+          val stale = now - 2_000_000_000L
+          pendingCommits.entries.removeAll { it.value < stale }
+        }
+      }
       return
     }
 
@@ -300,6 +336,7 @@ class FrameClockView(context: Context, appContext: AppContext) : ExpoView(contex
   }
 
   fun resetStats() {
+    synchronized(pendingLock) { pendingCommits.clear() }
     overlayDrift.reset()
     leadTimeMs.reset()
     seekError.reset()

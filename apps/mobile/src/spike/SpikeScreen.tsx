@@ -159,6 +159,8 @@ export default function SpikeScreen() {
    * baseline it improves on.
    */
   const paintStrategy = useRef<"react-state" | "sync-ack">("react-state");
+  /** Set while the draw-then-seek scrub runs, so the commit effect does not mark a second time. */
+  const drawFirstRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -196,6 +198,7 @@ export default function SpikeScreen() {
    */
   useEffect(() => {
     if (!measuring.current || paintStrategy.current !== "react-state") return;
+    if (drawFirstRef.current) return; // the scrub probe already marked this frame itself
     void clock.current?.markOverlayCommitted(overlayFrame);
   }, [overlayFrame]);
 
@@ -285,16 +288,27 @@ export default function SpikeScreen() {
    * through targets with a wait in between — which is what probe 2 does — measures seek accuracy
    * and says nothing about this.
    */
-  const runScrubProbe = useCallback(async () => {
+  /**
+   * @param drawFirst  Draw the overlay for the TARGET frame before asking for the seek, instead
+   *                   of waiting to be told a frame arrived.
+   *
+   * The reactive order is what the playback path uses and it cannot work here: a seeked frame is
+   * displayed essentially on arrival, so there is no lead to draw inside — measured 0.0% locked,
+   * p95 25 frames. But during a scrub the app already KNOWS the target; it chose it. Committing
+   * the overlay first and seeking second removes the round-trip from the critical path entirely.
+   */
+  const runScrubProbe = useCallback(async (drawFirst = false) => {
     const handle = clock.current;
     if (!handle || busy) return;
     setBusy(true);
-    setProbe("scrub", { status: "running" as ProbeStatus, measurement: undefined });
+    const probeId = drawFirst ? "scrub-draw-first" : "scrub";
+    setProbe(probeId, { status: "running" as ProbeStatus, measurement: undefined });
 
     setLooping(false);
     await handle.pause();
     await handle.resetStats();
     measuring.current = true;
+    drawFirstRef.current = drawFirst;
 
     // Sweep back and forth across the clip at roughly a finger's speed, without waiting for any
     // seek to settle. 16ms between requests is deliberately faster than the decoder can serve.
@@ -302,6 +316,10 @@ export default function SpikeScreen() {
     for (let pass = 0; pass < 3; pass += 1) {
       for (let t = 0; t <= 1; t += 0.02) {
         const target = Math.round((pass % 2 === 0 ? t : 1 - t) * span);
+        if (drawFirst) {
+          setOverlayFrame(target);
+          void handle.markOverlayCommitted(target);
+        }
         void handle.seekToFrame(target);
         await new Promise((r) => setTimeout(r, 16));
       }
@@ -310,12 +328,13 @@ export default function SpikeScreen() {
     await new Promise((r) => setTimeout(r, 300));
 
     measuring.current = false;
+    drawFirstRef.current = false;
     const stats: FrameClockStats = await handle.getStats();
     const verdict = judgeOverlayDrift(stats.overlayDriftFrames);
-    setProbe("scrub", {
+    setProbe(probeId, {
       status: verdict.status,
       measurement: { value: verdict.value, device: deviceName },
-      detail: verdict.detail,
+      detail: `${verdict.detail} · order=${drawFirst ? "draw-then-seek" : "seek-then-react"}`,
     });
     setBusy(false);
   }, [busy, clip.frames, deviceName, setProbe]);
@@ -471,8 +490,10 @@ export default function SpikeScreen() {
                   : p.id === "seek"
                     ? runSeekProbe
                     : p.id === "scrub"
-                      ? runScrubProbe
-                      : undefined
+                      ? () => runScrubProbe(false)
+                      : p.id === "scrub-draw-first"
+                        ? () => runScrubProbe(true)
+                        : undefined
             }
             disabled={busy || !clipUri}
           />

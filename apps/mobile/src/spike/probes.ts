@@ -79,6 +79,19 @@ export const PROBES: Probe[] = [
     measures: "drift in frames while seeking rapidly — target exactly 0",
   },
   {
+    id: "scrub-draw-first",
+    title: "2c · Scrubbing, overlay drawn BEFORE the seek",
+    question: "Does committing the overlay for the target frame first fix scrubbing?",
+    why:
+      "2b measures the reactive order and cannot work: a seeked frame is displayed on arrival, " +
+      "so there is no lead to draw inside (0.0% locked, p95 25 frames). But a scrub already " +
+      "KNOWS its target — the app chose it. Drawing first and seeking second takes the JS " +
+      "round-trip off the critical path. If this passes, mobile-player needs two overlay " +
+      "orders, one for playback and one for scrub, and that is a design input rather than a bug.",
+    status: "pending",
+    measures: "% of frames NOT exactly locked — target 0",
+  },
+  {
     id: "capture",
     title: "3 · Sustained 60fps capture",
     question: "Does the device actually record at the rate it reports?",
