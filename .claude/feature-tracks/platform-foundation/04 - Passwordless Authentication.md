@@ -156,3 +156,23 @@ brand-new account sees zero swings.
 | Real SMS delivery | A2P 10DLC registration (D31). |
 | Deleting email OTP, the seeded admin and `DEV_USER_EMAIL` | D31's rule is that email OTP dies once Google **and** phone are live on Android. Deleting the development identity now would leave no way to use the app in between. |
 | Account deletion (§4.3) and explicit identity linking (D31) | Untouched. Deletion needs the D15 cascade and an admin-API path; linking needs a second provider to link *to*. |
+
+### On-device verification 2026-08-11 — Google sign-in WORKS on the S25+
+
+Driven over wireless debugging (`10.0.1.125:37913`), new APK installed, Metro restarted with
+`--clear` so the new `EXPO_PUBLIC_*` values were actually inlined.
+
+| Check | Result |
+|---|---|
+| Sign in with Google, in-app | **Signed in as `taylorvowell@gmail.com`** — account bar shows the address |
+| The whole chain to the API | Server card: **`authenticated — 0 swings on this account`**. Google → Supabase session → bearer token → `/api/v1/swings` → RLS. |
+| The account is real, not the fallback | `public.users` gained `55cd2a6f-9df3-424e-9a54-0766fa54dd10 / taylorvowell@gmail.com`, created by `app.ensure_profile()`. The development identity still holds the ten fixtures and the new account correctly sees none of them. |
+| The email-collision fix, in practice | That row could only be inserted because the fallback had been moved off the real address hours earlier. Without it this sign-in would have raised a unique violation. |
+| Session survives app restart (§4.2) | Force-stop → relaunch → straight back in, no sign-in screen |
+
+Not yet exercised: the sign-out → chooser round trip, and two simultaneous sessions on one account.
+Both need the device, and the owner was using the phone.
+
+One product fix came out of it: **Sign out moved to the left of the account bar.** The
+expo-dev-client floating bubble is pinned top-right in every development build and swallows taps
+underneath, so a control there is unreachable in exactly the builds used to test it.

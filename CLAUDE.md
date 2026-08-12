@@ -11,6 +11,7 @@ Guidance for Claude Code working in this repository.
 | [`docs/PRODUCT-COVERAGE.md`](docs/PRODUCT-COVERAGE.md) | The north star scored section-by-section against current state. Source of truth for *what is missing*. |
 | [`.claude/ROADMAP.md`](.claude/ROADMAP.md) | The plan across all tracks (derived — never hand-edit). Source of truth for *what is next*. |
 | [`docs/RUNBOOK.md`](docs/RUNBOOK.md) | How to run and test it — desktop, Android phone over LAN, analyzer, tests. Source of truth for *how to start it*. |
+| [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) | **The machine, the devices, the services.** Device identifiers, ports, project refs, client ids, and the machine faults that have already cost time. Source of truth for *what the running system is*. Live state comes from `node scripts/env-probe.mjs`, which runs at session start. |
 
 **The gap between the first two is large and deliberate.** SwingSage today is a working
 proof of concept of the analysis engine — a Python CV pipeline plus a desktop web player,
@@ -270,9 +271,17 @@ looked healthy and were wrong. Build the debug view when the work starts, not af
   `pm list packages | grep swingsage`, `pidof`, `screencap`), curl the route, query the database.
   Answering "there is no mobile app" from `apps/mobile/` containing a spike harness, while that
   spike was installed and in use on the S25+, is a mistake this project has already made once.
-- **Write down facts as they arrive.** A device, account, version, network detail or constraint
-  mentioned in passing goes into the repo (RUNBOOK, step file, DECISIONS) in the same session —
-  not just into the reply.
+- **Write down facts as they arrive, in the one place that is read automatically.** A device,
+  account, version, port, identifier, dashboard setting or machine fault goes into
+  [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) in the same session — it is the only doc loaded
+  at session start alongside the probe, so a fact recorded anywhere else will be re-derived. If
+  the fact is *live* (an address, a pid, whether a service is up), teach
+  `scripts/env-probe.mjs` to discover it instead of writing it down; a recorded live fact is a
+  stale fact. Product decisions still go in `docs/DECISIONS.md`, and how-to-run-it still goes in
+  `docs/RUNBOOK.md`.
+- **Never make Taylor look something up.** Put the exact commands and numbers in the reply, run
+  them yourself, and cite a doc only as provenance — never as "go read this". A hand-off is for a
+  physical device interaction, a credential, a dashboard, a spend, or a judgement call.
 
 ## Replying
 

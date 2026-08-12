@@ -24,19 +24,23 @@ export function AccountBar() {
     }
   }
 
+  // Sign out sits on the LEFT. The expo-dev-client floating bubble is pinned to the top-RIGHT of
+  // every development build and swallows taps underneath it, so a control there is unreachable in
+  // exactly the builds used to test it — which is how a button gets called broken when it is fine.
   return (
     <View style={styles.bar}>
-      <Text style={styles.who} numberOfLines={1}>
-        {email ?? userId ?? "signed in"}
-      </Text>
       <Pressable
         onPress={() => void onSignOut()}
         disabled={busy}
         accessibilityRole="button"
+        testID="sign-out"
         style={({ pressed }) => [styles.button, (pressed || busy) && styles.buttonPressed]}
       >
         <Text style={styles.buttonText}>{busy ? "Signing out…" : "Sign out"}</Text>
       </Pressable>
+      <Text style={styles.who} numberOfLines={1}>
+        {email ?? userId ?? "signed in"}
+      </Text>
     </View>
   );
 }
@@ -54,7 +58,8 @@ const styles = StyleSheet.create({
     borderBottomColor: "#232a33",
     borderBottomWidth: 1,
   },
-  who: { color: "#7e8691", fontSize: 12, flexShrink: 1 },
+  // `paddingRight` keeps the address clear of the same dev-client bubble.
+  who: { color: "#7e8691", fontSize: 12, flexShrink: 1, textAlign: "right", paddingRight: 56 },
   button: {
     borderColor: "#232a33",
     borderWidth: 1,
