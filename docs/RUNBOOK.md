@@ -203,7 +203,7 @@ through CMake + ninja, which sees the same source through both its symlinked and
 `.pnpm/…` path, decides the generated manifest is stale, regenerates, and dies on
 `ninja: error: manifest 'build.ninja' still dirty after 100 tries`. The cost is that a hoisted
 tree is npm-shaped, so pnpm no longer catches a package importing something it did not declare.
-See `docs/DECISIONS.md` D21.
+See `docs/decisions/` D21.
 
 If you ever switch the linker back, **delete every `node_modules` first** — a leftover
 `node_modules/.pnpm` keeps resolving and reproduces the exact failure you were trying to fix.
@@ -281,7 +281,7 @@ use on the S25+. The repo describes what the product *is*; only the device knows
 *installed*. The `agent-device` and `dogfood` skills automate the rest of this loop.
 
 `apps/mobile/` exists as of spine step 02: **Expo 57 / React Native 0.86 / React 19**, chosen in
-`DECISIONS.md` D5. The step 02 spike harness that used to live behind sign-in is **deleted**
+`decisions/` D5. The step 02 spike harness that used to live behind sign-in is **deleted**
 (D44) — its measurements are recorded in D34–D40 and the two native modules it justified survive
 in `modules/`. What runs today is sign-in plus a placeholder home; the screens proper are the
 `mobile-app-shell` and `mobile-player` tracks.

@@ -43,6 +43,35 @@ const portOpen = (host, port, ms = 700) =>
     s.on("timeout", () => (s.destroy(), res(false)));
   });
 
+/**
+ * Outstanding human tasks, read out of `docs/HANDOFF.md`.
+ *
+ * Injected rather than looked up, for the same reason the phone's address is: a hand-off that
+ * lives in a document nobody opens gets re-asked, and a task that is already DONE gets asked for
+ * a second time. Both happened before this existed — Claude sent Taylor to the Google Cloud
+ * Console to create an OAuth client that had been created days earlier and was recorded in
+ * ENVIRONMENT.md the whole time.
+ *
+ * Only OPEN and BLOCKED rows print. DONE rows stay in the file as the answer to "did we already
+ * do this?", and are read there.
+ */
+function handoffs() {
+  const file = join(ROOT, "docs/HANDOFF.md");
+  if (!existsSync(file)) return null;
+  const text = readFileSync(file, "utf8");
+  const below = text.split("PROBE-READS-BELOW")[1];
+  if (!below) return null;
+  const rows = [];
+  for (const line of below.split("\n")) {
+    if (!line.startsWith("|")) continue;
+    const cells = line.split("|").slice(1, -1).map((c) => c.trim());
+    if (cells.length < 2) continue;
+    const [status, what] = cells;
+    if (status === "OPEN" || status === "BLOCKED") rows.push({ status, what });
+  }
+  return rows;
+}
+
 /** set | empty | missing — never the value. */
 function envKeys(relPath, keys) {
   const file = join(ROOT, relPath);
@@ -100,6 +129,16 @@ say(`- docker: ${containers.length ? containers.join("; ") : "no golf containers
 // --- env presence, never values -----------------------------------------------------------
 say(`- apps/web/.env: ${envKeys("apps/web/.env", ["DATABASE_URL", "APP_DATABASE_URL", "NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SECRET_KEY", "AUTH_ALLOWED_EMAILS", "DEV_USER_EMAIL"]).join("  ")}`);
 say(`- apps/mobile/.env: ${envKeys("apps/mobile/.env", ["EXPO_PUBLIC_SUPABASE_URL", "EXPO_PUBLIC_API_BASE_URL", "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID"]).join("  ")}`);
+
+// --- outstanding human tasks ---------------------------------------------------------------
+const pending = handoffs();
+if (pending?.length) {
+  say(`- waiting on Taylor (docs/HANDOFF.md) — do NOT ask for anything that is not listed here,`);
+  say(`  and do NOT re-ask for a DONE row in that file:`);
+  for (const r of pending) say(`    ${r.status === "OPEN" ? "OPEN   " : "BLOCKED"}  ${r.what}`);
+} else if (pending) {
+  say("- waiting on Taylor: nothing open (docs/HANDOFF.md)");
+}
 
 say("- fixed facts that a probe cannot discover are in docs/ENVIRONMENT.md — read it before");
 say("  scanning the network, guessing a port, or checking a vendor dashboard.");

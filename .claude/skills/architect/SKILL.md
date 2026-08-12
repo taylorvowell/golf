@@ -21,7 +21,7 @@ get otherwise:
 ## Two commands, one skill
 
 - **`/architect <question>`** — the default. Fast, inline, high-level. Ground in the relevant
-  docs/`DECISIONS.md` entries + a few targeted external checks, then decide. Most calls.
+  docs/`decisions/` entries + a few targeted external checks, then decide. Most calls.
 - **`/architect-deep <question>`** — the heavy treatment. Fan out a multi-agent **research →
   adversarial-debate → synthesis** workflow (see "Deep mode" below). For build-vs-buy,
   multi-vendor/multi-model selection, or a decision big enough to reshape the plan. Needs
@@ -51,7 +51,7 @@ Three failure modes are unacceptable:
 - **Anchoring on what he named.** A library, model, or approach he mentions is a *hypothesis
   to test*, not a decision to implement. Don't let his wording pick the answer — pull the
   intent and let the evidence pick. (See "Read for intent" below.)
-- **Deferring to a prior decision.** A recorded `DECISIONS.md` entry, roadmap phase, or
+- **Deferring to a prior decision.** A recorded `decisions/` entry, roadmap phase, or
   committed plan — *even one accepted today* — is a hypothesis to audit, not a settled fact.
   "We already decided X" is never, by itself, the answer to a fresh-audit ask. Recency grants
   zero immunity. (See "Audit-fresh vs integrate-with-stack" below.)
@@ -109,7 +109,7 @@ Non-Negotiable Constraints). It's the *solutions* he floats that you hold loosel
 ## Audit-fresh vs integrate-with-stack
 
 The anti-anchoring rule applies just as hard to SwingSage's **own prior decisions** —
-`docs/DECISIONS.md` entries, the roadmap, the committed plan — as it does to Taylor's words.
+`docs/decisions/` entries, the roadmap, the committed plan — as it does to Taylor's words.
 This is where the skill most easily fails, because a written decision *feels* authoritative.
 It is not the answer; it is a record of a conclusion someone reached. In a fresh audit, **even
 auditing that conclusion is too much deference** — framing the analysis as "should we overturn
@@ -120,7 +120,7 @@ D23?" still makes the decision the center of gravity and quietly biases you towa
   measured, the goals and constraints of his world (uploads-only, Python-CV-only,
   deterministic-first, AI-never-hard-dependency). *Use these freely.* They're reality.
 - **Conclusions on record** — which model/library was picked, which approach was chosen, what
-  a `DECISIONS.md` entry "decided." *In fresh mode, set these aside as if they were never
+  a `decisions/` entry "decided." *In fresh mode, set these aside as if they were never
   made.* Don't reason from them, don't center the analysis on them, don't treat them as the
   baseline to defend or overturn. Also check each entry's `Status:` line — a
   `SUPERSEDED`/`NEGATIVE RESULT` entry is itself evidence (an approach that lost), not a live
@@ -205,7 +205,7 @@ pressure-test it**, not to inherit it (see "Audit-fresh vs integrate-with-stack"
 integrate-with-stack mode these are constraints; in the default audit mode they are re-openable
 candidates. Read only what's relevant, in priority order:
 
-- **`docs/DECISIONS.md`** — the append-only decisions log. Read the entries the question
+- **`docs/decisions/`** — the append-only decisions log. Read the entries the question
   touches; check each one's `Status:` line before trusting it (roughly a quarter are no longer
   current — `SUPERSEDED`/`NEGATIVE RESULT`/`HISTORICAL` entries still matter as evidence of
   what was tried and lost).
@@ -224,7 +224,7 @@ candidates. Read only what's relevant, in priority order:
   question touches vocabulary or scoring coverage.
 - Any relevant deep-dive skill in `.claude/skills/` when the question is in its domain.
 
-**Find what's already decided, then audit it — don't defer to it.** If a `DECISIONS.md` entry
+**Find what's already decided, then audit it — don't defer to it.** If a `decisions/` entry
 appears to answer the question, that is precisely the thing to pressure-test, not a reason to
 stop. Re-derive it from current facts and either reaffirm it (say why it still holds) or
 overturn it (name the cost, and add a new numbered entry recording the reversal — never edit or
@@ -301,7 +301,7 @@ structured report for cross-system ones).
 
 ### 7. Record the decision (on acceptance)
 
-The `.claude/architecture/` doc is the thinking record; **`docs/DECISIONS.md` is the canonical
+The `.claude/architecture/` doc is the thinking record; **`docs/decisions/` is the canonical
 current-state record** — this project's single append-only, numbered decision log (never
 renumbered, never deleted). When he accepts a non-trivial direction (new dependency/library, a
 new pattern, a chosen approach, or a change to an existing decision), offer to record it as a
@@ -334,7 +334,7 @@ them — these are the columns to think in:
 | **Scalability** | Works on 2 fixtures now vs 10+ later; GPU vs CPU cost/throughput; concurrent-upload seams |
 | **Maintainability** | Who maintains it; build-vs-buy total cost of ownership for a solo/small team |
 | **Cost & complexity** | Real $ at current and target scale (GPU compute, hosted APIs); moving-parts count |
-| **Implementation sequence** | Files to change, migrations, `DECISIONS.md` entries/runbooks to write, ordered now-vs-defer |
+| **Implementation sequence** | Files to change, migrations, `decisions/` entries/runbooks to write, ordered now-vs-defer |
 
 Cover the rows the decision turns on; be honest about which you're deferring.
 

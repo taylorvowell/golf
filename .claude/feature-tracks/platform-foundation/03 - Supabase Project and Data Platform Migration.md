@@ -34,7 +34,7 @@ track inherits, so it is settled here rather than discovered during `coach-relat
 - `apps/web/drizzle/` — migrations
 - `docker-compose.yml` — local dev database
 - `infra/` — project/environment declarations
-- `docs/DECISIONS.md`
+- `docs/decisions/`
 
 ## Steps
 
@@ -67,7 +67,7 @@ track inherits, so it is settled here rather than discovered during `coach-relat
    auth users, without breaking local development.
 6. Confirm `pnpm db:backfill` still indexes local `out/` folders during development, or replace
    it with whatever step 07's storage decision implies.
-7. Record the outcome in `docs/DECISIONS.md`.
+7. Record the outcome in `docs/decisions/`.
 
 ## Quality Standards
 

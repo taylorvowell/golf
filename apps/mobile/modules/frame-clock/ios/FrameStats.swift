@@ -1,7 +1,7 @@
 import Foundation
 
 /// Swift twin of the Kotlin `FrameStats`. Kept deliberately identical, including the nearest-rank
-/// percentile, so an iOS number and an Android number in `DECISIONS.md` are the same measurement
+/// percentile, so an iOS number and an Android number in `decisions/` are the same measurement
 /// and can be compared directly. If one side ever starts interpolating percentiles, the two
 /// columns of that table quietly stop meaning the same thing.
 final class FrameStats {

@@ -64,7 +64,7 @@ async function main() {
     if (check.superuser || check.bypassrls) {
       throw new Error(
         "swingsage_app has SUPERUSER or BYPASSRLS. It would ignore every policy — refusing to " +
-          "report success (docs/DECISIONS.md D26).",
+          "report success (docs/decisions/ARCHIVE-numbered.md D26).",
       );
     }
 

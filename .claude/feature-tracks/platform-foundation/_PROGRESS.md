@@ -10,7 +10,7 @@ pipeline for all three artifacts.
 **10 steps, and deliberately front-loaded.** This track delivers no user-visible value. It
 exists because a native app cannot be force-updated, so API versioning, the shared contract,
 and the entitlement seam get permanently more expensive after the first store release. See
-`docs/DECISIONS.md` D3 for the review that shaped it.
+`docs/decisions/` D3 for the review that shaped it.
 
 **Starting position (2026-08-08):** a proof-of-concept analyzer + desktop web player running
 against local Docker Postgres and a single seeded admin user, with media on local disk. See
@@ -355,7 +355,7 @@ environment.
 ## 01 — Architecture Decisions ✅ 2026-08-08
 
 Closed the questions `PROJECT_MAIN.md` §44 left open. **13 decisions recorded as D5–D17** in
-`docs/DECISIONS.md`, synthesised into a new `docs/ARCHITECTURE.md`.
+`docs/decisions/`, synthesised into a new `docs/ARCHITECTURE.md`.
 
 **The decision that turned out to be forced rather than chosen:** the only dev machine is
 Windows with no Xcode, verified this session. iOS binaries cannot be built locally under *any*

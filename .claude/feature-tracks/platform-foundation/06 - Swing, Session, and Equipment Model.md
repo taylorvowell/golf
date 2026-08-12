@@ -59,7 +59,7 @@ blocked until a Swing can hold more than one video.
    and equipment should now be able to supply it automatically.
 8. Answer the §43 swing-data questions this forces: are sessions auto- or manually created, can
    a swing move between sessions, are raw recordings retained alongside trimmed clips. Record
-   in `docs/DECISIONS.md`.
+   in `docs/decisions/`.
 
 ## Quality Standards
 
@@ -87,7 +87,7 @@ score after the rebuild.
 - [ ] Sessions, equipment, tags, favourites and coach-reviewed status exist in the schema.
 - [ ] All seven existing analysed fixtures still resolve with correct scores.
 - [ ] `analysis.json`'s contract is unchanged.
-- [ ] The §43 swing-data questions are answered in `docs/DECISIONS.md`.
+- [ ] The §43 swing-data questions are answered in `docs/decisions/`.
 
 ## Notes
 

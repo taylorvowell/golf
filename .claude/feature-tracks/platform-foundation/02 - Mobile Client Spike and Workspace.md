@@ -32,7 +32,7 @@ has to be discovered now, not in the `in-app-capture` track.
 - `pnpm-workspace.yaml` — register the new package
 - `packages/` — any code genuinely shared between web and mobile (types first; rendering logic
   only if the spike shows it transfers)
-- `docs/DECISIONS.md` — amend or confirm step 01's client entry with the measured result
+- `docs/decisions/` — amend or confirm step 01's client entry with the measured result
 
 ## Steps
 
@@ -108,11 +108,11 @@ cd services/analyzer && .venv\Scripts\python.exe -m pytest tests
 ```
 
 Manual: the spike runs on a physical iPhone and a physical mid-range Android, and the three
-measurements are recorded in `docs/DECISIONS.md`.
+measurements are recorded in `docs/decisions/`.
 
 ## Definition of Done
 
-- [ ] Spike results recorded per device, as numbers, in `docs/DECISIONS.md`.
+- [ ] Spike results recorded per device, as numbers, in `docs/decisions/`.
 - [ ] `apps/mobile/` exists, typechecks, and builds from the repo root.
 - [ ] `pnpm-workspace.yaml` includes it and a clean `pnpm i` succeeds.
 - [ ] `packages/` exists as a workspace location (contract types come in step 07).

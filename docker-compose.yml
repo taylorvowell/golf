@@ -1,6 +1,6 @@
 # Local Postgres for development — same engine Railway provisions in production (D38), so
 # nothing about the schema or queries has to change between here and there. Not SQLite: see
-# docs/DECISIONS.md D38 for why the "v1 SQLite" shortcut in doc 02 was skipped outright.
+# docs/decisions/ARCHIVE-numbered.md D38 for why the "v1 SQLite" shortcut in doc 02 was skipped outright.
 #
 # Usage: docker compose up -d   (from the repo root)
 #        pnpm --filter web db:migrate   once it's up, to apply apps/web/drizzle/*.sql

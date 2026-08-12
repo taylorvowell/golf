@@ -47,7 +47,7 @@ account is created**, because one option adds a hard two-week gate immediately b
 
 Given SwingSage sells subscriptions and hosts a coach directory, organization accounts on both
 stores are almost certainly correct — which means D-U-N-S is on the critical path and the
-14-day Play testing gate is avoided. Record the choice in `docs/DECISIONS.md` when it is made.
+14-day Play testing gate is avoided. Record the choice in `docs/decisions/` when it is made.
 
 ## Architectural Context
 

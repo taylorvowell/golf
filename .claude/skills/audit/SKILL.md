@@ -42,7 +42,7 @@ Heuristics for scope:
 - **Medium** — one domain (the player, one pipeline stage, one scoring axis), 5–30 files. Read inline. Optionally fire **one pre-scan subagent** for convention violations across the audit scope (see "Subagent patterns" below) — this parallelizes the mechanical grep work with your structural investigation.
 - **Large** — multi-domain or whole subsystem (>30 files, or "the whole analyzer pipeline"). **Fan out parallel `Explore` subagents** — one per subdomain, plus the pre-scan and latest-leverage sweeps. The main agent stays in the architectural seat; subagents return short bulleted findings so you don't drown in code excerpts.
 
-State your plan back to the user in one or two sentences before going deep: *"I'm going to audit `apps/web/src/components/{SwingWorkspace,SwingStage,OverlayMenu}.tsx` plus `lib/usePlayer.ts` — about 6 files. I'll consult `.claude/rules/nextjs.md` and `.claude/rules/tailwind-v4.md`, and the `docs/DECISIONS.md` entries that touch frame sync and trace rendering (D43, D46, D51). Going to do this inline (medium scope), with one pre-scan subagent for convention violations. Sound right?"* Wait briefly — if the user pushes back, adjust. If they don't respond, proceed.
+State your plan back to the user in one or two sentences before going deep: *"I'm going to audit `apps/web/src/components/{SwingWorkspace,SwingStage,OverlayMenu}.tsx` plus `lib/usePlayer.ts` — about 6 files. I'll consult `.claude/rules/nextjs.md` and `.claude/rules/tailwind-v4.md`, and the `docs/decisions/` entries that touch frame sync and trace rendering (D43, D46, D51). Going to do this inline (medium scope), with one pre-scan subagent for convention violations. Sound right?"* Wait briefly — if the user pushes back, adjust. If they don't respond, proceed.
 
 ### 3. Load relevant ground truth
 
@@ -52,7 +52,7 @@ Only load skills/docs actually relevant to the target. Don't preload everything 
 - `apps/web/src/components/ui/kiosk.tsx` — this project's closest thing to a component registry, for any player/UI audit
 - Root `CLAUDE.md` — the project's non-negotiable constraints and architecture-that-spans-files
 - `.claude/rules/*.md` (`nextjs.md`, `tailwind-v4.md`, `typescript.md`, `testing.md`) — the mechanical conventions, each scoped by its `paths:` frontmatter to the files it governs
-- `docs/DECISIONS.md` — but **grep it for the D-numbers relevant to the target**, don't read the whole append-only log end to end. Every entry has a `Status:` line (`ACTIVE`/`SUPERSEDED by Dxx`/`NEGATIVE RESULT`/`HISTORICAL`/`OPEN`) — roughly a quarter of entries no longer hold, so check it before citing one.
+- `docs/decisions/` — but **grep it for the D-numbers relevant to the target**, don't read the whole append-only log end to end. Every entry has a `Status:` line (`ACTIVE`/`SUPERSEDED by Dxx`/`NEGATIVE RESULT`/`HISTORICAL`/`OPEN`) — roughly a quarter of entries no longer hold, so check it before citing one.
 
 **Domain-match (load 1–3 maximum):**
 - TS/Next.js client-server boundary questions → `.claude/rules/nextjs.md`, `.claude/rules/typescript.md`
@@ -78,7 +78,7 @@ Read the target. Look at structure, not just lines. Things worth checking on eve
 - **Frame sync:** does anything touch `lib/usePlayer.ts`, the CFR-60fps assumption, the `(frame + 0.5) / fps` seek offset, or the canvas draw order (`video → skeleton → club → trace → annotations`)?
 - **Tests:** is a change presented as "tested" when only a golden snapshot covers it? Golden snapshots (`test_stages.py`) prove nothing *changed* — never that it's *right*. Only `test_hand_labeled.py` proves correctness, and it's currently skipped project-wide (no hand-labelled truth exists yet).
 - **Naming:** PascalCase `.tsx` matching the component name, kebab-case non-component `.ts`, `[ComponentName]Props` above the component, Python module/function names following `swingsage/`'s existing snake_case conventions.
-- **Decisions log:** does a spec deviation, interim shortcut, or threshold/contract change lack a corresponding `docs/DECISIONS.md` entry?
+- **Decisions log:** does a spec deviation, interim shortcut, or threshold/contract change lack a corresponding `docs/decisions/` entry?
 
 Use `references/coverage-axes.md` for the full 13-axis checklist. Treat it as a "did you remember to look here?" pass before drafting findings.
 
@@ -89,7 +89,7 @@ Each finding has six fields. Be strict — if you can't fill all six, it's not a
 ```
 Finding ID: C1 / H2 / M3 / L4   (severity + sequence)
 Axis: one of the 13 axes
-Source of truth: which docs/DECISIONS.md entry / rules file / kiosk.tsx export / doc URL justifies this finding
+Source of truth: which docs/decisions/ entry / rules file / kiosk.tsx export / doc URL justifies this finding
 Evidence: file:line citations
 Why it matters: one sentence on the consequence if unfixed
 Recommendation: what to do, at a level a Claude could execute
@@ -97,7 +97,7 @@ Recommendation: what to do, at a level a Claude could execute
 
 **Severity rubric:**
 - **Critical (C):** breaks a hard rule from root `CLAUDE.md` (e.g., a face-angle degree fabricated from video, a `tailwind.config.js` reintroduced in a v4 project, `lib/scoring.ts` reachable from a client bundle, a scoring threshold hardcoded outside `scoring_config.json`, the 49-keypoint order broken) — or a scoring check wired without verifying its raw-value direction (the D42 failure mode, repeated).
-- **High (H):** violates a `docs/DECISIONS.md` entry whose `Status:` is `ACTIVE` (or reintroduces something a `SUPERSEDED`/`NEGATIVE RESULT` entry already rejected), duplicates a shape already in `components/ui/kiosk.tsx`, re-runs `burnin.py` on a committed fixture without `--club-detector`, or presents a golden-snapshot pass as proof of correctness.
+- **High (H):** violates a `docs/decisions/` entry whose `Status:` is `ACTIVE` (or reintroduces something a `SUPERSEDED`/`NEGATIVE RESULT` entry already rejected), duplicates a shape already in `components/ui/kiosk.tsx`, re-runs `burnin.py` on a committed fixture without `--club-detector`, or presents a golden-snapshot pass as proof of correctness.
 - **Medium (M):** suboptimal placement, missing test for a load-bearing pure function, a missed Next.js 16 leverage opportunity, a confidence/handedness slip that doesn't change scoring output but would under different inputs.
 - **Low (L):** worth noting but won't hurt anything immediately — naming inconsistency, small duplication, a documentation gap.
 
@@ -127,7 +127,7 @@ If no — most phases touching only internal utilities, docs, or `scoring_config
 Before writing, ask yourself: do I actually understand this code well enough to recommend changes? If there's anything load-bearing where you're guessing — a scoring-config change you only half-verified against every fixture, an `analysis.json` contract change you're not fully sure stays backward-compatible with the player — surface it as an `Open Question` in the doc rather than recommending something you might be wrong about.
 
 Confidence levels for the front-matter:
-- **High** — I read the relevant files, cross-checked against `.claude/rules/*.md`/`docs/DECISIONS.md`, and I'd stake my reputation on these findings.
+- **High** — I read the relevant files, cross-checked against `.claude/rules/*.md`/`docs/decisions/`, and I'd stake my reputation on these findings.
 - **Medium** — solid on most findings; one or two have open questions documented.
 - **Low** — investigated but several uncertainties; user should review before executing. (If you're at Low across the board, consider asking the user clarifying questions before writing the doc.)
 
@@ -213,7 +213,7 @@ Brief each one with: "Investigate `<paths>` against these architectural axes —
 - Structural soundness: files >500 lines; circular imports; mixed concerns (a module doing I/O + geometry + scoring in one file)
 - Boundary violations: client components importing server-only modules; a pipeline stage reaching past the stage boundary described in the architecture spec (e.g. event detection reading club data that Stage 4 hasn't produced yet, violating the Phase 2→5 build order)
 
-Return format: bulleted list, grouped by axis. Cite `components/ui/kiosk.tsx` exports or `docs/DECISIONS.md` D-numbers when relevant. No prose. No recommendations — just findings."
+Return format: bulleted list, grouped by axis. Cite `components/ui/kiosk.tsx` exports or `docs/decisions/` D-numbers when relevant. No prose. No recommendations — just findings."
 
 ### Pattern C — Latest-leverage sweep (axis 13 — medium and large scope)
 
@@ -232,9 +232,9 @@ Return format: `<finding type>` — `<file:line>` — `<one-line description>`. 
 
 ### Pattern D — Decisions digest (any scope that plausibly intersects several D-numbers)
 
-`docs/DECISIONS.md` is a single long append-only file, not a per-domain folder — so this pattern is "search it," not "read several files." One `Explore` subagent greps `docs/DECISIONS.md` for the D-numbers relevant to the audit scope (by keyword: "club", "scoring", "confidence", "keypoint", "handedness", "frame sync", etc.) and returns a one-line digest of each match: number, one-line decision, and its `Status:` line verbatim — reporting `Status:` is not optional, since roughly a quarter of entries are `SUPERSEDED`/`NEGATIVE RESULT`/`HISTORICAL` and citing one of those as current would be wrong. Saves the main agent from loading the whole file just to find three relevant entries.
+`docs/decisions/` is a single long append-only file, not a per-domain folder — so this pattern is "search it," not "read several files." One `Explore` subagent greps `docs/decisions/` for the D-numbers relevant to the audit scope (by keyword: "club", "scoring", "confidence", "keypoint", "handedness", "frame sync", etc.) and returns a one-line digest of each match: number, one-line decision, and its `Status:` line verbatim — reporting `Status:` is not optional, since roughly a quarter of entries are `SUPERSEDED`/`NEGATIVE RESULT`/`HISTORICAL` and citing one of those as current would be wrong. Saves the main agent from loading the whole file just to find three relevant entries.
 
-Brief it with: "Grep `docs/DECISIONS.md` for entries matching `<keywords>`. For each match, return: `D<N>` — decides: `<one line>`. Status: `<verbatim Status: line>`. No prose."
+Brief it with: "Grep `docs/decisions/` for entries matching `<keywords>`. For each match, return: `D<N>` — decides: `<one line>`. Status: `<verbatim Status: line>`. No prose."
 
 ### Anti-patterns — when NOT to spawn
 
@@ -282,7 +282,7 @@ Only this report, at the very end. Do not narrate per-phase during the run.
 >
 > **Phases:** 3 of 3 complete.
 > **Files changed:** 9 total (4 + 3 + 2 across phases).
-> **Commits:** `<sha1>` Phase 1: move hardcoded rotation thresholds into scoring_config v3; `<sha2>` Phase 2: verify + wire ROT-04 raw-value direction; `<sha3>` Phase 3: conventions + DECISIONS.md entry.
+> **Commits:** `<sha1>` Phase 1: move hardcoded rotation thresholds into scoring_config v3; `<sha2>` Phase 2: verify + wire ROT-04 raw-value direction; `<sha3>` Phase 3: conventions + decisions/ entry.
 > **Verification:** `pnpm --filter web exec tsc --noEmit && pnpm --filter web lint` ✓, `pytest tests` (phases 1–2) ✓.
 > **Checkpoints:** `checkpoint-audit-<slug>-phase1-<ts>` before phase 1's scoring_config schema change.
 > **In-flight deviations & extra fixes:**
@@ -387,7 +387,7 @@ Spawn one `Explore` subagent (don't fan out unless the scope is unusually large 
 > 8. **Import paths:** `@/*` alias, no `../../../`.
 > 9. **`analysis.json` contract discipline** (only if the file reads/writes `analysis.json`, `coach_report.json`, or keypoint/metrics data): normalized 0–1 coordinates preserved; the 49-keypoint order untouched or correctly appended, never reordered; confidence truncated not rounded; handedness-resolved `lead_*`/`trail_*` fields used where the metric is handedness-sensitive, not raw camera-side `left_*`/`right_*`.
 > 10. **Scoring discipline** (only if the file touches `scoring_config/*.json` or `swingsage/scoring.py`): no threshold hardcoded outside the versioned config; if a new check was added, was its raw value verified — across all fixtures — to move in the direction the band assumes, before being trusted?
-> 11. **Decisions log:** does this diff contain a spec deviation, threshold change, or interim shortcut that `docs/DECISIONS.md` should record but doesn't yet?
+> 11. **Decisions log:** does this diff contain a spec deviation, threshold change, or interim shortcut that `docs/decisions/` should record but doesn't yet?
 > 12. **For new API routes specifically:** is external input validated defensively before use (no formal schema library is standardized in this project yet — don't invent a requirement that isn't real, but flag genuinely unvalidated input)? Is job/progress state written to the `jobs` Postgres table rather than held only in module memory?
 >
 > Return format — three groups:
@@ -419,7 +419,7 @@ Render the chat report in this six-section structure. **Much shorter than full-a
 
 > Checked against:
 > - **Scoring thresholds live in `scoring_config.json`, never hardcoded (root `CLAUDE.md`):** any new check's band must be data, not a literal in `scoring.py`.
-> - **"A check that scores well is not evidence it works" (the D42 incident, `docs/DECISIONS.md`):** a new check's raw value must be printed across every fixture and confirmed to move the direction the band assumes before it's trusted.
+> - **"A check that scores well is not evidence it works" (the D42 incident, `docs/decisions/`):** a new check's raw value must be printed across every fixture and confirmed to move the direction the band assumes before it's trusted.
 > - **Client/server boundary (`.claude/rules/nextjs.md`):** `lib/scoreDisplay.ts` is the client-safe half of the scoring split — it must stay free of `db/*`/Postgres imports.
 
 **4. Findings (from the subagent).** Three short groups — followed / issues / violations. Use the subagent's own bullets. Cap at ~8 total findings; if there are more, summarize the long tail as "+N more — see full subagent output above."
@@ -434,12 +434,12 @@ Render the chat report in this six-section structure. **Much shorter than full-a
 > - [`scoring.py:220`](services/analyzer/swingsage/scoring.py#L220) — one of the two threshold numbers is still a literal (`0.12`) rather than pulled from `v3.json`, inconsistent with the rest of the check
 >
 > ❌ Violations:
-> - No `docs/DECISIONS.md` entry for the new `HIP-05` check or its threshold choice — `CLAUDE.md` requires spec deviations and new scoring checks to be logged there; future readers (and future audits) have no record of why this band was chosen.
+> - No `docs/decisions/` entry for the new `HIP-05` check or its threshold choice — `CLAUDE.md` requires spec deviations and new scoring checks to be logged there; future readers (and future audits) have no record of why this band was chosen.
 
 **5. Suggested fixes.** 3–5 bullets, each tagged `Quick` / `Moderate`. Tie each fix to the finding above. Skip phase numbers — task audits don't have phases.
 
 > Suggested fixes:
-> - Add a `docs/DECISIONS.md` entry for `HIP-05` — what it measures, why the threshold, what fixtures it was checked against [Quick]
+> - Add a `docs/decisions/` entry for `HIP-05` — what it measures, why the threshold, what fixtures it was checked against [Quick]
 > - Move the `0.12` literal at [`scoring.py:220`](services/analyzer/swingsage/scoring.py#L220) into `v3.json` alongside the other threshold [Quick]
 > - Print `metrics.hip_sway`'s raw value across all fixtures and confirm the sign/direction the `HIP-05` band assumes actually holds before trusting the score [Moderate]
 
@@ -478,11 +478,11 @@ In all of those, the task-audit chat report is still useful (the user sees the h
 These are the things that, if violated, ruin the value of the skill:
 
 - **The audit does not edit code.** It only writes `.md` files in `.claude/audits/`. Code edits happen only in execution mode, after the user explicitly opts in.
-- **Citations are mandatory.** Every finding must point at a source of truth (a `docs/DECISIONS.md` D-number, a `.claude/rules/*.md` file, a `components/ui/kiosk.tsx` export, `scoring_config/COVERAGE.md`, or a Next.js/React doc URL). "Best practice" with no source is not a finding.
+- **Citations are mandatory.** Every finding must point at a source of truth (a `docs/decisions/` D-number, a `.claude/rules/*.md` file, a `components/ui/kiosk.tsx` export, `scoring_config/COVERAGE.md`, or a Next.js/React doc URL). "Best practice" with no source is not a finding.
 - **Tech debt introduced by the solve is mandatory.** Every audit doc has a "Tech debt introduced by this plan" section. If the answer is "none," say "None — recommendations are pure removal/consolidation, no new abstractions." Don't skip the section.
 - **Don't manufacture findings.** A clean audit ("0 critical, 0 high, 2 medium, 1 low") is a valid and useful result. Padding undermines trust.
 - **Don't recommend changes outside the audited scope.** If during a scoring audit you notice something broken in the player, note it as a "scope-adjacent observation" at the end of the overview, but don't draft phase work for it. Stay in scope.
-- **Be honest about `docs/DECISIONS.md` Status lines.** Never cite a `SUPERSEDED`/`NEGATIVE RESULT`/`HISTORICAL` entry as if it's current guidance — check the `Status:` line every time.
+- **Be honest about `docs/decisions/` Status lines.** Never cite a `SUPERSEDED`/`NEGATIVE RESULT`/`HISTORICAL` entry as if it's current guidance — check the `Status:` line every time.
 
 ## Output style for the user's final message
 
@@ -506,9 +506,9 @@ When you finish writing the audit and present the four options, give the user a 
 
 > Frames applied:
 > - **Scoring thresholds live in `scoring_config.json`, never hardcoded (root `CLAUDE.md`):** used to find two rotation checks reading a threshold as a Python literal instead of the versioned config.
-> - **"A check that scores well is not evidence it works" (the D42 incident, `docs/DECISIONS.md`):** used to catch a third check whose raw value has never been printed across all fixtures — it could be the same silent-zero failure mode v1's rotation checks hit.
+> - **"A check that scores well is not evidence it works" (the D42 incident, `docs/decisions/`):** used to catch a third check whose raw value has never been printed across all fixtures — it could be the same silent-zero failure mode v1's rotation checks hit.
 > - **Client/server boundary (`.claude/rules/nextjs.md`):** `lib/scoring.ts` (server, Postgres I/O) vs `lib/scoreDisplay.ts` (client-safe) — used to confirm no new code crossed that line.
-> - **49-keypoint append-only order (`docs/DECISIONS.md` D25, D47):** used to confirm the new metric didn't reorder or insert into the keypoint array.
+> - **49-keypoint append-only order (`docs/decisions/` D25, D47):** used to confirm the new metric didn't reorder or insert into the keypoint array.
 
 **4. Coverage table.** A markdown table — one row per axis. **This is the findings view AND the proposal view combined.** Don't write a parallel bullet list of findings or a separate "what I'm proposing" section — the table carries all of it. The `00-overview.md` doc has the long-form per-finding detail (evidence, citations, recommendations); the chat table is the curated view.
 
@@ -551,7 +551,7 @@ Same treatment for N/A rows (status `—`): put a one-line reason in the What it
 > | 9 | Reuse vs duplication | ✅ | New checks reuse the existing `Check` dataclass and `evaluate()` dispatch — no forked scoring loop. | — |
 > | 10 | Logical placement | ✅ | New checks live in `scoring.py` next to their siblings; config lives in `scoring_config/v3.json`, not inline. | — |
 > | 11 | Tech debt invoked | ✅ | Recommendations are pure config migration + verification — no new abstractions, dependencies, or transitional states. | — |
-> | 12 | Conventions, naming & `docs/DECISIONS.md` | 🚨 | No `docs/DECISIONS.md` entry exists for `ROT-04`/`ROT-07`'s addition or thresholds — root `CLAUDE.md` requires scoring changes to be logged. | Add one D-number entry covering both checks: what they measure, chosen thresholds, fixtures checked against. |
+> | 12 | Conventions, naming & `docs/decisions/` | 🚨 | No `docs/decisions/` entry exists for `ROT-04`/`ROT-07`'s addition or thresholds — root `CLAUDE.md` requires scoring changes to be logged. | Add one D-number entry covering both checks: what they measure, chosen thresholds, fixtures checked against. |
 > | 13 | Latest Next.js/React leverage & additional suggestions | — | None outside the above — this audit's scope had no player-facing code. | — |
 
 ### Cell-writing rules

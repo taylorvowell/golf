@@ -37,7 +37,7 @@ Copy the structure below into the new audit's `00-overview.md`, replacing `<brac
 - `.claude/ai-instructions/PROJECT_MAIN.md` (whichever section the target lives under)
 - ...
 
-**`docs/DECISIONS.md` entries referenced:**
+**`docs/decisions/` entries referenced:**
 - D<N> — <one-line decision> — Status: <verbatim Status line>
 - ...
 
@@ -61,7 +61,7 @@ Status: `✓` clean, `⚠` findings present, `–` not applicable to this audit.
 | 9  | Reuse vs. duplication                           |        |          |
 | 10 | Logical placement                               |        |          |
 | 11 | Tech debt invoked by the solve                  |        |          |
-| 12 | Conventions, naming & DECISIONS.md discipline   |        |          |
+| 12 | Conventions, naming & decisions/ discipline   |        |          |
 | 13 | Latest Next.js/React leverage & suggestions     |        |          |
 
 ## Findings
@@ -73,7 +73,7 @@ Listed by severity. Each finding has a stable ID (C1, H1, M1, L1, ...) that phas
 #### C1 — <short title>
 
 - **Axis:** <#5 Scoring-config correctness>
-- **Source of truth:** <a docs/DECISIONS.md entry / .claude/rules/*.md / kiosk.tsx export / PROJECT_MAIN.md section>
+- **Source of truth:** <a docs/decisions/ entry / .claude/rules/*.md / kiosk.tsx export / PROJECT_MAIN.md section>
 - **Evidence:**
   - [path/to/file.py:42-58](path/to/file.py#L42-L58) — <what is there>
   - [path/to/other.ts:120](path/to/other.ts#L120) — <what is there>
@@ -221,7 +221,7 @@ Stop and ask the user **only** for these. Everything else, adapt and continue.
 
 ## References
 
-- `docs/DECISIONS.md` D<N> — <title> — <one-line relevance>
+- `docs/decisions/` D<N> — <title> — <one-line relevance>
 - `.claude/rules/<file>.md` — <one-line relevance>
 - Next.js / React docs — <URL> — <one-line relevance>
 - ...

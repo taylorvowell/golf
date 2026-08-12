@@ -45,7 +45,7 @@ describing the same objects by hand. Drift is not a risk here, it is a certainty
 - `services/analyzer/swingsage/` — schema emission/validation only, no pipeline logic
 - `apps/web/src/app/api/**` — versioned routing
 - `.github/workflows/` — the drift check
-- `docs/ARCHITECTURE.md`, `docs/DECISIONS.md`
+- `docs/ARCHITECTURE.md`, `docs/decisions/`
 
 ## Steps
 
@@ -74,7 +74,7 @@ describing the same objects by hand. Drift is not a risk here, it is a certainty
 8. **Decide and document what happens to stored artifacts on a pipeline upgrade** — re-analyse
    on read, lazily migrate, or serve as-is. §38 forbids unnecessary reprocessing, so "re-run
    everything" is not automatically available.
-9. Record the versioning and compatibility policy in `docs/DECISIONS.md`.
+9. Record the versioning and compatibility policy in `docs/decisions/`.
 
 ## Quality Standards
 
@@ -109,7 +109,7 @@ is rejected by analyzer-side validation.
 - [ ] API routes are versioned, with a written deprecation policy.
 - [ ] Additive-only `schema_version` evolution is test-enforced.
 - [ ] Minimum-supported-client / forced-upgrade path implemented end to end.
-- [ ] Policy recorded in `docs/DECISIONS.md`.
+- [ ] Policy recorded in `docs/decisions/`.
 
 ## Notes
 

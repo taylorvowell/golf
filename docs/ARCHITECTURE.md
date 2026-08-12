@@ -1,7 +1,7 @@
 # Architecture
 
 The target system for [`PROJECT_MAIN.md`](../.claude/ai-instructions/PROJECT_MAIN.md), decided in
-spine step 01. Reasoning for each choice is in [`DECISIONS.md`](DECISIONS.md) D5–D17.
+spine step 01. Reasoning for each choice is in [`decisions/`](decisions/) D5–D17.
 
 **Almost none of this is built yet.** [`CURRENT-STATE.md`](CURRENT-STATE.md) is what exists —
 a Python analyzer and a desktop web player on local Postgres and local disk. This file describes

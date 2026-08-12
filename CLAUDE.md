@@ -12,6 +12,8 @@ Guidance for Claude Code working in this repository.
 | [`.claude/ROADMAP.md`](.claude/ROADMAP.md) | The plan across all tracks (derived — never hand-edit). Source of truth for *what is next*. |
 | [`docs/RUNBOOK.md`](docs/RUNBOOK.md) | How to run and test it — desktop, Android phone over LAN, analyzer, tests. Source of truth for *how to start it*. |
 | [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md) | **The machine, the devices, the services.** Device identifiers, ports, project refs, client ids, and the machine faults that have already cost time. Source of truth for *what the running system is*. Live state comes from `node scripts/env-probe.mjs`, which runs at session start. |
+| [`docs/decisions/`](docs/decisions/) | **What we currently do**, present tense, by domain, edited in place. Source of truth for *the rules*. `ARCHIVE-numbered.md` is frozen provenance — cite it for *why*, never read it for *what is true*. |
+| [`docs/HANDOFF.md`](docs/HANDOFF.md) | **What needs Taylor, and what already got him.** Source of truth for *the asks*. Its open rows are printed by the session-start probe. |
 
 **The gap between the first two is large and deliberate.** SwingSage today is a working
 proof of concept of the analysis engine — a Python CV pipeline plus a desktop web player,
@@ -22,9 +24,14 @@ exists, and do not let the gap narrow silently in prose.
 
 Everything else is supporting reference: [`docs/GLOSSARY.md`](docs/GLOSSARY.md) (coaching term →
 measured field), [`docs/METRICS.md`](docs/METRICS.md) (every metric currently emitted),
-[`docs/DECISIONS.md`](docs/DECISIONS.md) (decisions taken from 2026-08-08 forward),
 [`services/analyzer/scoring_config/COVERAGE.md`](services/analyzer/scoring_config/COVERAGE.md)
 (which scoring checks are wired vs. deferred).
+
+**Each of the seven owns exactly one question, and duplication between them is the bug.** A fact
+written in two places drifts, and the copy that is wrong is the one someone reads. Before writing
+a fact down, decide which question it answers — *what to build / what is real / what is missing /
+what is next / how to start it / what the running system is / the rules / the asks* — and put it
+in that file only.
 
 ## Non-Negotiable Constraints
 
@@ -64,7 +71,7 @@ Decisions already made, not open questions. They override normal judgment calls.
 - **Coach access to golfer data is a data-access boundary** (row-level security), not a UI
   check. A golfer controls the relationship and can end it.
 - **Infrastructure decisions target production scale, not MVP shortcuts.** Where a shortcut
-  offers itself, default to the scale-ready option and log the deviation in `docs/DECISIONS.md`.
+  offers itself, default to the scale-ready option and log the deviation in `docs/decisions/`.
   Building the interim version is the debt this rule exists to avoid.
 
 ## The analysis engine — the parts that span files
@@ -160,7 +167,7 @@ and the flag moves forward as phases complete. Currently: **`platform-foundation
 
 Never advance without Verification passing. Never modify a step's `Steps` section in place —
 append a note explaining why. Never edit any `_STATUS.json`/`_PROGRESS.md` directly; route
-through `progress-tracker`. Decisions made while running a track go in `docs/DECISIONS.md` as a
+through `progress-tracker`. Decisions made while running a track go in `docs/decisions/` as a
 numbered entry, never a separate per-domain register.
 
 ## Commands
@@ -233,12 +240,12 @@ looked healthy and were wrong. Build the debug view when the work starts, not af
 - **Autonomous execution, no approval gates.** Decide with best judgement and proceed. Do not
   end a turn to ask "shall I continue?" — batch reporting until there is substantial progress
   to show. Execute `human-review-required` steps rather than stopping at them, recording the
-  decision and rationale in `docs/DECISIONS.md` and the track's `_PROGRESS.md`. A question is
+  decision and rationale in `docs/decisions/` and the track's `_PROGRESS.md`. A question is
   warranted only when proceeding under any assumption would be unsafe, or would waste
   significant work if wrong.
 - **Standing authorizations — do NOT ask about these. Decide, log, continue.**
   - **Dependencies.** Adding a mainstream library is tactical. Pick it, record why in
-    `DECISIONS.md`, move on. Only a *vendor* choice (a paid service, a data processor, anything
+    `decisions/`, move on. Only a *vendor* choice (a paid service, a data processor, anything
     holding user data) is strategic.
   - **UX and product defaults.** Sign-in method, control layout, wording, which of two reasonable
     designs — decide on the product's stated principles and record it. Presenting two options and
@@ -249,6 +256,21 @@ looked healthy and were wrong. Build the debug view when the work starts, not af
 - **Do stop for: money, hardware, credentials, and irreversibility.** Spending, buying a device,
   anything needing an interactive login or a dashboard setting, deleting user data, or a
   production deploy. These are the only routine interrupts.
+- **Every ask for Taylor is a row in [`docs/HANDOFF.md`](docs/HANDOFF.md) — never a sentence in a
+  reply.** The probe prints its open rows at session start, so the outstanding list is already in
+  context before the first tool call.
+  - **Never ask for something that is not an `OPEN` row.** If the ask is not a row, add the row
+    first — the act of adding it is what forces the check for whether it is already `DONE`.
+  - **Never re-ask for a `DONE` row.** This has happened: Claude sent Taylor to the Google Cloud
+    Console to create an OAuth client he had created days earlier, which was recorded in
+    `ENVIRONMENT.md` the whole time. The register exists because that fact was written down and
+    still not read.
+  - **When Taylor says he did something, mark the row `DONE` in the same turn.** A fact confirmed
+    in chat and left in chat is a fact that gets asked for again.
+- **Before naming a credential, id, port, package, device or vendor setting — read
+  [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md).** Not grep it for one string; read the section.
+  It is the file the session-start probe explicitly points at, and it already holds most of what
+  gets re-derived.
 - **Checkpoint at feature boundaries, not at decisions.** Run to the end of a step, or to the
   point where something is genuinely testable by hand — then stop and say so. Do not stop
   mid-step to confirm an approach.
@@ -277,17 +299,42 @@ looked healthy and were wrong. Build the debug view when the work starts, not af
   at session start alongside the probe, so a fact recorded anywhere else will be re-derived. If
   the fact is *live* (an address, a pid, whether a service is up), teach
   `scripts/env-probe.mjs` to discover it instead of writing it down; a recorded live fact is a
-  stale fact. Product decisions still go in `docs/DECISIONS.md`, and how-to-run-it still goes in
+  stale fact. Product decisions still go in `docs/decisions/`, and how-to-run-it still goes in
   `docs/RUNBOOK.md`.
 - **Never make Taylor look something up.** Put the exact commands and numbers in the reply, run
   them yourself, and cite a doc only as provenance — never as "go read this". A hand-off is for a
   physical device interaction, a credential, a dashboard, a spend, or a judgement call.
 
+## Documentation discipline — before ending a turn
+
+On any non-trivial change, do this *before* writing the final response. It is four checks, and
+skipping them is how a fact ends up living only in a closed chat window.
+
+1. **A decision was made** (a dependency, a pattern, a vendor, a threshold, a "we're going to do
+   X") → add or **edit in place** the entry in the right `docs/decisions/<domain>.md`. Present
+   tense, current state only, no dates, no alternatives, no history. If it changes an existing
+   entry, **edit that entry** — never add a second one saying "previously we…". Rationale worth
+   keeping goes in the frozen `ARCHIVE-numbered.md`, not the register.
+2. **A fact about the machine, a device, an account or a vendor setting arrived** → it goes in
+   `docs/ENVIRONMENT.md` in the same session. If the fact is *live* — an address, a pid, whether
+   a service is up — teach `scripts/env-probe.mjs` to discover it instead; a recorded live fact
+   is a stale fact.
+3. **Something now needs Taylor, or Taylor said he did something** → add or update the row in
+   `docs/HANDOFF.md`.
+4. **A procedure was created or learned** → `docs/RUNBOOK.md`. **`CLAUDE.md` is now wrong** →
+   fix it.
+
+Then, at the very end of the response, state in one line what was documented — or explicitly
+*"no documentation needed"* with a short reason. Not a section, one line.
+
+**Not worth documenting:** trivial fixes, cosmetics, how a framework works (it has its own docs),
+or a narration of the steps taken — the code and the commit are that.
+
 ## Replying
 
 **Way less words. Straight to the point.** Lead with the answer or the action; no preamble,
 no closing summary, no "what this means" section. A few bullets or one short table — not both.
-State *what* changed and *where*; the *why* goes in code comments or `docs/DECISIONS.md`, not in
+State *what* changed and *where*; the *why* goes in code comments or `docs/decisions/`, not in
 the reply. Don't explain reasoning unless asked, don't recap rejected options, don't restate what
 was already said. A finding worth flagging is one line, not a section.
 
@@ -306,7 +353,7 @@ is almost never one of those; run it. Long jobs go in the background rather than
   subset and no public beta to iterate in, so phases are ordered by **dependency and risk
   retirement, never by value-delivery order** — nothing ships before everything ships. Launch
   scope and the single permitted cut candidate are declared in `.claude/ROADMAP.json`'s `launch`
-  block. See `docs/DECISIONS.md` D4.
+  block. See `docs/decisions/` D4.
 - **Correctness over demoability.** Do not trade a durable design for something visible sooner,
   and never propose "we could show something earlier" as a reason to reorder or shrink work.
   The Platform Foundation phase deliberately delivers nothing a user can see: API versioning,
@@ -320,6 +367,6 @@ is almost never one of those; run it. Long jobs go in the background rather than
   deliberately, never blindly — updating a golden is the moment you decide the new numbers are
   better, so look at them.
 - **Prefer the documented fallback when spec and reality conflict**, and log the deviation in
-  `docs/DECISIONS.md` so the plan stays truthful.
+  `docs/decisions/` so the plan stays truthful.
 - **Name what is deferred; never silently carry debt.** A deferred scoring check that abstains
   is better than a confident wrong number — that principle generalizes.

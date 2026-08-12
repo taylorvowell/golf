@@ -122,7 +122,7 @@
           "track": "platform-foundation"
         }
       ],
-      "blockedBy": "docs/DECISIONS.md D18 \u2014 worker host undecided"
+      "blockedBy": "docs/decisions/ARCHIVE-numbered.md D18 \u2014 worker host undecided"
     },
     {
       "id": "media-pipeline",
@@ -669,7 +669,7 @@
       "spine": false,
       "lifecycle": "future",
       "phase": "future",
-      "deferredBy": "docs/DECISIONS.md D2",
+      "deferredBy": "docs/decisions/ARCHIVE-numbered.md D2",
       "goal": "FUTURE STATE (D2). Find the actual golf swing inside a long recording \u2014 rejecting walking in, setup, practice swings and walking away \u2014 and let the golfer choose when several are detected. Not the existing 8-event detection, which assumes a clip already contains exactly one swing. Until this ships, in-app-capture must provide a manual trim/select fallback.",
       "statusFile": ".claude/feature-tracks/swing-isolation/_STATUS.json",
       "specRefs": [

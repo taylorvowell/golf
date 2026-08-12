@@ -38,7 +38,7 @@ The blocker is something you can resolve right now with code or shell commands, 
 - Anything requiring a design choice (which package to add, where to put a file, which pattern to use).
 - Anything touching credentials, env vars, or secrets.
 - Anything that requires modifying a step file's Steps or Verification.
-- Fixes that require changing CLAUDE.md, `.claude/ai-instructions/PROJECT_MAIN.md`, or `docs/DECISIONS.md`.
+- Fixes that require changing CLAUDE.md, `.claude/ai-instructions/PROJECT_MAIN.md`, or `docs/decisions/`.
 
 **Attempt cap:** Two attempts. If the same command fails twice with the same root cause after AUTONOMOUS-FIX intervention, reclassify — usually to ARCHITECTURAL-DECISION (the "obvious" fix isn't, and there's a real ambiguity hiding) or USER-ACTION-NEEDED.
 
@@ -61,7 +61,7 @@ The blocker requires something only the user can provide: a credential, a config
 
 The blocker is a STRATEGIC choice the project docs don't cover, and picking wrong has lasting consequences beyond the code itself.
 
-**The tactical filter — apply it FIRST. Most in-step design choices are not blockers.** A choice is **tactical** when existing conventions, `docs/DECISIONS.md`, CLAUDE.md, or an established pattern in the repo constrain it to one best-practices answer: where a file lives, which existing pattern or primitive to apply, naming inside an established domain, a schema detail that follows conventions already in use. Decide it autonomously — pick the correct option per the project's Non-Negotiable Constraints, record the pick (the step's `_PROGRESS.md` note; a new `docs/DECISIONS.md` entry if it's durable enough to matter later), and keep the run moving. Do not stop, do not ask.
+**The tactical filter — apply it FIRST. Most in-step design choices are not blockers.** A choice is **tactical** when existing conventions, `docs/decisions/`, CLAUDE.md, or an established pattern in the repo constrain it to one best-practices answer: where a file lives, which existing pattern or primitive to apply, naming inside an established domain, a schema detail that follows conventions already in use. Decide it autonomously — pick the correct option per the project's Non-Negotiable Constraints, record the pick (the step's `_PROGRESS.md` note; a new `docs/decisions/` entry if it's durable enough to matter later), and keep the run moving. Do not stop, do not ask.
 
 **Strategic (escalate) includes:**
 - A new dependency, vendor, or model swap (a different pose model, a different club detector architecture, a new hosting provider).

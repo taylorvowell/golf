@@ -11,7 +11,7 @@ import { createClient } from "@/lib/supabase/browser";
  * leave the app, open mail, tap a link, hope the right app reopens — and on mobile that is the
  * single biggest drop-off in onboarding, with deep links that break and links that open in the
  * wrong browser. A six-digit code is the same email and the same Supabase call, except the user
- * never leaves the screen they started on. See docs/DECISIONS.md D25.
+ * never leaves the screen they started on. See docs/decisions/ARCHIVE-numbered.md D25.
  *
  * There is no sign-up flow because there is no such thing here: `signInWithOtp` creates the
  * account on first use. One screen, one field, no password to choose or forget.

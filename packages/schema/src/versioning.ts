@@ -5,7 +5,7 @@
  * whether to show an upgrade screen. Two implementations of the same comparison is how the two
  * end up disagreeing about who is too old.
  *
- * The policy itself is recorded in `docs/DECISIONS.md` D41. In short:
+ * The policy itself is recorded in `docs/decisions/` D41. In short:
  *
  *   * routes live under an explicit `/api/<version>/` prefix, and NOTHING is served unversioned
  *   * inside a version, bodies only ever gain fields

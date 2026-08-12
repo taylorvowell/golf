@@ -189,7 +189,7 @@ path, and the desktop-first workspace layout. These are proof-of-concept scaffol
 
 Three things in `PROJECT_MAIN.md` could not be built as literally stated. Two are now closed.
 
-1. **Stripe vs. app-store billing (§30) — RESOLVED 2026-08-08 (`docs/DECISIONS.md` D1).**
+1. **Stripe vs. app-store billing (§30) — RESOLVED 2026-08-08 (`docs/decisions/` D1).**
    The doc required Stripe *and* compatibility with iOS/Android distribution rules, which both
    mandate native in-app purchase for digital subscriptions. Resolved in favour of the
    distribution requirement: **billing is StoreKit and Google Play Billing, and Stripe is
@@ -197,7 +197,7 @@ Three things in `PROJECT_MAIN.md` could not be built as literally stated. Two ar
    validation, and stays authoritative on our server so admin-granted access works without a
    store transaction. §30 and §39 carry amendment notes.
 
-2. **"Automatic swing detection" (§11) — RESOLVED as future state (`docs/DECISIONS.md` D2).**
+2. **"Automatic swing detection" (§11) — RESOLVED as future state (`docs/decisions/` D2).**
    §11 segments a swing out of arbitrary footage; the existing event detection locates 8 events
    inside a clip already known to be a swing. These are different problems, and the second does
    not satisfy the first. §11 is accepted as a future-state feature and moved to the Future
@@ -227,4 +227,4 @@ after the first store release.
 
 The roadmap was restructured accordingly: the spine grew to 10 steps and the foundation phase
 gained four parallel tracks. Full finding-by-finding reasoning and consequences are in
-[`DECISIONS.md`](DECISIONS.md) **D3**.
+[`decisions/`](decisions/) **D3**.

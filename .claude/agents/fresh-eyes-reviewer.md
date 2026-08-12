@@ -23,7 +23,7 @@ Check, in priority order:
    - Keypoint-array code that reorders the 49-entry layout, inserts something between the derived and measured blocks, or hand-slices instead of calling `skeleton.strip_derived()` (root `CLAUDE.md`, the `analysis.json` contract).
    - Confidence values compared against a threshold after rounding instead of truncation, or a client that doesn't re-apply the same `MIN_CONF` gate the analyzer used (root `CLAUDE.md`, the `analysis.json` contract).
    - A metric or UI label that reads camera-relative `left_*`/`right_*` where a handedness-resolved `lead_*`/`trail_*` field (per `metrics.sides`) is what the spec requires — mirroring breaks for left-handed golfers otherwise (root `CLAUDE.md`, handedness constraint).
-   - A spec deviation, interim shortcut, or threshold/contract change with no corresponding `docs/DECISIONS.md` entry.
+   - A spec deviation, interim shortcut, or threshold/contract change with no corresponding `docs/decisions/` entry.
    - `burnin.py` re-run against a committed fixture without `--club-detector runs/clubhead/weights/best.pt` — silently regenerates the weaker classical-only trace and overwrites the better one already on disk (root `CLAUDE.md`).
    - A golden-snapshot test (`test_stages.py`) update or a green run presented as proof of correctness — golden snapshots prove nothing *changed*, never that it's *right*; only `test_hand_labeled.py` does that, and it's currently skipped project-wide (`.claude/rules/testing.md`).
 

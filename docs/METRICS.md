@@ -896,7 +896,7 @@ typical swing is closer to **14** than to 28.
 | [services/analyzer/swingsage/scoring.py](../services/analyzer/swingsage/scoring.py) | Band scoring, gating, Leverage, aggregation, bands |
 | [services/analyzer/scoring_config/COVERAGE.md](../services/analyzer/scoring_config/COVERAGE.md) | Exactly which `criteria.md` rows are wired vs deferred vs unbuilt, and why |
 | [docs/GLOSSARY.md](GLOSSARY.md) | The vocabulary — angle conventions §6–7, lead/trail, the P-system |
-| [docs/DECISIONS.md](DECISIONS.md) | D20 (no club position-error metric), D26 (confidence rescale), D27 (spine curvature limits), D28 (address-hold medians), D42 (the "a check that scores well isn't evidence" rule), D49 (Top is a hand landmark) |
+| [docs/decisions/](decisions/) | D20 (no club position-error metric), D26 (confidence rescale), D27 (spine curvature limits), D28 (address-hold medians), D42 (the "a check that scores well isn't evidence" rule), D49 (Top is a hand landmark) |
 | `apps/web/src/components/views/` | What is actually rendered: `OverviewView`, `CoachView`, `AdvancedView`, `CriteriaBreakdown`, `CheckpointAngles` |
 
 **Regenerate this document** whenever `scoring_config/build_config.py`'s `CHECKS` table or

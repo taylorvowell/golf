@@ -60,7 +60,7 @@ describe("API route authentication", () => {
 
   it("serves nothing outside an explicit API version", () => {
     // An unversioned path is a promise nobody meant to make. Once a build in a store is calling
-    // it there is no way to take it back — see docs/DECISIONS.md D41.
+    // it there is no way to take it back — see docs/decisions/ARCHIVE-numbered.md D41.
     const unversioned = files.filter((f) => !/^v\d+\//.test(routeId(f))).map(routeId);
     expect(
       unversioned,

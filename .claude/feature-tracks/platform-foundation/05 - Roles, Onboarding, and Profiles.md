@@ -51,7 +51,7 @@ the golfer.
 6. Separate public from private profile fields explicitly, so the coach directory (§23) and
    §34.1's "what appears publicly" question have an answer already in the schema.
 7. Answer the §43 product questions this step forces — minimum supported age, whether age is
-   exact or a range, which fields are required — and record them in `docs/DECISIONS.md`.
+   exact or a range, which fields are required — and record them in `docs/decisions/`.
 
 ## Quality Standards
 
@@ -79,7 +79,7 @@ Plus a test that a golfer-only account cannot reach a coach-role endpoint.
 - [ ] Goals are structured and editable.
 - [ ] Public/private field split is explicit in the schema.
 - [ ] Role enforcement is test-proven server-side.
-- [ ] The §43 questions this step forced are answered in `docs/DECISIONS.md`.
+- [ ] The §43 questions this step forced are answered in `docs/decisions/`.
 
 ## Notes
 

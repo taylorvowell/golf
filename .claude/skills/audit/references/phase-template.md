@@ -82,11 +82,11 @@ def check_rot_04(metrics: Metrics, config: ScoringConfig) -> CheckResult:
 **Files:**
 - [services/analyzer/scripts/checkangles.py](services/analyzer/scripts/checkangles.py) or an ad-hoc print added temporarily to `scoring.py`
 
-**Change:** Print `metrics.hip_turn_from_address`'s raw value at the checkpoint for every fixture in `out/`. Confirm the value moves in the direction `ROT-04`'s band assumes (increases as the check should score higher). If it's inverted — this is exactly the failure mode `docs/DECISIONS.md`'s D42 entry documents for v1's rotation checks — fix the comparison direction, not the score.
+**Change:** Print `metrics.hip_turn_from_address`'s raw value at the checkpoint for every fixture in `out/`. Confirm the value moves in the direction `ROT-04`'s band assumes (increases as the check should score higher). If it's inverted — this is exactly the failure mode `docs/decisions/`'s D42 entry documents for v1's rotation checks — fix the comparison direction, not the score.
 
-### Task 4 — Add a `docs/DECISIONS.md` entry
+### Task 4 — Add a `docs/decisions/` entry
 
-**File:** [docs/DECISIONS.md](docs/DECISIONS.md)
+**File:** [docs/decisions/](docs/decisions/)
 
 **Change:** Append a new D-number entry (never renumber or insert) documenting: what `ROT-04` measures, why `0.12`, which fixtures its direction was verified against, and its `Status: ACTIVE`.
 
@@ -105,8 +105,8 @@ pnpm --filter web lint
 # The hardcoded literal is actually gone
 ! grep -q "0.12" services/analyzer/swingsage/scoring.py
 
-# docs/DECISIONS.md has a new entry for this check
-grep -q "ROT-04" docs/DECISIONS.md
+# docs/decisions/ has a new entry for this check
+grep -q "ROT-04" docs/decisions/
 ```
 
 Note what a passing `pytest tests` run does and doesn't prove: it confirms the deterministic stages still produce the same golden-snapshot output and that the contract invariants (49-keypoint order, truncated confidence, etc.) still hold. It does **not** prove `ROT-04`'s band is correct — that's what Task 3's fixture check is for, and hand-labeled ground truth doesn't exist yet to prove it beyond that. If this phase's Goal implies "the check is now correct," Verification must show the fixture-direction check's output, not just a green pytest run.
@@ -117,7 +117,7 @@ This project has no Vitest/Playwright suite (`.claude/rules/testing.md`) — the
 
 > **Manual check:** Run `pnpm dev`, open a swing page, and confirm `<specific thing to look at>` renders/behaves as expected. This is an Escalation Trigger per the overview's Execution Instructions — execution pauses for user confirmation before this phase is marked complete.
 
-Use Manual checks sparingly — only for phases that actually touch rendered/interactive output. A phase that only moves a threshold into config, or only adds a `docs/DECISIONS.md` entry, needs no Manual check; typecheck/lint/pytest alone is sufficient Verification for those.
+Use Manual checks sparingly — only for phases that actually touch rendered/interactive output. A phase that only moves a threshold into config, or only adds a `docs/decisions/` entry, needs no Manual check; typecheck/lint/pytest alone is sufficient Verification for those.
 
 ## Completion criteria
 

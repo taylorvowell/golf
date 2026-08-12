@@ -9,7 +9,7 @@ selection, a cross-system ownership redesign, or anything big enough to reshape 
 runs the full fan-out:
 
 1. **Research** — parallel agents, each owning one library/model/topic, grounded in the
-   platform's actual `DECISIONS.md`/roadmap/`instructions/` docs, returning structured
+   platform's actual `decisions/`/roadmap/`instructions/` docs, returning structured
    findings from current docs/web (not memory).
 2. **Debate** — agents steelman opposing stances (e.g. train-our-own-detector vs a hosted
    inference API), each conceding where the other is right.
@@ -24,7 +24,7 @@ Everything else matches `/architect`: always stress-test the committed plan, lan
 recommendation with the road not taken and a "gaps you didn't ask about" list, classify the
 path forward and gate any handoff on the user's acceptance, record the full result to
 `.claude/architecture/`, and offer to record the decision as a new numbered
-`docs/DECISIONS.md` entry once accepted.
+`docs/decisions/` entry once accepted.
 
 Examples:
 - `/architect-deep should we keep building our own club-head detector or adopt a hosted

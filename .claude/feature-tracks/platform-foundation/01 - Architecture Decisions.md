@@ -22,7 +22,7 @@ One of these is genuinely hard and must not be waved through:
   smooth overlay rendering on mid-range Android fails the product, not just the code.
 
 **Already decided — do not reopen:** billing is native in-app purchase and Stripe is dropped
-(`docs/DECISIONS.md` D1), and automatic swing detection is deferred to a future phase
+(`docs/decisions/` D1), and automatic swing detection is deferred to a future phase
 (D2). Both were live conflicts when this file was written and are now closed.
 
 ## Dependencies
@@ -92,7 +92,7 @@ Sources: [VisionCamera formats](https://react-native-vision-camera.com/docs/guid
 
 ## Files & Areas Touched
 
-- `docs/DECISIONS.md` — one numbered entry per decision below (this is the real deliverable)
+- `docs/decisions/` — one numbered entry per decision below (this is the real deliverable)
 - `docs/ARCHITECTURE.md` — new: the resulting system diagram and component boundaries
 - `apps/mobile/` — created only far enough to prove the framework choice on a real device
 - `infra/` — created only far enough to hold environment/topology declarations
@@ -163,14 +163,14 @@ Sources: [VisionCamera formats](https://react-native-vision-camera.com/docs/guid
 10. **Write `docs/ARCHITECTURE.md`** — the component map, the boundaries between mobile client,
     API, analyzer worker, storage and database, and the request/data flow for the one path that
     matters most: a golfer records a swing and sees its analysis.
-11. **Append one `docs/DECISIONS.md` entry per decision above**, in the file's own format, each
+11. **Append one `docs/decisions/` entry per decision above**, in the file's own format, each
     with Context / Decision / Alternatives / Consequences and a `Status:` line.
 12. **Surface anything §39 forces that conflicts with a non-negotiable capability.** Do not
     quietly absorb it.
 
 ## Quality Standards
 
-- Every decision above appears in `docs/DECISIONS.md` with a real *Alternatives* section. An
+- Every decision above appears in `docs/decisions/` with a real *Alternatives* section. An
   entry with no alternative considered is not a decision, it is a default.
 - No decision is recorded on documentation alone where a measurement was possible — the client
   choice in particular is proven on hardware in step 02, and this file is amended if the spike
@@ -199,7 +199,7 @@ Report to the user (do not block on it — decide, log, proceed):
 
 ## Definition of Done
 
-- [ ] `docs/DECISIONS.md` contains a numbered, `Status:`-marked entry for each of: mobile
+- [ ] `docs/decisions/` contains a numbered, `Status:`-marked entry for each of: mobile
       client, role of the existing web app, data platform + RLS boundary, media storage and
       transport, queue and worker topology, secrets/environments, the IAP entitlement seam,
       AI provider seam, offline model, mobile release pipeline, SLO targets, AI

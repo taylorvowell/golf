@@ -25,7 +25,7 @@ if (!APP_DATABASE_URL) {
   throw new Error(
     "APP_DATABASE_URL is not set. This is the NON-SUPERUSER connection the app serves requests " +
       "on, and it is required — falling back to DATABASE_URL would silently restore the " +
-      "superuser connection that made row-level security inert (docs/DECISIONS.md D26).\n" +
+      "superuser connection that made row-level security inert (docs/decisions/ARCHIVE-numbered.md D26).\n" +
       "Local setup: `docker compose up -d` then `pnpm --filter web db:migrate` (which runs " +
       "db:app-role), then add to apps/web/.env:\n" +
       "  APP_DATABASE_URL=postgres://swingsage_app:swingsage_app@127.0.0.1:5433/swingsage",
@@ -104,7 +104,7 @@ async function assertNotPrivileged(): Promise<void> {
     throw new Error(
       `APP_DATABASE_URL connects as "${row.role_name}" and that role cannot serve requests: ` +
         `${faults.join("; ")}. Point it at swingsage_app (migration 0008) — see ` +
-        "docs/DECISIONS.md D26 and D42.",
+        "docs/decisions/ARCHIVE-numbered.md D26 and D42.",
     );
   }
 }

@@ -56,7 +56,7 @@ Spawn ONE `fresh-eyes-reviewer` agent (if `.claude/agents/fresh-eyes-reviewer.md
 
 If the agent type is unavailable, fall back to a general-purpose subagent briefed with this inline fresh-eyes checklist (fan out only if scope >8 files):
 
-- Does the diff follow this repo's established patterns — file placement (`swingsage/` for pipeline stages, `lib/` vs colocated for web helpers), naming inside an existing catalogue (`lib/overlays.ts`, `metrics.angle_fields`), and does it cite/consult `docs/DECISIONS.md` where relevant rather than re-deciding something already settled?
+- Does the diff follow this repo's established patterns — file placement (`swingsage/` for pipeline stages, `lib/` vs colocated for web helpers), naming inside an existing catalogue (`lib/overlays.ts`, `metrics.angle_fields`), and does it cite/consult `docs/decisions/` where relevant rather than re-deciding something already settled?
 - Any correctness red flags an author's own eyes would miss — e.g. handedness not threaded through new angle math, a new metric that doesn't carry a confidence, a new scoring check whose raw value was never printed across fixtures (CLAUDE.md's "a check that scores well is not evidence it works" trap).
 - Anything duplicated that already exists (a second angle-drawing helper, a second overlay-smoothing method) instead of reusing the established one.
 - Report as ❌ oracle-breaking / ⚠️ convention-judgment / ✅ followed, same taxonomy as a fresh-eyes review anywhere else in this system.
@@ -93,7 +93,7 @@ For the **judgment findings**, apply the safe-judgment-auto rule:
 When the oracle is green:
 
 - Invoke `/commit` for the healed unit (conventional message, e.g. `fix(scoring): heal type + lint on scoring config loader`).
-- **Append a telemetry entry to `.claude/heal-log.md`** (format below). This is load-bearing — it's how recurring mistakes get spotted and promoted into lint rules or a `docs/DECISIONS.md` entry.
+- **Append a telemetry entry to `.claude/heal-log.md`** (format below). This is load-bearing — it's how recurring mistakes get spotted and promoted into lint rules or a `docs/decisions/` entry.
 - Report concisely (format below). No per-attempt chatter during the loop.
 
 ### 6. Escalate (the rare case)

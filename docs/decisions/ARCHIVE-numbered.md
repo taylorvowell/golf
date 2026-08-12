@@ -1,12 +1,22 @@
-# Decisions
+# Decisions — ARCHIVE (D1–D44), frozen 2026-08-12
+
+> ## ⚠️ FROZEN. This is provenance, not current state.
+>
+> **Do not append to this file, and do not read it to find out what is true today.** Five of the
+> 44 entries below are superseded by later ones (D25→D31, D26→D42, D9→D18, D34→D35→D36, D38→D39)
+> and telling which requires reading all 44 in order. That is exactly what nobody does.
+>
+> **Current state is [the register](README.md)** — present tense, by domain, edited in place.
+> Come here only for the *why*: the context, the rejected alternatives and the negative results,
+> which the register deliberately omits. D-numbers stay valid as citations forever.
 
 Append-only log of decisions taken while building toward
-[`.claude/ai-instructions/PROJECT_MAIN.md`](../.claude/ai-instructions/PROJECT_MAIN.md).
+[`.claude/ai-instructions/PROJECT_MAIN.md`](../../.claude/ai-instructions/PROJECT_MAIN.md).
 
 **Started fresh on 2026-08-08.** The previous log (57 entries, D1–D57) covered the
 proof-of-concept phase and was deleted with the rest of the pre-pivot documentation. Whatever
 from it is still true about the running system is stated as plain fact in
-[`CURRENT-STATE.md`](CURRENT-STATE.md), not as history. Do not cite D-numbers — none resolve.
+[`CURRENT-STATE.md`](../CURRENT-STATE.md), not as history. Do not cite D-numbers — none resolve.
 
 ## What belongs here
 
@@ -383,7 +393,7 @@ keys derived from swing/view identity rather than folder names, and signed URLs 
 - **Revisit trigger, recorded so it is not forgotten:** if egress cost or playback latency
   becomes material, move artifacts behind a CDN or to object storage with cheaper egress.
   Stable keys make that a routing change rather than a data-model change.
-  **Quantified 2026-08-10** in [`SCALE-10K-MAU.md`](SCALE-10K-MAU.md): at 10,000 MAU the
+  **Quantified 2026-08-10** in [`SCALE-10K-MAU.md`](../SCALE-10K-MAU.md): at 10,000 MAU the
   egress alone is ~7.5 TB/month, which is ~$675/month on S3-priced egress and **$0 on
   Cloudflare R2**. R2 — not Azure Blob — is the concrete migration target, and the trigger
   is monthly egress above ~$200.
@@ -1251,7 +1261,7 @@ unrecoverable loss if the raw is gone immediately.
 
 30 days covers noticing and re-trimming, and bounds the cost: raw phone video is 270-330MB per
 swing against a normalized clip an order of magnitude smaller, and
-[`SCALE-10K-MAU.md`](SCALE-10K-MAU.md) already makes storage and egress the dominant line item.
+[`SCALE-10K-MAU.md`](../SCALE-10K-MAU.md) already makes storage and egress the dominant line item.
 Retaining raw indefinitely would multiply the largest cost in the product to insure against a
 rare, user-correctable mistake.
 

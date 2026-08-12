@@ -25,7 +25,7 @@ if (process.env.NEXT_RUNTIME) {
   throw new Error(
     "src/db/admin.ts was imported inside Next.js. This is the schema-owner connection and it " +
       "bypasses row-level security — nothing on a request path may hold it. Use `withUser` from " +
-      "src/db/session.ts instead (docs/DECISIONS.md D26).",
+      "src/db/session.ts instead (docs/decisions/ARCHIVE-numbered.md D26).",
   );
 }
 

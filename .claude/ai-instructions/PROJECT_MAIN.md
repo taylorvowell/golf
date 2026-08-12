@@ -505,7 +505,7 @@ The product should guide the user toward correcting the problem rather than fail
 >
 > **Consequence for §9.3 and §9.4:** hands-free and long-recording capture must ship with a
 > manual trim/select fallback, because they otherwise depend on this. That fallback is required,
-> not optional. Reasoning: `docs/DECISIONS.md` D2.
+> not optional. Reasoning: `docs/decisions/` D2.
 
 The app should automatically identify the actual golf swing within a longer recording.
 
@@ -1227,7 +1227,7 @@ The build roadmap must ensure subscription behavior is compatible with the distr
 > paragraphs above could not both be satisfied: Apple and Google mandate their own IAP for
 > digital subscriptions sold in an app. Resolved in favour of the distribution requirement.
 > Billing is StoreKit (iOS) and Google Play Billing (Android); **do not wire Stripe.**
-> Full reasoning and consequences: `docs/DECISIONS.md` D1.
+> Full reasoning and consequences: `docs/decisions/` D1.
 
 ## 30.1 Entitlement system
 
@@ -1533,7 +1533,7 @@ Required or preferred components:
 - Railway.
 - Infisical.
 - ~~Stripe.~~ **Removed 2026-08-08** — billing is native in-app purchase (StoreKit / Google
-  Play Billing). See §30's amendment note and `docs/DECISIONS.md` D1.
+  Play Billing). See §30's amendment note and `docs/decisions/` D1.
 - Azure preferred over GCP or AWS for additional cloud needs.
 
 All other technical decisions should be evaluated in the build roadmap based on the product requirements in this document.

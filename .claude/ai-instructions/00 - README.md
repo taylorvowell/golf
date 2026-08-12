@@ -88,7 +88,7 @@ What this step accomplishes and why.
 
 ## Architectural Context
 Key decisions. References to the relevant section of
-`.claude/ai-instructions/PROJECT_MAIN.md` and/or `docs/DECISIONS.md` entries.
+`.claude/ai-instructions/PROJECT_MAIN.md` and/or `docs/decisions/` entries.
 
 ## Files & Areas Touched
 Specific paths that will be created or modified.
@@ -224,6 +224,6 @@ them, presents the artifacts, and waits for explicit approval before marking com
 - `.claude/ai-instructions/PROJECT_MAIN.md` — the product north star; source of truth for
   what the product must do
 - `docs/CURRENT-STATE.md` — what is actually built right now
-- `docs/DECISIONS.md` — append-only decisions log (never renumbered, never deleted)
+- `docs/decisions/` — append-only decisions log (never renumbered, never deleted)
 - `CLAUDE.md` — always-loaded rules
 - `.claude/skills/` — loaded contextually per task

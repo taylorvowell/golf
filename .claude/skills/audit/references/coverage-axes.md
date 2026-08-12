@@ -34,10 +34,10 @@ Root `CLAUDE.md` calls frame sync "the #1 perceived-quality feature" — overlay
 - Playback logic that doesn't prefer `requestVideoFrameCallback` with a rAF fallback.
 - A change to the canvas draw order — must stay `video → skeleton → club → trace → annotations`.
 - A change to `lib/usePlayer.ts` that isn't treated as touching the frame-sync contract root `CLAUDE.md` calls "nothing here is negotiable."
-- A change to `playback_window` that doesn't preserve the `address − 1s … finish + 1s` pin (`docs/DECISIONS.md` D51), or doesn't publish `playback_pad` for clips too short to fill it.
+- A change to `playback_window` that doesn't preserve the `address − 1s … finish + 1s` pin (`docs/decisions/` D51), or doesn't publish `playback_pad` for clips too short to fill it.
 - Standard web-vitals concerns where they do apply: large client-side imports that should be `dynamic()`, images without dimensions, anything that would blow LCP/CLS budgets on the swing list or player pages.
 
-**Source of truth:** root `CLAUDE.md` ("Frame sync is the #1 perceived-quality feature," "Verification strategy — why the harness is shaped this way"), `apps/web/src/lib/usePlayer.ts`, `docs/DECISIONS.md` D43, D46, D51.
+**Source of truth:** root `CLAUDE.md` ("Frame sync is the #1 perceived-quality feature," "Verification strategy — why the harness is shaped this way"), `apps/web/src/lib/usePlayer.ts`, `docs/decisions/` D43, D46, D51.
 
 ---
 
@@ -52,7 +52,7 @@ Root `CLAUDE.md` calls frame sync "the #1 perceived-quality feature" — overlay
 - New CV code that doesn't route through the debug pages the club-tracking spec calls non-negotiable before trusting club output (`clubdebug.py`, `checkclub.py`, `checktrace.py`) — a PR/finding that claims "club tracking improved" with no debug-page evidence is a red flag, not a pass.
 - Confidence numbers compared or reported without accounting for D26 (pre-2026-08-04 confidence was clamped to 1.00 by a SimCC-peak clamp, not the model's opinion — old and new confidence figures are not comparable).
 
-**Source of truth:** root `CLAUDE.md` ("The 9-stage pipeline," "Verification strategy"), `docs/DECISIONS.md` D26, D43, D46, D48, D49, D50.
+**Source of truth:** root `CLAUDE.md` ("The 9-stage pipeline," "Verification strategy"), `docs/decisions/` D26, D43, D46, D48, D49, D50.
 
 ---
 
@@ -68,7 +68,7 @@ Root `CLAUDE.md` calls frame sync "the #1 perceived-quality feature" — overlay
 - A new 2D joint angle that doesn't account for projection sensitivity, or reads the elbows without `lead|trail_arm_in_plane` (D31).
 - `interp: true` values not rendered dashed at reduced opacity by the client, or `interp` computed inconsistently between analyzer and player.
 
-**Source of truth:** root `CLAUDE.md` ("The 9-stage pipeline" → `analysis.json` bullets), `docs/DECISIONS.md` D25, D26, D31, D33, D42, D47.
+**Source of truth:** root `CLAUDE.md` ("The 9-stage pipeline" → `analysis.json` bullets), `docs/decisions/` D25, D26, D31, D33, D42, D47.
 
 ---
 
@@ -83,7 +83,7 @@ Root `CLAUDE.md` calls frame sync "the #1 perceived-quality feature" — overlay
 - A check wired into `scoring.py` for a metric `scoring_config/COVERAGE.md` marks `deferred` (abstaining because the underlying metric isn't trustworthy) — being turned "on" without first resolving why it was deferred.
 - `validate_scoring_config.py`'s pass being treated as proof a check is correct — it only proves the field *exists* in `metrics.py`'s output, never that it *means* what the band assumes.
 
-**Source of truth:** root `CLAUDE.md` ("Scoring's standing trap"), `docs/DECISIONS.md` (the D42 entry), `services/analyzer/scoring_config/COVERAGE.md`.
+**Source of truth:** root `CLAUDE.md` ("Scoring's standing trap"), `docs/decisions/` (the D42 entry), `services/analyzer/scoring_config/COVERAGE.md`.
 
 ---
 
@@ -145,7 +145,7 @@ Root `CLAUDE.md` calls frame sync "the #1 perceived-quality feature" — overlay
 
 **How to find it:** `grep` `kiosk.tsx` and `scoring.py` for keywords matching the new thing's responsibility. Read the existing implementation — does it already generalize, or could it with a small change?
 
-**Source of truth:** `apps/web/src/components/ui/kiosk.tsx`, `services/analyzer/swingsage/scoring.py`, `docs/DECISIONS.md`.
+**Source of truth:** `apps/web/src/components/ui/kiosk.tsx`, `services/analyzer/swingsage/scoring.py`, `docs/decisions/`.
 
 ---
 
@@ -179,7 +179,7 @@ Root `CLAUDE.md` calls frame sync "the #1 perceived-quality feature" — overlay
 
 ---
 
-## 12. Conventions, naming & `docs/DECISIONS.md` discipline
+## 12. Conventions, naming & `docs/decisions/` discipline
 
 **Mechanical conventions:**
 - `any` anywhere in TypeScript (forbidden — use `unknown` and narrow).
@@ -199,12 +199,12 @@ Root `CLAUDE.md` calls frame sync "the #1 perceived-quality feature" — overlay
 - **No vestigial qualifiers.** `NewScoreGauge.tsx`, `ScoreGaugeV2.tsx` — the qualifier outlives the "new"-ness. Rename and delete the old, or flag why both need to exist.
 - **No abbreviation tax.** Expand unclear abbreviations; the cost of a longer name is paid once at writing, the cost of an unclear one is paid every time someone reads it.
 
-**`docs/DECISIONS.md` discipline (this project-specific — treat it as seriously as the mechanical items):**
+**`docs/decisions/` discipline (this project-specific — treat it as seriously as the mechanical items):**
 - A spec deviation, interim shortcut, or threshold/contract change made with no corresponding entry.
 - An entry, if one exists, missing a `Status:` line, or a finding elsewhere in the audit citing an entry without checking its `Status:` (roughly a quarter of entries are `SUPERSEDED`/`NEGATIVE RESULT`/`HISTORICAL` — citing one as current guidance is itself a finding-worthy mistake).
 - A new entry that renumbers or edits a prior one instead of appending — the log is append-only; 18 entries are cited by number from source comments, so renumbering breaks those silently.
 
-**Source of truth:** `.claude/rules/typescript.md`, `.claude/rules/tailwind-v4.md`, root `CLAUDE.md`, `docs/DECISIONS.md` (its own "How to read DECISIONS.md" section).
+**Source of truth:** `.claude/rules/typescript.md`, `.claude/rules/tailwind-v4.md`, root `CLAUDE.md`, `docs/decisions/` (its own "How to read decisions/" section).
 
 ---
 
@@ -233,7 +233,7 @@ When in doubt:
 
 - It violates a hard rule in root `CLAUDE.md` → **Critical**.
 - It breaks the `analysis.json` contract, hardcodes a scoring threshold, or repeats the D42 failure mode → **Critical**.
-- It violates an `ACTIVE` `docs/DECISIONS.md` entry or duplicates a `kiosk.tsx` shape → **High**.
+- It violates an `ACTIVE` `docs/decisions/` entry or duplicates a `kiosk.tsx` shape → **High**.
 - It misses a Next.js 16 leverage opportunity but the current code works → **Medium** (or Low if obscure).
 - It's a documentation/naming/location nit → **Low**.
 

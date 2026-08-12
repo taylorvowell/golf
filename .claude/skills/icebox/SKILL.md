@@ -129,5 +129,5 @@ captured: YYYY-MM-DD
   a track via `develop` → the `roadmap` skill's "Adding a track" procedure. `/roadmap` covers tracks; this skill
   covers the not-yet-scheduled backlog.
 - Decision record: if the icebox mechanism itself needs a durable design decision noted (not an individual idea —
-  those live as `ICE-NNN` entries), append a new numbered entry to `docs/DECISIONS.md` (never renumber or delete
+  those live as `ICE-NNN` entries), append a new numbered entry to `docs/decisions/` (never renumber or delete
   existing entries).

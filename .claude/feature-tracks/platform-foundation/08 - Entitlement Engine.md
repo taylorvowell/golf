@@ -32,7 +32,7 @@ the deliverable, not the answer it returns.
 
 - `PROJECT_MAIN.md` §30.1 (the entitlement dimensions list), §30.2 (upgrade experience),
   §30.3 (lifecycle states), §31.4 (admin-configurable tiers).
-- `docs/DECISIONS.md` D1 — billing is native in-app purchase, so entitlement is fed by store
+- `docs/decisions/` D1 — billing is native in-app purchase, so entitlement is fed by store
   transactions and server-side receipt validation, never by a client-reported purchase. That
   makes the entitlement record our own, not a mirror of a billing provider's state, which is
   also what makes admin-granted complimentary access possible without a store transaction.
@@ -73,7 +73,7 @@ the deliverable, not the answer it returns.
    (grace period, read-only, refuse-to-downgrade) rather than assuming deletion.
 8. **Provide admin-granted access** as a first-class grant type, independent of any store
    transaction.
-9. Record the capability model in `docs/DECISIONS.md`.
+9. Record the capability model in `docs/decisions/`.
 
 ## Quality Standards
 
@@ -104,7 +104,7 @@ over-consumed under concurrent requests; an admin grant overrides the absence of
 - [ ] Denial responses carry capability + required tier + current usage.
 - [ ] Admin-granted access works with no store transaction.
 - [ ] Downgrade-overflow behaviour is expressible and the chosen answer recorded.
-- [ ] Capability model recorded in `docs/DECISIONS.md`.
+- [ ] Capability model recorded in `docs/decisions/`.
 
 ## Notes
 

@@ -20,7 +20,7 @@ Steps:
    - Both sides changed: run both. Neither changed (docs/config only): skip this step.
    - A failure here is a hard stop — report it and don't commit broken code, regardless of what the audit said.
 
-5. **Commit.** Stage the specific files that were in scope (never `git add -A`/`git add .` blindly — this project's `.claude/hooks/guard-secret-exposure.mjs` and `guard-protected-paths.mjs` run on every Edit/Write/Bash anyway, but staging deliberately is still the right default). Write the commit message from what actually changed, not a generic label. If the diff includes a spec deviation, an interim shortcut, or anything `docs/DECISIONS.md` should record and the diff doesn't already include that entry, flag it to the user before committing rather than after.
+5. **Commit.** Stage the specific files that were in scope (never `git add -A`/`git add .` blindly — this project's `.claude/hooks/guard-secret-exposure.mjs` and `guard-protected-paths.mjs` run on every Edit/Write/Bash anyway, but staging deliberately is still the right default). Write the commit message from what actually changed, not a generic label. If the diff includes a spec deviation, an interim shortcut, or anything `docs/decisions/` should record and the diff doesn't already include that entry, flag it to the user before committing rather than after.
 
 6. **Report.** One short summary: commit SHA + subject, audit verdict (clean / N issues fixed / N issues accepted as-is), verification gate result. No further action (no push, no PR) unless the user asks — this command's job is the commit, not a release.
 
