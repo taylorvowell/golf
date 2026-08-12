@@ -1,24 +1,30 @@
-import { memo, useCallback } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { memo, useCallback, useEffect, useRef } from "react";
+import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { BarsGlyph, DECK, DeckButton, PauseGlyph, PlayGlyph, SparkGlyph } from "../../design/deck";
-import { FilmstripScrubber } from "./FilmstripScrubber";
+import { PhaseStrip } from "./PhaseStrip";
 import { ScrubBar, SCRUB_TOUCH } from "./ScrubBar";
-import { type PhaseBand } from "./phaseBands";
+import { activeBand, type PhaseBand } from "./phaseBands";
 import { frameToFraction, type Extent } from "./frames";
 import type { FramePlayerActions, FramePlayerState } from "./useFramePlayer";
 
 /**
  * The transport, floating over the picture.
  *
+ * ## Where you are is a NAME, not a picture
+ *
+ * The readout says `Downswing · 184`. That is the whole answer to "where am I", and it costs one
+ * line of text — where a strip of thumbnails costs an artifact, a request, a decode and forty
+ * points of the golfer's screen to say the same thing less precisely. The bar under it is six
+ * points tall and only has to answer "how far through, and how long is each part".
+ *
  * ## One x mapping, shared by everything that means a position
  *
- * The thumbnail strip, the phase bar, the playhead, its frame badge and the scrub thumb all read
- * the same fraction of the same full-width box. That is why none of them is padded, gapped or
- * inset: the moment two of them disagree about where frame N is, the line crosses the boundary
- * between backswing and downswing at a visibly different instant from the picture behind it, and
- * the strip stops being believable. Anything added here either spans that box exactly or sits
- * outside the group.
+ * The phase bar, the playhead and the scrub thumb all read the same fraction of the same
+ * full-width box. That is why none of them is padded, gapped or inset: the moment two of them
+ * disagree about where frame N is, the playhead crosses the backswing/downswing boundary at a
+ * visibly different instant from the picture behind it, and the bar stops being believable.
+ * `useSeekSurface` is the single copy of that arithmetic.
  *
  * ## Why the play button is the shape it is
  *
@@ -33,8 +39,8 @@ import type { FramePlayerActions, FramePlayerState } from "./useFramePlayer";
  * ## The three dock groups are absolutely positioned
  *
  * The play cap is centred on the dock, not on the space left over between its neighbours. Laying
- * the three groups out in a row would move the transport sideways whenever a speed label changed
- * width, and the one control pressed without looking must not move.
+ * the three groups out in a row would move the transport sideways whenever a label changed width,
+ * and the one control pressed without looking must not move.
  */
 
 export interface PlayerConsoleProps {
@@ -46,17 +52,25 @@ export interface PlayerConsoleProps {
   seekable: boolean;
   /** The swing's phases, drawn to scale. Empty on a swing with no artifact — the bar then hides. */
   bands: readonly PhaseBand[];
-  /** For the thumbnail strip, which fetches its own artifact. */
-  swingId: string;
-  view?: string | null;
-  onSpeed: () => void;
   onMetrics: () => void;
   onAnalysis: () => void;
   bottomInset?: number;
 }
 
+/**
+ * Real time, half, and a tenth.
+ *
+ * Three, not four. Half is "the whole shape, slower" and a tenth is for the transition, which is
+ * over in about four frames; a quarter sat between two speeds that already do their jobs and made
+ * the segment narrow enough to mis-tap.
+ */
+const SPEEDS = [1, 0.5, 0.1] as const;
+
 const PLAY_DIAMETER = 54;
 const DOCK_HEIGHT = 70;
+/** The speed well's inner geometry. Fixed, so the selection can slide to `index × SEGMENT`. */
+const SEGMENT = 42;
+const WELL_PAD = 4;
 
 export const PlayerConsole = memo(function PlayerConsole({
   state,
@@ -65,9 +79,6 @@ export const PlayerConsole = memo(function PlayerConsole({
   fps,
   seekable,
   bands,
-  swingId,
-  view,
-  onSpeed,
   onMetrics,
   onAnalysis,
   bottomInset = 0,
@@ -77,6 +88,8 @@ export const PlayerConsole = memo(function PlayerConsole({
 
   const onSeek = useCallback((f: number) => actions.seekTo(f), [actions]);
   const fraction = frameToFraction(frame, bounds);
+  const active = activeBand(bands, frame);
+  const here = active >= 0 ? bands[active].label : null;
 
   const first = typeof bounds === "number" ? 0 : bounds.first;
   const last = typeof bounds === "number" ? Math.max(0, bounds - 1) : bounds.last;
@@ -87,59 +100,36 @@ export const PlayerConsole = memo(function PlayerConsole({
     // the thing being watched. Only the controls themselves take touches.
     <View style={styles.scrim} pointerEvents="box-none" testID="player-console">
       <View style={styles.timeline} pointerEvents="box-none">
+        <View style={styles.readout}>
+          <Text testID="position-readout" style={styles.where} numberOfLines={1}>
+            {here ? <Text style={styles.wherePhase}>{here}</Text> : null}
+            {here ? "  " : null}
+            <Text style={styles.whereFrame}>{frame}</Text>
+          </Text>
+          <Text style={styles.time}>
+            {seconds(frame - first, rate)}
+            <Text style={styles.timeTotal}> / {seconds(last - first, rate)}</Text>
+          </Text>
+        </View>
+
         {/* The one box every position reads from. Nothing inset, nothing gapped. */}
         <View style={styles.track}>
-          <FilmstripScrubber
-            swingId={swingId}
-            view={view}
-            bounds={bounds}
-            onSeek={onSeek}
-            bands={bands}
-            disabled={disabled}
-          />
-          <ScrubBar frame={frame} bounds={bounds} onSeek={onSeek} disabled={disabled} />
+          <PhaseStrip bands={bands} active={active} onSeek={onSeek} disabled={disabled} />
+          <ScrubBar frame={frame} bounds={bounds} fps={fps} onSeek={onSeek} disabled={disabled} />
 
           {!disabled ? (
             <View
               testID="playhead"
               pointerEvents="none"
               style={[styles.playhead, { left: `${fraction * 100}%` }]}
-            >
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{frame}</Text>
-              </View>
-              <View style={styles.playheadLine} />
-            </View>
+            />
           ) : null}
-        </View>
-
-        <View style={styles.timeRow}>
-          <Text style={styles.time}>{seconds(frame - first, rate)}</Text>
-          <Text style={styles.time}>{seconds(last - first, rate)}</Text>
         </View>
       </View>
 
       <View style={[styles.dockWrap, { paddingBottom: 8 + bottomInset }]}>
         <View style={styles.dock}>
-          {/* One button rather than a row of four. Speed is chosen rarely and read constantly, so
-              the dock spends its width showing the current one and hides the rest behind it. */}
-          <Pressable
-            testID="speed-open"
-            accessibilityRole="button"
-            accessibilityLabel={`Playback speed, ${formatSpeed(speed)}`}
-            disabled={disabled}
-            onPress={onSpeed}
-            style={({ pressed }) => [
-              styles.speedButton,
-              speed !== 1 && styles.speedButtonOn,
-              (pressed || disabled) && styles.dim,
-            ]}
-          >
-            <Text style={[styles.speedValue, speed !== 1 && styles.speedValueOn]}>
-              {formatSpeed(speed)}
-            </Text>
-            <Text style={styles.speedCaption}>Speed</Text>
-          </Pressable>
+          <SpeedSlider speed={speed} disabled={disabled} onChange={actions.setSpeed} />
 
           {/* The one round cap, the one warm cap, and the only control anyone presses blind. */}
           <DeckButton
@@ -173,6 +163,76 @@ export const PlayerConsole = memo(function PlayerConsole({
   );
 });
 
+/**
+ * Speed, as a segmented slider.
+ *
+ * The lit pill *slides* between segments rather than cutting, and that is the only reason it is
+ * animated: a transport control that jumped would read as the layout changing rather than as a
+ * setting moving. It is `translateX` on the native driver, so it never touches the JS thread the
+ * overlay is drawing on.
+ *
+ * Segments are a fixed width, so the pill's position is `index × SEGMENT` with nothing to measure
+ * — no layout pass, and no first-render frame with the pill in the wrong place.
+ */
+function SpeedSlider({
+  speed,
+  disabled,
+  onChange,
+}: {
+  speed: number;
+  disabled: boolean;
+  onChange: (speed: number) => void;
+}) {
+  const index = Math.max(0, SPEEDS.indexOf(speed as (typeof SPEEDS)[number]));
+  const slide = useRef(new Animated.Value(index)).current;
+
+  useEffect(() => {
+    Animated.spring(slide, {
+      toValue: index,
+      damping: 22,
+      stiffness: 280,
+      mass: 0.7,
+      useNativeDriver: true,
+    }).start();
+  }, [index, slide]);
+
+  return (
+    <View style={[styles.well, disabled && styles.dim]}>
+      <Animated.View
+        style={[
+          styles.wellPill,
+          {
+            transform: [
+              {
+                translateX: slide.interpolate({
+                  inputRange: [0, SPEEDS.length - 1],
+                  outputRange: [0, SEGMENT * (SPEEDS.length - 1)],
+                }),
+              },
+            ],
+          },
+        ]}
+      />
+      {SPEEDS.map((s) => (
+        <Pressable
+          key={s}
+          testID={`speed-${String(s).replace(".", "-")}`}
+          accessibilityRole="button"
+          accessibilityLabel={`${formatSpeed(s)} speed`}
+          accessibilityState={{ selected: speed === s, disabled }}
+          disabled={disabled}
+          onPress={() => onChange(s)}
+          style={styles.segment}
+        >
+          <Text style={[styles.segmentText, speed === s && styles.segmentTextOn]}>
+            {formatSpeed(s)}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
 /** A glyph over a caption — the dock's secondary controls. Equal width, so the pair reads as one. */
 function DockAction({
   testID,
@@ -201,10 +261,9 @@ function DockAction({
   );
 }
 
-/** `1×`, `½×`, `¼×`, `⅒×` — fractions rather than decimals, which read faster at this size. */
+/** `1x`, `0.5x`, `0.1x`. Plain decimals — a fraction glyph is a font risk for no gain. */
 export function formatSpeed(speed: number): string {
-  const glyph: Record<string, string> = { "1": "1", "0.5": "½", "0.25": "¼", "0.1": "⅒" };
-  return `${glyph[String(speed)] ?? String(speed)}×`;
+  return `${speed}x`;
 }
 
 /**
@@ -223,24 +282,37 @@ const styles = StyleSheet.create({
     paddingTop: 72,
     experimental_backgroundImage: `linear-gradient(180deg, rgba(5,7,6,0) 0%, rgba(5,7,6,0.86) 42%, ${DECK.ground} 100%)`,
   },
-  // Room above the strip for the playhead's badge to sit clear of it. Overlapping the badge onto
-  // the pictures hides the frame it is naming.
-  timeline: { paddingHorizontal: 20, paddingTop: 14 },
-  track: { position: "relative" },
-  timeRow: { flexDirection: "row", justifyContent: "space-between", marginTop: -2 },
-  time: { color: DECK.label.quiet, fontSize: 10, fontVariant: ["tabular-nums"] },
-
-  playhead: { position: "absolute", top: -13, bottom: SCRUB_TOUCH / 2, width: 2, marginLeft: -1, alignItems: "center" },
-  playheadLine: {
-    flex: 1,
-    width: 2,
-    backgroundColor: DECK.accent,
-    boxShadow: [{ offsetX: 0, offsetY: 0, blurRadius: 12, spreadDistance: 0, color: "rgba(184,255,74,0.55)" }],
+  timeline: { paddingHorizontal: 20 },
+  readout: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    gap: 12,
+    paddingBottom: 7,
   },
-  badge: { backgroundColor: DECK.accent, borderRadius: 6, paddingHorizontal: 5, paddingVertical: 1 },
-  badgeText: { color: DECK.label.onPrimary, fontSize: 9, fontWeight: "900", fontVariant: ["tabular-nums"] },
+  where: { flexShrink: 1 },
+  wherePhase: { color: DECK.label.onFace, fontSize: 13, fontWeight: "700", letterSpacing: -0.2 },
+  whereFrame: { color: DECK.accent, fontSize: 13, fontWeight: "700", fontVariant: ["tabular-nums"] },
+  time: { color: DECK.label.quiet, fontSize: 11, fontVariant: ["tabular-nums"] },
+  timeTotal: { color: DECK.label.dim },
 
-  dockWrap: { paddingHorizontal: 16, paddingTop: 12 },
+  track: { position: "relative" },
+  // Terminates at the scrub thumb, which sits at `SCRUB_TOUCH / 2` from that view's top. No badge:
+  // the frame number is in the readout, and a second copy riding the line cost 13pt of headroom to
+  // say the same thing.
+  playhead: {
+    position: "absolute",
+    top: -3,
+    bottom: SCRUB_TOUCH / 2,
+    width: 2,
+    marginLeft: -1,
+    backgroundColor: DECK.accent,
+    boxShadow: [
+      { offsetX: 0, offsetY: 0, blurRadius: 10, spreadDistance: 0, color: "rgba(184,255,74,0.5)" },
+    ],
+  },
+
+  dockWrap: { paddingHorizontal: 16, paddingTop: 10 },
   dock: {
     height: DOCK_HEIGHT,
     borderRadius: DECK.radius.dock,
@@ -251,30 +323,31 @@ const styles = StyleSheet.create({
   },
   dim: { opacity: 0.5 },
 
-  speedButton: {
+  well: {
     position: "absolute",
     left: 12,
-    top: (DOCK_HEIGHT - 46) / 2,
-    minWidth: 62,
-    height: 46,
-    paddingHorizontal: 10,
-    borderRadius: 15,
+    top: (DOCK_HEIGHT - 44) / 2,
+    flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 4,
+    width: SEGMENT * SPEEDS.length + WELL_PAD * 2,
+    height: 44,
+    borderRadius: 15,
+    padding: WELL_PAD,
     backgroundColor: DECK.glass.well,
     boxShadow: DECK.shadow.sunk,
   },
-  speedButtonOn: { backgroundColor: "rgba(184,255,74,0.12)" },
-  speedValue: { color: "rgba(255,255,255,0.72)", fontSize: 15, fontWeight: "700", lineHeight: 16 },
-  speedValueOn: { color: DECK.accent },
-  speedCaption: {
-    color: DECK.label.caption,
-    fontSize: 7,
-    fontWeight: "700",
-    letterSpacing: 1.1,
-    textTransform: "uppercase",
+  wellPill: {
+    position: "absolute",
+    left: WELL_PAD,
+    top: WELL_PAD,
+    width: SEGMENT,
+    height: 44 - WELL_PAD * 2,
+    borderRadius: 11,
+    backgroundColor: "rgba(184,255,74,0.16)",
   },
+  segment: { width: SEGMENT, height: "100%", alignItems: "center", justifyContent: "center" },
+  segmentText: { color: DECK.label.caption, fontSize: 11.5, fontWeight: "700" },
+  segmentTextOn: { color: DECK.accent },
 
   playCap: {
     position: "absolute",

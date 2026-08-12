@@ -121,12 +121,7 @@ From `services/analyzer/`, always via the venv interpreter:
 
 .venv/Scripts/python.exe scripts/rescore.py      # re-run ONLY scoring over every out/
 .venv/Scripts/python.exe scripts/resegment.py    # add ONLY silhouette + butt line
-.venv/Scripts/python.exe scripts/refilmstrip.py  # add ONLY filmstrip.jpg — the scrubber's picture
 ```
-
-`burnin.py` writes `filmstrip.jpg` itself now, so `refilmstrip.py` is only for swings analysed
-before it did. It reads pixels and `playback_window` and runs no stage, so unlike a re-run it
-cannot damage a good club solve. Publish it with `pnpm --filter web db:backfill`.
 
 **Omitting `--club-detector` silently regenerates the club trace on the weaker classical-only
 path and overwrites the better artifact.** This has actually happened. Pass it on every fixture

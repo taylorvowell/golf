@@ -85,7 +85,7 @@ it("disables the transport, and says why, when the swing cannot be stepped", asy
   );
 
   await waitFor(() => expect(getByTestId("play-toggle").props.accessibilityState.disabled).toBe(true));
-  expect(getByTestId("speed-open").props.accessibilityState.disabled).toBe(true);
+  expect(getByTestId("speed-0-1").props.accessibilityState.disabled).toBe(true);
   expect(getByText(/cannot be stepped frame by frame/i)).toBeTruthy();
 });
 
@@ -169,15 +169,15 @@ it("starts the swing playing on load, without being asked", async () => {
 });
 
 it("changes speed natively rather than by dropping frames", async () => {
-  // Speed is chosen rarely and read constantly, so the dock shows the current one and the rest
-  // live behind it. `setPlaybackSpeed` retimes the decoder — a JS timer would drop frames and
-  // show a quarter of the swing while calling it slow motion.
+  // `setPlaybackSpeed` retimes the decoder, so a 60fps clip at 0.1 is a true 6 frames a second
+  // with every frame still presented — where dropping frames in JS would show a tenth of the
+  // swing and call it slow motion.
   const { getByTestId } = await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} />);
-  await act(async () => void fireEvent.press(getByTestId("speed-open")));
-  await act(async () => void fireEvent.press(getByTestId("speed-0-25")));
-  await waitFor(() => expect(getByTestId("speed-open").props.accessibilityLabel).toBe(
-    "Playback speed, ¼×",
-  ));
+  await act(async () => void fireEvent.press(getByTestId("speed-0-1")));
+  await waitFor(() =>
+    expect(getByTestId("speed-0-1").props.accessibilityState.selected).toBe(true),
+  );
+  expect(getByTestId("speed-1").props.accessibilityState.selected).toBe(false);
 });
 
 it("draws the back control and the swing's name over the picture", async () => {
@@ -188,6 +188,26 @@ it("draws the back control and the swing's name over the picture", async () => {
   expect(getByText("6iron3")).toBeTruthy();
   fireEvent.press(getByTestId("player-back"));
   expect(onBack).toHaveBeenCalled();
+});
+
+it("says where in the swing you are by NAME, not with a picture", async () => {
+  // The readout is the whole answer to "where am I", and it costs one line of text. A strip of
+  // thumbnails cost an artifact, a request, a decode and forty points of screen to say the same
+  // thing less precisely, which is why it is gone.
+  mockRequest.mockResolvedValue(makeAnalysis({ frameCount: 40, playbackWindow: [4, 30] }));
+  const api = await render(<SwingPlayer swingId="abc" frameCount={40} fps={60} />);
+  await act(async () => viewport(api));
+  await waitFor(() => expect(api.getByTestId("swing-overlay")).toBeTruthy());
+
+  // Frame 10 of this fixture is inside the backswing (address 2 -> clamped to the window at 4,
+  // top at 12). The readout names the phase and the frame, and nothing else.
+  await act(async () =>
+    api.getByTestId("swing-video").props.onFrameRendered?.({
+      nativeEvent: { frame: 10, presentationTimeUs: 0, releaseTimeNs: 0 },
+    }),
+  );
+  await waitFor(() => expect(api.getByText("Backswing")).toBeTruthy());
+  expect(api.getByText("10")).toBeTruthy();
 });
 
 it("shows a score chip only when the swing has actually been scored", async () => {

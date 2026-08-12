@@ -105,9 +105,11 @@ One artifact per analysed video, the single interface between analyzer and any c
 ### Frame sync is the #1 perceived-quality feature
 
 Overlay drift during scrubbing is what users notice. Normalize to CFR 60 fps so
-`frame = round(currentTime * fps)` is exact — VFR phone video *will* break this. Seek to
-`(frame + 0.5) / fps` to dodge boundary rounding. Use `requestVideoFrameCallback` during
-playback with a rAF fallback.
+`frame = round(currentTime * fps)` is exact — VFR phone video *will* break this. The seek target
+is **per-platform**: `(frame + 0.5) / fps` in the web player (HTML video seeks to the frame
+*containing* a time), but `frame / fps` on Android — media3 resolves seeks **forward**, so the
+web rule costs exactly one frame on every seek there (D40, measured 0% vs 100% exact). Use
+`requestVideoFrameCallback` during playback with a rAF fallback on web.
 
 ### Quality gates degrade, they don't crash
 
@@ -190,8 +192,6 @@ python scripts/rescore.py                 re-run ONLY Stage 8 over every out/<st
                                           is a pure function of analysis.json + the config, so
                                           a scoring change never needs a full re-run
 python scripts/resegment.py               add ONLY the silhouette + butt line to an existing out/
-python scripts/refilmstrip.py             add ONLY filmstrip.jpg (the mobile scrubber's picture)
-                                          to an existing out/ — burnin.py writes it from now on
 
 # verification tooling — run these before trusting anything
 python scripts/checkclub.py out/<stem>    the club drawn over the real frame at each event

@@ -81,10 +81,10 @@ describe("artifact addressing", () => {
     for (const name of [
       "analysis.json", "coach_report.json", "silhouette.json", "isolation.json",
       "source_timing.json", "club_only.json", "normalized.mp4", "analysis.mp4",
-      "overlay.mp4", "contact.jpg", "filmstrip.jpg",
+      "overlay.mp4", "contact.jpg",
     ]) {
       expect(isArtifactName(name), `${name} is not in the artifact catalogue`).toBe(true);
     }
-    expect(ARTIFACT_NAMES.length).toBeGreaterThanOrEqual(11);
+    expect(ARTIFACT_NAMES.length).toBeGreaterThanOrEqual(10);
   });
 });

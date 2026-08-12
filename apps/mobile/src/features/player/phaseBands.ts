@@ -15,11 +15,11 @@ import { type Bounds } from "./frames";
  *
  * ## Why this is not a filmstrip
  *
- * The design this screen was drawn from shows a wheel of video frames. There is no endpoint that
- * serves a frame — `/thumb` serves the single contact image — so the honest options were seven
- * decorative gradients that *look* like frames, or real information in the same shape. Seven
- * invented frames would be the exact failure this project names in the analysis engine (a
- * confident wrong picture beats no picture until someone believes it), so it is phases.
+ * It was one, briefly. The analyzer grew a `filmstrip.jpg` artifact, a route served it and the
+ * scrubber drew twelve real frames — and the whole thing was reverted, because a strip of
+ * thumbnails costs an artifact, a request, a decode and forty points of a golfer's screen to
+ * answer a question one line of text answers better: the readout says `Downswing · 184`. What the
+ * bar is left with is the part a name cannot give you, which is proportion.
  *
  * ## The colours are not decoration
  *

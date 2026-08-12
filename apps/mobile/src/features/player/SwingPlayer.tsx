@@ -18,7 +18,7 @@ import { COLORS } from "../../theme";
 import { AnalysisPanel } from "./AnalysisPanel";
 import { ComparePanel } from "./ComparePanel";
 import { FrameSyncPanel } from "./FrameSyncPanel";
-import { PlayerConsole, formatSpeed } from "./PlayerConsole";
+import { PlayerConsole } from "./PlayerConsole";
 import { isSeekable, windowBounds, type Bounds } from "./frames";
 import { phaseBands } from "./phaseBands";
 import { OverlayControls } from "./overlay/OverlayControls";
@@ -98,7 +98,7 @@ export interface SwingPlayerProps {
 }
 
 /** Which panel is up. One at a time — two stacked sheets have no way back to the picture. */
-type Panel = "overlays" | "metrics" | "analysis" | "compare" | "speed" | null;
+type Panel = "overlays" | "metrics" | "analysis" | "compare" | null;
 
 export function SwingPlayer({
   swingId,
@@ -204,7 +204,6 @@ export function SwingPlayer({
   const closePanel = useCallback(() => setPanel(null), []);
   const openMetrics = useCallback(() => setPanel("metrics"), []);
   const openAnalysis = useCallback(() => setPanel("analysis"), []);
-  const openSpeed = useCallback(() => setPanel("speed"), []);
 
   /**
    * The scorecard is fetched only once someone asks for it.
@@ -454,9 +453,6 @@ export function SwingPlayer({
           fps={fps}
           seekable={seekable}
           bands={bands}
-          swingId={swingId}
-          view={view}
-          onSpeed={openSpeed}
           onMetrics={openMetrics}
           onAnalysis={openAnalysis}
           bottomInset={insets.bottom}
@@ -545,63 +541,9 @@ export function SwingPlayer({
         />
       </DeckSheet>
 
-      {/* Short, so it opens at full height and never offers an expand that reveals nothing. */}
-      <DeckSheet
-        testID="speed-sheet"
-        visible={panel === "speed"}
-        onClose={closePanel}
-        title="Playback speed"
-        subtitle="Retimed natively, so every frame is still presented"
-        scrolls={false}
-      >
-        <View style={styles.speedList}>
-          {SPEEDS.map((s) => (
-            <Pressable
-              key={s.value}
-              testID={`speed-${String(s.value).replace(".", "-")}`}
-              accessibilityRole="button"
-              accessibilityState={{ selected: player.state.speed === s.value }}
-              accessibilityLabel={`${formatSpeed(s.value)} speed`}
-              onPress={() => {
-                player.actions.setSpeed(s.value);
-                closePanel();
-              }}
-              style={({ pressed }) => [
-                styles.speedRow,
-                player.state.speed === s.value && styles.speedRowOn,
-                pressed && styles.pressedGlass,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.speedRowValue,
-                  player.state.speed === s.value && styles.speedRowValueOn,
-                ]}
-              >
-                {formatSpeed(s.value)}
-              </Text>
-              <Text style={styles.speedRowHint}>{s.hint}</Text>
-            </Pressable>
-          ))}
-        </View>
-      </DeckSheet>
     </View>
   );
 }
-
-/**
- * Real time and three slow speeds, each with the reason it exists.
- *
- * Quarter speed is the coaching one — at 60fps it presents a true 15 frames a second, slow enough
- * to watch the club through impact and still fast enough to read as motion. Tenth exists for the
- * transition, which is over in about four frames.
- */
-const SPEEDS = [
-  { value: 1, hint: "Real time" },
-  { value: 0.5, hint: "Half — the whole shape, slower" },
-  { value: 0.25, hint: "Quarter — the coaching speed" },
-  { value: 0.1, hint: "Tenth — for the transition" },
-] as const;
 
 /**
  * The largest box of the given shape that fits inside `w × h`.

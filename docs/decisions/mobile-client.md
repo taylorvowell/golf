@@ -342,22 +342,24 @@ decision at the end of it. Glass is two translucent fills plus a lit hairline, *
 real backdrop blur is a native module, and every design change would then cost a fresh dev-client
 install on the device.
 
-### The scrubber is the swing's own frames, with its phases drawn to scale under them
+### Where you are is a NAME and a hairline bar, not a strip of thumbnails
 
-**Decision:** Above the scrub bar sits `filmstrip.jpg` drawn whole — twelve clean frames across the
-playback window, continuous and draggable — with a 4pt band beneath it showing the five phases
-(setup, backswing, downswing, through, run-out) **at their true durations**. The playhead, its
-frame badge, the strip, the phase band and the scrub thumb all read one x mapping over one
-full-width box, and `useSeekSurface` is the single copy of that arithmetic.
-**Gotchas:** Nothing in the group is padded, gapped or inset. Gaps are taken out of a row before
-flex divides what is left, so four 4pt gaps would push every phase boundary up to 16pt away from
-the frame it marks and the playhead would cross a boundary at a visibly different moment from the
-picture. The film sprockets are therefore drawn *over* the image, not between cells. A swing with
-no `filmstrip.jpg` — analysed before the artifact existed — still scrubs and still shows its
-phases; it simply has no pictures, and nothing here fabricates a frame it could not fetch.
-**Scope:** Drawn to scale, backswing against downswing **is tempo**, which is why the phase band
-survived having pictures put above it. Two swings' phase durations are also the only thing that
-can honestly be compared across two clips, which is what `ComparePanel` reads.
+**Decision:** The transport's readout says `Downswing · 184` — the phase the playhead is in, and
+the frame — with the elapsed and total time opposite it. Under that sits a **6pt** phase bar, the
+five phases drawn at their true durations and tappable to seek, then the scrub track. The playhead
+is a plain line with no frame badge.
+**Gotchas:** This replaced a real filmstrip. The analyzer grew a `filmstrip.jpg` artifact, a route
+served it and the scrubber drew twelve clean frames — and the whole chain was reverted, because a
+strip of thumbnails costs an artifact, a request, a decode and forty points of a golfer's screen to
+answer a question one line of text answers *better*. What the bar keeps is the part a name cannot
+give you: proportion. Nothing in the group is padded, gapped or inset — gaps are taken out of a row
+before flex divides what is left, so four 4pt gaps would push every phase boundary up to 16pt away
+from the frame it marks, and the playhead would cross a boundary at a visibly different moment from
+the picture. `useSeekSurface` is the single copy of the x↔frame arithmetic the bar and the scrub
+track both read.
+**Scope:** Drawn to scale, backswing against downswing **is tempo**, which is the whole reason the
+bar earns any height. `git show f05eaee` has the filmstrip if it is ever wanted back — the artifact,
+the route and `refilmstrip.py` all went with it rather than being left as surface with no consumer.
 
 ### Compare puts timing and scores side by side, never geometry
 
@@ -386,18 +388,23 @@ stay a chip row rather than becoming tiles: there are dozens of fields and every
 tile to say what an angle looks like, and the chips choose which.
 **Scope:** A group the artifact cannot support is still hidden, never disabled.
 
-### One speed button, no loop button, no frame stepper
+### A three-way speed slider, no loop button, no frame stepper
 
-**Decision:** The dock is: a **speed button** showing the current rate and opening a picker; the
-round play cap centred; **Metrics** and **Analysis** to the right. Looping is permanently on and
-has no control. There is no frame-stepper overlay.
-**Gotchas:** Removing the loop button removed the only place its behaviour was observable, so
+**Decision:** The dock is: a **segmented speed slider** on the left (`1x` · `0.5x` · `0.1x`, the lit
+pill sliding between segments), the round play cap centred, and **Metrics** and **Analysis** to the
+right. Looping is permanently on and has no control. There is no frame-stepper overlay and no speed
+picker sheet.
+**Gotchas:** Three speeds, not four — a quarter sat between two rates that already do their jobs
+(half is "the whole shape, slower", a tenth is for the transition, which is over in about four
+frames) and made each segment narrow enough to mis-tap. Labels are plain decimals: a `¼` glyph is a
+font risk on Android for no gain. The pill's position is `index × SEGMENT` with a fixed segment
+width, so there is no layout pass and no first-render frame with the pill in the wrong place, and it
+animates on `translateX` under the native driver so it never touches the JS thread the overlay draws
+on. Removing the loop button removed the only place its behaviour was observable, so
 `useFramePlayer.test.ts` now carries it — default on, restart-at-window-start without pausing,
-and stop-at-end when off. Without that, a regression would be silent on screen until someone
-noticed the swing had stopped repeating.
-**Scope:** Speed is chosen rarely and read constantly, so the dock spends its width showing the
-current one. It is still applied natively (`setPlaybackSpeed`) — a JS timer would drop frames and
-show a quarter of the swing while calling it slow motion.
+stop-at-end when off.
+**Scope:** Speed is still applied natively (`setPlaybackSpeed`) — a JS timer would drop frames and
+show a tenth of the swing while calling it slow motion.
 
 ### The picture's box is sized from the swing list, and never resizes
 

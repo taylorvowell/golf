@@ -121,15 +121,6 @@ export const ARTIFACTS = {
   /** Written on demand by `scripts/stampframes.py`; absent is the normal state. */
   "framestamp.mp4": { contentType: "video/mp4", lazy: true },
   "contact.jpg": { contentType: "image/jpeg", lazy: false },
-  /**
-   * The scrubber's picture: one row of `FILMSTRIP_CELLS` clean frames across `playback_window`.
-   *
-   * Not `contact.jpg`, which burns the skeleton in and stamps a frame number on every tile — right
-   * for a debug folder, wrong under a thumb. It carries **no metadata**: a client maps cell `i` to
-   * a frame from the cell count and the window it already has, which is why the count is a
-   * constant in `swingsage/render.py` rather than something negotiated per swing.
-   */
-  "filmstrip.jpg": { contentType: "image/jpeg", lazy: false },
 } as const;
 
 export type ArtifactName = keyof typeof ARTIFACTS;

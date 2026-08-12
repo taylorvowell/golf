@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Animated,
-  Dimensions,
   Easing,
   Modal,
   PanResponder,
@@ -10,6 +9,7 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
   type LayoutChangeEvent,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -113,7 +113,9 @@ export function DeckSheet({
   const [mounted, setMounted] = useState(visible);
   const [height, setHeight] = useState(0);
 
-  const screenHeight = Dimensions.get("window").height;
+  // `useWindowDimensions`, never a render-time `Dimensions.get`: this app is edge-to-edge, and a
+  // measurement taken once at module scope survives neither a rotation nor a fold.
+  const { height: screenHeight } = useWindowDimensions();
   const translate = useRef(new Animated.Value(screenHeight)).current;
   /** The panel has finished coming up at least once, so layout must not re-trigger the entrance. */
   const opened = useRef(false);

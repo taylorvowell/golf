@@ -1,7 +1,7 @@
 import { StyleSheet, View } from "react-native";
 
 import { DECK } from "../../design/deck";
-import { frameToFraction, type Extent } from "./frames";
+import { frameToFraction, stepFrame, type Extent } from "./frames";
 import { useSeekSurface } from "./useSeekSurface";
 
 /**
@@ -10,8 +10,8 @@ import { useSeekSurface } from "./useSeekSurface";
  * Built on `PanResponder` from React Native itself (via `useSeekSurface`) rather than a slider
  * package or `react-native-gesture-handler` — the latter is deliberately excluded from autolinking
  * (D47) and a slider that speaks percentages would put a second frame↔position conversion in the
- * app. This one converts once, through `frames.ts`, and reports whole frames. The thumbnail strip
- * above it shares that surface, which is what keeps the two agreeing about where frame N is.
+ * app. This one converts once, through `frames.ts`, and reports whole frames. The phase bar above
+ * it shares that surface, which is what keeps the two agreeing about where frame N is.
  *
  * The track is thin and the touch target is not: §41's bar is one-handed use in bright sunlight on
  * a driving range, so the grabbable area is 40pt tall around a 3pt line.
@@ -19,6 +19,8 @@ import { useSeekSurface } from "./useSeekSurface";
 
 export interface ScrubBarProps {
   frame: number;
+  /** For the spoken position. A scrub bar that only announces a percentage is not a transport. */
+  fps?: number;
   /**
    * The span the bar spans — the playback window once the analysis has loaded, the whole file
    * before that. Not a frame count: the window rarely starts at zero (swing1's opens at frame 90
@@ -34,6 +36,7 @@ export interface ScrubBarProps {
 
 export function ScrubBar({
   frame,
+  fps = 0,
   bounds,
   onSeek,
   onScrubbingChange,
@@ -42,11 +45,32 @@ export function ScrubBar({
   const surface = useSeekSurface(bounds, onSeek, disabled, onScrubbingChange);
   const fraction = frameToFraction(frame, bounds);
 
+  /**
+   * A drag is not a gesture a screen reader can make.
+   *
+   * `adjustable` plus the two actions is the whole of how this control is reachable without sight
+   * — TalkBack swipes up and down on it and gets a frame at a time. Announcing a percentage would
+   * be useless here: the unit a golfer works in is the frame, so that is what is spoken.
+   */
+  const spoken =
+    fps > 0 ? `frame ${frame}, ${(frame / fps).toFixed(2)} seconds` : `frame ${frame}`;
+
   return (
     <View
       testID="scrub-bar"
       style={styles.touch}
       onLayout={surface.onLayout}
+      accessible
+      accessibilityRole="adjustable"
+      accessibilityLabel="Swing position"
+      accessibilityState={{ disabled }}
+      accessibilityValue={{ text: spoken }}
+      accessibilityActions={ADJUST_ACTIONS}
+      onAccessibilityAction={(e) => {
+        if (disabled) return;
+        if (e.nativeEvent.actionName === "increment") onSeek(stepFrame(frame, 1, bounds));
+        if (e.nativeEvent.actionName === "decrement") onSeek(stepFrame(frame, -1, bounds));
+      }}
       {...surface.panHandlers}
     >
       <View style={[styles.track, disabled && styles.trackDisabled]}>
@@ -62,6 +86,8 @@ export function ScrubBar({
     </View>
   );
 }
+
+const ADJUST_ACTIONS = [{ name: "increment" }, { name: "decrement" }] as const;
 
 /**
  * The drawn track is a hairline and the touch target is not.
