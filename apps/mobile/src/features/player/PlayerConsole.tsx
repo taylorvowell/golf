@@ -127,36 +127,78 @@ export const PlayerConsole = memo(function PlayerConsole({
         </View>
       </View>
 
-      <View style={[styles.dockWrap, { paddingBottom: 8 + bottomInset }]}>
-        <View style={styles.dock}>
-          <SpeedSlider speed={speed} disabled={disabled} onChange={actions.setSpeed} />
+      <Dock
+        playing={playing}
+        speed={speed}
+        disabled={disabled}
+        onToggle={actions.toggle}
+        onSpeed={actions.setSpeed}
+        onMetrics={onMetrics}
+        onAnalysis={onAnalysis}
+        bottomInset={bottomInset}
+      />
+    </View>
+  );
+});
 
-          {/* The one round cap, the one warm cap, and the only control anyone presses blind. */}
-          <DeckButton
-            testID="play-toggle"
-            accessibilityLabel={playing ? "Pause" : "Play"}
-            primary
-            diameter={PLAY_DIAMETER}
-            depressed={playing}
-            disabled={disabled}
-            onPress={actions.toggle}
-            style={styles.playCap}
-          >
-            {playing ? (
-              <PauseGlyph size={19} color={DECK.label.onPrimary} />
-            ) : (
-              <PlayGlyph size={20} color={DECK.label.onPrimary} />
-            )}
-          </DeckButton>
+/**
+ * The dock, behind its own memo boundary, taking only primitives and stable callbacks.
+ *
+ * The console above it re-renders on every presented frame — `frame` is in the readout and the
+ * playhead, so it must. Nothing in the dock changes at 60Hz, and without this boundary the speed
+ * well, the play cap and both dock actions reconciled once per frame for a readout they do not
+ * contain. Primitives rather than the `state` object, because an object prop whose identity
+ * changes per frame is what defeats a memo in the first place.
+ */
+const Dock = memo(function Dock({
+  playing,
+  speed,
+  disabled,
+  onToggle,
+  onSpeed,
+  onMetrics,
+  onAnalysis,
+  bottomInset,
+}: {
+  playing: boolean;
+  speed: number;
+  disabled: boolean;
+  onToggle: () => void;
+  onSpeed: (speed: number) => void;
+  onMetrics: () => void;
+  onAnalysis: () => void;
+  bottomInset: number;
+}) {
+  return (
+    <View style={[styles.dockWrap, { paddingBottom: 8 + bottomInset }]}>
+      <View style={styles.dock}>
+        <SpeedSlider speed={speed} disabled={disabled} onChange={onSpeed} />
 
-          <View style={styles.dockRight}>
-            <DockAction testID="metrics-open" label="Metrics" onPress={onMetrics}>
-              <BarsGlyph size={16} color={DECK.label.caption} />
-            </DockAction>
-            <DockAction testID="analysis-open" label="Analysis" accent onPress={onAnalysis}>
-              <SparkGlyph size={17} color={DECK.accent} />
-            </DockAction>
-          </View>
+        {/* The one round cap, the one warm cap, and the only control anyone presses blind. */}
+        <DeckButton
+          testID="play-toggle"
+          accessibilityLabel={playing ? "Pause" : "Play"}
+          primary
+          diameter={PLAY_DIAMETER}
+          depressed={playing}
+          disabled={disabled}
+          onPress={onToggle}
+          style={styles.playCap}
+        >
+          {playing ? (
+            <PauseGlyph size={19} color={DECK.label.onPrimary} />
+          ) : (
+            <PlayGlyph size={20} color={DECK.label.onPrimary} />
+          )}
+        </DeckButton>
+
+        <View style={styles.dockRight}>
+          <DockAction testID="metrics-open" label="Metrics" onPress={onMetrics}>
+            <BarsGlyph size={16} color={DECK.label.caption} />
+          </DockAction>
+          <DockAction testID="analysis-open" label="Analysis" accent onPress={onAnalysis}>
+            <SparkGlyph size={17} color={DECK.accent} />
+          </DockAction>
         </View>
       </View>
     </View>

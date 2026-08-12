@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type {
   FrameClockHandle,
@@ -166,13 +166,34 @@ export function useFramePlayer(bounds: Extent): FramePlayer {
    * The callback fires up to `fps` times a second and must not be rebuilt every time the window
    * narrows or playback starts — rebuilding it re-registers a native listener mid-playback, which
    * is exactly the kind of churn a per-frame path cannot afford.
+   *
+   * Synced in effects, not in the render body: a concurrent render that never commits must not
+   * leak its window into a callback that fires 60 times a second (the web twin documents the same
+   * rule). The handlers that need the value *before* the next commit — pause, play, the stop path
+   * in the frame callback — also write the ref directly, which an event handler may.
    */
   const boundsRef = useRef(fileBounds(0));
-  boundsRef.current = typeof bounds === "number" ? fileBounds(bounds) : bounds;
   const playingRef = useRef(false);
-  playingRef.current = playing;
   const loopingRef = useRef(true);
-  loopingRef.current = looping;
+  /**
+   * `presented`/`target`, mirrored for the transport's own callbacks.
+   *
+   * `play` and `step` need "where are we", and reading the state for it puts a 60Hz value in
+   * their dependency arrays — which rebuilds `actions` every presented frame and re-renders every
+   * memoized control that takes a callback from it. The refs keep the callbacks' identities
+   * coarse while staying exact: they are written at the same moments the state is set.
+   */
+  const presentedRef = useRef(0);
+  const targetRef = useRef<number | null>(null);
+  useEffect(() => {
+    boundsRef.current = typeof bounds === "number" ? fileBounds(bounds) : bounds;
+  }, [bounds]);
+  useEffect(() => {
+    playingRef.current = playing;
+  }, [playing]);
+  useEffect(() => {
+    loopingRef.current = looping;
+  }, [looping]);
 
   const issue = useCallback((frame: number) => {
     inFlight.current = frame;
@@ -183,17 +204,19 @@ export function useFramePlayer(bounds: Extent): FramePlayer {
   }, []);
 
   const pause = useCallback(() => {
+    playingRef.current = false;
     setPlaying(false);
     void ref.current?.pause();
   }, []);
 
   const seekTo = useCallback(
     (frame: number) => {
-      const wanted = clampFrame(frame, bounds);
+      const wanted = clampFrame(frame, boundsRef.current);
+      targetRef.current = wanted;
       setTarget(wanted);
       // Seeking is not playing. Leaving playback running would have the decoder advancing past
       // wherever the seek lands, so the frame a golfer stopped on is not the frame they get.
-      if (playing) pause();
+      if (playingRef.current) pause();
 
       const outstanding = inFlight.current;
       const stale = outstanding !== null && Date.now() - inFlightAt.current > SEEK_TIMEOUT_MS;
@@ -205,7 +228,7 @@ export function useFramePlayer(bounds: Extent): FramePlayer {
       setMeasure((m) => ({ ...m, issued: m.issued + 1 }));
       issue(wanted);
     },
-    [bounds, issue, pause, playing],
+    [issue, pause],
   );
 
   const step = useCallback(
@@ -213,10 +236,10 @@ export function useFramePlayer(bounds: Extent): FramePlayer {
       // Step from the target, not from what is presented: two taps of "+1 frame" in quick
       // succession must move two frames, and the second one arrives long before the first has
       // reached the glass.
-      const from = target ?? presented;
-      seekTo(stepFrame(from, delta, bounds));
+      const from = targetRef.current ?? presentedRef.current;
+      seekTo(stepFrame(from, delta, boundsRef.current));
     },
-    [bounds, presented, seekTo, target],
+    [seekTo],
   );
 
   const play = useCallback(() => {
@@ -224,22 +247,24 @@ export function useFramePlayer(bounds: Extent): FramePlayer {
     // "play" at the finish does nothing at all, because the frame the picture would advance to is
     // outside the span — a control that visibly does nothing reads as broken.
     const b = boundsRef.current;
-    if (b.last > b.first && (target ?? presented) >= b.last) {
+    if (b.last > b.first && (targetRef.current ?? presentedRef.current) >= b.last) {
       void ref.current?.seekToFrame(b.first);
     }
+    playingRef.current = true;
     setPlaying(true);
     // Playback owns the position from here, so drop any outstanding seek rather than letting it
     // land mid-play and yank the picture backwards.
     inFlight.current = null;
     queued.current = null;
+    targetRef.current = null;
     setTarget(null);
     void ref.current?.play();
-  }, [presented, target]);
+  }, []);
 
   const toggle = useCallback(() => {
-    if (playing) pause();
+    if (playingRef.current) pause();
     else play();
-  }, [pause, play, playing]);
+  }, [pause, play]);
 
   const setLooping = useCallback((on: boolean) => setLoopingState(on), []);
 
@@ -256,6 +281,7 @@ export function useFramePlayer(bounds: Extent): FramePlayer {
   const onFrameRendered = useCallback(
     ({ nativeEvent }: { nativeEvent: FrameRenderedEvent }) => {
       const arrived = nativeEvent.frame;
+      presentedRef.current = arrived;
       setPresented(arrived);
       setPainted(true);
 
@@ -300,6 +326,7 @@ export function useFramePlayer(bounds: Extent): FramePlayer {
         issue(next);
       } else {
         // Nothing else pending: the picture is now the authority again.
+        targetRef.current = null;
         setTarget(null);
       }
     },

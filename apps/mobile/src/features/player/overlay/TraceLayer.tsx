@@ -67,6 +67,33 @@ const DRAW_ORDER: TraceKey[] = ["followthrough", "backswing", "downswing"];
 /** How much heavier the downswing draws than the backswing. */
 const DOWNSWING_WEIGHT = 1.25;
 
+interface TraceRun {
+  key: TraceKey;
+  tag: string;
+  segments: Segment[];
+  width: number;
+}
+
+/** One piece's frame-independent geometry, plus its finished form, computed once per artifact. */
+interface TraceEntry {
+  key: TraceKey;
+  tag: string;
+  dashed: boolean;
+  width: number;
+  piece: TracePiece;
+  /** The frame this piece finishes on. At or past it, `cutAt` returns the whole polyline. */
+  lastFrame: number;
+  /** The fully-revealed run — reused verbatim for every frame at or past `lastFrame`. */
+  full: TraceRun;
+}
+
+/** Scale to the stage, drop what the display cannot resolve, and cut into drawable segments. */
+function toSegments(pts: Pt[], sx: number, sy: number, peak: number, dashed: boolean): Segment[] {
+  const stage: Pt[] = pts.map(([x, y]) => [x * sx, y * sy]);
+  const thin = simplify(stage, SIMPLIFY_PX);
+  return dashed ? dashSegments(thin, peak * 1.25, peak * 2.1) : polylineSegments(thin);
+}
+
 export const TraceLayer = memo(function TraceLayer({
   analysis,
   pieces,
@@ -80,8 +107,17 @@ export const TraceLayer = memo(function TraceLayer({
   const sy = h / analysis.video.height;
   const peak = Math.max(2.5, w / 200);
 
-  const runs = useMemo(() => {
-    const out: { key: TraceKey; tag: string; segments: Segment[]; width: number }[] = [];
+  /**
+   * Everything the playhead cannot change, once per artifact-and-stage.
+   *
+   * The scale, the RDP simplify and the dashing used to run for EVERY piece on EVERY frame —
+   * O(whole path) of tuple allocations at 60Hz for output that was byte-identical the moment a
+   * piece was fully revealed. A smoothed trace runs to a few thousand points (see `paths.ts`),
+   * so the per-frame work has to be O(growing tip): only the one piece the playhead is inside is
+   * recut below; everything else — and everything, when `grow` is off — reuses these.
+   */
+  const entries = useMemo(() => {
+    const out: TraceEntry[] = [];
     for (const key of DRAW_ORDER) {
       // Follow-through ships at zero alpha — hidden, not deleted, so restoring it is one colour.
       // Skipping the render rather than drawing invisible views is the one place this renderer
@@ -90,30 +126,58 @@ export const TraceLayer = memo(function TraceLayer({
       if (TRACE_COLOR[key] === "rgba(255,255,255,0)") continue;
       const list = pieces[key];
       if (!list?.length) continue;
-      const dashed = key === "backswing";
+      const phaseDashed = key === "backswing";
       const width = key === "downswing" ? peak * DOWNSWING_WEIGHT : peak;
 
       list.forEach((piece, i) => {
-        const cut = grow ? cutAt(piece, frame) : piece.pts;
-        if (!cut || cut.length < 2) return;
-        const stage: Pt[] = cut.map(([x, y]) => [x * sx, y * sy]);
-        const thin = simplify(stage, SIMPLIFY_PX);
+        if (piece.pts.length < 2) return;
+        const tag = `${key}-${i}`;
+        // A bridge is already a two-point chord; dashing it is what says "nothing was measured
+        // here". A measured backswing run is dashed as a phase style. Both end up dashed and the
+        // reasons are different, which is why they are two conditions and not one.
+        const dashed = phaseDashed || piece.bridge;
         out.push({
           key,
-          tag: `${key}-${i}`,
-          // A bridge is already a two-point chord; dashing it is what says "nothing was measured
-          // here". A measured backswing run is dashed as a phase style. Both end up dashed and the
-          // reasons are different, which is why they are two conditions and not one.
-          segments:
-            dashed || piece.bridge
-              ? dashSegments(thin, peak * 1.25, peak * 2.1)
-              : polylineSegments(thin),
+          tag,
+          dashed,
           width,
+          piece,
+          lastFrame: piece.frames[piece.frames.length - 1] ?? -1,
+          full: { key, tag, width, segments: toSegments(piece.pts, sx, sy, peak, dashed) },
         });
       });
     }
     return out;
-  }, [pieces, frame, grow, sx, sy, peak]);
+  }, [pieces, sx, sy, peak]);
+
+  /** The finished path — what `grow` off draws, with no per-frame work at all. */
+  const fullRuns = useMemo(() => entries.map((e) => e.full), [entries]);
+
+  /**
+   * Revealed to the playhead. Each cached `full` keeps its identity frame to frame, so the
+   * memoized `Segments` under it skips; only the piece containing the playhead pays the cut.
+   */
+  const grownRuns = useMemo(() => {
+    if (!grow) return null;
+    const out: TraceRun[] = [];
+    for (const e of entries) {
+      if (frame >= e.lastFrame) {
+        out.push(e.full);
+        continue;
+      }
+      const cut = cutAt(e.piece, frame);
+      if (!cut || cut.length < 2) continue;
+      out.push({
+        key: e.key,
+        tag: e.tag,
+        width: e.width,
+        segments: toSegments(cut, sx, sy, peak, e.dashed),
+      });
+    }
+    return out;
+  }, [entries, frame, grow, sx, sy, peak]);
+
+  const runs = grownRuns ?? fullRuns;
 
   if (costRef) costRef.current = runs.reduce((n, r) => n + r.segments.length, 0);
 

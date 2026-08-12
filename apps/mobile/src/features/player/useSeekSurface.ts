@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PanResponder, type LayoutChangeEvent } from "react-native";
 
 import { fractionToFrame, type Extent } from "./frames";
@@ -46,11 +46,16 @@ export function useSeekSurface(
   const boundsRef = useRef(bounds);
   const disabledRef = useRef(disabled);
   const scrubbingRef = useRef(onScrubbingChange);
-  widthRef.current = width;
-  seekRef.current = onSeek;
-  boundsRef.current = bounds;
-  disabledRef.current = disabled;
-  scrubbingRef.current = onScrubbingChange;
+  // Synced in an effect, not the render body: a render that never commits must not leak its
+  // props into handlers that outlive it. The gesture only reads these after a commit, so the
+  // effect always lands first. `widthRef` is written by `onLayout` directly — an event, so
+  // allowed — because a grant can arrive before the commit that follows the layout.
+  useEffect(() => {
+    seekRef.current = onSeek;
+    boundsRef.current = bounds;
+    disabledRef.current = disabled;
+    scrubbingRef.current = onScrubbingChange;
+  }, [bounds, onSeek, disabled, onScrubbingChange]);
 
   const originRef = useRef(0);
 

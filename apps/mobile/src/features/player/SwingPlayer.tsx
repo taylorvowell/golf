@@ -257,6 +257,53 @@ export function SwingPlayer({
 
   const notice = noticeFor(seekable, analysisState.kind);
 
+  /**
+   * The sheets' contents, as stable elements.
+   *
+   * This whole component re-renders on every presented frame — the transport's `frame` lives
+   * here — and playback keeps running behind an open panel by design. An element written inline
+   * in the JSX below is *recreated* on each of those renders, which forces the sheet's chip grid
+   * to re-execute at frame rate while the user is looking at it. Every input here is
+   * frame-invariant, so the element is built once per real change and React bails out of the
+   * subtree on identity alone — the same reason the metrics sheet's `children` (owned by the
+   * screen above) were never affected.
+   */
+  const overlaysContent = useMemo(
+    () =>
+      analysis ? (
+        <OverlayControls
+          analysis={analysis}
+          toggles={toggles}
+          onToggle={onToggle}
+          angles={angles}
+          onAngles={setAngles}
+        />
+      ) : (
+        <Text style={styles.sheetEmpty}>
+          There is no analysis for this swing, so there is nothing to draw on it.
+        </Text>
+      ),
+    [analysis, toggles, onToggle, angles],
+  );
+
+  const analysisContent = useMemo(() => <AnalysisPanel state={report} />, [report]);
+
+  const compareContent = useMemo(
+    () => (
+      <ComparePanel
+        swingId={swingId}
+        fps={fps}
+        frameCount={frameCount}
+        bands={bands}
+        score={typeof score === "number" ? score : null}
+        tempoRatio={tempoRatio ?? null}
+        reference={reference}
+        onReference={setReference}
+      />
+    ),
+    [swingId, fps, frameCount, bands, score, tempoRatio, reference],
+  );
+
   return (
     <View style={styles.screen} onLayout={onViewportLayout} testID="swing-player">
       <View style={styles.stageWrap} pointerEvents="box-none">
@@ -466,19 +513,7 @@ export function SwingPlayer({
         title="Overlays"
         subtitle="What is drawn on the swing"
       >
-        {analysis ? (
-          <OverlayControls
-            analysis={analysis}
-            toggles={toggles}
-            onToggle={onToggle}
-            angles={angles}
-            onAngles={setAngles}
-          />
-        ) : (
-          <Text style={styles.sheetEmpty}>
-            There is no analysis for this swing, so there is nothing to draw on it.
-          </Text>
-        )}
+        {overlaysContent}
       </DeckSheet>
 
       <DeckSheet
@@ -515,7 +550,7 @@ export function SwingPlayer({
         title="Analysis"
         subtitle="Scored from the swing, with no AI in it"
       >
-        <AnalysisPanel state={report} />
+        {analysisContent}
       </DeckSheet>
 
       <DeckSheet
@@ -529,16 +564,7 @@ export function SwingPlayer({
             : "Pick a reference swing or one of your own"
         }
       >
-        <ComparePanel
-          swingId={swingId}
-          fps={fps}
-          frameCount={frameCount}
-          bands={bands}
-          score={typeof score === "number" ? score : null}
-          tempoRatio={tempoRatio ?? null}
-          reference={reference}
-          onReference={setReference}
-        />
+        {compareContent}
       </DeckSheet>
 
     </View>

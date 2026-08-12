@@ -5,8 +5,8 @@
 
 | Phase | Title | Status | Started | Completed | Notes |
 |---|---|---|---|---|---|
-| 0 | Re-baseline against the moving tree | pending | | | bundle size + device drift numbers go here |
-| 1 | Hot-path render hygiene | pending | | | H1 → M14 → H3p1 → M4 → H2, in order |
+| 0 | Re-baseline against the moving tree | complete | 2026-08-12 | 2026-08-12 | typecheck+239 tests green; bundle 2.7 MB; device numbers pending (phone offline) |
+| 1 | Hot-path render hygiene | complete | 2026-08-12 | 2026-08-12 | all five fixes landed; checkoverlay counts identical on all 10 fixtures (461/400 at pro_3 impact) |
 | 2 | Lifecycle & network (JS) | pending | | | |
 | 3 | frame-clock native fixes | pending | | | dev-client rebuild |
 | 4 | Shell, startup & native config | pending | | | ONE prebuild --clean covers all |
@@ -16,7 +16,7 @@
 
 ## Baselines (Phase 0 fills these)
 
-- JS bundle size (expo export, android): _pending_
+- JS bundle size (expo export, android): **2.7 MB** Hermes bytecode (index-*.hbc, 2026-08-12, pre-fix tree)
 - overlayDrift p50/p95/max, trace ON: _pending_ (open HANDOFF row covers this)
 - overlayDrift p50/p95/max, trace OFF: _pending_
 - Trace view count on worst fixture: measured historically at 461 (pro_3 impact) — re-read live
