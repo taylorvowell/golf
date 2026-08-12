@@ -51,6 +51,10 @@ export interface FramePlayerState {
   error: string | null;
   /** True while a seek is outstanding — the presented frame is expected to disagree meanwhile. */
   seeking: boolean;
+  /** Playback restarts at the window start instead of stopping at its end. */
+  looping: boolean;
+  /** 1 = real time. A swing is 1.5s long, so this is not a nicety. */
+  speed: number;
   /** Seeks issued since the clip loaded, including any still in flight. */
   seeksIssued: number;
   /**
@@ -73,6 +77,15 @@ export interface FramePlayerActions {
   toggle: () => void;
   play: () => void;
   pause: () => void;
+  setLooping: (on: boolean) => void;
+  /**
+   * Change playback rate.
+   *
+   * Native, not a JS timer: `setPlaybackSpeed` retimes the decoder, so a 60fps clip at 0.25 is a
+   * true 15 frames a second on screen with every frame still presented — where dropping frames in
+   * JS would show a quarter of the swing and call it slow motion.
+   */
+  setSpeed: (speed: number) => void;
   /** Forget the seek tally without touching playback — the panel's reset. */
   resetMeasurement: () => void;
   /**
@@ -117,6 +130,13 @@ export function useFramePlayer(bounds: Extent): FramePlayer {
   const [ready, setReady] = useState<ReadyEvent | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [measure, setMeasure] = useState({ issued: 0, landed: 0, exact: 0, worst: 0 });
+  /**
+   * Looping defaults ON, and that is a golf decision rather than a media-player one. A swing is
+   * about a second and a half; a player that stops dead at the finish makes a golfer press play
+   * for every single look at the same two frames.
+   */
+  const [looping, setLoopingState] = useState(true);
+  const [speed, setSpeedState] = useState(1);
 
   /**
    * Seek bookkeeping lives in refs, not state.
@@ -142,6 +162,8 @@ export function useFramePlayer(bounds: Extent): FramePlayer {
   boundsRef.current = typeof bounds === "number" ? fileBounds(bounds) : bounds;
   const playingRef = useRef(false);
   playingRef.current = playing;
+  const loopingRef = useRef(true);
+  loopingRef.current = looping;
 
   const issue = useCallback((frame: number) => {
     inFlight.current = frame;
@@ -210,6 +232,13 @@ export function useFramePlayer(bounds: Extent): FramePlayer {
     else play();
   }, [pause, play, playing]);
 
+  const setLooping = useCallback((on: boolean) => setLoopingState(on), []);
+
+  const setSpeed = useCallback((next: number) => {
+    setSpeedState(next);
+    void ref.current?.setPlaybackSpeed(next);
+  }, []);
+
   const resetMeasurement = useCallback(() => {
     setMeasure({ issued: 0, landed: 0, exact: 0, worst: 0 });
     void ref.current?.resetStats();
@@ -227,9 +256,16 @@ export function useFramePlayer(bounds: Extent): FramePlayer {
         // running on past the finish into whatever the golfer did next is the reason it exists.
         const b = boundsRef.current;
         if (playingRef.current && b.last > b.first && arrived >= b.last) {
-          playingRef.current = false;
-          setPlaying(false);
-          void ref.current?.pause();
+          if (loopingRef.current) {
+            // Seek without pausing. Pausing first and playing again on the landing produces a
+            // visible hitch at the finish of every single loop, which is the frame a golfer is
+            // most often looking at.
+            void ref.current?.seekToFrame(b.first);
+          } else {
+            playingRef.current = false;
+            setPlaying(false);
+            void ref.current?.pause();
+          }
         }
         return;
       }
@@ -319,17 +355,19 @@ export function useFramePlayer(bounds: Extent): FramePlayer {
       ready,
       error,
       seeking: target !== null,
+      looping,
+      speed,
       seeksIssued: measure.issued,
       seeksLanded: measure.landed,
       seeksExact: measure.exact,
       worstSeekError: measure.worst,
     }),
-    [error, measure, playing, presented, ready, target],
+    [error, looping, measure, playing, presented, ready, speed, target],
   );
 
   const actions = useMemo<FramePlayerActions>(
-    () => ({ seekTo, step, toggle, play, pause, resetMeasurement, runSeekSweep }),
-    [pause, play, resetMeasurement, runSeekSweep, seekTo, step, toggle],
+    () => ({ seekTo, step, toggle, play, pause, setLooping, setSpeed, resetMeasurement, runSeekSweep }),
+    [pause, play, resetMeasurement, runSeekSweep, seekTo, setLooping, setSpeed, step, toggle],
   );
 
   const handlers = useMemo(

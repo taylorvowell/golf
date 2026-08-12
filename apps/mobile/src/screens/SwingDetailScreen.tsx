@@ -1,19 +1,21 @@
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 import { SwingPlayer } from "../features/player/SwingPlayer";
 import { useSwing } from "../features/swings/useSwings";
+import { useAppNavigation } from "../navigation";
 import { COLORS } from "../theme";
 
 /**
- * One swing: the player, then the facts about it.
+ * One swing: the picture, then the facts about it.
  *
- * The player is deliberately overlay-free — Gate 2 of this project's verification strategy in its
- * mobile form. Pose and frame sync are unrelated causes of "the stick figure looks wrong", so a
- * proven clock ships with nothing drawn on it and the skeleton follows in step 02.
+ * **The screen has no header.** `SwingPlayer` owns the whole viewport — full-width picture at the
+ * top with the back control and the swing's name laid over it, the facts scrolling beneath, and
+ * the transport pinned to the bottom of the window. A navigation bar above the video would spend
+ * the most valuable strip of a tall screen on a title that is already on the picture.
  *
- * The metadata below it is not filler. Pose coverage and trace availability are confidence
- * signals, and a swing the model barely tracked has to say so next to its own score rather than
- * present it as equally trustworthy.
+ * The metadata is not filler. Pose coverage and trace availability are confidence signals, and a
+ * swing the model barely tracked has to say so next to its own score rather than present it as
+ * equally trustworthy.
  */
 
 export interface SwingDetailScreenProps {
@@ -22,6 +24,7 @@ export interface SwingDetailScreenProps {
 
 export function SwingDetailScreen({ id }: SwingDetailScreenProps) {
   const { state, swing } = useSwing(id);
+  const navigation = useAppNavigation();
 
   if (state.kind === "loading") {
     return (
@@ -47,15 +50,17 @@ export function SwingDetailScreen({ id }: SwingDetailScreenProps) {
   const scored = typeof swing.overallScore === "number";
 
   return (
-    <ScrollView contentContainerStyle={styles.content} testID="swing-detail">
-      <Text style={styles.heading}>{swing.label}</Text>
-
-      {/* No `view` — the route serves the primary angle, which is the one a single-view player
-          wants. Passing `primaryViewId` here is what made every swing answer 400: that is a uuid
-          and the parameter takes a view TYPE. Dual-view is step 04. */}
-      <SwingPlayer swingId={swing.id} frameCount={swing.frameCount} fps={swing.fps} />
-
-      <View style={styles.panel}>
+    // No `view` — the route serves the primary angle, which is the one a single-view player wants.
+    // Passing `primaryViewId` here is what made every swing answer 400: that is a uuid and the
+    // parameter takes a view TYPE. Dual-view is step 04.
+    <SwingPlayer
+      swingId={swing.id}
+      frameCount={swing.frameCount}
+      fps={swing.fps}
+      title={swing.label}
+      onBack={navigation.canGoBack() ? navigation.goBack : undefined}
+    >
+      <View testID="swing-detail" style={styles.panel}>
         <Row
           label="Score"
           value={scored ? `${Math.round(swing.overallScore as number)}${swing.band ? ` · ${swing.band}` : ""}` : "Not scored"}
@@ -68,12 +73,7 @@ export function SwingDetailScreen({ id }: SwingDetailScreenProps) {
         <Row label="Club trace" value={swing.traceEnabled ? "Available" : "Not available"} />
         {swing.tempoRatio ? <Row label="Tempo" value={`${swing.tempoRatio.toFixed(1)} : 1`} /> : null}
       </View>
-
-      <Text style={styles.detail}>
-        Overlays and the full scorecard arrive with the next player release. This swing is analysed
-        and safe.
-      </Text>
-    </ScrollView>
+    </SwingPlayer>
   );
 }
 
@@ -91,9 +91,7 @@ function viewName(v: { view: string }): string {
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 20, gap: 16 },
   centre: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10, padding: 24 },
-  heading: { color: COLORS.text, fontSize: 22, fontWeight: "700" },
   panel: {
     backgroundColor: COLORS.panel,
     borderColor: COLORS.border,

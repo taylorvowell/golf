@@ -1,4 +1,5 @@
-import { render, waitFor } from "@testing-library/react-native";
+import { ScrollView } from "react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 
 import { SwingPlayer } from "./SwingPlayer";
 import { ApiClientError } from "../../platform/api";
@@ -123,4 +124,87 @@ it("bounds the transport by the playback window, not by the file", async () => {
   mockRequest.mockResolvedValue(makeAnalysis({ frameCount: 40, playbackWindow: [4, 30] }));
   const { getByText } = await render(<SwingPlayer swingId="abc" frameCount={40} fps={60} />);
   await waitFor(() => expect(getByText("4–30")).toBeTruthy());
+});
+
+/**
+ * The console and its layout.
+ *
+ * These assert behaviour a golfer would notice on a range mat, not markup: that the swing starts
+ * without being asked, that the transport survives being scrolled away from, and that pause is the
+ * play button pushed IN rather than a different control. The last one is the reason `DeckButton`
+ * separates a latched state from a finger-down state at all.
+ */
+
+/** The video surface only reports its size once laid out; the console's release depends on it. */
+function layout(el: { props: { onLayout?: (e: unknown) => void } }, height: number) {
+  el.props.onLayout?.({ nativeEvent: { layout: { x: 0, y: 0, width: 393, height } } });
+}
+
+/** Drive the native `onReady`, which is what tells the player the clip exists. */
+function ready(el: { props: { onReady?: (e: unknown) => void } }) {
+  el.props.onReady?.({
+    nativeEvent: { durationMs: 4000, width: 1080, height: 1920, containerFps: 60 },
+  });
+}
+
+it("starts the swing playing on load, without being asked", async () => {
+  mockRequest.mockResolvedValue(makeAnalysis({ frameCount: 40 }));
+  const { getByTestId } = await render(<SwingPlayer swingId="abc" frameCount={40} fps={60} />);
+  await waitFor(() => expect(getByTestId("overlay-controls")).toBeTruthy());
+
+  await act(async () => ready(getByTestId("swing-video")));
+
+  // Pause IS play, depressed — so "is it playing" and "is the cap in" are the same assertion.
+  await waitFor(() =>
+    expect(getByTestId("play-toggle").props.accessibilityState.selected).toBe(true),
+  );
+  expect(getByTestId("play-toggle").props.accessibilityLabel).toBe("Pause");
+});
+
+it("loops by default — a swing is a second and a half long", async () => {
+  const { getByTestId } = await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} />);
+  await waitFor(() =>
+    expect(getByTestId("loop-toggle").props.accessibilityState.selected).toBe(true),
+  );
+});
+
+it("changes speed natively rather than by dropping frames", async () => {
+  const { getByTestId } = await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} />);
+  const quarter = getByTestId("speed-0-25");
+  await act(async () => quarter.props.onClick?.() ?? fireEvent.press(quarter));
+  await waitFor(() => expect(quarter.props.accessibilityState.selected).toBe(true));
+});
+
+it("pulls the picture back into view when a control is touched", async () => {
+  const { getByTestId } = await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} />);
+  // Spied on the class, not on the rendered host element: the test renderer's host node carries
+  // props, not the imperative handle the component actually calls through its ref.
+  const spy = jest
+    .spyOn(ScrollView.prototype as unknown as { scrollTo: () => void }, "scrollTo")
+    .mockImplementation(() => {});
+  fireEvent.press(getByTestId("step-fwd-1"));
+  expect(spy).toHaveBeenCalledWith({ y: 0, animated: true });
+  spy.mockRestore();
+});
+
+it("keeps the console mounted while the picture is scrolled past", async () => {
+  // It slides out of the way rather than unmounting: a console that unmounted would drop the
+  // transport's state and lose the speed and loop the golfer had chosen.
+  const { getByTestId } = await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} />);
+  layout(getByTestId("swing-video").parent ?? getByTestId("swing-video"), 700);
+  fireEvent.scroll(getByTestId("swing-scroll"), {
+    nativeEvent: { contentOffset: { y: 900 }, contentSize: { height: 2000, width: 393 },
+                   layoutMeasurement: { height: 852, width: 393 } },
+  });
+  expect(getByTestId("player-console")).toBeTruthy();
+});
+
+it("draws the back control and the swing's name over the picture", async () => {
+  const onBack = jest.fn();
+  const { getByTestId, getByText } = await render(
+    <SwingPlayer swingId="abc" frameCount={240} fps={60} title="6iron3" onBack={onBack} />,
+  );
+  expect(getByText("6iron3")).toBeTruthy();
+  fireEvent.press(getByTestId("player-back"));
+  expect(onBack).toHaveBeenCalled();
 });

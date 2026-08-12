@@ -59,10 +59,12 @@ export default function App() {
                 component={SwingLogScreen}
                 options={{ title: "Your swings" }}
               />
+              {/* No header: the player draws its own back control and title OVER the picture, so
+                  a bar above it would spend the most valuable strip of a tall screen twice. */}
               <Stack.Screen
                 name="SwingDetail"
                 component={SwingDetailRoute}
-                options={{ title: "Swing" }}
+                options={{ headerShown: false }}
               />
               <Stack.Screen
                 name="DeleteAccount"

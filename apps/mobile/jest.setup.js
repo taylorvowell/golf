@@ -104,3 +104,27 @@ jest.mock("./modules/frame-clock/src/FrameClockView", () => {
 
   return { __esModule: true, default: FrameClockView };
 });
+
+/**
+ * `react-native-safe-area-context` reads its insets from a native view, so `useSafeAreaInsets()`
+ * throws *"No safe area value available"* under jest unless a provider with real metrics wraps the
+ * tree — which every screen test would otherwise have to remember to do.
+ *
+ * Mocked with a phone-shaped notch and gesture bar rather than zeros. Zeros would let a layout
+ * that ignores the insets pass here and then draw its back button under the status bar on the
+ * device, which is precisely the class of bug this app cannot check in CI.
+ */
+jest.mock("react-native-safe-area-context", () => {
+  const actual = jest.requireActual("react-native-safe-area-context");
+  const insets = { top: 47, right: 0, bottom: 34, left: 0 };
+  return {
+    ...actual,
+    useSafeAreaInsets: () => insets,
+    useSafeAreaFrame: () => ({ x: 0, y: 0, width: 393, height: 852 }),
+    SafeAreaProvider: ({ children }) => children,
+    SafeAreaInsetsContext: {
+      ...actual.SafeAreaInsetsContext,
+      Consumer: ({ children }) => children(insets),
+    },
+  };
+});

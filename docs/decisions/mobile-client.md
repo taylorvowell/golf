@@ -271,3 +271,39 @@ arise.
 answered 244/396 frames against 90%+ on the other nine — never a reason to change the pick.
 Provenance for the pick is `burnin.py`'s `TRACE_MODES` and `club.py`'s `smooth_trace`, whose
 `measured()` gate is what makes a trace refuse to draw through undetected frames in the first place.
+
+### Deck — the control-surface system, and why controls have depth
+
+**Decision:** Player controls are built from **Deck** (`src/design/deck/`): a slab, and caps that sit
+at one of three depths on it. One rule governs everything — **light comes from directly above** — so
+a raised cap catches a highlight on its top rim and casts a shadow below itself, and a cap pushed in
+inverts both. **Pause is the play cap latched down**, not a second icon.
+**Gotchas:** §41's conditions are bright sunlight, one hand, a driving range, and flat design fails
+all three at once: in glare a filled rectangle converges with its background and there is no shape
+cue left. **Depth survives washout where colour does not**, and it gives state somewhere to live
+that is not colour. `DeckButton` separates a *latched* state (`depressed`, the caller's) from a
+*finger-down* state (its own) — conflating them would pop the pause cap back out the instant the
+finger lifted, which is exactly when a golfer looks at it.
+**Scope:** This is a control-surface system, **not the app's design system**. Type scale, spacing
+rhythm, iconography and the §41 contrast bar are `mobile-app-shell` step 03, which absorbs this
+folder rather than colliding with it — Deck layers on `theme.ts`'s tokens instead of restating them.
+Built on RN 0.86's `boxShadow` (multi-shadow, `inset`) and `experimental_backgroundImage`
+gradients; an earlier React Native would have needed nine-patch images for the same effect.
+
+### The swing screen has no header, and its transport is pinned
+
+**Decision:** `SwingDetail` sets `headerShown: false`. The picture is full width at the top of the
+screen at the analysed frame's aspect ratio, with the back control and the swing's name laid over
+it. The console is pinned to the bottom of the window while any part of the picture is on screen and
+slides out of the way once it has been scrolled past. **Touching any control scrolls the picture
+back to the top first.** Playback starts on load, looping, at 1×.
+**Gotchas:** Park-then-play is **one effect, not three**. The artifact arrives after the video does
+and narrows the transport to `playback_window`, so a play issued on `ready` alone is cut off a
+moment later by the seek that follows it. The effect waits for `analysisState` to leave `loading`,
+which also covers the swing that has no artifact — it settles on `not-analysed` and playback still
+starts. The console **slides rather than unmounting**: unmounting would drop the speed and loop the
+golfer had chosen.
+**Scope:** Looping defaults ON because a swing is about a second and a half; a player that stops
+dead at the finish makes a golfer press play for every look at the same two frames. Speeds are 1×,
+½×, ¼×, ⅒× and are applied natively (`setPlaybackSpeed`) — a JS timer would drop frames and show a
+quarter of the swing while calling it slow motion.
