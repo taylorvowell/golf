@@ -406,6 +406,23 @@ stop-at-end when off.
 **Scope:** Speed is still applied natively (`setPlaybackSpeed`) — a JS timer would drop frames and
 show a tenth of the swing while calling it slow motion.
 
+## Standards
+
+### `.claude/rules/react-native.md` is the mobile client's binding rulebook
+
+**Decision:** Mechanical standards for all mobile code — hot-path render discipline, the
+`analysis.json` contract on the phone, lifecycle/cleanup, CNG-only native config, accessibility,
+testing — live in `.claude/rules/react-native.md`, path-scoped to `apps/mobile/**` like the
+project's other rules files. Produced by the 2026-08-12 performance review
+(`.claude/audits/mobile-rn-perf-2026-08-12/` — findings and the phased fix plan). This register
+holds decisions; the rules file holds mechanics; where they overlap, the register wins.
+**Gotchas:** Hot-path changes are **measurement-gated**: the FrameSyncPanel's overlayDrift and
+view-count numbers on the S25+ decide, not inference — the review's Phase 7 items
+(`useSyncExternalStore` for the frame value, transform-based primitive positioning, React
+Compiler adoption) are explicitly *experiments to measure*, not backlog. Re-litigating D23
+(plain-View overlay) without fresh numbers is the named anti-pattern.
+**See:** ARCHIVE D23, D36, D40.
+
 ### The picture's box is sized from the swing list, and never resizes
 
 **Decision:** `SwingPlayer` takes an `aspectRatio` prop, resolved by the screen from
