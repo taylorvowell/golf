@@ -1,4 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
+import "./cliOnly";
 import { sql } from "drizzle-orm";
 import { endOwnerPool, withOwner } from "./admin";
 

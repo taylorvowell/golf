@@ -130,3 +130,17 @@ autolinking in `apps/mobile/react-native.config.js` and `package.json`'s `expo.a
 where routes are declared and changes no screen. Delete the exclusion the day the app needs a
 drawer or a swipeable row.
 **See:** ARCHIVE D47.
+
+### Images that need the session use `expo-image`, never React Native's `Image`
+
+**Decision:** Any image behind an authenticated route goes through `expo-image` with a source from
+`api.mediaSource()`. React Native's own `Image` accepts `headers` on its source and **silently does
+not send them on Android**.
+**Gotchas:** The failure renders as a blank thumbnail with no error and no `onError`. Worse, the
+unauthenticated request is *answered* as the `DEV_USER_EMAIL` identity, so the route returns **404
+rather than 401** and nothing points at authentication. `SwingCard.test.tsx` asserts the source
+carries its `Authorization` header for exactly this reason.
+**Scope:** `cachePolicy: "disk"` is not decoration — the thumb route serves the analyzer's
+full-resolution `contact.jpg` (1–2 MB), so a ten-swing log is ~13 MB uncached. A server-side
+thumbnail size belongs with the media pipeline.
+**See:** ARCHIVE D48.

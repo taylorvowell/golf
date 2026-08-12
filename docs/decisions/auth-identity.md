@@ -15,6 +15,11 @@ a local `supabase start` stack. There is no `supabase/` directory in the repo ye
 the build is on core functionality instead. Three things stay in place because of that hold and
 must not be deleted until phone lands: **email OTP**, the **`DEV_USER_EMAIL`** identity, and the
 absence of **identity linking** (which needs a second provider to link to).
+**Cost of keeping the fallback, measured:** an unauthenticated request is *answered as the
+development identity* rather than refused, so a missing credential surfaces as **404** ("no such
+swing for this owner") instead of **401**. That turned a one-line client bug into a full diagnosis
+cycle once already (D48). Whenever a media or swing route 404s inexplicably, check whether the
+request carried a bearer token at all before checking anything else.
 **See:** ARCHIVE D31, which supersedes D25's provider choice but not its reasoning; D46 for the hold.
 
 ### Google sign-in is native, and the server takes the session as a bearer token

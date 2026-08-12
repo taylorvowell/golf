@@ -47,3 +47,18 @@ jest.mock("@react-native-google-signin/google-signin", () => {
     isSuccessResponse: (r) => r?.type === "success",
   };
 });
+
+/**
+ * `expo-image` is a native module and its web/observer shim throws under jest
+ * (`observe.getIntegrations is not a function`) at *import*, before any component renders.
+ *
+ * Mocked to a plain `Image` so tests still see a real element with the source they expect — which
+ * matters here more than usual: the reason this component is `expo-image` at all is that React
+ * Native's own `Image` silently drops the `headers` on its source, so the thing worth asserting is
+ * that a source with an `Authorization` header reaches the component.
+ */
+jest.mock("expo-image", () => {
+  const React = require("react");
+  const { Image: RNImage } = require("react-native");
+  return { Image: (props) => React.createElement(RNImage, props) };
+});

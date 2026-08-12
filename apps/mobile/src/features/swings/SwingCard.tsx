@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Image } from "expo-image";
 import type { SwingSummary } from "@swingsage/schema/contract";
 
 import { api } from "../../platform/client";
@@ -33,7 +34,19 @@ export function SwingCard({ swing, onPress }: SwingCardProps) {
     >
       <View style={styles.thumbWrap}>
         {thumb ? (
-          <Image source={thumb} style={styles.thumb} resizeMode="cover" />
+          <Image
+            source={thumb}
+            testID="swing-thumb"
+            style={styles.thumb}
+            contentFit="cover"
+            // Disk-cached, because the route serves the analyzer's full-resolution `contact.jpg` —
+            // 1–2 MB per swing. Ten cards is ~13 MB on every cold start otherwise, which is the
+            // wrong shape for a product used on a course on cellular. A server-side thumbnail
+            // size is the real fix and belongs with the media pipeline; caching is what makes
+            // that a later decision rather than an urgent one.
+            cachePolicy="disk"
+            transition={120}
+          />
         ) : (
           // A placeholder, never a broken-image glyph. `contact.jpg` is legitimately absent on a
           // swing analysed before that stage existed, and that is not an error to report.
@@ -74,6 +87,13 @@ export function SwingCard({ swing, onPress }: SwingCardProps) {
  *
  * Asynchronous because the access token is — `getSession()` may refresh it. Returning null for
  * that first render is why `SwingCard` draws a placeholder rather than an `Image` with no source.
+ *
+ * **The component this feeds must be `expo-image`, not React Native's `Image`.** RN's `Image`
+ * accepts `headers` on its source and silently does not send them on Android — the request arrives
+ * unauthenticated, and because a development fallback identity exists it is answered as *that*
+ * user rather than refused, so the route returns 404 (no such swing for this owner) instead of
+ * 401. The visible symptom is a blank thumbnail with a plausible-looking status and nothing in the
+ * client to suggest authentication was ever involved.
  */
 function useAuthenticatedImage(path: string) {
   const [source, setSource] = useState<{ uri: string; headers: Record<string, string> } | null>(

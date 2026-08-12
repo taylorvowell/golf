@@ -2597,3 +2597,54 @@ pnpm relinks it. Deleting the orphaned directory does not help — it comes stra
 bundler and the install succeeds first time. The package named in the error is whichever one pnpm
 reached when it hit the lock, so it moves between runs and looks unrelated to what you asked for.
 Now in `ENVIRONMENT.md` under the toolchain gotchas.
+
+---
+
+## D48 — React Native's `Image` drops auth headers, and a dev fallback turned the 401 into a 404
+
+**Date:** 2026-08-12 · **Track:** mobile-app-shell, step 01 · **Status:** done
+
+Every thumbnail in the new swing log rendered blank. The list itself was correct, the scores were
+correct, and tapping a swing worked. Only the images were missing.
+
+**Three things had to be true at once for this to be as hard to find as it was.**
+
+**1. `Image` accepts `headers` and does not send them.** `apps/mobile/src/platform/api.ts`
+produces `{ uri, headers }` and React Native's `Image` takes that source without complaint. On
+Android the request goes out with no `Authorization` header at all. There is no error, no
+`onError`, no warning — the component simply renders nothing.
+
+**2. The server answered 404, not 401.** With no bearer token, `lib/auth.ts` falls through to the
+`DEV_USER_EMAIL` development identity, which since D46's fixture claim owns nothing. So the request
+*was* authenticated, as the wrong person, and `requireViewAccess` correctly reported "no such swing
+for this owner" — a 404. **A 401 would have named the problem in one line.** This is a real,
+measured cost of the fallback identity that D31 gates on phone OTP landing, and it belongs on the
+ledger next to the reasons for keeping it.
+
+**3. Every other layer was verifiably fine**, which is what made the search expensive: the objects
+were on disk at the right keys, the database agreed, `multiView.test.ts` passed, and
+`verify:media` — written during this diagnosis — fetched all thirty artifacts over HTTP with a real
+session and got `200` for every one. The repository could not distinguish "the object is missing"
+from "the route refused" from "the client never asked properly", and only the third was true.
+
+**What found it:** instrumenting the route to log `auth?` alongside the status, then relaunching the
+app. `auth? false` on every request, and the whole thing collapsed to one line.
+
+**The fix is `expo-image`**, whose source honours `headers` on both platforms, plus `cachePolicy:
+"disk"` — which also blunts a second problem this exposed: the route serves the analyzer's
+full-resolution `contact.jpg`, 1–2 MB per swing, ~13 MB for a ten-card log on every cold start. A
+server-side thumbnail size is the real answer and belongs with the media pipeline; caching is what
+makes that a later decision rather than an urgent one.
+
+**Two things now stop this recurring.** `SwingCard.test.tsx` asserts the source handed to the image
+component carries an `Authorization` header — an assertion about the source rather than about
+pixels, because the component is the part that will change. And `pnpm --filter web verify:media
+<email>` fetches every swing's thumb, video and analysis over HTTP with a real session, so "is it
+the server or the client" is one command instead of an afternoon.
+
+**A boundary held while this happened**, and is worth recording because it cost a fix rather than a
+bug: `verify:media` uses the auth admin API to mint a session, and `service-role.test.ts` failed
+the build until it declared itself unreachable from a request. The exemption is now `db/cliOnly.ts`
+— a module that throws under `NEXT_RUNTIME` — so a script proves it is CLI-only rather than being
+allowlisted by name, and does not have to import a database connection it never uses to inherit the
+guarantee.

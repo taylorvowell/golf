@@ -55,7 +55,22 @@ the S25+.
 - **Verified:** mobile tsc clean, 41 jest (+2 suites), web tsc/lint clean, 167 vitest, 100 schema
   vitest, `assembleDebug` BUILD SUCCESSFUL, APK installed, and the served Metro bundle contains
   every swing-log string.
-- **Not looked at on the device's screen** — the phone was in its owner's hands (TeamViewer in the
-  foreground). One relaunch is all it needs.
+- **Followed up on the device: every thumbnail was blank, and the cause was none of the obvious
+  ones (D48).** React Native's `Image` accepts `headers` on its source and **silently does not send
+  them on Android**. The request then arrived unauthenticated, was answered as the `DEV_USER_EMAIL`
+  identity — which owns nothing since the fixture claim — and the route correctly returned **404**,
+  not 401. Every other layer verified clean, which is what made it expensive: objects on disk at
+  the right keys, database agreeing, `multiView.test.ts` green, and `verify:media` fetching all
+  thirty artifacts over HTTP with a real session for `200` each. Instrumenting the route to log
+  `auth?` alongside the status collapsed it to one line: `auth? false`.
+- **Fixed with `expo-image`** (honours `headers`, plus `cachePolicy: "disk"` — the route serves the
+  analyzer's full-resolution `contact.jpg`, ~13 MB across ten cards uncached). Confirmed on the
+  device: all ten thumb requests now return 200.
+- **Two things stop it recurring:** `SwingCard.test.tsx` asserts the source handed to the image
+  component carries its `Authorization` header, and `pnpm --filter web verify:media <email>` makes
+  "server or client?" one command. A third thing held on its own: `service-role.test.ts` failed the
+  build until `verify:media` declared itself unreachable from a request, which produced
+  `db/cliOnly.ts` — a guard a script imports to *prove* it is CLI-only rather than being
+  allowlisted by name.
 
 ---

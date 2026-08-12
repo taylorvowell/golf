@@ -154,6 +154,9 @@ pnpm --filter mobile exec tsc --noEmit
 # the account lifecycle, against the RUNNING system — needs `pnpm dev` up (§4.2 + §4.3)
 pnpm --filter web verify:account                  # 7 checks; creates and deletes its own identity
 
+# every swing's media, fetched over HTTP exactly as the phone fetches it
+pnpm --filter web verify:media you@example.com    # thumb + video + analysis per swing, real session
+
 # the shared contract — from the repo root
 pnpm --filter @swingsage/schema test              # vitest, 100 tests
 pnpm schema:check                                 # generated types match the schemas
@@ -186,6 +189,14 @@ cover the authorization boundary and they answer different questions:
 * `src/db/accountDeletion.test.ts` proves §4.3 **actually deletes** — it counts every user-owned
   table before and after, so a table added later without a cascading foreign key fails the suite
   instead of quietly surviving a deletion.
+
+**"The thumbnails are blank" has three unrelated causes and only one command separates them.**
+The object may be missing, the route may be refusing the request, or the client may never have
+asked properly. `pnpm --filter web verify:media <email>` answers the first two by fetching every
+swing's `thumb`, `video` and `analysis` over HTTP with a real session — so all-`200` means the
+remaining suspect is the client. When it *is* the client, note that a media route answering **404**
+rather than 401 does not rule out authentication: an unauthenticated request is answered as the
+`DEV_USER_EMAIL` identity, which owns nothing (D48).
 
 **`pnpm --filter web verify:account` is a different kind of check and is not in the suite.** It
 needs a real Supabase project and a running server, because what it exercises belongs to neither:

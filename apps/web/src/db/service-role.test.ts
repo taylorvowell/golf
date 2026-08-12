@@ -143,12 +143,15 @@ describe("service-role boundary", () => {
       .filter((f) => {
         const text = readFileSync(f, "utf8");
         if (!/\bauth\.admin\b/.test(text)) return false;
-        // A CLI script is a different question. `db/admin.ts` throws at import when `NEXT_RUNTIME`
-        // is set, so anything importing it is unreachable from a request BY CONSTRUCTION rather
-        // than by an allowlist entry — the same proof that lets the owner connection exist at all.
-        // `verifyAccount.ts` is the case: it creates and deletes a probe identity, which is
-        // precisely the capability being fenced off, and it can only run under plain node.
-        return !/from\s+["'](@\/db\/admin|\.\/admin)["']/.test(text);
+        // A CLI script is a different question, and the exemption is a PROOF rather than a name.
+        // `db/admin.ts` and `db/cliOnly.ts` both throw at import when `NEXT_RUNTIME` is set, so a
+        // module importing either is unreachable from a request by construction — the same
+        // mechanism that lets the owner connection exist at all. The verification scripts are the
+        // case: they mint and delete probe identities, which is precisely the capability being
+        // fenced off, and they can only run under plain node.
+        return !/(from\s+["'](@\/db\/admin|\.\/admin)["']|import\s+["'](@\/db\/cliOnly|\.\/cliOnly)["'])/.test(
+          text,
+        );
       })
       .map((f) => f.replace(process.cwd(), "."));
 

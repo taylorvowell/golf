@@ -28,7 +28,8 @@
     },
     "plugins": [
       "expo-dev-client",
-      "expo-video"
+      "expo-video",
+      "expo-image"
     ],
     "scheme": "swingsage"
   }
