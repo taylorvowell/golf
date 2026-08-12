@@ -226,3 +226,24 @@ describe("readiness and failure", () => {
     expect(view.result.current.state.playing).toBe(false);
   });
 });
+
+describe("what the exactness figure is measured over", () => {
+  it("divides by landed seeks, not issued ones", async () => {
+    const { view } = await setup();
+
+    await act(async () => view.result.current.actions.seekTo(100));
+    await act(async () => view.result.current.handlers.onFrameRendered(rendered(100)));
+    await act(async () => view.result.current.actions.seekTo(200));
+
+    // One landed exactly, one is still in flight. Dividing by `issued` reports 1/2 = 50% about a
+    // run in which nothing has missed — which is exactly what the panel showed mid-sweep.
+    expect(view.result.current.state.seeksIssued).toBe(2);
+    expect(view.result.current.state.seeksLanded).toBe(1);
+    expect(view.result.current.state.seeksExact).toBe(1);
+    expect(view.result.current.state.seeking).toBe(true);
+
+    await act(async () => view.result.current.handlers.onFrameRendered(rendered(200)));
+    expect(view.result.current.state.seeksLanded).toBe(2);
+    expect(view.result.current.state.seeking).toBe(false);
+  });
+});

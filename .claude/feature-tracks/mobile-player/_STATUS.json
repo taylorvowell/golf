@@ -3,12 +3,12 @@
   "featureName": "mobile-player",
   "currentStep": "01",
   "phase": "Core Golfer Experience",
-  "lastUpdated": "2026-08-12T06:05:00Z",
+  "lastUpdated": "2026-08-12T07:55:00Z",
   "steps": {
     "01": {
       "status": "in-progress",
       "startedAt": "2026-08-12T04:50:00Z",
-      "note": "Built and verified as far as automation reaches; open ONLY on the on-device seek measurement. D50: the surface is modules/frame-clock, not expo-video - frame-clock owns its own ExoPlayer and is the only thing that can report the frame on the glass, so the two cannot compose. That forced three native additions the spike never needed: `headers` (the media route is behind auth and an unauthenticated request returns 404 not 401 - D48 in native form), `positionMs` and `playing`. Found and fixed on device: declaring `httpFactory` BELOW the init block left it null in buildPlayer(), so Expo substituted an ErrorGroupView and the only symptom was `ErrorGroupView cannot be cast to FrameClockView` from getStats - a healthy function named for a view that never got built. Verified: mobile tsc clean, 83 jest (+38), `verify:media` 10/10 over the running server, Gradle assembleDebug BUILD SUCCESSFUL, APK installed on the S25+, app launched and a swing opened with a CLEAN logcat, and the player renders - scrub bar, transport, and the frame-sync panel reading 519 frames at 60 fps. BLOCKED on: the phone's proximity sensor is covered, so Samsung's Accidental touch protection swallows every `adb shell input` event; screen_off_pocket=0, `dumpsys sensorservice restrict` and force-stopping com.samsung.android.gesture all failed to dismiss it. HANDOFF row open; procedure in RUNBOOK 11 - tap `Run 250 seeks` and read two lines."
+      "note": "Built and verified as far as automation reaches; open ONLY on the on-device seek measurement. D50: the surface is modules/frame-clock, not expo-video - frame-clock owns its own ExoPlayer and is the only thing that can report the frame on the glass, so the two cannot compose. That forced three native additions the spike never needed: `headers` (the media route is behind auth and an unauthenticated request returns 404 not 401 - D48 in native form), `positionMs` and `playing`. Found and fixed on device: declaring `httpFactory` BELOW the init block left it null in buildPlayer(), so Expo substituted an ErrorGroupView and the only symptom was `ErrorGroupView cannot be cast to FrameClockView` from getStats - a healthy function named for a view that never got built. Verified: mobile tsc clean, 83 jest (+38), `verify:media` 10/10 over the running server, Gradle assembleDebug BUILD SUCCESSFUL, APK installed on the S25+, app launched and a swing opened with a CLEAN logcat, and the player renders - scrub bar, transport, and the frame-sync panel reading 519 frames at 60 fps. BLOCKED on: the phone's proximity sensor is covered, so Samsung's Accidental touch protection swallows every `adb shell input` event; screen_off_pocket=0, `dumpsys sensorservice restrict` and force-stopping com.samsung.android.gesture all failed to dismiss it. HANDOFF row open; procedure in RUNBOOK 11 - tap `Run 250 seeks` and read two lines. | Later the same day: reported as 'would not play - source error'. It was HTTP 400 from requireViewAccess - SwingDetailScreen passed primaryViewId (a uuid) into /video?view=, which takes a view TYPE; the route refuses an unrecognised view rather than falling back. Fixed by passing no view at all and typing the prop as SwingViewSummary['view']. The 400 masked a worse bug: setSource and setHeaders each prepared the player, so prop order decided whether the fetch carried a session - an unauthenticated pass returns 404 not 401 and then self-heals. Both setters now only record and OnViewDidUpdateProps prepares once per batch. THE SWING THEN PLAYED on the S25+: 59.9 fps UI, 0 stutters, 1889 frames at 60 fps, container fps 60.00 vs 60 declared, and a PARTIAL sweep of 30 seeks at native 100.0% exact, p95 0, max 0. Also fixed two flaws in the instrument itself - JS exactness divided by seeks ISSUED so an in-flight seek read as a failure (30/31 96.8% with zero misses), and Drift showed -1114 mid-seek. 85 jest. Still open ONLY on the full n>=200 sweep."
     },
     "02": {
       "status": "not-started"
@@ -25,9 +25,9 @@
       "step": "01",
       "classification": "USER-ACTION-NEEDED",
       "raised": "2026-08-12",
-      "what": "The on-device seek measurement needs the phone uncovered.",
-      "why": "Samsung's Accidental touch protection (window `UnintentionalLcdOn`) consumes every injected touch while the proximity sensor is covered, and no adb command dismisses it.",
-      "unblocks": "Tap `Run 250 seeks` on the Frame sync panel and report the two exactness lines. RUNBOOK 11."
+      "what": "The full n>=200 seek sweep, on the phone.",
+      "why": "The device is in its owner's hands; a partial run of 30 seeks read 100.0% exact before it was picked up.",
+      "unblocks": "Open a swing, scroll to Frame sync, tap `Run 250 seeks`, report the two exactness lines. RUNBOOK 11."
     }
   ],
   "skipped": []

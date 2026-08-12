@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import type { SwingViewSummary } from "@swingsage/schema/contract";
 
 import { FrameClockView } from "../../../modules/frame-clock/src";
 import { api } from "../../platform/client";
@@ -28,12 +29,22 @@ export interface SwingPlayerProps {
   swingId: string;
   frameCount: number;
   fps: number;
-  /** Which view of a multi-angle swing to play. Omitted plays the primary one. */
-  viewId?: string | null;
+  /**
+   * Which angle of a multi-view swing to play — a view **TYPE**, not a view id.
+   *
+   * `SwingSummary` carries both and they are easy to confuse: `primaryViewId` is a uuid, while
+   * `/video?view=` takes `dtl` or `face_on`. The route answers a uuid with **400 "unknown view"**
+   * rather than falling back, deliberately — silently serving down-the-line for `?view=overhead`
+   * would look like the parameter worked.
+   *
+   * Omitted plays the primary view, which is what the route does with no parameter at all. Step 01
+   * never passes it; dual-view is step 04.
+   */
+  view?: SwingViewSummary["view"] | null;
 }
 
-export function SwingPlayer({ swingId, frameCount, fps, viewId }: SwingPlayerProps) {
-  const source = useMediaSource(swingId, viewId);
+export function SwingPlayer({ swingId, frameCount, fps, view }: SwingPlayerProps) {
+  const source = useMediaSource(swingId, view);
   const player = useFramePlayer(frameCount);
   const [scrubbing, setScrubbing] = useState(false);
 
@@ -134,15 +145,15 @@ export function SwingPlayer({ swingId, frameCount, fps, viewId }: SwingPlayerPro
  * media route answers an unauthenticated request as the development fallback identity and returns
  * **404, not 401**, so the failure would read as a swing that does not exist (D48, D50).
  */
-function useMediaSource(swingId: string, viewId?: string | null) {
+function useMediaSource(swingId: string, view?: SwingViewSummary["view"] | null) {
   const [source, setSource] = useState<{ uri: string; headers: Record<string, string> } | null>(
     null,
   );
 
   useEffect(() => {
     let live = true;
-    const path = viewId
-      ? `swings/${swingId}/video?view=${encodeURIComponent(viewId)}`
+    const path = view
+      ? `swings/${swingId}/video?view=${encodeURIComponent(view)}`
       : `swings/${swingId}/video`;
     void api.mediaSource(path).then((s) => {
       if (live) setSource(s);
@@ -150,7 +161,7 @@ function useMediaSource(swingId: string, viewId?: string | null) {
     return () => {
       live = false;
     };
-  }, [swingId, viewId]);
+  }, [swingId, view]);
 
   return source;
 }

@@ -81,3 +81,44 @@ for the next so the sample size is real. `CURRENT-STATE.md` §11b still records 
 unmeasured and stays that way until the number exists.
 
 ---
+
+## 01 — the swing plays, and the two bugs the device found
+**Worked:** 2026-08-12 (same day, after the first on-device pass)
+
+**Reported: "the swing would not play — source error".** True, and it was mine. Not auth, not the
+media pipeline: **HTTP 400**, from `requireViewAccess`. `SwingDetailScreen` passed
+`swing.primaryViewId` into `/video?view=`, and that parameter takes a view **TYPE** (`dtl` /
+`face_on`), not a view **id** (a uuid). The route answers an unrecognised view with 400 rather than
+falling back — deliberately, and its own comment says why: silently serving down-the-line for
+`?view=overhead` would look like the parameter worked. `SwingSummary` carries both fields and they
+are one word apart. Fixed by passing nothing at all, which is what a single-view player wants — the
+route already orders by `is_primary`. The prop is now typed `SwingViewSummary["view"]`, so the same
+mistake no longer compiles, and a test asserts both the typed form and the omitted form.
+
+**The 400 was masking a worse one.** `setSource` and `setHeaders` each prepared the player, so
+whichever prop Expo applied first decided whether the fetch carried a session. On the pass where
+`source` won, the request went out unauthenticated, was answered as the development fallback
+identity, and came back **404 rather than 401** (D48) — then self-healed on the next apply. An
+intermittent bug that repairs itself is the worst kind to be left holding. Both setters now only
+record, and `OnViewDidUpdateProps` prepares once after the whole batch has landed. Same change on
+iOS, still uncompiled.
+
+**Then it played.** Real footage on the S25+, 59.9 fps UI, **0 stutters**, 1889 frames at 60 fps,
+and the panel reporting **container fps 60.00 vs 60 declared** — the check that would catch every
+frame index being wrong while each number looked individually right.
+
+**A partial sweep ran before the phone was picked up: 30 seeks, native 100.0% exact, p95 0, max 0,
+worst seek error 0 frames.** Consistent with D40, and not yet the n≥200 the step asks for.
+
+**Two flaws in the instrument, both visible in that screenshot and both fixed.** *Seeks exact (JS)*
+divided by seeks **issued**, so the one still in flight counted as a failure and it read
+`30/31 · 96.8%` about a run in which nothing had missed — it now divides by seeks **landed**, with a
+regression test. And *Drift* showed `−1114` mid-seek, because while a seek is outstanding the
+presented frame is the old one and the difference is the distance jumped, not an error; it now reads
+`seek in flight`. An oracle that cries wolf is one people stop reading, which is the same failure
+this project's own measurement history keeps repeating.
+
+Verified: mobile tsc clean · **85 jest** (+2) · assembleDebug SUCCESSFUL · installed · swing opened
+and played with a clean logcat.
+
+---

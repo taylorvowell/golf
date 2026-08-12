@@ -94,8 +94,10 @@ export function FrameSyncPanel({ state, playerRef, fps, onReset, onSweep }: Fram
   const containerFps = state.ready?.containerFps ?? 0;
   const mismatch = fpsDisagrees(containerFps, fps);
 
+  // Over LANDED seeks. Dividing by seeks issued counts the one still in flight as a failure, which
+  // read "30/31 · 96.8%" during a sweep in which nothing had actually missed.
   const exactShare =
-    state.seeksIssued > 0 ? (state.seeksExact / state.seeksIssued) * 100 : null;
+    state.seeksLanded > 0 ? (state.seeksExact / state.seeksLanded) * 100 : null;
 
   return (
     <View testID="frame-sync-panel" style={styles.panel}>
@@ -112,17 +114,28 @@ export function FrameSyncPanel({ state, playerRef, fps, onReset, onSweep }: Fram
         <Cell label="Position" value={positionFrame === null ? "—" : String(positionFrame)} />
       </View>
 
+      {/**
+       * While a seek is outstanding the presented frame is the OLD one, so the difference is the
+       * distance jumped, not an error. It read −1114 mid-sweep, which is a frightening number
+       * about nothing — and an oracle that cries wolf is one people stop reading.
+       */}
       <Line
         label="Drift (presented − requested)"
-        value={seekError === 0 ? "0 — locked" : `${seekError > 0 ? "+" : ""}${seekError}`}
-        bad={seekError !== 0}
+        value={
+          state.seeking
+            ? "seek in flight"
+            : seekError === 0
+              ? "0 — locked"
+              : `${seekError > 0 ? "+" : ""}${seekError}`
+        }
+        bad={!state.seeking && seekError !== 0}
       />
       <Line
         label="Seeks exact (JS)"
         value={
           exactShare === null
             ? "no seeks yet"
-            : `${state.seeksExact}/${state.seeksIssued} · ${exactShare.toFixed(1)}%`
+            : `${state.seeksExact}/${state.seeksLanded} · ${exactShare.toFixed(1)}%`
         }
         bad={exactShare !== null && exactShare < 100}
       />

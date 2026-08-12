@@ -269,23 +269,27 @@ class FrameClockView(context: Context, appContext: AppContext) : ExpoView(contex
 
   fun setSource(uri: String?) {
     sourceUri = uri
-    applySource()
+  }
+
+  /** The headers every media request carries — in practice `Authorization` and the client version. */
+  fun setHeaders(headers: Map<String, String>) {
+    sourceHeaders = headers
   }
 
   /**
-   * The headers every media request carries — in practice `Authorization` and the client version.
+   * Prepare the player, once, after every prop in the batch has been applied.
    *
-   * Set independently of [setSource] because props arrive in whatever order the view receives
-   * them, and a source prepared before its headers landed would fetch unauthenticated exactly
-   * once — which is the failure this exists to prevent. Both setters funnel through [applySource],
-   * which is idempotent, so whichever arrives second is the one that prepares the player.
+   * **The setters above deliberately only record.** Props arrive in whatever order the view
+   * receives them, so preparing inside `setSource` fetches with whatever headers happen to have
+   * landed — and on the pass where `source` comes first that is none. The request then goes out
+   * unauthenticated, is answered as the development fallback identity, and comes back **404 rather
+   * than 401** (D48), which reads as a swing that does not exist. It would also self-heal on the
+   * next apply, making it the worst kind of bug: intermittent, and invisible when it heals.
+   *
+   * `OnViewDidUpdateProps` fires after the whole batch, which removes the ordering question rather
+   * than betting on it.
    */
-  fun setHeaders(headers: Map<String, String>) {
-    sourceHeaders = headers
-    applySource()
-  }
-
-  private fun applySource() {
+  fun applySource() {
     val exo = player ?: return
     val uri = sourceUri
     if (uri.isNullOrBlank()) {

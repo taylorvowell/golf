@@ -50,12 +50,10 @@ export function SwingDetailScreen({ id }: SwingDetailScreenProps) {
     <ScrollView contentContainerStyle={styles.content} testID="swing-detail">
       <Text style={styles.heading}>{swing.label}</Text>
 
-      <SwingPlayer
-        swingId={swing.id}
-        frameCount={swing.frameCount}
-        fps={swing.fps}
-        viewId={swing.primaryViewId}
-      />
+      {/* No `view` — the route serves the primary angle, which is the one a single-view player
+          wants. Passing `primaryViewId` here is what made every swing answer 400: that is a uuid
+          and the parameter takes a view TYPE. Dual-view is step 04. */}
+      <SwingPlayer swingId={swing.id} frameCount={swing.frameCount} fps={swing.fps} />
 
       <View style={styles.panel}>
         <Row

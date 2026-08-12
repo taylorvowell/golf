@@ -44,11 +44,19 @@ it("gives the video surface a source carrying the session", async () => {
   });
 });
 
-it("asks for a specific view when the swing has one", async () => {
-  await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} viewId="view-1" />);
+it("asks for an angle by view TYPE, never by view id", async () => {
+  // `SwingSummary` carries `primaryViewId` (a uuid) and `views[].view` (`dtl` | `face_on`), and
+  // passing the first one here is what made every swing answer **400 "unknown view"** — the route
+  // refuses an unrecognised view rather than quietly serving the default.
+  await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} view="face_on" />);
   await waitFor(() =>
-    expect(mockMediaSource).toHaveBeenCalledWith("swings/abc/video?view=view-1"),
+    expect(mockMediaSource).toHaveBeenCalledWith("swings/abc/video?view=face_on"),
   );
+});
+
+it("asks for no angle at all when none is named, so the route serves the primary", async () => {
+  await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} />);
+  await waitFor(() => expect(mockMediaSource).toHaveBeenCalledWith("swings/abc/video"));
 });
 
 it("passes the analysed frame rate through, never a default", async () => {

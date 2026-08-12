@@ -17,6 +17,12 @@ public class FrameClockModule: Module {
         view.setHeaders(headers ?? [:])
       }
 
+      // Both setters above only record. The player is prepared here, once the whole batch has
+      // landed, so a source can never be fetched with headers that had not arrived yet (D50).
+      OnViewDidUpdateProps { (view: FrameClockView) in
+        view.applySource()
+      }
+
       Prop("fps") { (view: FrameClockView, fps: Double) in
         view.fps = fps
       }

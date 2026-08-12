@@ -49,8 +49,16 @@ export interface FramePlayerState {
   ready: ReadyEvent | null;
   /** A native playback error, already user-readable. Null while healthy. */
   error: string | null;
-  /** Seeks issued since the clip loaded — the denominator of the frame-exactness claim. */
+  /** True while a seek is outstanding — the presented frame is expected to disagree meanwhile. */
+  seeking: boolean;
+  /** Seeks issued since the clip loaded, including any still in flight. */
   seeksIssued: number;
+  /**
+   * Seeks that have arrived. **This is the denominator of the exactness figure, not
+   * `seeksIssued`** — dividing by seeks issued counts the one still in flight as a failure and
+   * reports 30/31 · 96.8% about a run in which nothing had missed.
+   */
+  seeksLanded: number;
   /** Seeks that landed on exactly the frame requested. */
   seeksExact: number;
   /** Worst |requested − presented| seen. One bad seek is the thing an average would hide. */
@@ -103,7 +111,7 @@ export function useFramePlayer(frameCount: number): FramePlayer {
   const [playing, setPlaying] = useState(false);
   const [ready, setReady] = useState<ReadyEvent | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [measure, setMeasure] = useState({ issued: 0, exact: 0, worst: 0 });
+  const [measure, setMeasure] = useState({ issued: 0, landed: 0, exact: 0, worst: 0 });
 
   /**
    * Seek bookkeeping lives in refs, not state.
@@ -180,7 +188,7 @@ export function useFramePlayer(frameCount: number): FramePlayer {
   }, [pause, play, playing]);
 
   const resetMeasurement = useCallback(() => {
-    setMeasure({ issued: 0, exact: 0, worst: 0 });
+    setMeasure({ issued: 0, landed: 0, exact: 0, worst: 0 });
     void ref.current?.resetStats();
   }, []);
 
@@ -196,6 +204,7 @@ export function useFramePlayer(frameCount: number): FramePlayer {
       const err = Math.abs(arrived - wanted);
       setMeasure((m) => ({
         issued: m.issued,
+        landed: m.landed + 1,
         exact: m.exact + (err === 0 ? 1 : 0),
         worst: Math.max(m.worst, err),
       }));
@@ -274,7 +283,9 @@ export function useFramePlayer(frameCount: number): FramePlayer {
       playing,
       ready,
       error,
+      seeking: target !== null,
       seeksIssued: measure.issued,
+      seeksLanded: measure.landed,
       seeksExact: measure.exact,
       worstSeekError: measure.worst,
     }),

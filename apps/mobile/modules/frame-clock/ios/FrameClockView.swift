@@ -79,23 +79,24 @@ class FrameClockView: ExpoView {
 
   func setSource(_ uri: String?) {
     sourceUri = uri
-    applySource()
   }
 
   /// The headers every media request carries — in practice `Authorization` and the client version.
-  ///
-  /// Separate from `setSource` because props arrive in whatever order the view receives them, and
-  /// an item created before its headers landed would fetch unauthenticated exactly once. Both
-  /// funnel through `applySource`, so whichever arrives second prepares the player.
   ///
   /// **Unverified.** There is no Mac and no iOS device (D31); this is parity with the Android path
   /// that was measured, not a tested claim.
   func setHeaders(_ headers: [String: String]) {
     sourceHeaders = headers
-    applySource()
   }
 
-  private func applySource() {
+  /// Prepare the player, once, after every prop in the batch has been applied.
+  ///
+  /// The setters above deliberately only record. Props arrive in whatever order the view receives
+  /// them, so building the asset inside `setSource` would fetch with whatever headers happened to
+  /// have landed — none, on the pass where `source` comes first. See the Android counterpart; the
+  /// failure mode there is a 404 that self-heals on the next apply, which is worse than one that
+  /// does not.
+  func applySource() {
     stopDisplayLink()
     statusObservation = nil
 
