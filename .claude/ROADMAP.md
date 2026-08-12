@@ -18,7 +18,7 @@ Platform Foundation → Core Golfer Experience → Capture & Multi-Device → Co
 | observability-and-slos | Platform Foundation | Define and instrument the targets that make 'production ready' falsifiable: … | 0/0 (—) | — | planned | — |
 | notifications | Platform Foundation | Push and email notification infrastructure with user-manageable preferences.… | 0/0 (—) | — | planned | — |
 | mobile-app-shell | Core Golfer Experience | Mobile client scaffold for iPhone and Android: navigation, auth flows, onboa… | 1/3 (33%) | 02 | active | — |
-| **mobile-player** (spine) | Core Golfer Experience | Re-express the frame-accurate player and overlay system on mobile, plus the … | 0/4 (0%) | 01 | active | — |
+| **mobile-player** (spine) | Core Golfer Experience | Re-express the frame-accurate player and overlay system on mobile, plus the … | 1/4 (25%) | 02 | active | — |
 | swing-ingest | Core Golfer Experience | The product flow on top of the media pipeline: turn one or two uploaded vide… | 0/0 (—) | — | planned | — |
 | analysis-ground-truth | Core Golfer Experience | Make the analysis falsifiable before anyone pays for it: hand-labelled event… | 0/0 (—) | — | planned | — |
 | in-app-capture | Capture & Multi-Device | Record a swing inside the app at a minimum of 60fps: capability detection wi… | 0/0 (—) | — | planned | — |
@@ -48,5 +48,5 @@ Platform Foundation → Core Golfer Experience → Capture & Multi-Device → Co
 
 ## Recommended next
 
-Spine: **mobile-player 01** (`/build`). Then the other unblocked active/planned tracks per phase order. Externally-blocked
+Spine: **mobile-player 02** (`/build`). Then the other unblocked active/planned tracks per phase order. Externally-blocked
 tracks wait on their `unblockTrigger`.

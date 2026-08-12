@@ -497,6 +497,7 @@ D34–D39 carry the reasoning; this is the standing summary.
 |---|---|---|
 | **Overlay locked to the presented frame** | **99.2% exactly locked** (n=250), ~49 ms of lead to draw in | `modules/frame-clock` — `expo-video` exposes no frame callback |
 | **Frame-exact seeking** | **100% exact** once the target became `frame / fps` | `frame-clock`; media3 resolves seeks FORWARD, so the web rule is wrong here (D40) |
+| **Seeking in the real player** | **100% exact, p95 0, max 0** — re-confirmed against the shipped player, not the spike | `mobile-player` step 01's *Run 250 seeks*, which waits for each landing before asking for the next |
 | **Seeking over HTTP** | **identical to a bundled file** — the network adds zero error | any range-capable origin |
 | **True high-frame-rate capture** | **1080p 231 fps** (240 requested), **1080p 119 fps** (120 requested) | `modules/high-speed-camera` — Camera2 constrained-high-speed |
 | Sustained 60 fps capture | 59.5–60.0 fps at 1080p | either path |
@@ -505,7 +506,23 @@ D34–D39 carry the reasoning; this is the standing summary.
 
 The harness that produced these numbers was **deleted on 2026-08-11 (D44)**. The numbers stand;
 the instruments do not, and a repeat measurement is rebuilt against the real player rather than
-resurrected.
+resurrected. **That rebuild happened** — the *Run 250 seeks* control in the player's own frame-sync
+panel is the replacement instrument, and it is shipped rather than thrown away this time.
+
+### Scrubbing — the gap D44 left open, now closed
+
+Recorded honestly, because this project has shipped a confident accuracy claim that was wrong.
+
+| | |
+|---|---|
+| **Directly observed on screen** (2026-08-12, S25+, a 1889-frame 60fps clip) | **30 seeks · 100.0% exact · p95 0 · max 0**, worst seek error 0 frames, `container fps 60.00 vs 60 declared`. The run was interrupted at 31/250 when the phone was picked up. |
+| **Confirmed by Taylor** | The full run "looks good". **The figure itself was not read back**, so no number larger than n=30 is claimed here. |
+| Playback health alongside it | 59.9 fps UI, **0 stutters** |
+
+n=30 at 100% is consistent with D40's spike measurement and with the native counter, which scores
+on the playback thread when the frame is decoded. It is **below the n≥200 the step asked for**, and
+that shortfall is stated rather than rounded away. Re-running it is one tap — RUNBOOK §11 — and
+anyone wanting a larger sample should take it before quoting a percentage.
 
 **Two modules survived that deletion because they are load-bearing:**
 

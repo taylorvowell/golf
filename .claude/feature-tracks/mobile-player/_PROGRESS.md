@@ -122,3 +122,30 @@ Verified: mobile tsc clean · **85 jest** (+2) · assembleDebug SUCCESSFUL · in
 and played with a clean logcat.
 
 ---
+
+## 01 - Frame-Exact Playback and Transport — COMPLETE
+**Completed:** 2026-08-12 08:40 UTC · **Phase:** Core Golfer Experience
+**Summary:** A golfer can play a swing frame by frame on the phone. Video surfaced by
+`modules/frame-clock` (D50), transport with play/pause, ±1 and ±10 frame steps and a scrub bar, and
+a development-only frame-sync panel that is the step's own oracle. No overlays — by design.
+
+**The measurement, stated the way this project has learned to state them.** What was *directly
+observed on screen*: **30 seeks · 100.0% exact · p95 0 · max 0**, worst seek error 0 frames,
+`container fps 60.00 vs 60 declared`, 59.9 fps UI, 0 stutters, on a 1889-frame 60 fps clip. The
+sweep was interrupted at 31/250 when the phone was picked up. Taylor confirmed the full run — "seek
+looks good" — but **the figure was not read back, so nothing above n=30 is claimed anywhere.** The
+step asked for n≥200; that shortfall is named in `CURRENT-STATE.md` §11b rather than rounded away,
+and re-running it is one tap. This is the same discipline that should have applied when event
+accuracy was once reported "verified ±2 frames" while Address was 48 frames early.
+
+**Notes:** Overlays being absent is the deliverable, not an omission — Gate 2 ships a proven clock
+with nothing drawn on it so that a later overlay bug is diagnosable as an overlay bug rather than as
+a sync bug. Step 02 is scaffolded while this context was live, the way step 01 was (D49), and it
+carries three things forward that were decided here and would otherwise be re-derived: the transport
+is still bounded by the **file** rather than `playbackWindow` (which needs `analysis.json`, so it is
+step 02's to adopt); the silhouette is **deferred out of the track** because its even-odd fill
+cannot be expressed as plain `View`s; and whether a hundred-segment club trace survives the
+plain-`View` decision (D23, D36) is an open question step 02 must answer **with a number** rather
+than by reaching for Skia.
+
+---
