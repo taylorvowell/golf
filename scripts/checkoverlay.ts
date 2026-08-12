@@ -24,6 +24,8 @@
  *                    in the database rather than in the artifact this script reads from disk
  *     --stage PX     the stage width the view count is costed at (default 360, a phone)
  *     --true-colour  draw in the overlay's real palette instead of the diff hairline
+ *     --variant KEY  force a club solution instead of `defaultClubVar` (`--variant list` prints them)
+ *     --smoothing K  force a trace smoothing method instead of `savgol`
  *
  * By default it draws every layer as a **thin magenta hairline**, because the burn-in already uses
  * the same green/yellow/cyan and two identical drawings on top of each other cannot be told from
@@ -49,7 +51,7 @@ import {
 } from "../apps/mobile/src/features/player/overlay/geometry";
 import {
   ORIENT_PAIRS,
-  buildTrace,
+  buildTraceFor,
   orientationHold,
   selectedClub,
   traceSpans,
@@ -112,6 +114,16 @@ const STAGE_W = flag("--stage", 360);
 const TRUE_COLOUR = argv.includes("--true-colour");
 
 /**
+ * Overrides for the two choices the DESKTOP persists in localStorage — globally, not per swing.
+ *
+ * That persistence is why "the phone looks different from what we had" is a question this script
+ * has to be able to answer: the browser draws whatever was last picked in the Debug Menu, while a
+ * fresh client draws `defaultClubVar` + `savgol`. Comparing them needs both to be nameable here.
+ */
+const variantArg = argv.includes("--variant") ? argv[argv.indexOf("--variant") + 1] : null;
+const smoothingArg = argv.includes("--smoothing") ? argv[argv.indexOf("--smoothing") + 1] : null;
+
+/**
  * Hand-corrected boundaries, passed in rather than fetched.
  *
  * They live in Postgres, not in `analysis.json` — deliberately, since the artifact is rewritten
@@ -161,10 +173,38 @@ if (!frames.length) {
 const W = analysis.video.width;
 const H = analysis.video.height;
 
-// The variant the player actually draws, not `primary` — the same call the overlay makes.
-const club = selectedClub(analysis);
+if (variantArg === "list") {
+  const v = analysis.club?.variants ?? {};
+  console.log(`${stem}: default ${defaultClubVar(analysis)}`);
+  for (const [k, d] of Object.entries(v)) {
+    const cov = Object.entries(d.coverage ?? {})
+      .map(([seg, f]) => `${seg} ${Math.round((f as number) * 100)}%`)
+      .join("  ");
+    const pts =
+      (d.trace?.backswing?.length ?? 0) +
+      (d.trace?.downswing?.length ?? 0) +
+      (d.trace?.followthrough?.length ?? 0);
+    console.log(`  ${k.padEnd(22)} ${String(pts).padStart(4)} trace pts   ${cov}`);
+  }
+  process.exit(0);
+}
+
+// The variant the player actually draws, not `primary` — the same call the overlay makes, unless
+// this run is deliberately comparing one.
+const club = (() => {
+  const c = analysis.club;
+  if (!c) return null;
+  if (!variantArg || variantArg === "primary") return variantArg ? c : selectedClub(analysis);
+  const v = c.variants?.[variantArg];
+  if (!v) {
+    console.error(`${stem}: no variant ${variantArg} — try --variant list`);
+    process.exit(2);
+  }
+  return { ...c, frames: v.frames, trace: v.trace, trace_frames: v.trace_frames, coverage: v.coverage };
+})();
 const spans = traceSpans(analysis, phaseOverrides);
-const pieces = buildTrace(analysis, spans, DEFAULT_SMOOTHING);
+const method = (smoothingArg ?? DEFAULT_SMOOTHING) as typeof DEFAULT_SMOOTHING;
+const pieces = buildTraceFor(club, analysis, spans, method);
 const tracks = orientationHold(analysis, idx);
 // Every drawable angle, so a port bug in `resolve()`'s chain/feet/club branches has somewhere to
 // show. The phone draws a selection; the check draws all of them.
@@ -188,7 +228,10 @@ try {
   );
   // Naming the solution is not decoration: the first pass of this port drew `primary` while the web
   // player drew a variant, and the only visible symptom was a differently-shaped line.
-  console.log(`  club solution ${club ? defaultClubVar(analysis) : "none (analysed --no-club)"}`);
+  console.log(
+    `  club solution ${club ? (variantArg ?? defaultClubVar(analysis)) : "none (analysed --no-club)"}` +
+      `   smoothing ${method}`,
+  );
   const pinned = Object.entries(phaseOverrides);
   if (pinned.length) {
     console.log(`  boundaries pinned ${pinned.map(([k, v]) => `${k}=${v}`).join(" ")}`);

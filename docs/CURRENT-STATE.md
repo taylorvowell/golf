@@ -152,7 +152,11 @@ revealed frame-by-frame; gaps where the detector declined are drawn as dashed st
 and never interpolated (reconstruction was tried on held-out gaps and lost to a straight line).
 Nine render-time smoothing methods are switchable live in the overlay menu
 (`lib/traceSmoothing.ts`, default Savitzky-Golay); all keep endpoints exact so the head of the
-line lands on the playhead. `checkclub.py` judges the per-frame head, `checktrace.py` the
+line lands on the playhead. Thirteen alternative club SOLUTIONS are stored per swing and switchable
+the same way; `lib/clubVariants.ts` picks the default, and no candidate may be the default unless
+it measured at least half the swing — otherwise it falls back to `primary`, the conservative
+classical solve. Nine fixtures select `model_traj_moving`; `swing1` falls back, because every model
+solve measures under 30% of it and one of them measures 0% of the downswing. `checkclub.py` judges the per-frame head, `checktrace.py` the
 polyline — a good `checkclub.py` sheet says nothing about the trace.
 
 ---

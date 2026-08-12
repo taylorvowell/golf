@@ -231,8 +231,9 @@ result. On these fixtures it resolves to `model_traj_moving`.
 test caught it, and the only symptom was a differently-shaped line over the same swing —
 `scripts/checkoverlay.ts` is what found it, on its first real run. Switching solutions is a RENDER
 change only: metrics, face and event refinement all read the primary block regardless.
-**Scope:** It also changes the trace's cost materially — swing1's impact frame went from 136 trace
-views on `primary` to 49 on the selected variant, while `pro_3`'s went the other way, to 400.
+**Scope:** It also changes the trace's cost materially — `pro_3`'s impact frame went to 400 trace
+views. And it exposed a bug in `defaultClubVar` itself; see the entry below, which is the reason
+`swing1` is the one fixture where the selection is still `primary`.
 
 ### Hand corrections merge on the phone, by frame, at render time
 
@@ -250,3 +251,20 @@ in this database predate that model and still say `address` / `top` / `toe_up`; 
 ignores them by only asking for names it knows, and dropping them keeps the two clients agreeing
 about which corrections are live. Today that leaves exactly one in effect — `pro_2`'s `impact` at
 143 against the analyzer's 140.
+
+### A club solution is only the default if it measured half the swing
+
+**Decision:** `defaultClubVar` gates **every** candidate on `measuredFrac >= 0.5` — the
+architecture spec's own bar for showing a trace at all — and falls through to `primary` when none
+passes. Both clients read the same file.
+**Gotchas:** `model_traj_moving` was added at the FRONT of the chain and inherited none of the gate
+the branch below it already had, so it was the default unconditionally. On `swing1` the trajectory
+solve measures **0% of the downswing**, and the player drew a single dashed chord with no downswing
+arc at all — 90 primary trace points at 100% coverage replaced by 23 that cannot form a curve.
+Nothing went red; coverage figures on the primary block looked healthy. Measured fraction across
+all ten fixtures: nine sit at **0.61–0.94**, `swing1` at **0.25–0.28** on all three model
+candidates at once, because they share the same detections. So the bar separates exactly the one
+broken case and changes nothing else — nine fixtures still select `model_traj_moving`.
+**Scope:** This is the third time a club number has looked fine while the drawn result did not.
+`scripts/checkoverlay.ts` is what caught it, by drawing the club over real pixels — which is the
+standing rule (`RUNBOOK` §12a), not a coverage percentage.

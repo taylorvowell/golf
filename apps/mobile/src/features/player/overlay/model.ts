@@ -95,6 +95,23 @@ export function buildTrace(
   a: Analysis,
   spans: TraceSpans | null,
   method: SmoothingKey,
+  marks?: HeadMarks,
+): Record<TraceKey, TracePiece[]> {
+  return buildTraceFor(selectedClub(a), a, spans, method, marks);
+}
+
+/**
+ * The same build against a NAMED solution.
+ *
+ * Split out for `scripts/checkoverlay.ts`, which has to be able to draw a solution the player did
+ * not pick — the desktop persists the Debug Menu's choice in localStorage, globally, so "the phone
+ * looks different from what we had" is a question that can only be answered by rendering both.
+ */
+export function buildTraceFor(
+  club: Club | null,
+  a: Analysis,
+  spans: TraceSpans | null,
+  method: SmoothingKey,
   /**
    * Hand-placed club heads, merged in by frame.
    *
@@ -105,7 +122,6 @@ export function buildTrace(
   marks?: HeadMarks,
 ): Record<TraceKey, TracePiece[]> {
   const out = { backswing: [], downswing: [], followthrough: [] } as Record<TraceKey, TracePiece[]>;
-  const club = selectedClub(a);
   if (!club?.trace || !spans) return out;
   const vw = a.video.width,
     vh = a.video.height;
