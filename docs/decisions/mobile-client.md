@@ -307,3 +307,21 @@ golfer had chosen.
 dead at the finish makes a golfer press play for every look at the same two frames. Speeds are 1×,
 ½×, ¼×, ⅒× and are applied natively (`setPlaybackSpeed`) — a JS timer would drop frames and show a
 quarter of the swing while calling it slow motion.
+
+### The picture's box is sized from the swing list, and never resizes
+
+**Decision:** `SwingPlayer` takes an `aspectRatio` prop, resolved by the screen from
+`SwingViewSummary`'s `width / height` — data the swing log already holds before the detail screen
+mounts. The stage box is therefore correct on the first frame of layout. A placeholder holds that
+box, with a loader, until a frame has actually reached the glass, then fades out over it.
+**Gotchas:** The stage used to default to **16:9**, so a portrait clip loaded squat and jumped to
+full height the moment the artifact landed — shoving the analysis below it down the screen while it
+was being read. A portrait default would not have fixed it either: the ten fixtures are 1080x1722
+through 1080x2146, so eight of them would still shift. The placeholder is keyed on a new
+`painted` flag rather than on `presented`, because **0 is a real frame** — the one every clip starts
+on — and a placeholder keyed on the frame number leaves before there is anything to see.
+**Scope:** The artifact still wins once loaded, because the overlay's coordinates are normalized
+against it and a stage at any other aspect would letterbox the picture and put the skeleton beside
+the golfer. The two agree because both are written from the same probe: the prop is not a guess the
+artifact later corrects, it is the artifact's own number, sooner. A view analysed before those
+columns existed carries nulls and falls through to portrait.

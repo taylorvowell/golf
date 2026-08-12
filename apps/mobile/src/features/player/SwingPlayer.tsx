@@ -59,6 +59,19 @@ export interface SwingPlayerProps {
   fps: number;
   /** Drawn over the picture, top-left, beside the back control. */
   title?: string;
+  /**
+   * The analysed frame's shape, from the swing LIST — `width / height` off `SwingViewSummary`.
+   *
+   * Passed in rather than waited for, and that is the whole point: it is already on the device
+   * before this screen mounts, so the picture's box is the right size on the very first frame of
+   * layout. Without it the stage has to guess, and a guess that is wrong resizes the box the
+   * instant the artifact lands — which shoves everything below it down the screen while a golfer
+   * is reading it.
+   *
+   * These clips are not one shape: the ten fixtures are 1080x1722 through 1080x2146. A "portrait"
+   * default would still shift on eight of them.
+   */
+  aspectRatio?: number | null;
   onBack?: () => void;
   /** Everything below the picture — the swing's facts. Scrolls under the console. */
   children?: ReactNode;
@@ -77,6 +90,7 @@ export function SwingPlayer({
   frameCount,
   fps,
   title,
+  aspectRatio,
   onBack,
   children,
   view,
@@ -103,20 +117,32 @@ export function SwingPlayer({
   const traceCost = useRef(0);
 
   const seekable = isSeekable(bounds, fps);
-  const { ready, error } = player.state;
+  const { ready, error, painted } = player.state;
 
   /**
-   * The stage's shape, from the ARTIFACT first and the container second.
+   * The stage's shape.
    *
-   * The overlay's coordinates are normalized against the analysed frame, so a stage shaped by
-   * anything else would letterbox the picture inside it and put the skeleton beside the golfer —
-   * which reads as a pose failure rather than as a layout one.
+   * The overlay's coordinates are normalized against the analysed frame, so the stage MUST end up
+   * at the artifact's aspect — anything else letterboxes the picture inside its own box and puts
+   * the skeleton beside the golfer, which reads as a pose failure rather than a layout one. Hence
+   * the artifact first.
+   *
+   * `aspectRatio` is the same number arriving earlier: the swing list already carries the view's
+   * width and height, so the box is correct from the first frame of layout and **never resizes**.
+   * The two agree because they are written from the same probe; the prop is not a guess the
+   * artifact later corrects, it is the artifact's own number, sooner.
+   *
+   * The last fallback is portrait rather than 16/9. Every clip this product has ever seen was
+   * filmed on a phone held upright, and a landscape default is what made the picture load squat
+   * and then jump tall.
    */
   const aspect = analysis
     ? analysis.video.width / analysis.video.height
-    : ready && ready.width > 0 && ready.height > 0
-      ? ready.width / ready.height
-      : 16 / 9;
+    : aspectRatio && aspectRatio > 0
+      ? aspectRatio
+      : ready && ready.width > 0 && ready.height > 0
+        ? ready.width / ready.height
+        : 9 / 16;
 
   /**
    * Park at the start of the swing, then play. Once, when the artifact has settled.
@@ -194,6 +220,11 @@ export function SwingPlayer({
         contentContainerStyle={{ paddingBottom: CONSOLE_RESERVE + insets.bottom }}
       >
         <View style={[styles.stage, { aspectRatio: aspect }]} onLayout={onStageLayout}>
+          {/**
+           * Mounted only once the authorized source resolves, but the BOX is already the right
+           * size — the stage above holds its aspect regardless. That separation is the fix: what
+           * used to be missing was a picture, and what shifted the page was the container.
+           */}
           {source ? (
             <FrameClockView
               ref={player.ref}
@@ -210,11 +241,17 @@ export function SwingPlayer({
               emitFrames
               {...player.handlers}
             />
-          ) : (
-            <View style={styles.centre}>
-              <ActivityIndicator color={COLORS.muted} />
-            </View>
-          )}
+          ) : null}
+
+          {/**
+           * Held until a frame has actually reached the glass, then faded out over the picture.
+           *
+           * `painted` rather than `presented`, because 0 is a real frame — the one every clip
+           * starts on — so a placeholder keyed on the frame number would leave before there was
+           * anything to see. Faded rather than switched: a hard cut between a black box and the
+           * first frame reads as a flash, which is the one thing worse than a moment of black.
+           */}
+          <StagePlaceholder visible={!painted && !error} />
 
           {analysis ? (
             <SwingOverlay
@@ -341,6 +378,35 @@ export function SwingPlayer({
 }
 
 /**
+ * What fills the picture's box before there is a picture.
+ *
+ * It exists because the box is now correct from the first layout pass — so the only thing missing
+ * during load is the image, and the honest thing to show is that it is coming. Nothing here may
+ * change the stage's size; it is an absolute fill inside a box whose height was already decided.
+ */
+function StagePlaceholder({ visible }: { visible: boolean }) {
+  const fade = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    Animated.timing(fade, {
+      toValue: visible ? 1 : 0,
+      duration: visible ? 0 : 220,
+      useNativeDriver: true,
+    }).start();
+  }, [fade, visible]);
+
+  return (
+    <Animated.View
+      testID="stage-placeholder"
+      pointerEvents="none"
+      style={[styles.placeholder, { opacity: fade }]}
+    >
+      <ActivityIndicator color={COLORS.muted} />
+    </Animated.View>
+  );
+}
+
+/**
  * How far the console travels when it is released, and how much room the scroll content leaves for
  * it. One number for both, so the content can never end up shorter than the thing covering it.
  */
@@ -380,6 +446,18 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: COLORS.bg },
   stage: { width: "100%", backgroundColor: "#000" },
   centre: { flex: 1, alignItems: "center", justifyContent: "center", gap: 8, padding: 20 },
+  placeholder: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    // The same black the stage already is, so the fade is the spinner leaving rather than the
+    // background changing colour underneath it.
+    backgroundColor: "#000",
+  },
   chrome: {
     position: "absolute",
     left: 0,

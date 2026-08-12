@@ -49,6 +49,14 @@ export interface FramePlayerState {
   ready: ReadyEvent | null;
   /** A native playback error, already user-readable. Null while healthy. */
   error: string | null;
+  /**
+   * A frame has reached the glass at least once.
+   *
+   * Not derivable from `presented`, because **0 is a real frame** — the one every clip starts on.
+   * The placeholder over the stage needs "is there a picture yet", and a player that guessed from
+   * the frame number would tear its placeholder away before the first frame was decoded.
+   */
+  painted: boolean;
   /** True while a seek is outstanding — the presented frame is expected to disagree meanwhile. */
   seeking: boolean;
   /** Playback restarts at the window start instead of stopping at its end. */
@@ -129,6 +137,7 @@ export function useFramePlayer(bounds: Extent): FramePlayer {
   const [playing, setPlaying] = useState(false);
   const [ready, setReady] = useState<ReadyEvent | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [painted, setPainted] = useState(false);
   const [measure, setMeasure] = useState({ issued: 0, landed: 0, exact: 0, worst: 0 });
   /**
    * Looping defaults ON, and that is a golf decision rather than a media-player one. A swing is
@@ -248,6 +257,7 @@ export function useFramePlayer(bounds: Extent): FramePlayer {
     ({ nativeEvent }: { nativeEvent: FrameRenderedEvent }) => {
       const arrived = nativeEvent.frame;
       setPresented(arrived);
+      setPainted(true);
 
       const wanted = inFlight.current;
       if (wanted === null) {
@@ -354,6 +364,7 @@ export function useFramePlayer(bounds: Extent): FramePlayer {
       playing,
       ready,
       error,
+      painted,
       seeking: target !== null,
       looping,
       speed,
@@ -362,7 +373,7 @@ export function useFramePlayer(bounds: Extent): FramePlayer {
       seeksExact: measure.exact,
       worstSeekError: measure.worst,
     }),
-    [error, looping, measure, playing, presented, ready, speed, target],
+    [error, looping, measure, painted, playing, presented, ready, speed, target],
   );
 
   const actions = useMemo<FramePlayerActions>(

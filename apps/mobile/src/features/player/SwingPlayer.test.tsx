@@ -1,4 +1,4 @@
-import { ScrollView } from "react-native";
+import { ScrollView, StyleSheet, type ViewStyle } from "react-native";
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 
 import { SwingPlayer } from "./SwingPlayer";
@@ -207,4 +207,67 @@ it("draws the back control and the swing's name over the picture", async () => {
   expect(getByText("6iron3")).toBeTruthy();
   fireEvent.press(getByTestId("player-back"));
   expect(onBack).toHaveBeenCalled();
+});
+
+/**
+ * The picture's box, and the fact that it must never change size.
+ *
+ * The failure this pins is a layout one, not a rendering one: the stage used to default to 16:9,
+ * so a portrait clip loaded squat and then jumped to full height the instant the artifact landed —
+ * shoving the analysis below it down the screen while it was being read. The box now comes from
+ * the swing list, which already has it before this screen mounts.
+ */
+
+function stageAspect(el: { props: { style?: unknown } }) {
+  const flat = StyleSheet.flatten(el.props.style as ViewStyle);
+  return flat.aspectRatio;
+}
+
+/** The stage is the placeholder's parent — the box whose height is in question. */
+function stageOf(api: { getByTestId: (id: string) => { parent: unknown } }) {
+  return api.getByTestId("stage-placeholder").parent as { props: { style?: unknown } };
+}
+
+it("takes the picture's box from the swing list, before anything is fetched", async () => {
+  // 1080x1920. Nothing has resolved yet — no source, no artifact — and the box is already right.
+  const api = await render(
+    <SwingPlayer swingId="abc" frameCount={240} fps={60} aspectRatio={1080 / 1920} />,
+  );
+  expect(stageAspect(stageOf(api))).toBeCloseTo(0.5625);
+});
+
+it("does not resize the box when the artifact arrives", async () => {
+  mockRequest.mockResolvedValue(makeAnalysis({ frameCount: 40 }));
+  const api = await render(
+    <SwingPlayer swingId="abc" frameCount={40} fps={60} aspectRatio={1080 / 1920} />,
+  );
+  const before = stageAspect(stageOf(api));
+  await waitFor(() => expect(api.getByTestId("overlay-controls")).toBeTruthy());
+  // The fixture is 1080x1920 too, because both numbers come from the same probe. Equal, not close:
+  // a box that changed at all would push the analysis down the screen.
+  expect(stageAspect(stageOf(api))).toBe(before);
+});
+
+it("assumes portrait, not 16:9, when the swing never recorded a size", async () => {
+  // A view analysed before those columns existed. Every clip this product has seen was filmed on a
+  // phone held upright, and the landscape default is what made the picture load squashed.
+  const api = await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} />);
+  expect(stageAspect(stageOf(api))).toBeCloseTo(9 / 16);
+});
+
+it("holds a placeholder over the box until a frame has reached the glass", async () => {
+  const { getByTestId } = await render(
+    <SwingPlayer swingId="abc" frameCount={240} fps={60} aspectRatio={0.5625} />,
+  );
+  expect(getByTestId("stage-placeholder")).toBeTruthy();
+
+  await act(async () =>
+    getByTestId("swing-video").props.onFrameRendered?.({
+      nativeEvent: { frame: 0, presentationTimeUs: 0, releaseTimeNs: 0 },
+    }),
+  );
+
+  // Frame ZERO. The placeholder has to go on "a frame arrived", never on the frame number — 0 is
+  // the frame every clip starts on.
+  await waitFor(() => expect(getByTestId("stage-placeholder").props.style).toBeTruthy());
 });

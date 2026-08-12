@@ -49,6 +49,19 @@ export function SwingDetailScreen({ id }: SwingDetailScreenProps) {
 
   const scored = typeof swing.overallScore === "number";
 
+  /**
+   * The picture's shape, from data the log already had.
+   *
+   * The primary view when there is one, else the first view that recorded a size — a view analysed
+   * before those columns existed carries nulls, and guessing a shape for it would put the height
+   * shift back. `SwingPlayer` falls through to portrait in that case, which is right far more often
+   * than the 16:9 it used to assume.
+   */
+  const sized =
+    swing.views.find((v) => v.id === swing.primaryViewId && v.width && v.height) ??
+    swing.views.find((v) => v.width && v.height);
+  const aspectRatio = sized?.width && sized?.height ? sized.width / sized.height : null;
+
   return (
     // No `view` — the route serves the primary angle, which is the one a single-view player wants.
     // Passing `primaryViewId` here is what made every swing answer 400: that is a uuid and the
@@ -58,6 +71,7 @@ export function SwingDetailScreen({ id }: SwingDetailScreenProps) {
       frameCount={swing.frameCount}
       fps={swing.fps}
       title={swing.label}
+      aspectRatio={aspectRatio}
       onBack={navigation.canGoBack() ? navigation.goBack : undefined}
     >
       <View testID="swing-detail" style={styles.panel}>
