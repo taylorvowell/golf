@@ -96,8 +96,11 @@ gets a connection timeout.
 
 Load a swing, scrub it frame by frame, toggle every overlay (skeleton, club, trace and its nine
 smoothing variants, silhouette, isolation, butt line, angles), read the scorecard and coach
-narrative, compare two swings, place head markers, and trigger a re-analysis. It is a desktop-
-first layout on a phone screen — the mobile client does not exist yet.
+narrative, compare two swings, place head markers, and trigger a re-analysis. It is a desktop-first
+layout on a phone screen.
+
+**This is still the only way to WATCH a swing on the phone.** The native app (§6) signs in and lists
+your swings with thumbnails and scores, but has no player yet — that is the `mobile-player` track.
 
 ---
 
@@ -147,7 +150,7 @@ look at the frame before believing any club number.
 
 # clients — from the repo root
 pnpm --filter web test                            # vitest, 167 tests
-pnpm --filter mobile test                         # jest-expo, 39 tests (logic + components)
+pnpm --filter mobile test                         # jest-expo, 45 tests (logic + components)
 pnpm --filter web exec tsc --noEmit && pnpm --filter web lint
 pnpm --filter mobile exec tsc --noEmit
 
@@ -423,7 +426,7 @@ keytool -list -v -keystore android/app/debug.keystore \
 | | |
 |---|---|
 | Package | `com.swingsage.spike` |
-| Keystore | `apps/mobile/android/app/debug.keystore` (committed) |
+| Keystore | `apps/mobile/android/app/debug.keystore` — **generated, not committed** (`apps/mobile/.gitignore` ignores all of `/android`). Regenerating it reproduces the SAME fingerprint, because it is React Native's stock debug key rather than a random one. |
 | SHA-1 | `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25` |
 
 **That SHA-1 is React Native's stock debug key and it is public** — the same fingerprint appears in

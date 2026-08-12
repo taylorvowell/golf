@@ -2648,3 +2648,38 @@ the build until it declared itself unreachable from a request. The exemption is 
 — a module that throws under `NEXT_RUNTIME` — so a script proves it is CLI-only rather than being
 allowlisted by name, and does not have to import a database connection it never uses to inherit the
 guarantee.
+
+---
+
+## D49 — The spine moves to the player, because that is where the risk is
+
+**Date:** 2026-08-12 · **Track:** mobile-app-shell → mobile-player · **Status:** done
+
+`mobile-app-shell` step 01 landed navigation and a working swing log, and the thumbnails were
+confirmed on the S25+. Its remaining steps — onboarding and role selection (02), the design system
+and §41's real-golf-conditions bar (03) — are launch-blocking and stay open. **Neither gates
+watching a swing**, and watching a swing is the single largest unproven thing in this product.
+
+**Why the player rather than finishing the shell.** The frame-accurate player and overlay system
+exists only as a desktop web app. Frame sync is the #1 perceived-quality feature, and there is
+already a measured finding that the web implementation is **wrong on Android**: D40 established
+that media3 resolves a seek FORWARD to the next sync point, so the web player's midpoint rule
+(`(frame + 0.5) / fps`) does not port — seeking was 100% frame-exact only once the target became
+`frame / fps`. That is exactly the class of thing that stays invisible until someone builds it, and
+building it later means discovering it later.
+
+Nothing blocks it. Ten analysed swings are on disk, owned by a real account, serving `analysis.json`
+and `normalized.mp4` over the versioned API — verified end to end by `verify:media`. `expo-video` is
+installed. `modules/frame-clock`, kept from the step 02 spike specifically for this and consumerless
+since (D44), finally gets its consumer. `swing-ingest` is deliberately not a prerequisite, exactly
+as `ROADMAP.json`'s own sequencing note anticipated.
+
+**The track is scaffolded rather than left lazy**, with step 01 written while the context that
+produced it was still live: playback and transport only, no overlays. That split is Gate 1 / Gate 2
+applied to the mobile port — a proven clock with nothing drawn on it is what makes a later overlay
+bug diagnosable as an overlay bug rather than a sync bug. It also carries the one open measurement
+D44 left behind: scrubbing is unmeasured because `measure_overlay.py` went with the spike harness,
+and closing it is part of step 01 rather than a follow-up nobody schedules.
+
+**`mobile-app-shell` stays `active`** with steps 02–03 open, and its dependency from `mobile-player`
+is non-blocking — a fact about ordering, not a prerequisite.

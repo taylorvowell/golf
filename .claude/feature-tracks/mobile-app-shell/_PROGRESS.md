@@ -64,8 +64,12 @@ the S25+.
   thirty artifacts over HTTP with a real session for `200` each. Instrumenting the route to log
   `auth?` alongside the status collapsed it to one line: `auth? false`.
 - **Fixed with `expo-image`** (honours `headers`, plus `cachePolicy: "disk"` — the route serves the
-  analyzer's full-resolution `contact.jpg`, ~13 MB across ten cards uncached). Confirmed on the
-  device: all ten thumb requests now return 200.
+  analyzer's full-resolution `contact.jpg`, ~13 MB across ten cards uncached). **Confirmed on the
+  S25+ by its owner: the thumbnails render.** All ten thumb requests return 200.
+- **Step 01 is closed on the device, not merely on the oracles.** Sign in → see ten real swings with
+  contact-frame thumbnails and scores → tap one → arrive at its detail. The detail screen showing
+  metadata and no video is correct: the player is the `mobile-player` track, which became the spine
+  when this step closed (D49).
 - **Two things stop it recurring:** `SwingCard.test.tsx` asserts the source handed to the image
   component carries its `Authorization` header, and `pnpm --filter web verify:media <email>` makes
   "server or client?" one command. A third thing held on its own: `service-role.test.ts` failed the

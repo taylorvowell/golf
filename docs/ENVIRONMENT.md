@@ -95,7 +95,7 @@ the repo yet; the CLI is installed (2.104.0).
 | Android client id | `665583572860-tlfq1jrit3g4hrmoatlcub81r6t13gn8.apps.googleusercontent.com` — must exist, is never in the bundle |
 | Web client **secret** | Supabase dashboard only. An Android OAuth client has no secret at all. |
 | Bound to | package `com.swingsage.spike` + SHA-1 `5E:8F:16:06:2E:A3:CD:2C:4A:0D:54:78:76:BA:A6:F3:8C:AB:F6:25` |
-| Keystore | `apps/mobile/android/app/debug.keystore` (committed) — React Native's **public** stock debug key. Fine for development, never for production. |
+| Keystore | `apps/mobile/android/app/debug.keystore` — React Native's **public** stock debug key. Fine for development, never for production. **Not committed**: `apps/mobile/.gitignore` ignores all of `/android`, so a fresh clone regenerates it — and reproduces the same SHA-1, which is why sign-in survives a `prebuild`. Verified 2026-08-12. |
 | iOS client | **Does not exist.** Which is why the library's Expo config plugin is deliberately absent from `app.json`: its only job is an iOS URL scheme and it throws without one. Android needs nothing from it. |
 
 Google mints the ID token with `aud` = web client, `azp` = Android client. Passing the Android id to

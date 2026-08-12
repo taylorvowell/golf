@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "featureName": "mobile-player",
+  "currentStep": "01",
+  "phase": "Core Golfer Experience",
+  "lastUpdated": "2026-08-12T04:40:00Z",
+  "steps": {
+    "01": { "status": "not-started" },
+    "02": { "status": "not-started" },
+    "03": { "status": "not-started" },
+    "04": { "status": "not-started" }
+  },
+  "blockers": [],
+  "skipped": []
+}
