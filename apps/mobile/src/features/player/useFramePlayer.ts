@@ -5,7 +5,7 @@ import type {
   FrameRenderedEvent,
   ReadyEvent,
 } from "../../../modules/frame-clock/src";
-import { clampFrame, lastFrame, stepFrame } from "./frames";
+import { clampFrame, fileBounds, stepFrame, type Extent } from "./frames";
 
 /**
  * The transport state machine for one clip.
@@ -99,11 +99,16 @@ export interface FramePlayer {
 }
 
 /**
- * Takes only `frameCount`. There is deliberately no `fps` parameter: every frame↔time conversion
+ * Takes an `Extent` and no `fps`. The missing `fps` is deliberate: every frame↔time conversion
  * this machine could need is done natively against the same number, so the seek-target rule (D40)
  * has exactly one place it can be wrong.
+ *
+ * The extent is a bare frame count until the analysis arrives and narrows it to `playback_window`
+ * — the span the analyzer says is worth playing. Widening or narrowing it mid-clip is normal (the
+ * artifact loads after the video does), and the current frame is re-clamped when it happens rather
+ * than being left outside the bar that is drawing it.
  */
-export function useFramePlayer(frameCount: number): FramePlayer {
+export function useFramePlayer(bounds: Extent): FramePlayer {
   const ref = useRef<FrameClockHandle | null>(null);
 
   const [presented, setPresented] = useState(0);
@@ -126,6 +131,17 @@ export function useFramePlayer(frameCount: number): FramePlayer {
   const queued = useRef<number | null>(null);
   /** Set by the sweep while it waits for the seek it just issued to reach the glass. */
   const landed = useRef<((frame: number) => void) | null>(null);
+  /**
+   * The extent and the play state as the frame callback sees them.
+   *
+   * The callback fires up to `fps` times a second and must not be rebuilt every time the window
+   * narrows or playback starts — rebuilding it re-registers a native listener mid-playback, which
+   * is exactly the kind of churn a per-frame path cannot afford.
+   */
+  const boundsRef = useRef(fileBounds(0));
+  boundsRef.current = typeof bounds === "number" ? fileBounds(bounds) : bounds;
+  const playingRef = useRef(false);
+  playingRef.current = playing;
 
   const issue = useCallback((frame: number) => {
     inFlight.current = frame;
@@ -142,7 +158,7 @@ export function useFramePlayer(frameCount: number): FramePlayer {
 
   const seekTo = useCallback(
     (frame: number) => {
-      const wanted = clampFrame(frame, frameCount);
+      const wanted = clampFrame(frame, bounds);
       setTarget(wanted);
       // Seeking is not playing. Leaving playback running would have the decoder advancing past
       // wherever the seek lands, so the frame a golfer stopped on is not the frame they get.
@@ -158,7 +174,7 @@ export function useFramePlayer(frameCount: number): FramePlayer {
       setMeasure((m) => ({ ...m, issued: m.issued + 1 }));
       issue(wanted);
     },
-    [frameCount, issue, pause, playing],
+    [bounds, issue, pause, playing],
   );
 
   const step = useCallback(
@@ -167,12 +183,19 @@ export function useFramePlayer(frameCount: number): FramePlayer {
       // succession must move two frames, and the second one arrives long before the first has
       // reached the glass.
       const from = target ?? presented;
-      seekTo(stepFrame(from, delta, frameCount));
+      seekTo(stepFrame(from, delta, bounds));
     },
-    [frameCount, presented, seekTo, target],
+    [bounds, presented, seekTo, target],
   );
 
   const play = useCallback(() => {
+    // Play from the start of the window when the playhead is already at its end. Without this,
+    // "play" at the finish does nothing at all, because the frame the picture would advance to is
+    // outside the span — a control that visibly does nothing reads as broken.
+    const b = boundsRef.current;
+    if (b.last > b.first && (target ?? presented) >= b.last) {
+      void ref.current?.seekToFrame(b.first);
+    }
     setPlaying(true);
     // Playback owns the position from here, so drop any outstanding seek rather than letting it
     // land mid-play and yank the picture backwards.
@@ -180,7 +203,7 @@ export function useFramePlayer(frameCount: number): FramePlayer {
     queued.current = null;
     setTarget(null);
     void ref.current?.play();
-  }, []);
+  }, [presented, target]);
 
   const toggle = useCallback(() => {
     if (playing) pause();
@@ -198,7 +221,18 @@ export function useFramePlayer(frameCount: number): FramePlayer {
       setPresented(arrived);
 
       const wanted = inFlight.current;
-      if (wanted === null) return; // a playback frame, not a seek landing
+      if (wanted === null) {
+        // A playback frame, not a seek landing. The only thing playback owes the window is to stop
+        // at its end: `playback_window` is the span the analyzer says is worth watching, and
+        // running on past the finish into whatever the golfer did next is the reason it exists.
+        const b = boundsRef.current;
+        if (playingRef.current && b.last > b.first && arrived >= b.last) {
+          playingRef.current = false;
+          setPlaying(false);
+          void ref.current?.pause();
+        }
+        return;
+      }
 
       inFlight.current = null;
       const err = Math.abs(arrived - wanted);
@@ -240,13 +274,14 @@ export function useFramePlayer(frameCount: number): FramePlayer {
    */
   const runSeekSweep = useCallback(
     async (count: number) => {
-      const last = lastFrame(frameCount);
-      if (last <= 0) return;
+      const { first, last } = typeof bounds === "number" ? fileBounds(bounds) : bounds;
+      const span = last - first;
+      if (span <= 0) return;
 
       let seed = 20260812;
       for (let i = 0; i < count; i++) {
         seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-        const wanted = seed % (last + 1);
+        const wanted = first + (seed % (span + 1));
 
         const arrival = new Promise<number>((resolve) => {
           landed.current = resolve;
@@ -263,7 +298,7 @@ export function useFramePlayer(frameCount: number): FramePlayer {
         await arrival;
       }
     },
-    [frameCount, seekTo],
+    [bounds, seekTo],
   );
 
   const onReady = useCallback(({ nativeEvent }: { nativeEvent: ReadyEvent }) => {

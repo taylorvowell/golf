@@ -95,7 +95,7 @@ coaching, billing, hosting) is unbuilt.
 | 13 | Play/pause/scrub/slow/frame-step/jump to positions/full-screen | ✅ | Frame-accurate, with the exactness argued for and enforced (CFR-60 + half-frame seeks + `requestVideoFrameCallback`). |
 | 13 | Switching between views, synchronized two-view playback | ⬜ | Only one view per swing exists to switch between. |
 | 13 | Comparison mode | ✅ | Side-by-side pane, synced on the pinned 1 s lead-in/run-out. |
-| 14 | Club-head tracing, stick figure, silhouette | ✅ | Plus isolation rings, address butt line, and click-to-draw angles. Nine live trace-smoothing methods. |
+| 14 | Club-head tracing, stick figure, silhouette | 🟡 | **On the web player, ✅** — plus isolation rings, address butt line, and click-to-draw angles, with nine live trace-smoothing methods. **On mobile, the silhouette, the isolation scrim, the butt line and fit-to-golfer crop are ABSENT** and have no owning step: the scrim needs `Path2D` + even-odd fill to put its holes back, which plain `View`s cannot express. Skeleton, club, trace, orientation rods and angle arcs are drawn. Since the primary product is the phone, this row is not green until they have a home. |
 | 14.1 | Correct frame, stays aligned, works during scrub | ✅ | Three independent verification gates exist for exactly this. |
 | 14.1 | Respect subscription entitlements | ⬜ | No entitlement system. |
 | 14.2 | Future overlays (swing plane, head/hip/shoulder movement, club path, hand path) | 🟡 | The angle catalogue and `geom` make most of these additive rather than new architecture. Not drawn today. |

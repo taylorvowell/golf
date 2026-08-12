@@ -623,3 +623,45 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 adb logcat -c && adb shell monkey -p com.swingsage.spike -c android.intent.category.LAUNCHER 1
 adb logcat -d | grep -E "ReactNativeJS|has been rejected"    # empty is the pass
 ```
+
+## 12. Verifying the OVERLAY — Gate 3, half of it here and half on the phone
+
+Step 02 draws the skeleton, club, trace, orientation rods and angle arcs on the phone. "The stick
+figure looks wrong" has two unrelated causes and this splits them, exactly as Gates 1 and 2 do:
+
+### 12a. The geometry — on this machine, no phone needed
+
+`scripts/checkoverlay.ts` imports the **same modules the phone runs** and lays their output over the
+analyzer's own burn-in. Gate 1 drew frame N's pose onto frame N's pixels in the process that
+computed them, so a disagreement here is a port bug in the client and nothing else.
+
+```bash
+pnpm exec tsx scripts/checkoverlay.ts services/analyzer/out/swing1
+pnpm exec tsx scripts/checkoverlay.ts services/analyzer/out/swing1 150 --angles 3
+for d in services/analyzer/out/*/; do pnpm exec tsx scripts/checkoverlay.ts "$d"; done
+```
+
+Writes `checkoverlay_<stem>.html` plus a PNG per frame into the same directory. Everything the
+mobile renderer draws comes out as a **thin magenta hairline**; the burn-in underneath keeps its
+green / yellow / cyan. A hairline running down the middle of a burn-in bone is the pass. A hairline
+beside it is the bug. `--true-colour` switches to the real palette, `--stage PX` changes the width
+the view count is costed at (default 360, a phone), `--angles N|all` adds angle arcs.
+
+The per-frame line also prints the **view count** — the number of `View`s that frame costs on the
+device, since every stroke is one — and how many angle fields drew versus abstained.
+
+### 12b. The frame lock — only the phone can answer this
+
+A JS change needs no rebuild: Metro is already serving it, so shake the device (or `adb shell input
+keyevent 82`) → **Reload**.
+
+1. Open **SwingSage** → any swing. The skeleton and the club-head trace are on by default.
+2. In **Frame sync**, read **Overlay drift** — `100.0% locked · p95 0 · max 0` is the pass. It is
+   scored natively, against the frame actually on the glass.
+3. Read **Trace views** beside it. Then turn the **Club head trace** chip off and read Overlay drift
+   again. **The two drift figures, with the trace on and with it off, are the measurement** — they
+   answer whether plain `View`s carry a hundred-plus-segment polyline at 60 fps, which is the one
+   open question the overlay step owes a number for.
+4. Tap **Run 250 seeks** with the trace ON. Seek exactness must still be `250/250 · 100.0%`.
+5. Compare against `services/analyzer/out/<stem>/checkoverlay_<stem>_f<frame>.png` at the same
+   frame — that is Gate 3 proper.

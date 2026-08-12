@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import type { FrameClockHandle, FrameClockStats } from "../../../modules/frame-clock/src";
 import { COLORS } from "../../theme";
-import { fpsDisagrees, msToFrame } from "./frames";
+import { fpsDisagrees, msToFrame, type Bounds } from "./frames";
 import type { FramePlayerState } from "./useFramePlayer";
 
 /**
@@ -22,6 +22,12 @@ import type { FramePlayerState } from "./useFramePlayer";
  * quantities disagreeing about the same instant, which on a correctly normalized CFR clip should
  * not happen and means the fps is wrong somewhere.
  *
+ * **Overlay drift is the fourth reading and it is Gate 3.** Native scores the frame the overlay
+ * committed for against the frame actually on the glass, on the playback thread — so it measures
+ * the composited result rather than JS's opinion of it. It sits next to the trace's view count on
+ * purpose: the open question this player had to answer with a number was whether plain `View`s can
+ * carry a hundred-plus-segment polyline at 60fps, and the two figures together are that answer.
+ *
  * **Seek exactness is counted twice, on purpose.** JS scores the frame it asked for against the
  * frame the callback reports; native scores it on the playback thread at the moment the frame is
  * decoded. They measure the same thing through different clocks, so agreement is evidence and a
@@ -34,6 +40,11 @@ export interface FrameSyncPanelProps {
   state: FramePlayerState;
   playerRef: React.RefObject<FrameClockHandle | null>;
   fps: number;
+  /** The span the transport is bounded by — the playback window once the analysis has loaded. */
+  bounds: Bounds;
+  /** Views the trace layer drew on its last pass. Polled, never subscribed: reading it must not
+   *  re-render the thing it is measuring. */
+  traceCostRef?: { current: number };
   onReset: () => void;
   onSweep: (count: number) => Promise<void>;
 }
@@ -49,14 +60,24 @@ const POLL_MS = 250;
  */
 const SWEEP_SEEKS = 250;
 
-export function FrameSyncPanel({ state, playerRef, fps, onReset, onSweep }: FrameSyncPanelProps) {
+export function FrameSyncPanel({
+  state,
+  playerRef,
+  fps,
+  bounds,
+  traceCostRef,
+  onReset,
+  onSweep,
+}: FrameSyncPanelProps) {
   const [stats, setStats] = useState<FrameClockStats | null>(null);
+  const [traceViews, setTraceViews] = useState(0);
   const [sweeping, setSweeping] = useState(false);
   const live = useRef(true);
 
   useEffect(() => {
     live.current = true;
     const id = setInterval(() => {
+      if (live.current && traceCostRef) setTraceViews(traceCostRef.current);
       void playerRef.current
         ?.getStats()
         .then((s) => {
@@ -73,7 +94,7 @@ export function FrameSyncPanel({ state, playerRef, fps, onReset, onSweep }: Fram
       live.current = false;
       clearInterval(id);
     };
-  }, [playerRef]);
+  }, [playerRef, traceCostRef]);
 
   const reset = useCallback(() => {
     setStats(null);
@@ -153,6 +174,30 @@ export function FrameSyncPanel({ state, playerRef, fps, onReset, onSweep }: Fram
         label="Worst seek error"
         value={`${state.worstSeekError} frame${state.worstSeekError === 1 ? "" : "s"}`}
         bad={state.worstSeekError !== 0}
+      />
+      {/* Gate 3. `exactShare` is over frames the overlay committed for AND native could match to a
+          display time, so a low count means the overlay is not committing, not that it is drifting. */}
+      <Line
+        label="Overlay drift"
+        value={
+          stats && stats.overlayDriftFrames.count > 0
+            ? `${stats.overlayDriftFrames.count} frames · ${(stats.overlayDriftFrames.exactShare * 100).toFixed(1)}% locked` +
+              ` · p95 ${stats.overlayDriftFrames.p95} · max ${stats.overlayDriftFrames.max}`
+            : "nothing committed yet"
+        }
+        bad={
+          !!stats && stats.overlayDriftFrames.count > 0 && stats.overlayDriftFrames.exactShare < 1
+        }
+      />
+      <Line
+        label="Trace views"
+        value={traceViews > 0 ? `${traceViews} drawn this frame` : "trace off or empty"}
+        bad={false}
+      />
+      <Line
+        label="Window"
+        value={`${bounds.first}–${bounds.last}`}
+        bad={false}
       />
       <Line
         label="Container fps"

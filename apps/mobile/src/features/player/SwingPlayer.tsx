@@ -1,5 +1,11 @@
-import { useEffect, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  StyleSheet,
+  Text,
+  View,
+  type LayoutChangeEvent,
+} from "react-native";
 import type { SwingViewSummary } from "@swingsage/schema/contract";
 
 import { FrameClockView } from "../../../modules/frame-clock/src";
@@ -8,21 +14,31 @@ import { COLORS } from "../../theme";
 import { FrameSyncPanel } from "./FrameSyncPanel";
 import { ScrubBar } from "./ScrubBar";
 import { PositionReadout, Transport } from "./Transport";
-import { isSeekable } from "./frames";
+import { isSeekable, windowBounds, type Bounds } from "./frames";
+import { OverlayControls } from "./overlay/OverlayControls";
+import { SwingOverlay } from "./overlay/SwingOverlay";
+import { drawableAngles } from "./overlay/overlays";
+import { DEFAULT_TOGGLES, type ToggleKey, type Toggles } from "./overlay/overlays";
+import { playbackWindow } from "./overlay/playbackWindow";
+import { useAnalysis } from "./useAnalysis";
 import { useFramePlayer } from "./useFramePlayer";
 
 /**
- * A swing, playing, on a phone.
+ * A swing, playing, with the analysis drawn on it.
  *
  * The surface is `modules/frame-clock`, not `expo-video`, and that is a decision rather than an
  * accident: `frame-clock` owns its own ExoPlayer and is the only thing in this app that can report
  * the frame actually on the glass. Composing the two would put two decoders on one clip and still
  * leave nothing to observe. See D50.
  *
- * **No overlays here.** This is Gate 2 of the project's verification strategy in its mobile form —
- * a proven clock with nothing drawn on it. Pose and sync are unrelated causes of "the stick figure
- * looks wrong", and the entire reason to ship a player with no skeleton first is that it makes the
- * skeleton's bugs diagnosable as skeleton bugs in step 02.
+ * Step 01 shipped this with nothing drawn on it — Gate 2 of the project's verification strategy in
+ * its mobile form, a proven clock first. **The overlay lands on top of that clock here**, which is
+ * what makes a fault in it diagnosable as an overlay fault: seeking was measured frame-exact
+ * before a single bone was drawn.
+ *
+ * A swing with no artifact still plays. `analysis.json` arriving is what adds the overlay, narrows
+ * the transport to `playback_window`, and populates the controls — and its absence is a real,
+ * permanent state (a swing that failed analysis), not an error to apologise for.
  */
 
 export interface SwingPlayerProps {
@@ -37,24 +53,89 @@ export interface SwingPlayerProps {
    * rather than falling back, deliberately — silently serving down-the-line for `?view=overhead`
    * would look like the parameter worked.
    *
-   * Omitted plays the primary view, which is what the route does with no parameter at all. Step 01
-   * never passes it; dual-view is step 04.
+   * Omitted plays the primary view, which is what the route does with no parameter at all.
+   * Dual-view is step 04.
    */
   view?: SwingViewSummary["view"] | null;
 }
 
 export function SwingPlayer({ swingId, frameCount, fps, view }: SwingPlayerProps) {
   const source = useMediaSource(swingId, view);
-  const player = useFramePlayer(frameCount);
-  const [scrubbing, setScrubbing] = useState(false);
+  const { state: analysisState } = useAnalysis(swingId, view);
+  const analysis = analysisState.kind === "ok" ? analysisState.analysis : null;
 
-  const seekable = isSeekable(frameCount, fps);
+  /**
+   * The transport's extent: the analyzer's `playback_window` once it is known, the whole file until
+   * then. The window is a property of the SWING rather than of the viewer — the burn-in, the coach
+   * report and a future comparison view all need the same answer — so the client reads it rather
+   * than deriving its own.
+   */
+  const bounds = useMemo<Bounds>(
+    () => windowBounds(frameCount, analysis ? playbackWindow(analysis) : null),
+    [frameCount, analysis],
+  );
+
+  const player = useFramePlayer(bounds);
+  const [scrubbing, setScrubbing] = useState(false);
+  const [stage, setStage] = useState({ w: 0, h: 0 });
+  const [toggles, setToggles] = useState<Toggles>(DEFAULT_TOGGLES);
+  const [angles, setAngles] = useState<string[]>([]);
+  const traceCost = useRef(0);
+
+  const seekable = isSeekable(bounds, fps);
   const { ready, error } = player.state;
-  const aspect = ready && ready.width > 0 && ready.height > 0 ? ready.width / ready.height : 16 / 9;
+
+  /**
+   * The stage's shape.
+   *
+   * From the ARTIFACT first, not from the container: the overlay's coordinates are normalized
+   * against the analysed frame, so if the stage were shaped by anything else the skeleton would sit
+   * on a letterboxed picture and read as a pose failure. `ready` is the fallback for a swing with
+   * no artifact, where there is nothing to draw anyway.
+   */
+  const aspect = analysis
+    ? analysis.video.width / analysis.video.height
+    : ready && ready.width > 0 && ready.height > 0
+      ? ready.width / ready.height
+      : 16 / 9;
+
+  /**
+   * Park the playhead at the start of the swing once the window is known.
+   *
+   * Runs once per window, not per render: the artifact arrives after the video does, so without
+   * this the golfer is left however many frames into the approach the decoder happened to stop at,
+   * outside the span the scrub bar is now drawing.
+   */
+  const parked = useRef(-1);
+  const { seekTo } = player.actions;
+  useEffect(() => {
+    if (bounds.last <= bounds.first || parked.current === bounds.first) return;
+    parked.current = bounds.first;
+    seekTo(bounds.first);
+  }, [bounds, seekTo]);
+
+  const onStageLayout = useCallback((e: LayoutChangeEvent) => {
+    const { width, height } = e.nativeEvent.layout;
+    setStage((s) => (s.w === width && s.h === height ? s : { w: width, h: height }));
+  }, []);
+
+  const onToggle = useCallback(
+    (key: ToggleKey, value: boolean) => setToggles((t) => ({ ...t, [key]: value })),
+    [],
+  );
+
+  // Resolved from the artifact rather than held as specs in state, so a selection cannot outlive
+  // the field it names — reloading a different swing drops any angle it does not publish.
+  const selectedAngles = useMemo(() => {
+    const drawable = drawableAngles(analysis);
+    return angles
+      .map((f) => drawable.find((d) => d.field === f))
+      .filter((f): f is NonNullable<typeof f> => !!f);
+  }, [analysis, angles]);
 
   return (
     <View style={styles.wrap}>
-      <View style={[styles.stage, { aspectRatio: aspect }]}>
+      <View style={[styles.stage, { aspectRatio: aspect }]} onLayout={onStageLayout}>
         {source ? (
           <FrameClockView
             ref={player.ref}
@@ -66,9 +147,9 @@ export function SwingPlayer({ swingId, frameCount, fps, view }: SwingPlayerProps
             /**
              * On, and it is the reason this module exists. It costs an event per presented frame —
              * the module's own docs call that a measurement mode — but the presented frame IS the
-             * product here: it drives the scrub head, it is what step 02's overlay will paint
-             * from, and it is the only honest half of the sync panel. Measured at 99.2% frame-lock
-             * with React in the loop (D36), so the cost is known rather than feared.
+             * product here: it drives the scrub head, it is what the overlay paints from, and it is
+             * the only honest half of the sync panel. Measured at 99.2% frame-lock with React in
+             * the loop (D36), so the cost is known rather than feared.
              */
             emitFrames
             {...player.handlers}
@@ -78,6 +159,19 @@ export function SwingPlayer({ swingId, frameCount, fps, view }: SwingPlayerProps
             <ActivityIndicator color={COLORS.muted} />
           </View>
         )}
+
+        {analysis ? (
+          <SwingOverlay
+            analysis={analysis}
+            frame={player.state.frame}
+            toggles={toggles}
+            angles={selectedAngles}
+            w={stage.w}
+            h={stage.h}
+            playerRef={player.ref}
+            traceCostRef={traceCost}
+          />
+        ) : null}
 
         {error ? (
           <View style={[StyleSheet.absoluteFill, styles.centre, styles.errorScrim]}>
@@ -90,7 +184,7 @@ export function SwingPlayer({ swingId, frameCount, fps, view }: SwingPlayerProps
       <View style={styles.controls}>
         <ScrubBar
           frame={player.state.frame}
-          frameCount={frameCount}
+          bounds={bounds}
           onSeek={player.actions.seekTo}
           onScrubbingChange={setScrubbing}
           disabled={!seekable || !!error}
@@ -121,13 +215,36 @@ export function SwingPlayer({ swingId, frameCount, fps, view }: SwingPlayerProps
             frame. It will still play.
           </Text>
         ) : null}
+
+        {analysisState.kind === "not-analysed" ? (
+          <Text style={styles.notice}>
+            This swing has not been analysed, so there is nothing to draw on it. The video plays and
+            steps as normal.
+          </Text>
+        ) : null}
+        {analysisState.kind === "unreachable" ? (
+          <Text style={styles.notice}>
+            The analysis could not be loaded, so the overlays are missing. This is a connection
+            problem, not a problem with the swing.
+          </Text>
+        ) : null}
       </View>
+
+      <OverlayControls
+        analysis={analysis}
+        toggles={toggles}
+        onToggle={onToggle}
+        angles={angles}
+        onAngles={setAngles}
+      />
 
       {__DEV__ ? (
         <FrameSyncPanel
           state={player.state}
           playerRef={player.ref}
           fps={fps}
+          bounds={bounds}
+          traceCostRef={traceCost}
           onReset={player.actions.resetMeasurement}
           onSweep={player.actions.runSeekSweep}
         />

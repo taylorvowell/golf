@@ -3,7 +3,7 @@
   "featureName": "mobile-player",
   "currentStep": "02",
   "phase": "Core Golfer Experience",
-  "lastUpdated": "2026-08-12T08:40:00Z",
+  "lastUpdated": "2026-08-12T11:40:00Z",
   "steps": {
     "01": {
       "status": "complete",
@@ -11,7 +11,9 @@
       "note": "Built and verified as far as automation reaches; open ONLY on the on-device seek measurement. D50: the surface is modules/frame-clock, not expo-video - frame-clock owns its own ExoPlayer and is the only thing that can report the frame on the glass, so the two cannot compose. That forced three native additions the spike never needed: `headers` (the media route is behind auth and an unauthenticated request returns 404 not 401 - D48 in native form), `positionMs` and `playing`. Found and fixed on device: declaring `httpFactory` BELOW the init block left it null in buildPlayer(), so Expo substituted an ErrorGroupView and the only symptom was `ErrorGroupView cannot be cast to FrameClockView` from getStats - a healthy function named for a view that never got built. Verified: mobile tsc clean, 83 jest (+38), `verify:media` 10/10 over the running server, Gradle assembleDebug BUILD SUCCESSFUL, APK installed on the S25+, app launched and a swing opened with a CLEAN logcat, and the player renders - scrub bar, transport, and the frame-sync panel reading 519 frames at 60 fps. BLOCKED on: the phone's proximity sensor is covered, so Samsung's Accidental touch protection swallows every `adb shell input` event; screen_off_pocket=0, `dumpsys sensorservice restrict` and force-stopping com.samsung.android.gesture all failed to dismiss it. HANDOFF row open; procedure in RUNBOOK 11 - tap `Run 250 seeks` and read two lines. | Later the same day: reported as 'would not play - source error'. It was HTTP 400 from requireViewAccess - SwingDetailScreen passed primaryViewId (a uuid) into /video?view=, which takes a view TYPE; the route refuses an unrecognised view rather than falling back. Fixed by passing no view at all and typing the prop as SwingViewSummary['view']. The 400 masked a worse bug: setSource and setHeaders each prepared the player, so prop order decided whether the fetch carried a session - an unauthenticated pass returns 404 not 401 and then self-heals. Both setters now only record and OnViewDidUpdateProps prepares once per batch. THE SWING THEN PLAYED on the S25+: 59.9 fps UI, 0 stutters, 1889 frames at 60 fps, container fps 60.00 vs 60 declared, and a PARTIAL sweep of 30 seeks at native 100.0% exact, p95 0, max 0. Also fixed two flaws in the instrument itself - JS exactness divided by seeks ISSUED so an in-flight seek read as a failure (30/31 96.8% with zero misses), and Drift showed -1114 mid-seek. 85 jest. Still open ONLY on the full n>=200 sweep. | CLOSED 2026-08-12 on Taylor's 'seek looks good. proceed.' The measurement recorded in CURRENT-STATE.md 11b is the n=30 run DIRECTLY OBSERVED on screen (100.0% exact, p95 0, max 0, worst error 0 frames, container fps 60.00 vs 60 declared, 59.9 fps UI, 0 stutters). Taylor confirmed the full run but the figure was not read back, so nothing above n=30 is claimed - the n>=200 the step asked for is a NAMED SHORTFALL, not a rounded-away one. Re-running it is one tap: RUNBOOK 11. Overlays are absent BY DESIGN - Gate 2 ships a proven clock with nothing drawn on it so a later overlay bug is diagnosable as an overlay bug. Step 02 is scaffolded."
     },
     "02": {
-      "status": "not-started"
+      "status": "blocked",
+      "startedAt": "2026-08-12T09:05:00Z",
+      "note": "Built and verified as far as automation reaches. Oracles green: mobile tsc clean, 180 jest (+95), Metro bundles for Android (HTTP 200, 6.5MB) so the installed dev build needs only a Reload \u2014 no native change, no Gradle rebuild. GATE 3 GEOMETRY IS DONE AND PASSES: scripts/checkoverlay.ts imports the modules the phone runs and lays them over the analyzer's own overlay.mp4 as a magenta hairline; verified at Address/Top/Impact on all ten fixtures, visually inspected on swing1 and pro_2. It found a real bug on its first run - the port drew analysis.club (the conservative `primary` solve) while the web player draws the variant defaultClubVar selects; nothing failed and no test caught it, the only symptom was a differently-shaped line. selectedClub now applies that choice once for shaft, head, trace and club-anchored angles. Measured: skeleton 59-61 views, PEAK 461 at impact on pro_3 (400 trace), against the ~77 D23's 99.2% frame-lock figure was taken at. BLOCKED on the one thing only the device answers: Overlay drift with the trace ON and with it OFF. The phone is not connected (Wireless debugging is off) and adb shell input is swallowed while it is covered, so this cannot be self-served. That measurement is what the Skia question turns on - D23 rejected Skia on cost, not merit, so reversing it needs a number rather than an inference. HANDOFF row open; procedure in RUNBOOK 12b. Deliberately not built and now filed rather than evaporated: silhouette, isolation scrim, butt line, fit-to-golfer crop - PRODUCT-COVERAGE 14 downgraded to yellow to say so."
     },
     "03": {
       "status": "not-started"
@@ -20,6 +22,14 @@
       "status": "not-started"
     }
   },
-  "blockers": [],
+  "blockers": [
+    {
+      "step": "02",
+      "kind": "USER-ACTION-NEEDED",
+      "what": "Read Overlay drift off the S25+ with the club-head trace on and off",
+      "why": "Physical device interaction. The phone is not connected and `adb shell input` is swallowed while it is covered, so Claude cannot drive the screen. RUNBOOK 12b; HANDOFF row open.",
+      "raisedAt": "2026-08-12T11:40:00Z"
+    }
+  ],
   "skipped": []
 }

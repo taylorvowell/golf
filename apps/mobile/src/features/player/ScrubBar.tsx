@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import { PanResponder, StyleSheet, View, type LayoutChangeEvent } from "react-native";
 
 import { COLORS } from "../../theme";
-import { fractionToFrame, frameToFraction } from "./frames";
+import { fractionToFrame, frameToFraction, type Extent } from "./frames";
 
 /**
  * The scrub strip.
@@ -18,7 +18,13 @@ import { fractionToFrame, frameToFraction } from "./frames";
 
 export interface ScrubBarProps {
   frame: number;
-  frameCount: number;
+  /**
+   * The span the bar spans — the playback window once the analysis has loaded, the whole file
+   * before that. Not a frame count: the window rarely starts at zero (swing1's opens at frame 90
+   * of 396), so a bar mapping its left edge to frame 0 would spend a fifth of its travel outside
+   * the span it is drawing.
+   */
+  bounds: Extent;
   onSeek: (frame: number) => void;
   /** Fires on touch-down and release so the caller can show that the scrub is live. */
   onScrubbingChange?: (scrubbing: boolean) => void;
@@ -27,7 +33,7 @@ export interface ScrubBarProps {
 
 export function ScrubBar({
   frame,
-  frameCount,
+  bounds,
   onSeek,
   onScrubbingChange,
   disabled = false,
@@ -44,12 +50,12 @@ export function ScrubBar({
    */
   const widthRef = useRef(0);
   const seekRef = useRef(onSeek);
-  const countRef = useRef(frameCount);
+  const boundsRef = useRef(bounds);
   const disabledRef = useRef(disabled);
   const scrubbingRef = useRef(onScrubbingChange);
   widthRef.current = width;
   seekRef.current = onSeek;
-  countRef.current = frameCount;
+  boundsRef.current = bounds;
   disabledRef.current = disabled;
   scrubbingRef.current = onScrubbingChange;
 
@@ -83,7 +89,7 @@ export function ScrubBar({
   function seekAtPage(pageX: number) {
     const w = widthRef.current;
     if (w <= 0 || disabledRef.current) return;
-    seekRef.current(fractionToFrame((pageX - originRef.current) / w, countRef.current));
+    seekRef.current(fractionToFrame((pageX - originRef.current) / w, boundsRef.current));
   }
 
   function onLayout(e: LayoutChangeEvent) {
@@ -92,7 +98,7 @@ export function ScrubBar({
     widthRef.current = next;
   }
 
-  const fraction = frameToFraction(frame, frameCount);
+  const fraction = frameToFraction(frame, bounds);
 
   return (
     <View testID="scrub-bar" style={styles.touch} onLayout={onLayout} {...responder.panHandlers}>

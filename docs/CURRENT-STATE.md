@@ -539,7 +539,7 @@ anyone wanting a larger sample should take it before quoting a percentage.
 |---|---|
 | `react-native-vision-camera` v5 for high speed | Accepted 120/240 and **silently delivered 60** |
 | CameraX 1.5 high-speed | Refuses — gates on `CamcorderProfile`, which this device leaves empty |
-| Skia for the overlay | Unnecessary. Plain rotated `View`s drawing 49 keypoints hit 99.2%, so the Skia retest is cancelled |
+| Skia for the overlay | Unnecessary **for the skeleton**. Plain rotated `View`s drawing 49 keypoints hit 99.2%, so that retest is cancelled. The **trace** was never in that measurement and is 3–4× the view count — see the open item below |
 | React state as the overlay paint path | Not the bottleneck — removing it entirely scored no better (99.0%) |
 
 ### Known limits and open items
@@ -556,6 +556,17 @@ anyone wanting a larger sample should take it before quoting a percentage.
   (`measure_overlay.py`, comparing the drawn marker and the burned-in bar within one screenshot)
   went with the harness in D44 — the measurement is now `mobile-player`'s to make against the
   real player, and it is an open item, not a solved one.
+- **The overlay's frame lock WITH THE TRACE ON is unmeasured.** The view count is measured and the
+  geometry is verified: on a 360pt stage across all ten fixtures the mobile overlay costs **59–61
+  views for the skeleton alone and peaks at 461 at impact on `pro_3`, 400 of them trace** — where
+  D36's 99.2% figure was taken at roughly 77, with no trace at all. Second and third worst are
+  `pro_3` at the top (293) and `7wood-1` at impact (234); a typical clip sits near 110–200. `scripts/checkoverlay.ts` confirms every layer lands
+  on the analyzer's Gate 1 burn-in on all ten fixtures (RUNBOOK §12a). What is NOT known is whether
+  frame-lock holds at 272 views, and that is the number the Skia question turns on. Reading it is
+  one screen: RUNBOOK §12b, Overlay drift with the trace on and with it off. **Do not conclude
+  either way from the view count alone** — D23's rejection of Skia was on cost, not on merit, and
+  reversing it needs a measurement rather than an inference.
+
 - **Transfer, not parsing, is the artifact problem** — 13.7 MB took 2781 ms over LAN. A lean
   per-view API payload is a step 07 input.
 - **iOS is entirely unmeasured** — no Mac, no device. Android leads by D31's amendment.

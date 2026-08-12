@@ -161,3 +161,32 @@ Plus, on the S25+ (RUNBOOK §11 for the loop):
 The scorecard, findings and priorities are step 03. Dual-view is step 04. Silhouette, isolation and
 butt line are deferred out of this track's step 02 and need a home before launch — file them rather
 than letting them evaporate.
+
+---
+
+### Appended 2026-08-12 during execution — Gate 3 got a harness, and it immediately earned its keep
+
+The `Steps` above are unchanged; this records two things they could not have anticipated.
+
+**1. Gate 3's geometry half does not need the phone, and should not wait for it.**
+`scripts/checkoverlay.ts` imports the very modules the phone runs — `keypointIndex`, `BONES`,
+`buildTrace`, `cutAt`, `orientationHold`, `resolveAngle`, `simplify`, `dashSegments` — and lays
+their output over the analyzer's own `overlay.mp4` as a magenta hairline. Gate 1 drew frame N's pose
+onto frame N's pixels in the process that computed them, so a disagreement is a client port bug and
+nothing else. Verified on all ten fixtures at Address, Top and Impact. RUNBOOK §12a.
+
+**On its first real run it found a bug no test would have:** the port was drawing
+`analysis.club` (the conservative classical `primary` solve) while the web player draws the variant
+`defaultClubVar` selects. Same swing, visibly different line, nothing red anywhere. `selectedClub`
+now applies that choice once, and the shaft, head, trace and club-anchored angles all read it.
+
+**2. What is left is genuinely device-only, and it is the step's own open question.**
+The view count is measured — 59–61 for the skeleton, **peak 461 at impact on `pro_3`, 400 of them
+trace**, against the ~77 D23's 99.2% frame-lock figure was taken at. Whether the lock holds at 461
+is not inferable from that number, and D23 rejected Skia on cost rather than on merit, so reversing
+it needs the measurement rather than an argument. Reading it is one screen: Overlay drift with the
+trace on and with it off (RUNBOOK §12b). The step stays open on exactly that.
+
+**Also deliberately not built, and now filed rather than evaporated:** the silhouette, the isolation
+scrim, the butt line and fit-to-golfer crop. `docs/PRODUCT-COVERAGE.md` §14 is downgraded from ✅ to
+🟡 to say so, since the phone is the primary product.

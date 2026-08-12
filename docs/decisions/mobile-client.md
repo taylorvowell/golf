@@ -164,3 +164,72 @@ carries its `Authorization` header for exactly this reason.
 full-resolution `contact.jpg` (1–2 MB), so a ten-swing log is ~13 MB uncached. A server-side
 thumbnail size belongs with the media pipeline.
 **See:** ARCHIVE D48.
+
+### The mobile overlay is rotated `View`s, and every stroke is a segment
+
+**Decision:** Draw the skeleton, club, trace, orientation rods and angle arcs as absolutely
+positioned, rotated React Native `View`s — one per line segment, positioned by its **midpoint**
+because RN rotates about a view's centre. An arc is a short chord polyline; a dash is one view per
+dash, not one per sample crossed.
+**Gotchas:** The number of segments IS the cost of a frame, so two render-time reductions carry the
+trace: the already-smoothed curve is simplified with Ramer–Douglas–Peucker at **0.6 stage pixels**
+(both endpoints preserved exactly — the head of the line has to land on the playhead), and dashing
+is a *saving* rather than a surcharge. Measured over all ten fixtures at a 360pt stage: **59–61
+views for the skeleton alone, peak 461 total at impact on `pro_3` (400 of them trace).** The
+translucent wedge behind each angle arc is dropped — a wedge is not expressible as rectangles.
+**Scope:** The silhouette, isolation scrim and butt line are **not** portable this way: the scrim
+needs `Path2D` + even-odd fill to put its holes back, which is why the analyzer stores rings with
+no outer/hole distinction. They stay web-only until something else draws them.
+**See:** ARCHIVE D23, D36.
+
+### The mobile overlay draws the transport's frame, not the presented frame
+
+**Decision:** The overlay paints `target ?? presented` — the seek target while a seek is
+outstanding, the presented frame otherwise — and calls `markOverlayCommitted(frame)` in a layout
+effect immediately after.
+**Gotchas:** The two paths were measured and they differ. During playback JS learns about a frame
+~49 ms **before** it is displayed, so reacting to the frame event is comfortably in budget. On a
+seek there is **no lead at all** — a seeked frame is displayed essentially on arrival — so an
+overlay that waited for the event would always be a frame behind while scrubbing, which is the one
+interaction where a golfer is studying a position.
+**Scope:** `markOverlayCommitted` is what makes the sync panel's `Overlay drift` a native
+measurement scored on the playback thread rather than a JS self-report.
+**See:** ARCHIVE D36.
+
+### The mobile transport is bounded by `playback_window`, not by the file
+
+**Decision:** Once `analysis.json` loads, seeking, stepping, the scrub bar and playback all clamp to
+the analyzer's `playback_window`; the playhead parks at its start; playback stops at its end and
+`play` at the end restarts from the beginning of the window. A swing with no artifact keeps the
+file bound.
+**Gotchas:** The window rarely starts at zero — swing1's opens at frame 90 of 396 — so `frames.ts`
+takes an `Extent` (a `{first, last}` span, or a bare frame count meaning the whole file) rather than
+a frame count. Anything that must reach frames outside the window passes the file extent
+explicitly.
+**Scope:** The window is a property of the *swing*, not the viewer, which is why the client reads it
+rather than deriving one.
+
+### `analysis.json` is duplicated into the mobile tree, not shared
+
+**Decision:** `traceSmoothing.ts`, `playbackWindow.ts` and `skeleton.ts` are **copied verbatim**
+from `apps/web/src/lib/` into `apps/mobile/src/features/player/overlay/`, with their tests, and each
+carries a banner saying so.
+**Gotchas:** This is knowingly-carried debt, not an oversight. The only workspace package a phone
+build already resolves is `@swingsage/schema`; adding a second means Metro resolution config and a
+native rebuild to move pure array math, on a tree that already had to be hoisted (D21) to build for
+Android at all. **The trigger to un-duplicate is the third consumer, or the first time the two
+copies are found to have diverged.**
+**Scope:** Only files with no imports beyond a type. Anything that touches a renderer was
+re-expressed instead.
+
+### The mobile player draws the SELECTED club solution, not `primary`
+
+**Decision:** `selectedClub(analysis)` applies `defaultClubVar` — the same choice the web player
+makes — and the shaft, the head ring, the trace and any club-anchored angle all read that one
+result. On these fixtures it resolves to `model_traj_moving`.
+**Gotchas:** The first pass of the mobile port drew `analysis.club` directly. Nothing failed, no
+test caught it, and the only symptom was a differently-shaped line over the same swing —
+`scripts/checkoverlay.ts` is what found it, on its first real run. Switching solutions is a RENDER
+change only: metrics, face and event refinement all read the primary block regardless.
+**Scope:** It also changes the trace's cost materially — swing1's impact frame went from 136 trace
+views on `primary` to 49 on the selected variant, while `pro_3`'s went the other way, to 400.

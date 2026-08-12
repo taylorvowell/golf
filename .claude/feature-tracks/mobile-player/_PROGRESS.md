@@ -29,6 +29,49 @@ consumer in the tree** — `frame-clock` is this track's, and it is why the spik
 
 ---
 
+## 02 - Overlays on the Proven Clock — BLOCKED on one on-device reading
+**Started:** 2026-08-12 09:05 UTC
+**Phase:** Core Golfer Experience
+**Summary:** The swing is drawn on the phone: skeleton, club, trace, orientation rods and angle
+arcs, as rotated React Native `View`s (D23/D36), locked to the transport's frame and committed to
+native with `markOverlayCommitted`. `useAnalysis` fetches `analysis.json` and treats a 404 as
+**not-analysed** rather than an error, so a swing with no artifact still plays and steps. The
+transport is now bounded by `playback_window` — `frames.ts` takes an `Extent` (a `{first, last}`
+span or a bare frame count meaning the whole file) because the window rarely starts at zero.
+`tsc` clean, **180 jest (+95)**, and Metro bundles for Android (HTTP 200, 6.5 MB) — no native change,
+so the installed dev build needs a Reload and not a Gradle rebuild.
+
+**Notes:**
+
+- **Gate 3's geometry half was automated instead of waiting for the phone, and it earned its keep
+  on the first run.** `scripts/checkoverlay.ts` imports the very modules the device executes and
+  lays their output over the analyzer's own `overlay.mp4` as a magenta hairline. Verified at
+  Address, Top and Impact on all ten fixtures. It found a bug **no test would have caught**: the
+  port drew `analysis.club` — the deliberately conservative `primary` solve — while the web player
+  draws whatever `defaultClubVar` selects (`model_traj_moving` on these fixtures). Nothing failed
+  anywhere; the only symptom was a differently-shaped line over the same swing. `selectedClub` now
+  makes that choice once and the shaft, head ring, trace and club-anchored angles all read it.
+- **The trace's cost is measured, its frame-lock is not, and the difference is the whole open
+  question.** On a 360pt stage: skeleton alone **59–61 views**, peak **461 at impact on `pro_3`
+  (400 of them trace)** — against roughly 77 for the measurement D23's 99.2% figure came from, which
+  contained no trace at all. Two render-time reductions carry it: RDP simplification at 0.6 stage
+  pixels with both endpoints preserved exactly, and dashing, which emits one view per dash rather
+  than one per sample and is therefore a *saving*. **Do not conclude anything about Skia from the
+  count** — D23 rejected it on cost rather than merit, so reversing that needs the drift number.
+- **Blocked, USER-ACTION-NEEDED:** Overlay drift with the trace on and with it off. The phone is not
+  connected and Samsung's Accidental touch protection swallows `adb shell input` while it is
+  covered, so this is not self-servable. One screen, two readings — RUNBOOK §12b, HANDOFF row open.
+- **Named as absent rather than left to be discovered:** the silhouette, the isolation scrim, the
+  butt line and fit-to-golfer crop. The scrim needs `Path2D` + even-odd fill to put its holes back,
+  which plain `View`s cannot express. `PRODUCT-COVERAGE.md` §14 drops from ✅ to 🟡 to say so, since
+  the phone is the primary product.
+- **Three files are duplicated from `apps/web/src/lib/`, knowingly** (`traceSmoothing`,
+  `playbackWindow`, `skeleton`, plus `clubVariants`), each with a banner. The trigger to
+  un-duplicate is the third consumer or the first divergence. Adding a workspace package means
+  Metro config and a native rebuild on a tree already hoisted (D21) just to build for Android.
+
+---
+
 ## 01 - Frame-Exact Playback and Transport — IN PROGRESS
 **Worked:** 2026-08-12 · **Phase:** Core Golfer Experience
 **Status:** everything except the on-device seek measurement. Blocked on a physical device
