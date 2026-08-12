@@ -647,6 +647,9 @@ green / yellow / cyan. A hairline running down the middle of a burn-in bone is t
 beside it is the bug. `--true-colour` switches to the real palette, `--stage PX` changes the width
 the view count is costed at (default 360, a phone), `--angles N|all` adds angle arcs.
 
+Corrections live in Postgres rather than in the artifact, so this script — which reads a directory —
+cannot see them. Pass them: `--stages impact=143` re-cuts the boundaries the same way the phone does.
+
 The per-frame line also prints the **view count** — the number of `View`s that frame costs on the
 device, since every stroke is one — and how many angle fields drew versus abstained.
 

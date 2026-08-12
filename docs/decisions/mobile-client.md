@@ -233,3 +233,20 @@ test caught it, and the only symptom was a differently-shaped line over the same
 change only: metrics, face and event refinement all read the primary block regardless.
 **Scope:** It also changes the trace's cost materially — swing1's impact frame went from 136 trace
 views on `primary` to 49 on the selected variant, while `pro_3`'s went the other way, to 400.
+
+### Hand corrections merge on the phone, by frame, at render time
+
+**Decision:** `useCorrections(swingId, view)` fetches `/stages` and `/markers` alongside the
+analysis. A pinned boundary re-cuts where the trace changes colour; a placed club head replaces the
+analyzer's point on its own frame, is inserted where it had none, re-aims the shaft, and draws its
+ring green rather than rose.
+**Gotchas:** Corrections are **not in `analysis.json` and must never be** — the artifact is
+rewritten wholesale by every re-analysis, so one stored there is destroyed by the next run. Both
+routes already existed and are access-checked; no server change. Everything is optional in both
+directions: an uncorrected swing and a failed fetch both draw the analyzer's own answer, and there
+is no error state, because a correction that cannot be loaded must never stop a swing being watched.
+**Scope:** Stage NAMES are validated against the five-mark list rather than mapped. The oldest rows
+in this database predate that model and still say `address` / `top` / `toe_up`; the web player
+ignores them by only asking for names it knows, and dropping them keeps the two clients agreeing
+about which corrections are live. Today that leaves exactly one in effect — `pro_2`'s `impact` at
+143 against the analyzer's 140.

@@ -21,6 +21,7 @@ import { drawableAngles } from "./overlay/overlays";
 import { DEFAULT_TOGGLES, type ToggleKey, type Toggles } from "./overlay/overlays";
 import { playbackWindow } from "./overlay/playbackWindow";
 import { useAnalysis } from "./useAnalysis";
+import { useCorrections } from "./useCorrections";
 import { useFramePlayer } from "./useFramePlayer";
 
 /**
@@ -63,6 +64,9 @@ export function SwingPlayer({ swingId, frameCount, fps, view }: SwingPlayerProps
   const source = useMediaSource(swingId, view);
   const { state: analysisState } = useAnalysis(swingId, view);
   const analysis = analysisState.kind === "ok" ? analysisState.analysis : null;
+  // Pinned boundaries and placed club heads. Optional everywhere: a swing nobody has corrected, or
+  // a fetch that fails, draws the analyzer's own answer rather than nothing.
+  const corrections = useCorrections(swingId, view);
 
   /**
    * The transport's extent: the analyzer's `playback_window` once it is known, the whole file until
@@ -168,6 +172,7 @@ export function SwingPlayer({ swingId, frameCount, fps, view }: SwingPlayerProps
             angles={selectedAngles}
             w={stage.w}
             h={stage.h}
+            corrections={corrections}
             playerRef={player.ref}
             traceCostRef={traceCost}
           />

@@ -140,3 +140,62 @@ describe("capabilities", () => {
     expect(availableGroups(null).map((g) => g.title)).toEqual(["Body"]);
   });
 });
+
+describe("hand corrections", () => {
+  /**
+   * Corrections are **not in `analysis.json` and must never be** — the artifact is rewritten
+   * wholesale by every re-analysis, so a correction stored there is destroyed by the next run.
+   * They merge by frame at render time, and these pin that they actually do. Pinning a boundary
+   * that changed nothing on screen is a bug the web player has already shipped once.
+   */
+
+  it("moves the colour change to a corrected boundary", () => {
+    const a = makeAnalysis();
+    expect(traceSpans(a)!.downswing).toEqual([12, 18]);
+    expect(traceSpans(a, { downswing_start: 14 })!).toEqual({
+      backswing: [2, 14],
+      downswing: [14, 18],
+      followthrough: [18, 26],
+    });
+  });
+
+  it("propagates a pin downstream only, never dragging an earlier mark", () => {
+    // A correction that pulled the boundaries before it would silently undo other corrections.
+    const spans = traceSpans(makeAnalysis(), { downswing_start: 1 })!;
+    expect(spans.backswing[0]).toBe(2);
+    expect(spans.downswing[0]).toBe(2);
+    expect(spans.followthrough[0]).toBe(18);
+  });
+
+  it("ignores a stage name it does not know rather than guessing at it", () => {
+    // The oldest rows in this database predate the five-mark model and say `address` / `top`.
+    const a = makeAnalysis();
+    expect(traceSpans(a, { top: 99 } as never)).toEqual(traceSpans(a));
+  });
+
+  it("a placed head closes the bridge it sits in", () => {
+    const a = makeAnalysis({ traceGap: true });
+    const spans = traceSpans(a);
+    expect(buildTrace(a, spans, DEFAULT_SMOOTHING).backswing.some((p) => p.bridge)).toBe(true);
+
+    // The gap runs f2 → f12. Filling it densely leaves no step above BRIDGE_STEP, so the dashed
+    // chord becomes measured line — which is the whole reason to correct a frame inside one.
+    const marks = new Map<number, [number, number]>(
+      [4, 6, 8, 10].map((f) => [f, [0.5 + f * 0.01, 0.4] as [number, number]]),
+    );
+    const filled = buildTrace(a, spans, DEFAULT_SMOOTHING, marks);
+    expect(filled.backswing.some((p) => p.bridge)).toBe(false);
+  });
+
+  it("a placed head replaces the analyzer's point on its own frame", () => {
+    const a = makeAnalysis();
+    const spans = traceSpans(a);
+    const vw = a.video.width;
+    const marks = new Map<number, [number, number]>([[4, [0.9, 0.9]]]);
+    const xs = buildTrace(a, spans, DEFAULT_SMOOTHING, marks).backswing.flatMap((p) =>
+      p.pts.map(([x]) => x),
+    );
+    // 0.9 of a 1080-wide frame is further right than any analyzer point in this fixture.
+    expect(Math.max(...xs)).toBeGreaterThan(0.85 * vw);
+  });
+});

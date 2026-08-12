@@ -61,6 +61,14 @@ so the installed dev build needs a Reload and not a Gradle rebuild.
 - **Blocked, USER-ACTION-NEEDED:** Overlay drift with the trace on and with it off. The phone is not
   connected and Samsung's Accidental touch protection swallows `adb shell input` while it is
   covered, so this is not self-servable. One screen, two readings — RUNBOOK §12b, HANDOFF row open.
+- **Hand corrections merge on the phone too, added after a fidelity question.** The first pass drew
+  the analyzer's events and ignored the database. `useCorrections` now fetches `/stages` and
+  `/markers` — both routes already existed — so a pinned boundary moves where the trace changes
+  colour and a placed head replaces the analyzer's point, re-aims the shaft and turns its ring
+  green. Live effect today is exactly one row: `pro_2`'s `impact` at 143 against the analyzer's 140,
+  worth 3 frames of downswing colour (108 → 111 trace views at f140). `head_markers` is empty, so
+  that half is dormant but correct. The other four stored rows use names retired before the
+  five-mark model and are dropped rather than mapped, which is what the web player effectively does.
 - **Named as absent rather than left to be discovered:** the silhouette, the isolation scrim, the
   butt line and fit-to-golfer crop. The scrim needs `Path2D` + even-odd fill to put its holes back,
   which plain `View`s cannot express. `PRODUCT-COVERAGE.md` §14 drops from ✅ to 🟡 to say so, since

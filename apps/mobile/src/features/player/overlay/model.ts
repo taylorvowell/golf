@@ -1,5 +1,6 @@
 import type { Analysis, Club } from "@swingsage/schema/contract";
 
+import type { HeadMarks, PhaseOverrides } from "../useCorrections";
 import { defaultClubVar } from "./clubVariants";
 import { MIN_CONF, type KeypointIndex } from "./geometry";
 import { buildTracePath, type SmoothingKey, type TracePiece } from "./traceSmoothing";
@@ -49,19 +50,32 @@ export const TRACE_KEYS = ["backswing", "downswing", "followthrough"] as const;
 export type TraceKey = (typeof TRACE_KEYS)[number];
 
 /**
- * Where the trace changes colour.
+ * Where the trace changes colour — the analyzer's events, **re-cut at any hand-corrected boundary**.
  *
- * The web player re-cuts these at hand-corrected phase boundaries. There are no corrections on the
- * phone yet — they live in the database and merge at render time, which is a later step — so this
- * reads the analyzer's events directly. The shape is the same one corrections would fill in.
+ * Correcting a boundary has to move the colour change with it, or pinning "start of downswing" does
+ * nothing visible and the control reads as broken. The analyzer's `events` are the base; a stored
+ * override replaces one mark and nothing else.
+ *
+ * Later marks yield to earlier ones on the forward walk, exactly as the web player does it: a pin
+ * propagates only downstream, so correcting one boundary never silently drags the ones before it.
  */
-export function traceSpans(a: Analysis): TraceSpans | null {
+export function traceSpans(a: Analysis, phases?: PhaseOverrides): TraceSpans | null {
   const e = a.events;
   if (!e?.address || !e.top || !e.impact || !e.finish) return null;
+
+  let back = phases?.backswing_start ?? e.address.frame;
+  let down = phases?.downswing_start ?? e.top.frame;
+  let imp = phases?.impact ?? e.impact.frame;
+  let fin = phases?.finish_start ?? e.finish.frame;
+
+  down = Math.max(down, back);
+  imp = Math.max(imp, down);
+  fin = Math.max(fin, imp);
+
   return {
-    backswing: [e.address.frame, e.top.frame],
-    downswing: [e.top.frame, e.impact.frame],
-    followthrough: [e.impact.frame, e.finish.frame],
+    backswing: [back, down],
+    downswing: [down, imp],
+    followthrough: [imp, fin],
   };
 }
 
@@ -81,6 +95,14 @@ export function buildTrace(
   a: Analysis,
   spans: TraceSpans | null,
   method: SmoothingKey,
+  /**
+   * Hand-placed club heads, merged in by frame.
+   *
+   * A marker REPLACES the analyzer's point on its own frame and is INSERTED where the analyzer had
+   * none — so a correction shows in the line and not only under the cursor, and correcting a frame
+   * inside a bridge closes the bridge, which is the whole reason to correct one.
+   */
+  marks?: HeadMarks,
 ): Record<TraceKey, TracePiece[]> {
   const out = { backswing: [], downswing: [], followthrough: [] } as Record<TraceKey, TracePiece[]>;
   const club = selectedClub(a);
@@ -112,6 +134,7 @@ export function buildTrace(
         if (pts[i]) pooled.set(f, pts[i]);
       });
     }
+    if (marks) for (const [f, pt] of marks) pooled.set(f, pt);
     const ordered = [...pooled.keys()].sort((p, q) => p - q);
     for (const key of TRACE_KEYS) {
       const [lo, hi] = spans[key];
@@ -134,14 +157,28 @@ export function buildTrace(
     const [lo, hi] = spans[key];
     const tf = club.trace_frames?.[key];
     const known = tf?.length === pts.length;
-    const fs: number[] = known
+    let fs: number[] = known
       ? tf
       : pts.map((_, i) => lo + Math.round((i * (hi - lo)) / Math.max(1, pts.length - 1)));
+    let seg: [number, number][] = pts;
+
+    // Only when the segment carries real frames: a synthetic index says nothing about when a point
+    // was measured, so merging a correction into it would place it against a made-up frame.
+    if (known && marks?.size) {
+      const inSeg = [...marks.entries()].filter(([f]) => f >= lo && f <= hi);
+      if (inSeg.length) {
+        const merged = new Map<number, [number, number]>();
+        fs.forEach((f, i) => merged.set(f, pts[i]));
+        for (const [f, pt] of inSeg) merged.set(f, pt);
+        fs = [...merged.keys()].sort((x, y) => x - y);
+        seg = fs.map((f) => merged.get(f)!);
+      }
+    }
     // A segment with no real frames must not be chopped into bridges by a synthetic index, so hand
     // over a dense synthetic sequence and clear the bridge flag it cannot have earned.
     const framesIn = known ? fs : fs.map((_, i) => lo + i);
     out[key] = buildTracePath(
-      pts.map(([x, y]) => [x * vw, y * vh] as [number, number]),
+      seg.map(([x, y]) => [x * vw, y * vh] as [number, number]),
       framesIn,
       method,
     ).map((piece) => ({ ...piece, bridge: known ? piece.bridge : false }));

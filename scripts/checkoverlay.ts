@@ -20,6 +20,8 @@
  *
  *   pnpm exec tsx scripts/checkoverlay.ts services/analyzer/out/swing1 [frame ...]
  *     --angles N     also draw the first N drawable angle fields (default 0 — 25 arcs is noise)
+ *     --stages k=f,… hand-corrected boundaries, e.g. `--stages impact=143`, since corrections live
+ *                    in the database rather than in the artifact this script reads from disk
  *     --stage PX     the stage width the view count is costed at (default 360, a phone)
  *     --true-colour  draw in the overlay's real palette instead of the diff hairline
  *
@@ -108,6 +110,23 @@ const ANGLE_LIMIT = flag("--angles", 0);
  */
 const STAGE_W = flag("--stage", 360);
 const TRUE_COLOUR = argv.includes("--true-colour");
+
+/**
+ * Hand-corrected boundaries, passed in rather than fetched.
+ *
+ * They live in Postgres, not in `analysis.json` — deliberately, since the artifact is rewritten
+ * wholesale by every re-analysis — and this script reads a directory rather than a running server.
+ * Naming them on the command line keeps the check honest about the fact that the phone merges
+ * something this sheet cannot see by itself.
+ */
+const stageArg = argv[argv.indexOf("--stages") + 1];
+const phaseOverrides: Record<string, number> = {};
+if (argv.includes("--stages") && stageArg) {
+  for (const pair of stageArg.split(",")) {
+    const [k, v] = pair.split("=");
+    if (k && Number.isFinite(Number(v))) phaseOverrides[k] = Number(v);
+  }
+}
 /** The diff hairline. Nothing in the analyzer's palette is near it. */
 const DIFF = "#FF2FD0";
 
@@ -144,7 +163,7 @@ const H = analysis.video.height;
 
 // The variant the player actually draws, not `primary` — the same call the overlay makes.
 const club = selectedClub(analysis);
-const spans = traceSpans(analysis);
+const spans = traceSpans(analysis, phaseOverrides);
 const pieces = buildTrace(analysis, spans, DEFAULT_SMOOTHING);
 const tracks = orientationHold(analysis, idx);
 // Every drawable angle, so a port bug in `resolve()`'s chain/feet/club branches has somewhere to
@@ -170,6 +189,10 @@ try {
   // Naming the solution is not decoration: the first pass of this port drew `primary` while the web
   // player drew a variant, and the only visible symptom was a differently-shaped line.
   console.log(`  club solution ${club ? defaultClubVar(analysis) : "none (analysed --no-club)"}`);
+  const pinned = Object.entries(phaseOverrides);
+  if (pinned.length) {
+    console.log(`  boundaries pinned ${pinned.map(([k, v]) => `${k}=${v}`).join(" ")}`);
+  }
   // Sequential rather than Promise.all: three 1080x1920 composites at once is enough memory
   // pressure to matter, and the run is not waiting on anything else.
   for (const b of built) {

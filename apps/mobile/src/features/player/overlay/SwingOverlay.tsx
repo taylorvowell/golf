@@ -3,6 +3,7 @@ import { StyleSheet, View } from "react-native";
 import type { AngleField, Analysis } from "@swingsage/schema/contract";
 
 import type { FrameClockHandle } from "../../../../modules/frame-clock/src";
+import type { Corrections } from "../useCorrections";
 import { AngleLayer } from "./AngleLayer";
 import { ClubLayer } from "./ClubLayer";
 import { OrientLayer } from "./OrientLayer";
@@ -48,6 +49,13 @@ export interface SwingOverlayProps {
   /** Stage size in layout pixels. Normalized coordinates are scaled by these and nothing else. */
   w: number;
   h: number;
+  /**
+   * Hand corrections, merged by frame.
+   *
+   * They are deliberately NOT in `analysis.json` — it is rewritten wholesale by every re-analysis —
+   * so the merge has to happen here, at render time, or a correction is destroyed by the next run.
+   */
+  corrections?: Corrections;
   playerRef: React.RefObject<FrameClockHandle | null>;
   /** Written with the number of trace views drawn, for the sync panel to report. */
   traceCostRef?: { current: number };
@@ -60,16 +68,20 @@ export function SwingOverlay({
   angles,
   w,
   h,
+  corrections,
   playerRef,
   traceCostRef,
 }: SwingOverlayProps) {
   // All four are whole-clip passes over the artifact and none of them depends on the playhead.
   // Recomputing any of them per frame is the single easiest way to lose the frame budget.
   const idx = useMemo(() => keypointIndex(analysis), [analysis]);
-  const spans = useMemo(() => traceSpans(analysis), [analysis]);
+  const spans = useMemo(
+    () => traceSpans(analysis, corrections?.phases),
+    [analysis, corrections?.phases],
+  );
   const pieces = useMemo(
-    () => buildTrace(analysis, spans, DEFAULT_SMOOTHING),
-    [analysis, spans],
+    () => buildTrace(analysis, spans, DEFAULT_SMOOTHING, corrections?.marks),
+    [analysis, spans, corrections?.marks],
   );
   const tracks = useMemo(() => orientationHold(analysis, idx), [analysis, idx]);
   // The variant the artifact's own numbers select, not `primary` — see `selectedClub`. Chosen once
@@ -105,7 +117,9 @@ export function SwingOverlay({
         />
       ) : null}
 
-      {toggles.club && club ? <ClubLayer club={club} frame={frame} w={w} h={h} /> : null}
+      {toggles.club && club ? (
+        <ClubLayer club={club} frame={frame} marks={corrections?.marks} w={w} h={h} />
+      ) : null}
 
       {toggles.orient ? (
         <OrientLayer analysis={analysis} idx={idx} tracks={tracks} frame={frame} w={w} h={h} />
