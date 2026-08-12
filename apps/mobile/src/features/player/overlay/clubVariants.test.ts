@@ -3,18 +3,18 @@ import type { Analysis } from "@swingsage/schema/contract";
 import { defaultClubVar } from "./clubVariants";
 
 /**
- * Which club solution the player draws by default.
+ * Which club solution the player draws, and why a SPARSE trace must not change it.
  *
- * This has a bug in its history and the bug was invisible: `model_traj_moving` was added at the
- * FRONT of the chain and inherited none of the half-the-swing gate the branch below it already
- * had, so a swing the trajectory solve barely measured became the default anyway. On `swing1` that
- * drew a single dashed chord with **no downswing at all** — the trajectory solve measured 0% of it
- * — where the classical `primary` solve has 90 points at 100% coverage.
+ * The approved pick is `model_traj_moving` — trajectory-gated head, moving-average trace, drawn
+ * with Savitzky-Golay render smoothing — chosen on 2026-08-08 from an evaluation of 31 candidates.
+ * It is deliberately ungated, and this file exists because that looks like a bug and is not.
  *
- * Nothing went red. Coverage percentages looked healthy. It is the third time in this project's
- * history that a club number looked fine and the drawn result did not, which is why the rule is to
- * look at the club over real pixels (`scripts/checkoverlay.ts`, RUNBOOK §12a) rather than at a
- * coverage figure.
+ * On `swing1` it draws almost no downswing, which reads as broken next to `primary`'s full arc.
+ * But `swing1`'s downswing contains **zero real uninterpolated detections in either solve**:
+ * `primary` draws 24 trace points through those 24 frames anyway, this solve draws 1. The prettier
+ * line is 24 fabricated positions. A coverage-based fallback to it would make the player assert
+ * measurements the detector never made — so the gate that was briefly added here on 2026-08-12 was
+ * removed again, and these are the assertions that keep it removed.
  */
 
 function analysis(variants: Record<string, { back: number; down: number }>): Analysis {
@@ -39,34 +39,22 @@ function analysis(variants: Record<string, { back: number; down: number }>): Ana
 const HEALTHY = { back: 40, down: 40 }; // 0.80
 const STARVED = { back: 15, down: 13 }; // 0.28 — swing1's real figure
 
-it("prefers the trajectory-gated solve when it measured the swing", () => {
+it("draws the approved solve: trajectory-gated head with a moving-average trace", () => {
   expect(defaultClubVar(analysis({ model_traj_moving: HEALTHY }))).toBe("model_traj_moving");
 });
 
-it("refuses a solve that measured less than half the swing", () => {
-  // The bar is the architecture spec's own for showing a trace at all. A precise solve that saw a
-  // quarter of the swing is worse than a conservative one that saw all of it.
-  expect(defaultClubVar(analysis({ model_traj_moving: STARVED }))).toBe("primary");
+it("KEEPS it on a swing the detector barely measured, rather than reaching for a fuller line", () => {
+  // The whole point. A sparse trace on a detector-starved clip is the honest output; the fuller
+  // alternative is drawing through frames nothing was detected in. Changing this is a decision to
+  // argue, not a tidy-up — see the comment on `defaultClubVar`.
+  expect(defaultClubVar(analysis({ model_traj_moving: STARVED }))).toBe("model_traj_moving");
 });
 
-it("falls all the way through when every model solve is starved", () => {
-  // swing1's real shape: all three model candidates sit at 0.25-0.28 together, because they share
-  // the detections. Gating only the first one lands on the second, which is just as empty.
+it("still gates the OLDER measured-trace preference, which was never the approved pick", () => {
   expect(
-    defaultClubVar(
-      analysis({
-        model_traj_moving: STARVED,
-        model_traj_measured: STARVED,
-        model_trace_savgol: STARVED,
-      }),
-    ),
-  ).toBe("primary");
-});
-
-it("takes the next candidate when only the first is starved", () => {
-  expect(
-    defaultClubVar(analysis({ model_traj_moving: STARVED, model_traj_measured: HEALTHY })),
-  ).toBe("model_traj_measured");
+    defaultClubVar(analysis({ model_traj_measured: STARVED, model_trace_savgol: HEALTHY })),
+  ).toBe("model_trace_savgol");
+  expect(defaultClubVar(analysis({ model_traj_measured: HEALTHY }))).toBe("model_traj_measured");
 });
 
 it("is primary on a swing with no variants at all", () => {

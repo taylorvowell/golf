@@ -153,10 +153,14 @@ and never interpolated (reconstruction was tried on held-out gaps and lost to a 
 Nine render-time smoothing methods are switchable live in the overlay menu
 (`lib/traceSmoothing.ts`, default Savitzky-Golay); all keep endpoints exact so the head of the
 line lands on the playhead. Thirteen alternative club SOLUTIONS are stored per swing and switchable
-the same way; `lib/clubVariants.ts` picks the default, and no candidate may be the default unless
-it measured at least half the swing — otherwise it falls back to `primary`, the conservative
-classical solve. Nine fixtures select `model_traj_moving`; `swing1` falls back, because every model
-solve measures under 30% of it and one of them measures 0% of the downswing. `checkclub.py` judges the per-frame head, `checktrace.py` the
+the same way; `lib/clubVariants.ts` picks the default and every fixture gets
+**`model_traj_moving`** — trajectory-gated head + moving-average trace — which with Savitzky-Golay
+render smoothing is the approved combination (2026-08-08, from 31 evaluated candidates).
+**A sparse trace is the correct output, not a failure**: `swing1`'s 24 downswing frames contain
+zero real uninterpolated detections, so the approved solve draws 1 point through them where the
+classical `primary` solve draws 24 — every one asserted rather than measured. Where the detector
+did answer (`pro_2`: 11 of 16) the trace is full. An empty stretch is a detector result to fix
+upstream, never a reason to switch solution. `checkclub.py` judges the per-frame head, `checktrace.py` the
 polyline — a good `checkclub.py` sheet says nothing about the trace.
 
 ---

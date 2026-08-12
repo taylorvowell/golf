@@ -252,19 +252,22 @@ ignores them by only asking for names it knows, and dropping them keeps the two 
 about which corrections are live. Today that leaves exactly one in effect — `pro_2`'s `impact` at
 143 against the analyzer's 140.
 
-### A club solution is only the default if it measured half the swing
+### The approved club solution is ungated, and a sparse trace is the correct output
 
-**Decision:** `defaultClubVar` gates **every** candidate on `measuredFrac >= 0.5` — the
-architecture spec's own bar for showing a trace at all — and falls through to `primary` when none
-passes. Both clients read the same file.
-**Gotchas:** `model_traj_moving` was added at the FRONT of the chain and inherited none of the gate
-the branch below it already had, so it was the default unconditionally. On `swing1` the trajectory
-solve measures **0% of the downswing**, and the player drew a single dashed chord with no downswing
-arc at all — 90 primary trace points at 100% coverage replaced by 23 that cannot form a curve.
-Nothing went red; coverage figures on the primary block looked healthy. Measured fraction across
-all ten fixtures: nine sit at **0.61–0.94**, `swing1` at **0.25–0.28** on all three model
-candidates at once, because they share the same detections. So the bar separates exactly the one
-broken case and changes nothing else — nine fixtures still select `model_traj_moving`.
-**Scope:** This is the third time a club number has looked fine while the drawn result did not.
-`scripts/checkoverlay.ts` is what caught it, by drawing the club over real pixels — which is the
-standing rule (`RUNBOOK` §12a), not a coverage percentage.
+**Decision:** `defaultClubVar` returns `model_traj_moving` — **trajectory-gated head + moving-average
+trace**, drawn with **Savitzky-Golay** render smoothing — with no coverage condition. Chosen
+2026-08-08 from an evaluation of 31 candidates, and it is a solve that evaluation *created*: the
+artifact previously carried gated-head-with-measured-trace and moving-average-over-ungated-head,
+never the combination. Legacy trace with no experiment selected.
+**Gotchas:** It looks wrong on `swing1`, which draws almost no downswing where `primary` draws a
+full arc — and that appearance was acted on once, on 2026-08-12, by gating the pick on measured
+coverage. **That was the wrong call and is reverted.** `swing1`'s 24 downswing frames contain
+**zero real uninterpolated detections in either solve**: `primary` draws 24 trace points through
+them anyway, `model_traj_moving` draws 1. The prettier line is 24 fabricated positions, and falling
+back to it would make the player assert measurements the detector never made. On `pro_2`, where 11
+of 16 downswing frames are real detections, the approved solve draws 12 and the question does not
+arise.
+**Scope:** An empty stretch of trace is a **detector** result to fix upstream — `swing1`'s detector
+answered 244/396 frames against 90%+ on the other nine — never a reason to change the pick.
+Provenance for the pick is `burnin.py`'s `TRACE_MODES` and `club.py`'s `smooth_trace`, whose
+`measured()` gate is what makes a trace refuse to draw through undetected frames in the first place.
