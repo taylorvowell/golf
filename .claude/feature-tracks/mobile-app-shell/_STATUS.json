@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "featureName": "mobile-app-shell",
+  "currentStep": "02",
+  "phase": "Core Golfer Experience",
+  "lastUpdated": "2026-08-12T03:55:00Z",
+  "steps": {
+    "01": {
+      "status": "complete",
+      "completedAt": "2026-08-12T03:55:00Z",
+      "note": "Expo Router adopted, built, then REVERSED on evidence (D47) - it peers on react-native-gesture-handler whose C++ codegen paths exceed the Android SDK ninja 260-char limit, and removing expo-router does not remove the package because it is a peer of @expo/cli under pnpm hoisting. Excluded from autolinking instead; navigation is React Navigation 7 native-stack. Also found and fixed: db:claim-fixtures reassigned ten swings without moving their media, and D33 keys lead with the owner id, so every artifact resolved to an empty namespace - caught by multiView.test.ts, fixed with MediaStore.movePrefix and an unconditional sweep so re-running is the repair. Verified: mobile tsc, 41 jest, web tsc/lint, 167 vitest, 100 schema vitest, Android assembleDebug BUILD SUCCESSFUL, APK installed on the S25+, and the served bundle carries every swing-log string. Not looked at on the device screen - the phone was in its owner hands."
+    },
+    "02": {
+      "status": "not-started"
+    },
+    "03": {
+      "status": "not-started"
+    }
+  },
+  "blockers": [],
+  "skipped": []
+}

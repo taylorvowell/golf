@@ -139,5 +139,35 @@ export function supabaseStore(): MediaStore {
       if (error) throw new Error(`storage removePrefix ${bucket}/${prefix}: ${error.message}`);
       return keys.length;
     },
+
+    async movePrefix(bucket, from, to) {
+      // Storage has no prefix rename either: enumerate, then move each object by explicit key.
+      // Same bounded two-level walk as `removePrefix` — a view prefix holds revision folders
+      // holding flat artifact names.
+      const store = storageClient().storage.from(bucket);
+      const keys: string[] = [];
+      const walk = async (dir: string, depth: number): Promise<void> => {
+        if (depth > 4) return;
+        const { data } = await store.list(dir, { limit: 1000 });
+        for (const entry of data ?? []) {
+          const child = `${dir}/${entry.name}`;
+          if (entry.id) keys.push(child);
+          else await walk(child, depth + 1);
+        }
+      };
+      await walk(from, 0);
+
+      let moved = 0;
+      for (const key of keys) {
+        const { error } = await store.move(key, `${to}${key.slice(from.length)}`);
+        // An object already at the destination means an earlier run got that far. Treated as
+        // done rather than fatal, so an interrupted move can be finished by running it again.
+        if (error && !/exists/i.test(error.message)) {
+          throw new Error(`storage movePrefix ${bucket}/${key}: ${error.message}`);
+        }
+        moved += 1;
+      }
+      return moved;
+    },
   };
 }

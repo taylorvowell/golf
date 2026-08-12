@@ -297,8 +297,14 @@ use on the S25+. The repo describes what the product *is*; only the device knows
 `apps/mobile/` exists as of spine step 02: **Expo 57 / React Native 0.86 / React 19**, chosen in
 `decisions/` D5. The step 02 spike harness that used to live behind sign-in is **deleted**
 (D44) — its measurements are recorded in D34–D40 and the two native modules it justified survive
-in `modules/`. What runs today is sign-in plus a placeholder home; the screens proper are the
-`mobile-app-shell` and `mobile-player` tracks.
+in `modules/`. What runs today is Google sign-in, a real **swing log** with thumbnails and scores,
+and a per-swing detail screen. **There is no player yet** — that is the `mobile-player` track.
+
+Navigation is React Navigation 7 native-stack, not Expo Router (D47). Two build faults that look
+like something else: a native dependency failing with `ninja: error … Filename longer than 260
+characters` is **ninja's own limit, not Windows'** (long paths are already enabled here), and
+`pnpm add` failing with `ENOENT … _tmp_NNNNN` means **Metro is running** — stop it and the install
+works first time. Both are in `ENVIRONMENT.md`.
 
 ### Which of the two ways to run it you need
 

@@ -552,10 +552,12 @@ resurrected.
 Stated as fact, with no implied ordering or plan. See
 [`PRODUCT-COVERAGE.md`](PRODUCT-COVERAGE.md) for this measured against the product target.
 
-- **No mobile app a golfer could use.** An Expo/RN **Android** client exists and is installed on
-  the S25+, but it is sign-in plus a placeholder home screen — no player, no capture, no swing
-  list, and no iOS build has ever been compiled. The only client that shows a swing is the
-  desktop-oriented Next.js web app.
+- **The mobile app shows a golfer their swings, and nothing else yet.** An Expo/RN **Android**
+  client is installed on the S25+ with Google sign-in, a real swing log (thumbnails, scores, bands,
+  pull-to-refresh) reading `/api/v1/swings`, navigation via React Navigation 7 native-stack, and a
+  per-swing detail screen. **There is no player** — tapping a swing shows its metadata and says
+  playback is not here yet. No capture, no upload, and no iOS build has ever been compiled. The
+  only client that plays a swing is the desktop-oriented Next.js web app.
 - **No capture of any kind.** No in-app recording, no camera code, no multi-device sync.
 - **No upload flow.** Analysis is started by hand (`burnin.py`) or via the web app's re-analyze
   button on an already-indexed swing. There is no queue beyond the DB-backed reanalyze job.

@@ -158,7 +158,53 @@ export function localStore(): MediaStore {
       await rm(dir, { recursive: true, force: true });
       return count;
     },
+
+    async movePrefix(bucket, from, to) {
+      const src = resolveKey(bucket, from);
+      const dest = resolveKey(bucket, to);
+
+      // Count first — after the rename there is nothing at the source to walk, and reporting
+      // "moved 0" while having moved a hundred files is how a migration gets re-run.
+      let count = 0;
+      const walk = async (p: string): Promise<void> => {
+        let entries;
+        try {
+          entries = await fs.promises.readdir(p, { withFileTypes: true });
+        } catch {
+          return;
+        }
+        for (const e of entries) {
+          if (e.isDirectory()) await walk(path.join(p, e.name));
+          else count += 1;
+        }
+      };
+      await walk(src);
+      if (!count) return 0;
+
+      await mkdir(path.dirname(dest), { recursive: true });
+      try {
+        await fs.promises.rename(src, dest);
+      } catch {
+        // `rename` fails when the destination already exists (a partially-completed earlier run),
+        // and on Windows it also fails across volumes. Merging file-by-file covers both, and is
+        // the only shape that makes a re-run of an interrupted move finish rather than throw.
+        await mergeInto(src, dest);
+        await rm(src, { recursive: true, force: true });
+      }
+      return count;
+    },
   };
+}
+
+/** Recursive copy that tolerates an existing destination — the retry path for `movePrefix`. */
+async function mergeInto(src: string, dest: string): Promise<void> {
+  await mkdir(dest, { recursive: true });
+  for (const e of await fs.promises.readdir(src, { withFileTypes: true })) {
+    const from = path.join(src, e.name);
+    const to = path.join(dest, e.name);
+    if (e.isDirectory()) await mergeInto(from, to);
+    else await copyFile(from, to);
+  }
 }
 
 function guessContentType(key: string): string {

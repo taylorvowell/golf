@@ -127,6 +127,23 @@ export class ApiClient {
   }
 
   /**
+   * A media URL plus the headers that authorize it — for `Image` and `expo-video`, which fetch
+   * bytes themselves rather than going through `request()`.
+   *
+   * Both `/thumb` and `/video` require a bearer token. A `<Image source={{ uri }}>` without one
+   * gets a 401 and renders as **nothing** — no error, no callback most people wire up — so it
+   * reads as "the analyzer never produced a thumbnail" rather than as an auth failure. That is a
+   * bug you can stare straight at, which is why the URL and its headers are produced together
+   * here and never separately.
+   */
+  async mediaSource(path: string): Promise<{ uri: string; headers: Record<string, string> }> {
+    const token = await this.accessToken();
+    const headers: Record<string, string> = { [CLIENT_VERSION_HEADER]: this.clientVersion };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    return { uri: this.url(path), headers };
+  }
+
+  /**
    * The launch call. Unauthenticated, so a build too old to sign in still learns why.
    *
    * It goes through `request`, which means a server that has already raised the floor past this

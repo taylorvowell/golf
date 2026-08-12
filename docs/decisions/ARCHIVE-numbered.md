@@ -2473,3 +2473,127 @@ crashed script leaves, so the verification script now cleans both sides.
 **Deliberately not built here:** identity linking (D31 — it needs a second provider to link *to*,
 and phone is not live yet), and the backup/analytics reach D15 describes, which belongs to
 `production-readiness` with the rest of the retention machinery.
+
+---
+
+## D46 — Phone OTP is held, and the spine moves to the golfer's first real screen
+
+**Date:** 2026-08-12 · **Track:** platform-foundation → mobile-app-shell · **Status:** done
+
+**Taylor's call, and it is the right one:** phone OTP is on hold because there is no SMS provider,
+and the build moves to core functionality — a golfer signing in on a phone and seeing their own
+analysed swing.
+
+**What "held" means precisely, because D31 gated other work on it.** The free development path
+(a local `supabase start` stack with `[auth.sms.test_otp]`) is still buildable without spending
+anything, so this is not a blocker being reported — it is a *priority* decision. The cost of
+holding is that three things stay where they are:
+
+* **Email OTP stays.** D31 said it dies once Google *and* phone are live on Android. Only Google
+  is, so deleting it now would leave the web app with no way in at all.
+* **`DEV_USER_EMAIL` stays**, for the same reason and under the same rule.
+* **Identity linking stays unbuilt** — it needs a second provider to link *to*, and Google is
+  the only one.
+
+None of the three blocks a golfer seeing a swing, which is the whole point of the reprioritisation.
+
+**The spine flag moved from `platform-foundation` to `mobile-app-shell`.** Steps 05
+(roles/onboarding/profiles), 08 (entitlements) and 10 (release pipeline) are genuinely unfinished
+and stay launch-blocking, but examine what each one gates: 05 gates the coach persona, 08 gates
+billing, 10 gates deployment. **None of them gates the vertical slice**, and platform-foundation
+has already delivered the four things that do — identity (D43), the versioned API and generated
+contract (D41), the real swing/view data model (D28, D30) and media addressed by identity (D33).
+Continuing down the foundation track would have been building the parts of the platform that
+support features nobody can see yet, before proving the one path the whole product is about.
+
+`mobile-app-shell` therefore depends on `platform-foundation` **non-blockingly** — the sequencing
+note is a fact about ordering, not a prerequisite.
+
+**This is not a descope and not a staged release.** D4 still holds: one launch, nothing ships
+before everything ships. What changed is the order in which risk is retired, and the risk being
+retired first is now the largest unproven one in the product — that the frame-accurate player and
+overlay system, which exists only as a desktop web app, works on a phone.
+
+**Fixtures moved with the decision.** `pnpm --filter web db:claim-fixtures taylorvowell@gmail.com`
+reassigned all ten analysed swings from the development identity to the real Google account, so
+the phone has real data to render rather than an empty state. That is what makes the player port
+provable against real artifacts immediately, exactly as `ROADMAP.json`'s `mobile-player`
+sequencing note anticipated.
+
+---
+
+## D47 — React Navigation, not Expo Router; and reassigning a swing's owner moves its media
+
+**Date:** 2026-08-12 · **Track:** mobile-app-shell, step 01 · **Status:** done
+
+Three findings from building the first real golfer screen. Two are traps that cost time and would
+have cost it again; one is a dependency choice made and then reversed on evidence.
+
+### 1. The navigator is React Navigation, and Expo Router was tried first
+
+Expo Router was the reasoned choice — first-party for SDK 57, file-based routing, deep linking for
+free (§35 share links, §29 notification taps), and `src/app/` was deliberately left free by D44 for
+exactly this. It was installed, the route tree was written, and it typechecked.
+
+**It does not build on this machine.** Expo Router names `react-native-gesture-handler` among its
+peers, for the drawer navigation this app does not have. That package's C++ codegen object paths
+run past 260 characters —
+
+```
+…/.cxx/Debug/<hash>/arm64-v8a/rngesturehandler_codegen_autolinked_build/CMakeFiles/
+react_codegen_rngesturehandler_codegen.dir/C_/Users/taylo/development/golf/node_modules/
+react-native-gesture-handler/shared/shadowNodes/react/renderer/components/
+rngesturehandler_codegen/RNGestureHandlerDetectorShadowNode.cpp.o
+```
+
+— and the `ninja` bundled with the Android SDK's CMake refuses them outright. **Windows long paths
+are already enabled here (`LongPathsEnabled = 0x1`) and make no difference**: the 260 limit is a
+hard check inside ninja itself, not a Windows one. That is worth writing down because the obvious
+diagnosis is the registry key, and the registry key is already correct.
+
+Removing `expo-router` **did not remove the package**: it is a peer of `@expo/cli`, which ships
+inside `expo` itself, so pnpm's hoisted linker (D21) puts it in the repo-root `node_modules` where
+React Native's autolinking finds and compiles it regardless of whether a line of code imports it.
+The fix is `apps/mobile/react-native.config.js` plus `expo.autolinking.exclude`, and it is accurate
+rather than a workaround — the app genuinely does not use gesture handling. It is also reversible
+in one file the day a drawer or a swipeable row needs it, at which point the path length becomes a
+real problem rather than a cost to decline.
+
+**What was kept:** React Navigation 7 native-stack, which is what Expo Router is a file-based layer
+over. The screens are unchanged by the reversal; only where routes are declared moved, from
+`src/app/*.tsx` files to a `Stack.Navigator`. Adopting Expo Router later is a re-declaration, not a
+rewrite. `react-native-screens` and `react-native-safe-area-context` — the two native modules that
+actually matter — build without complaint.
+
+### 2. Changing who owns a swing moves where its media lives
+
+`db:claim-fixtures` reassigned ten swings to a real Google account and left every artifact behind.
+
+The cause is D33 working exactly as designed: a storage key **leads with the owner's id**
+(`u/<userId>/s/<swingId>/v/<viewId>/…`) so that a Supabase Storage policy can enforce ownership
+from the path. The consequence nobody had drawn out is that `update swings set user_id = …`
+silently repoints every artifact at a namespace nothing was ever published to.
+
+**The symptom is not an error.** It is a swing log full of real swings with no thumbnails and no
+video, because each key resolves to an object that is not there — and the analyzer, the database
+and the routes are all behaving correctly. It was caught by `multiView.test.ts`, which asserts
+every ready view resolves to a published `analysis.json`; a test written for the multi-view
+migration, catching an unrelated bug three phases later.
+
+`MediaStore` gained `movePrefix(bucket, from, to)` (local: a rename, falling back to a merge so an
+interrupted move can be finished; Supabase: list-then-`move` per key, treating an
+already-at-destination object as done). `claim-fixtures` now calls it, **unconditionally rather
+than only when rows moved** — because the broken state it produced has no legacy owner row left to
+key off, so re-running the command has to be the repair.
+
+**The general rule, for every future owner change:** transfer of ownership is a data move, not a
+column update. §4.3 deletion already knew this (D45 sweeps `u/<userId>` in both buckets); a coach
+transfer, an account merge or an identity link (D31) will each need the same treatment.
+
+### 3. `pnpm add` fails while Metro is running
+
+`ERR_PNPM_ENOENT … scandir '<pkg>_tmp_NNNNN'` is Metro holding open handles on `node_modules` while
+pnpm relinks it. Deleting the orphaned directory does not help — it comes straight back. Stop the
+bundler and the install succeeds first time. The package named in the error is whichever one pnpm
+reached when it hit the lock, so it moves between runs and looks unrelated to what you asked for.
+Now in `ENVIRONMENT.md` under the toolchain gotchas.

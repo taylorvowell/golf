@@ -48,6 +48,16 @@ export interface MediaStore {
   signedUrl(bucket: string, key: string, ttlSeconds: number): Promise<string | null>;
   /** Everything under a prefix. Returns how many objects went — the deletion cascade (D24). */
   removePrefix(bucket: string, prefix: string): Promise<number>;
+  /**
+   * Re-home everything under a prefix. Returns how many objects moved.
+   *
+   * Exists because **a key leads with the owner's id** (D33), so anything that changes who owns a
+   * swing changes where its media lives. `db:claim-fixtures` is the case that found this: it
+   * reassigned ten swings to a real account and every artifact stayed in the development
+   * identity's namespace, so each swing resolved to a key with nothing behind it — a log full of
+   * swings with no thumbnails and no video, and no error anywhere to say why.
+   */
+  movePrefix(bucket: string, from: string, to: string): Promise<number>;
 }
 
 /** JSON convenience shared by both drivers — parsing is identical either side. */

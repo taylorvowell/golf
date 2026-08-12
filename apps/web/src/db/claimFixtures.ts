@@ -1,6 +1,9 @@
 import { sql } from "drizzle-orm";
 import { endOwnerPool, withOwner } from "./admin";
 import { DEV_USER_ID } from "../lib/devIdentity";
+import { ADMIN_USER_ID } from "./seed";
+import { ARTIFACT_BUCKET, SOURCE_BUCKET, userPrefix } from "../lib/media/keys";
+import { getMediaStore } from "../lib/media/store";
 
 /**
  * Hand the pre-auth development fixtures to a named account, once.
@@ -55,6 +58,12 @@ async function main() {
       );
     }
 
+    // Which owners are about to disappear, read BEFORE the delete — their ids are the media
+    // prefixes that have to be re-homed afterwards, and after the statement below they are gone.
+    const legacy = await tx.execute<{ id: string }>(sql`
+      select id from public.users where display_name = 'admin' or id = ${DEV_USER_ID}
+    `);
+
     // One statement: the delete and the reassignment cannot half-apply, so there is no state in
     // which a pre-auth row is gone and its swings are orphaned.
     const rows = await tx.execute<{ id: string }>(sql`
@@ -67,12 +76,46 @@ async function main() {
        where user_id in (select id from legacy)
       returning id
     `);
-    return rows.length;
+    return { count: rows.length, newOwner: owner[0].id, oldOwners: legacy.map((r) => r.id) };
   });
 
   console.log(
-    moved ? `moved ${moved} swing(s) to ${email}` : "nothing to claim — no pre-auth owner rows",
+    moved.count
+      ? `moved ${moved.count} swing(s) to ${email}`
+      : "nothing to claim — no pre-auth owner rows",
   );
+
+  /**
+   * **The media has to move with the ownership.**
+   *
+   * A storage key leads with the owner's id (D33: `u/<userId>/s/<swingId>/v/<viewId>/...`), so
+   * reassigning `swings.user_id` silently repoints every artifact at a namespace nothing was ever
+   * published to. The symptom is not an error — it is a swing log full of real swings with no
+   * thumbnails and no video, because each key resolves to an object that is not there.
+   *
+   * This ran for the first time on 2026-08-12 without this block and did exactly that. It was
+   * caught by `multiView.test.ts`, which asserts every ready view resolves to a published
+   * `analysis.json` — a test written for a different reason entirely.
+   */
+  // Runs whether or not any row moved, and that is deliberate: the first version of this script
+  // reassigned the rows and left the media behind, so the state it produced has no legacy owner
+  // row left to key off. Sweeping the known pre-auth prefixes unconditionally makes re-running the
+  // command the repair, rather than requiring a one-off script nobody will find again.
+  const store = await getMediaStore();
+  const stale = new Set([...moved.oldOwners, DEV_USER_ID, ADMIN_USER_ID]);
+  stale.delete(moved.newOwner);
+  let objects = 0;
+  for (const bucket of [SOURCE_BUCKET, ARTIFACT_BUCKET]) {
+    for (const old of stale) {
+      objects += await store.movePrefix(bucket, userPrefix(old), userPrefix(moved.newOwner));
+    }
+  }
+  console.log(
+    objects
+      ? `re-homed ${objects} media object(s) onto ${email}'s prefix`
+      : "no media left under a pre-auth prefix",
+  );
+
   await endOwnerPool();
 }
 

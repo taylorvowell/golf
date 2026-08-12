@@ -1,50 +1,78 @@
-import { useState } from "react";
-import { StyleSheet, View } from "react-native";
+import { DarkTheme, NavigationContainer } from "@react-navigation/native";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { StatusBar } from "expo-status-bar";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
-import { HomeScreen } from "./src/screens/HomeScreen";
-import { AccountBar } from "./src/features/auth/AccountBar";
 import { AuthGate } from "./src/features/auth/AuthGate";
 import { AuthProvider } from "./src/features/auth/AuthProvider";
-import { DeleteAccountScreen } from "./src/features/auth/DeleteAccountScreen";
+import { DeleteAccountRoute } from "./src/screens/DeleteAccountRoute";
+import { SwingDetailRoute } from "./src/screens/SwingDetailRoute";
+import { SwingLogScreen } from "./src/screens/SwingLogScreen";
+import type { RootStackParamList } from "./src/navigation";
+import { COLORS } from "./src/theme";
 
 /**
- * Entry point.
+ * Entry point and the whole navigation tree.
  *
- * Auth wraps the whole tree rather than living inside a screen: gating here means every screen
- * added later is behind sign-in by default instead of by remembering. Navigation, onboarding and
- * the real screens are the `mobile-app-shell` track; `HomeScreen` is the single placeholder that
- * stands in front of a golfer until then.
+ * **`AuthGate` wraps the navigator, not a route inside it.** Gating above the stack means a screen
+ * added later is behind sign-in because of where it is, rather than because somebody remembered to
+ * guard it — the same argument `route-auth.test.ts` makes on the server, where the alternative had
+ * already failed once.
  *
- * The two-screen `useState` below is deliberately NOT a router. `mobile-app-shell` owns
- * navigation, and installing a router here to carry one destination would pre-empt that track's
- * decision with a throwaway one — the same mistake the spike harness made with the palette.
+ * **React Navigation rather than Expo Router**, and the reason is concrete rather than
+ * preferential: Expo Router lists `react-native-gesture-handler` among its peers for drawer
+ * navigation this app does not have, and that package's C++ codegen paths exceed what the Android
+ * SDK's bundled `ninja` will accept on this machine. Expo Router is a file-based layer over
+ * exactly this navigator, so nothing about the screens below would change if it is adopted later —
+ * only where the route declarations live. See `react-native.config.js`.
  */
-export default function App() {
-  const [screen, setScreen] = useState<"home" | "delete-account">("home");
 
+const Stack = createNativeStackNavigator<RootStackParamList>();
+
+// The stock dark theme with this product's background, so the split-second before a screen paints
+// is the app's colour rather than React Navigation's near-black.
+const theme = {
+  ...DarkTheme,
+  colors: { ...DarkTheme.colors, background: COLORS.bg, card: COLORS.bg, text: COLORS.text },
+};
+
+export default function App() {
   return (
-    <AuthProvider>
-      <AuthGate>
-        <View style={styles.root}>
-          {screen === "delete-account" ? (
-            // No AccountBar here: its sign-out sits where the cancel control is, and offering two
-            // different ways out of an irreversible screen is how the wrong one gets tapped.
-            <DeleteAccountScreen onCancel={() => setScreen("home")} />
-          ) : (
-            <>
-              <AccountBar />
-              <View style={styles.body}>
-                <HomeScreen onDeleteAccount={() => setScreen("delete-account")} />
-              </View>
-            </>
-          )}
-        </View>
-      </AuthGate>
-    </AuthProvider>
+    <SafeAreaProvider>
+      {/* Light content, set once. Per-screen status bars are how one screen ends up with
+          invisible text that nobody notices until it is on a real phone outdoors. */}
+      <StatusBar style="light" />
+      <AuthProvider>
+        <AuthGate>
+          <NavigationContainer theme={theme}>
+            <Stack.Navigator
+              screenOptions={{
+                headerStyle: { backgroundColor: COLORS.bg },
+                headerTintColor: COLORS.text,
+                headerTitleStyle: { fontWeight: "700" },
+                headerShadowVisible: false,
+                contentStyle: { backgroundColor: COLORS.bg },
+              }}
+            >
+              <Stack.Screen
+                name="SwingLog"
+                component={SwingLogScreen}
+                options={{ title: "Your swings" }}
+              />
+              <Stack.Screen
+                name="SwingDetail"
+                component={SwingDetailRoute}
+                options={{ title: "Swing" }}
+              />
+              <Stack.Screen
+                name="DeleteAccount"
+                component={DeleteAccountRoute}
+                options={{ title: "Delete account" }}
+              />
+            </Stack.Navigator>
+          </NavigationContainer>
+        </AuthGate>
+      </AuthProvider>
+    </SafeAreaProvider>
   );
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#080a0d" },
-  body: { flex: 1 },
-});

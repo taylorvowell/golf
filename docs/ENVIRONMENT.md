@@ -143,7 +143,18 @@ The product's own deletion path is unaffected — `DELETE /api/v1/account` remov
 - **pnpm uses the hoisted linker here** (`.npmrc`, D21) — everything lands in the repo-root
   `node_modules`, and `apps/*/node_modules` is nearly empty. That is correct, not a broken install.
   An orphaned directory in the root `node_modules` makes `pnpm add` fail with
-  `ENOENT … scandir '<pkg>_tmp_NNNNN'`; delete the orphan and retry.
+  `ENOENT … scandir '<pkg>_tmp_NNNNN'`. **Deleting the orphan is not the fix — it comes straight
+  back.** The cause is **Metro holding open handles on `node_modules` while pnpm relinks it**, so
+  stop Metro (`netstat -ano | grep :8081`, then `taskkill //PID <pid> //T //F`) and re-run
+  `pnpm install`. It succeeds first time with the bundler down. The name in the error is whichever
+  package pnpm happened to reach when it hit the lock, so it moves between runs and looks unrelated
+  to the package you were installing.
+- **A native Android build can fail on a 260-character path, and the registry is not the fix.**
+  `ninja: error: Stat(...): Filename longer than 260 characters` comes from the `ninja` bundled
+  with the Android SDK's CMake, which has that limit hard-coded. `LongPathsEnabled` is **already
+  `0x1`** on this machine and changes nothing. The offender so far is
+  `react-native-gesture-handler`, excluded from autolinking in `apps/mobile/react-native.config.js`
+  (D47). A newer `cmake;3.31.4` is installed alongside `3.22.1` if a future package needs one.
 - **`adb shell input keyevent 4` (Back) exits the app** and lands on whatever the owner was using.
   Relaunch with `monkey -p com.swingsage.spike -c android.intent.category.LAUNCHER 1` instead.
 - **The expo-dev-client bubble is pinned top-right** and swallows taps under it. Controls placed

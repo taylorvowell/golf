@@ -11,7 +11,11 @@ transition path**, deleted — not disabled — once Google *and* phone are both
 Apple (needs $99 + Apple hardware) → real SMS delivery (needs A2P 10DLC).
 **Gotchas:** A hosted Supabase project has no test-number setting, so the free phone path requires
 a local `supabase start` stack. There is no `supabase/` directory in the repo yet.
-**See:** ARCHIVE D31, which supersedes D25's provider choice but not its reasoning.
+**Status:** Google is live on Android. **Phone OTP is HELD** (D46) — no SMS provider is set up, and
+the build is on core functionality instead. Three things stay in place because of that hold and
+must not be deleted until phone lands: **email OTP**, the **`DEV_USER_EMAIL`** identity, and the
+absence of **identity linking** (which needs a second provider to link to).
+**See:** ARCHIVE D31, which supersedes D25's provider choice but not its reasoning; D46 for the hold.
 
 ### Google sign-in is native, and the server takes the session as a bearer token
 

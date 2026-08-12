@@ -43,3 +43,15 @@ swings all work with **no network**. Analysis requires connectivity and queues u
 **Scope:** Every bucket declares its deletion behaviour when introduced; deletion itself is in
 [auth-identity.md](auth-identity.md).
 **See:** ARCHIVE D29.
+
+### Transferring ownership of a swing moves its media, always
+
+**Decision:** A storage key leads with the owner's id (`u/<userId>/s/<swingId>/v/<viewId>/…`), so
+any change to `swings.user_id` must be accompanied by `MediaStore.movePrefix()` across **both**
+buckets. Ownership transfer is a data move, not a column update.
+**Gotchas:** The failure is silent and does not look like a bug in the code that caused it — the
+swings still list, and every one of them has no thumbnail and no video, because each derived key
+resolves to an object nobody ever published there. `db:claim-fixtures` did exactly this once.
+**Scope:** Applies to every future owner change — a coach transfer, an account merge, identity
+linking (D31). §4.3 deletion already sweeps `u/<userId>` for the same reason.
+**See:** ARCHIVE D33, D45, D47.

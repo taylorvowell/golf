@@ -52,7 +52,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     gap: 12,
-    paddingTop: 48,
+    // No status-bar inset any more — the router's Stack header sits above this. The 48pt that
+    // used to be here was standing in for a header that did not exist.
+    paddingTop: 8,
     paddingHorizontal: 20,
     paddingBottom: 10,
     backgroundColor: COLORS.bg,

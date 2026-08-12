@@ -115,3 +115,18 @@ makes the bar read as a label pinned over the body rather than an object attache
 abstaining makes it vanish at exactly the moment a coach is looking hardest.
 **Scope:** Applies to both players.
 **See:** ARCHIVE D20.
+
+### Navigation is React Navigation 7 native-stack, not Expo Router
+
+**Decision:** `@react-navigation/native` + `@react-navigation/native-stack`, with the route map
+typed once in `src/navigation.ts` and `AuthGate` wrapping the navigator so a screen added later is
+behind sign-in by where it is rather than by being remembered.
+**Gotchas:** Expo Router was chosen first and reversed on evidence — it peers on
+`react-native-gesture-handler`, whose C++ codegen paths exceed the 260-character limit **inside
+the Android SDK's bundled `ninja`** (not a Windows limit; long paths are already enabled here).
+That package arrives in `node_modules` anyway as a peer of `@expo/cli`, so it is excluded from
+autolinking in `apps/mobile/react-native.config.js` and `package.json`'s `expo.autolinking`.
+**Scope:** Expo Router is a file-based layer over this same navigator, so adopting it later moves
+where routes are declared and changes no screen. Delete the exclusion the day the app needs a
+drawer or a swipeable row.
+**See:** ARCHIVE D47.

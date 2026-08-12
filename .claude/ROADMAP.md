@@ -1,11 +1,8 @@
-# SwingSage Roadmap — generated 2026-08-11
+# SwingSage Roadmap — generated 2026-08-12
 
 > Macro source of truth. Declarations live in `.claude/ROADMAP.json`; this rollup is DERIVED by `/roadmap`
 > (`node scripts/roadmap/derive.mjs`). Do not hand-edit the table — re-run the script. Single-track detail:
 > `/feature <name> status`.
-
-> **Session handoff:** [`.claude/NEXT-SESSION.md`](NEXT-SESSION.md) — where the build is, what is
-> next, and the traps worth re-reading before touching mobile video.
 
 ## Arc
 
@@ -15,12 +12,12 @@ Platform Foundation → Core Golfer Experience → Capture & Multi-Device → Co
 
 | Track | Phase | Goal | Progress | Current | Lifecycle | Blocked on |
 |-------|-------|------|----------|---------|-----------|------------|
-| **platform-foundation** (spine) | Platform Foundation | Close PROJECT_MAIN §44's open architecture questions, then build identity, t… | 4/10 (40%, 2 in-prog) | 07 | active | — |
+| platform-foundation | Platform Foundation | Close PROJECT_MAIN §44's open architecture questions, then build identity, t… | 6/10 (60%, 1 in-prog) | 04 | active | — |
 | analyzer-service | Platform Foundation | Promote the analyzer from a hand-invoked CLI to a hosted, queue-driven worke… | 0/0 (—) | — | planned | — |
 | media-pipeline | Platform Foundation | Get 270-330MB phone video off a device on cellular, reliably: on-device trim… | 0/0 (—) | — | planned | — |
 | observability-and-slos | Platform Foundation | Define and instrument the targets that make 'production ready' falsifiable: … | 0/0 (—) | — | planned | — |
 | notifications | Platform Foundation | Push and email notification infrastructure with user-manageable preferences.… | 0/0 (—) | — | planned | — |
-| mobile-app-shell | Core Golfer Experience | Mobile client scaffold for iPhone and Android: navigation, auth flows, onboa… | 0/0 (—) | — | planned | — |
+| **mobile-app-shell** (spine) | Core Golfer Experience | Mobile client scaffold for iPhone and Android: navigation, auth flows, onboa… | 1/3 (33%) | 02 | active | — |
 | mobile-player | Core Golfer Experience | Re-express the frame-accurate player and overlay system on mobile, plus the … | 0/0 (—) | — | planned | — |
 | swing-ingest | Core Golfer Experience | The product flow on top of the media pipeline: turn one or two uploaded vide… | 0/0 (—) | — | planned | — |
 | analysis-ground-truth | Core Golfer Experience | Make the analysis falsifiable before anyone pays for it: hand-labelled event… | 0/0 (—) | — | planned | — |
@@ -44,12 +41,12 @@ Platform Foundation → Core Golfer Experience → Capture & Multi-Device → Co
 
 ## Consistency
 
-- ✅ spine: exactly one active (platform-foundation)
+- ✅ spine: exactly one active (mobile-app-shell)
 - ✅ dependency: none
 - ✅ ownership overlap: none
 - ✅ lifecycle/derived: none
 
 ## Recommended next
 
-Spine: **platform-foundation 07** (`/build`). Then the other unblocked active/planned tracks per phase order. Externally-blocked
+Spine: **mobile-app-shell 02** (`/build`). Then the other unblocked active/planned tracks per phase order. Externally-blocked
 tracks wait on their `unblockTrigger`.
