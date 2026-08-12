@@ -24,19 +24,19 @@ beforeEach(() => mockRequest.mockReset());
 describe("HomeScreen", () => {
   it("reads an empty account as no swings yet", async () => {
     mockRequest.mockResolvedValue({ swings: [] });
-    const { getByText } = await render(<HomeScreen />);
+    const { getByText } = await render(<HomeScreen onDeleteAccount={() => {}} />);
     await waitFor(() => expect(getByText("No swings yet")).toBeTruthy());
   });
 
   it("reports a count, singular", async () => {
     mockRequest.mockResolvedValue({ swings: [{}] });
-    const { getByText } = await render(<HomeScreen />);
+    const { getByText } = await render(<HomeScreen onDeleteAccount={() => {}} />);
     await waitFor(() => expect(getByText("1 swing")).toBeTruthy());
   });
 
   it("never renders a network failure as an empty swing log", async () => {
     mockRequest.mockRejectedValue(new TypeError("Network request failed"));
-    const { getByText, getByTestId, queryByText } = await render(<HomeScreen />);
+    const { getByText, getByTestId, queryByText } = await render(<HomeScreen onDeleteAccount={() => {}} />);
 
     await waitFor(() => expect(getByText("Cannot reach SwingSage")).toBeTruthy());
     expect(queryByText("No swings yet")).toBeNull();
@@ -45,7 +45,7 @@ describe("HomeScreen", () => {
 
   it("distinguishes a declined session from an unreachable server", async () => {
     mockRequest.mockRejectedValue(new ApiClientError(401, "unauthorized", "no session"));
-    const { getByText, queryByText } = await render(<HomeScreen />);
+    const { getByText, queryByText } = await render(<HomeScreen onDeleteAccount={() => {}} />);
 
     await waitFor(() => expect(getByText("Your session has expired")).toBeTruthy());
     expect(queryByText("Cannot reach SwingSage")).toBeNull();

@@ -25,7 +25,16 @@ type State =
   | { kind: "signed-out" }
   | { kind: "unreachable" };
 
-export function HomeScreen() {
+export interface HomeScreenProps {
+  /**
+   * §4.3 has to be reachable from somewhere, and there is no settings screen yet — that is
+   * `mobile-app-shell`. A quiet footer link is where a golfer looks for it in the meantime;
+   * inventing a settings surface here would be the second one when that track ships.
+   */
+  onDeleteAccount: () => void;
+}
+
+export function HomeScreen({ onDeleteAccount }: HomeScreenProps) {
   const [state, setState] = useState<State>({ kind: "loading" });
 
   const load = useCallback(async () => {
@@ -66,6 +75,14 @@ export function HomeScreen() {
           />
         ) : null}
       </View>
+      <Pressable
+        onPress={onDeleteAccount}
+        accessibilityRole="button"
+        testID="home-delete-account"
+        style={({ pressed }) => [styles.footer, pressed && styles.footerPressed]}
+      >
+        <Text style={styles.footerText}>Delete account</Text>
+      </Pressable>
     </View>
   );
 }
@@ -140,4 +157,9 @@ const styles = StyleSheet.create({
   },
   retryPressed: { opacity: 0.6 },
   retryText: { color: COLORS.text, fontSize: 13, fontWeight: "700" },
+  // Quiet and at the bottom on purpose: it is the only irreversible action in the app, and a
+  // destructive control competing for attention with the primary one gets tapped by mistake.
+  footer: { alignItems: "center", paddingVertical: 16 },
+  footerPressed: { opacity: 0.6 },
+  footerText: { color: COLORS.dim, fontSize: 13, fontWeight: "600" },
 });

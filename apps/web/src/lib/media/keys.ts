@@ -61,7 +61,20 @@ function segment(kind: string, value: string): string {
  * under the tables in migration 0003.
  */
 export function viewPrefix(a: ViewAddress): string {
-  return `u/${segment("userId", a.userId)}/s/${segment("swingId", a.swingId)}/v/${segment("viewId", a.viewId)}`;
+  return `${userPrefix(a.userId)}/s/${segment("swingId", a.swingId)}/v/${segment("viewId", a.viewId)}`;
+}
+
+/**
+ * Everything one golfer's media lives under, in either bucket — the unit account deletion (§4.3)
+ * removes.
+ *
+ * Exported so the deletion sweep does not assemble `u/${id}` by hand. A key built by string
+ * concatenation skips `segment()`, and the failure mode is specific: on the local driver an
+ * unvalidated id is joined to a filesystem root, so `..` in the "user id" position of a recursive
+ * delete is the difference between removing a golfer's videos and removing the media root.
+ */
+export function userPrefix(userId: string): string {
+  return `u/${segment("userId", userId)}`;
 }
 
 /** One analysis run's output. Immutable once written — a re-run writes the next revision. */

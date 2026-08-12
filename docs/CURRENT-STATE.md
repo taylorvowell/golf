@@ -292,7 +292,11 @@ privileged, so a mis-set `APP_DATABASE_URL` is a loud failure rather than a sile
 `src/db/admin.ts` (`withOwner`) is the privileged counterpart for command-line work only — it
 **throws at import if `NEXT_RUNTIME` is set**, so it cannot reach a request path. First sign-in
 goes through `app.ensure_profile()`, a `SECURITY DEFINER` function that reads the identity from
-`auth.uid()` internally and lives in a schema PostgREST does not serve.
+`auth.uid()` internally and lives in a schema PostgREST does not serve. Account deletion uses the
+same shape — `app.delete_own_account()` takes **no argument** and reads `auth.uid()` itself, so one
+account deleting another is not expressible; `users` has no DELETE policy and is not meant to get
+one. `users.email` is `NOT NULL` as well as UNIQUE, and `ensure_profile` raises a matchable
+`SS_EMAIL_REQUIRED` for an identity that arrives without one (D31, D45).
 
 Two connection strings, and the difference is the boundary: **`DATABASE_URL`** is the owner
 (migrations, seed, backfill), **`APP_DATABASE_URL`** is what serves requests.
@@ -559,9 +563,14 @@ Stated as fact, with no implied ordering or plan. See
   narrative, no AI coach chat — the coach text is deterministic Stage 8 output.
 - **Auth is one provider deep.** Google native sign-in works on Android and the server accepts
   that session as a bearer token against forced RLS (D42, D43) — verified on the phone. Phone
-  OTP, Sign in with Apple, account deletion and identity linking are **not** built, and the
-  `DEV_USER_EMAIL` development identity still exists because deleting it before phone sign-in
-  lands would leave no way in. The ten local fixtures belong to that identity, not to a person.
+  OTP, Sign in with Apple and identity linking are **not** built, and the `DEV_USER_EMAIL`
+  development identity still exists because deleting it before phone sign-in lands would leave no
+  way in. The ten local fixtures belong to that identity, not to a person.
+- **Account deletion is built, and reaches three of the six places D15 names.** `DELETE
+  /api/v1/account` removes object storage, every database row by FK cascade, and the sign-in
+  identity at the auth vendor, in that order (D45) — verified end to end by `pnpm --filter web
+  verify:account`. AI conversation history, coach-visible copies, analytics and backups are still
+  designed-only; none of them exists yet to delete from.
 - **No roles, no coach features, no messaging, no notifications.**
 - **No subscriptions, entitlements, or payments.**
 - **No drill library, no trends/history views, no goals, no equipment inventory.**

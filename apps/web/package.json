@@ -18,7 +18,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "media:provision": "node --env-file-if-exists=.env --import tsx src/db/provisionStorage.ts"
+    "media:provision": "node --env-file-if-exists=.env --import tsx src/db/provisionStorage.ts",
+    "verify:account": "node --env-file-if-exists=.env --import tsx src/db/verifyAccount.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

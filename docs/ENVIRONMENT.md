@@ -112,10 +112,25 @@ valid-looking user with `idToken: null` rather than failing. See D43.
 | App connection | `APP_DATABASE_URL` → `swingsage_app` — non-superuser, no BYPASSRLS. The app refuses to start on anything privileged (D42). |
 | Development identity | id `00000000-0000-4000-8000-0000000000de`, stored as `dev@swingsage.invalid`. **Never a real address** — `users.email` is UNIQUE, so a fallback holding a real one breaks that person's first real sign-in (D43). |
 | The ten fixtures | owned by the development identity. `pnpm --filter web db:claim-fixtures <email>` moves them onto a real account and deletes the pre-auth rows. |
+| Session/deletion probe | `session-probe@swingsage.invalid`, created and destroyed by `pnpm --filter web verify:account`. It must be in `AUTH_ALLOWED_EMAILS` or every check in that script 401s for a reason that has nothing to do with what it is testing. |
 
 Auth lives in the hosted project while data is local, so a real sign-in produces an id that exists
 in hosted `auth.users` and not locally. `app.ensure_profile()` detects the local shim and mirrors the
 row — that is why signing in works at all across the split.
+
+**The split has no cascade across it, and the symptom is a 500 that looks like a broken session.**
+Deleting an identity in the Supabase dashboard or through the admin API removes the hosted
+`auth.users` row and leaves the local `public.users` mirror in place. The next sign-in under that
+same address mints a *new* id, `app.ensure_profile()` hits the UNIQUE constraint on `users.email`,
+and every API call answers 500. If sign-in suddenly 500s for one address, look here first:
+
+```bash
+docker exec golf-postgres-1 psql -U swingsage -d swingsage \
+  -c "select id, email from public.users;"
+```
+
+The product's own deletion path is unaffected — `DELETE /api/v1/account` removes the profile row
+*before* the identity, deliberately (D45). This only bites when an identity is deleted by hand.
 
 ---
 

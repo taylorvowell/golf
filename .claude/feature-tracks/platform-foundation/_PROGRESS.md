@@ -20,6 +20,61 @@ closing.
 
 ---
 
+## 04 — Passwordless Authentication (in progress) — account lifecycle 2026-08-12
+
+**Logged:** 2026-08-12 03:17 UTC
+**Phase:** Platform Foundation
+**Status:** step 04 stays `in-progress` — this entry records work inside it, not its completion.
+
+**Summary:** §4.3 account deletion and §4.2 multi-device sessions are built and proved end to end
+against the running system (D45). `DELETE /api/v1/account` sweeps object storage, cascades the
+database from `public.users`, then erases the auth identity — **in that order, chosen by failure
+mode**: media-first because bytes with no row cannot be enumerated afterwards, identity-last
+because a failure there leaves someone who can sign in and ask again. D31's "every account carries
+an email" invariant landed with it as `users.email NOT NULL` plus a matchable `SS_EMAIL_REQUIRED`,
+deliberately *before* phone OTP — the provider that produces the case it guards.
+
+**Notes:**
+
+- **`app.delete_own_account()` takes no argument.** Identity comes from `auth.uid()` inside a
+  SECURITY DEFINER function in a schema PostgREST does not serve — the same shape D42 established
+  for `ensure_profile`. `users` has no DELETE policy and is not meant to get one: a request-role
+  delete on that table has a blast radius of one entire person, so the safe version is the one
+  where the target cannot be named. There is no parameter to validate.
+- **One fenced admin call.** `lib/account/identity.ts` is the only module allowed to touch
+  `auth.admin` — one function, client built inside it, never returned, no read path.
+  `service-role.test.ts` now fails on a second call site and on any route importing the seam
+  instead of the orchestration. The risk was never that file; it is `listUsers` / `getUserById`
+  arriving later on a request path, which is D26 with different names.
+- **Verified against the running system, not mocked:** `pnpm --filter web verify:account`, 7/7 —
+  two sessions on one account served concurrently (200/200), a local sign-out leaving the other
+  alive, a **global** sign-out demonstrably killing it (the failure that would silently break §12),
+  `DELETE` returning 200, `getUserById` finding nothing, and a still-unexpired token answering 401.
+  It is a script rather than a test because the admin API that erases an identity at the vendor is
+  executed nowhere else — mocked, it would have shipped never having run.
+- **Found while running it:** deleting a hosted auth identity does **not** remove its local
+  `public.users` mirror (auth hosted, data local, no cascade across the gap). The next sign-in
+  under that address mints a new id and hits the UNIQUE email — every call 500s and reads exactly
+  like a broken session. D43's collision from the other direction; now in `ENVIRONMENT.md` with the
+  one query that diagnoses it. The product path is immune *because* of the ordering above.
+- **A real bug the test caught:** `pg_catalog.coalesce(...)` does not exist — `coalesce` is SQL
+  grammar, not a schema-qualifiable function, exactly as migration 0008 records in its own comment.
+  Under `search_path = ''` it fails at call time, not at create time, so `ensure_profile` would
+  have raised "function does not exist" on every first sign-in. Migration 0009 carries the
+  correction and both databases were re-applied.
+- **Mobile:** a delete-account screen that lists the six consequences *before* the control (§34 is
+  informed consent, not a warning after the decision) and confirms by typed word rather than a
+  second tap — the only irreversible action in the product, and a double-tap would cost a golfer
+  every swing they own. Reached from a quiet footer link; `mobile-app-shell` owns the settings
+  surface, so inventing one here would be the second one when that track ships.
+- **Not verified on the device's screen.** The bundle Metro serves contains every string of the
+  new screen, but the phone was in its owner's hands. One relaunch is all it needs.
+- **Still open, and blocking step 04:** phone OTP (needs a local `supabase start` stack; there is
+  still no `supabase/` directory), identity linking (needs a second provider to link *to*), Apple,
+  real SMS, the `com.swingsage.spike` rename, and deleting `DEV_USER_EMAIL`.
+
+---
+
 ## 04 — Passwordless Authentication (in progress) — spike harness removed 2026-08-12
 
 **Logged:** 2026-08-12 00:44 UTC

@@ -146,10 +146,13 @@ look at the frame before believing any club number.
 .venv/Scripts/python.exe -m pytest tests          # 125 passed, 2 skipped, 1 xfailed
 
 # clients — from the repo root
-pnpm --filter web test                            # vitest, 135 tests
-pnpm --filter mobile test                         # jest-expo, 66 tests (logic + components)
+pnpm --filter web test                            # vitest, 167 tests
+pnpm --filter mobile test                         # jest-expo, 39 tests (logic + components)
 pnpm --filter web exec tsc --noEmit && pnpm --filter web lint
 pnpm --filter mobile exec tsc --noEmit
+
+# the account lifecycle, against the RUNNING system — needs `pnpm dev` up (§4.2 + §4.3)
+pnpm --filter web verify:account                  # 7 checks; creates and deletes its own identity
 
 # the shared contract — from the repo root
 pnpm --filter @swingsage/schema test              # vitest, 100 tests
@@ -180,6 +183,17 @@ cover the authorization boundary and they answer different questions:
   in which the app bypassed every policy it was checking (D26), because the app connected as a
   superuser. Point `APP_DATABASE_URL` at an owner account and this suite fails immediately, naming
   the role.
+* `src/db/accountDeletion.test.ts` proves §4.3 **actually deletes** — it counts every user-owned
+  table before and after, so a table added later without a cascading foreign key fails the suite
+  instead of quietly surviving a deletion.
+
+**`pnpm --filter web verify:account` is a different kind of check and is not in the suite.** It
+needs a real Supabase project and a running server, because what it exercises belongs to neither:
+two concurrent sessions on one account (§4.2, the prerequisite for multi-phone capture), and the
+admin-API call that erases an identity at the vendor (§4.3), which nothing else in the project
+executes. It creates `session-probe@swingsage.invalid`, drives seven checks through the real HTTP
+API, and deletes it again. Add that address to `AUTH_ALLOWED_EMAILS` if you set that variable —
+otherwise every check 401s for allowlist reasons and reads as a session failure.
 
 Both **fail rather than skip** without a database, deliberately: a security test that silently
 skips still reports the suite green, which is worse than not having it. `docker compose up -d`

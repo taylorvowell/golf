@@ -1229,6 +1229,31 @@
   "api#": {
     "type": "object"
   },
+  "api#/definitions/accountDeletion": {
+    "type": "object",
+    "required": [
+      "authIdentityDeleted",
+      "mediaObjects",
+      "swings",
+      "userId",
+      "views"
+    ]
+  },
+  "api#/definitions/accountDeletion/properties/authIdentityDeleted": {
+    "type": "boolean"
+  },
+  "api#/definitions/accountDeletion/properties/mediaObjects": {
+    "type": "integer"
+  },
+  "api#/definitions/accountDeletion/properties/swings": {
+    "type": "integer"
+  },
+  "api#/definitions/accountDeletion/properties/userId": {
+    "type": "string"
+  },
+  "api#/definitions/accountDeletion/properties/views": {
+    "type": "integer"
+  },
   "api#/definitions/apiError": {
     "type": "object",
     "required": [

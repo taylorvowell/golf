@@ -21,7 +21,15 @@ export const users = pgTable("users", {
   // never from the database. A generated default would produce a row that looks valid and can
   // never be logged into.
   id: uuid("id").primaryKey(),
-  email: text("email").unique(),
+  /**
+   * Required regardless of which provider signed the golfer in (D31, migration 0009).
+   *
+   * A phone-only account is unreachable and is lost permanently the day its owner changes
+   * carrier, so an address is a recovery and delivery attribute rather than a property of the
+   * email provider. `app.ensure_profile()` raises `SS_EMAIL_REQUIRED` when an identity arrives
+   * without one — that is a prompt for onboarding, not a failure.
+   */
+  email: text("email").notNull().unique(),
   displayName: text("display_name").notNull(),
   handedness: text("handedness", { enum: ["right", "left"] }),
   heightCm: integer("height_cm"),

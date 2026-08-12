@@ -122,6 +122,65 @@ describe("service-role boundary", () => {
   });
 
   /**
+   * The auth admin API has exactly one call site, and it deletes the caller's own identity.
+   *
+   * §4.3 needs one elevated auth operation that the request path cannot express any other way:
+   * erasing an identity from the hosted auth system. `lib/account/identity.ts` is that operation,
+   * built to be un-generalizable — one function, a client constructed inside it and never
+   * returned, no read path.
+   *
+   * The risk is not that file, it is the second one. `admin.auth.admin` also reaches
+   * `listUsers`, `getUserById` and `updateUserById`, every one of which reads or writes another
+   * person's identity with a credential that answers to no policy. That is the D26 defect
+   * wearing a different hat, so "there is only ever one of these" is asserted rather than
+   * intended.
+   */
+  it("constructs an auth admin client in exactly one module", () => {
+    const allowed = join(WEB_SRC, "lib", "account", "identity.ts");
+    const offenders = walk(WEB_SRC)
+      .filter((f) => !f.endsWith(".test.ts") && !f.endsWith(".test.tsx"))
+      .filter((f) => f !== allowed)
+      .filter((f) => {
+        const text = readFileSync(f, "utf8");
+        if (!/\bauth\.admin\b/.test(text)) return false;
+        // A CLI script is a different question. `db/admin.ts` throws at import when `NEXT_RUNTIME`
+        // is set, so anything importing it is unreachable from a request BY CONSTRUCTION rather
+        // than by an allowlist entry — the same proof that lets the owner connection exist at all.
+        // `verifyAccount.ts` is the case: it creates and deletes a probe identity, which is
+        // precisely the capability being fenced off, and it can only run under plain node.
+        return !/from\s+["'](@\/db\/admin|\.\/admin)["']/.test(text);
+      })
+      .map((f) => f.replace(process.cwd(), "."));
+
+    expect(
+      offenders,
+      "Only src/lib/account/identity.ts may reach the Supabase auth admin API. That credential " +
+        "can read and rewrite any identity in the project, so a second call site is a general " +
+        "privileged handle on a request path — D26 with different names.",
+    ).toEqual([]);
+  });
+
+  /**
+   * Routes go through the orchestration, never straight at the credential.
+   *
+   * `deleteAccount()` is where the ordering lives — media, then rows, then identity — and every
+   * step of that order exists so a failure is recoverable. A route importing `identity.ts`
+   * directly would delete the sign-in identity while the golfer's videos were still in a bucket
+   * nobody can now enumerate.
+   */
+  it("never imports the auth admin seam from a route or component", () => {
+    const offenders = REQUEST_SURFACE.flatMap(walk)
+      .filter((f) => /account\/identity/.test(readFileSync(f, "utf8")))
+      .map((f) => f.replace(process.cwd(), "."));
+
+    expect(
+      offenders,
+      "A route imported lib/account/identity directly. Use lib/account/deleteAccount — the " +
+        "deletion order is the recoverability guarantee, and bypassing it orphans media.",
+    ).toEqual([]);
+  });
+
+  /**
    * There is no ambient database handle any more, and that has to stay true.
    *
    * The seam only works because there is nowhere else to run a query. A re-introduced

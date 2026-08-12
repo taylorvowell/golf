@@ -255,3 +255,28 @@ export interface Job {
 export interface JobIdle {
   status: "idle";
 }
+/**
+ * What DELETE /api/v1/account actually removed. Reported back rather than answered with 204 because a golfer deleting their account is entitled to see the count, and because a partial deletion has to be distinguishable from a complete one — three systems are involved and no transaction spans them.
+ *
+ * This interface was referenced by `Api`'s JSON-Schema
+ * via the `definition` "accountDeletion".
+ */
+export interface AccountDeletion {
+  /**
+   * The account that was deleted. Always the caller — this route cannot name another.
+   */
+  userId: string;
+  /**
+   * Objects removed across the source and artifact buckets.
+   */
+  mediaObjects: number;
+  swings: number;
+  /**
+   * Camera angles removed. A two-camera swing is two views.
+   */
+  views: number;
+  /**
+   * False only where Supabase is unconfigured (the local development split, D7). The row data is gone either way; a client must not claim a full deletion when this is false.
+   */
+  authIdentityDeleted: boolean;
+}

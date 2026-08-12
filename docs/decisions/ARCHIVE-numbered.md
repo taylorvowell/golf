@@ -2405,3 +2405,71 @@ installing `expo-router` later would have silently switched the entry point and 
 `HomeScreen.tsx` as a route. Renamed to `src/screens/`, and the track's `owns` entry moved with
 it, so that adopting Expo Router stays a decision somebody makes rather than one a directory name
 made for them.
+
+---
+
+## D45 — Account deletion is a SECURITY DEFINER cascade plus one fenced admin call, ordered so a failure is recoverable
+
+**Date:** 2026-08-12 · **Track:** platform-foundation, step 04 · **Status:** done
+
+§4.3 needs a golfer to be able to erase their account. Three systems hold that account — object
+storage, the application database, and the hosted auth project — and **no transaction spans
+them**, so the real design question is not "how do we delete" but "which partial state does a
+failure leave behind".
+
+**The order is the design, and it is chosen by failure mode rather than by convenience:**
+
+| Step | What runs | What a failure here leaves |
+|---|---|---|
+| 1 | Sweep `u/<userId>` in `swing-source` **and** `swing-artifacts` | Nothing lost — rows still point at the objects, retry works |
+| 2 | `app.delete_own_account()` — one `delete` cascading from `public.users` | Rows gone, media already gone; the identity survives and can retry |
+| 3 | `auth.admin.deleteUser` on the hosted project | The golfer can still sign in, lands on an empty account, asks again |
+
+Reversing 1 and 2 is the expensive mistake: bytes with no row referencing them cannot be
+enumerated afterwards, so they are unrecoverable rather than merely stale. Running 3 first
+invalidates the credential mid-cascade and strands the rest of the data with no owner.
+
+**The database half needs no elevation at all.** `users` has no DELETE policy and deliberately
+never will — a request-role `delete` on that table has a blast radius of one entire person. So it
+is the same shape D42 established for `ensure_profile`: `app.delete_own_account()`, SECURITY
+DEFINER, `search_path = ''`, in a schema PostgREST does not serve, **with no argument** — the
+identity is read from `auth.uid()` internally. Deleting somebody else's account is not
+expressible, so there is no parameter to validate and none to get wrong. The FK cascade declared
+in 0003/0005/0006 does the work, which matters because it means a table added later inherits the
+deletion behaviour from its foreign key rather than from a delete script someone has to remember
+to update.
+
+**The auth half is the one credential this could not avoid**, and it is fenced rather than
+excused. `lib/account/identity.ts` exports one function, constructs the admin client inside it,
+never returns or caches it, and has no read path. `service-role.test.ts` now fails the suite if a
+**second** module under `src/` reaches `auth.admin`, or if a route imports the seam directly
+instead of the orchestration. The risk was never that file; it is `listUsers`, `getUserById` and
+`updateUserById` arriving later on a request path, which is D26 wearing different names.
+
+**D31's email invariant landed with it, before the provider that can violate it.** `users.email`
+is now `NOT NULL`, and `ensure_profile` raises a matchable `SS_EMAIL_REQUIRED` rather than letting
+a null hit the constraint — a 23502 would be indistinguishable from a bug, where the phone flow
+needs a signal meaning *ask this golfer for an address*. Phone is the next sequenced provider and
+arrives with `email` NULL; the constraint exists first so the requirement cannot be skipped by
+forgetting.
+
+**Verified against the running system, not mocked.** `pnpm --filter web verify:account` creates a
+throwaway identity, signs it in twice, and proves §4.2 and §4.3 end to end: two sessions served
+concurrently (200/200), a local sign-out leaving the other alive, a *global* sign-out demonstrably
+killing it — the failure mode that would silently break §12's multi-phone capture if the app ever
+called it — then `DELETE /api/v1/account` returning 200, `getUserById` finding nothing, and the
+still-unexpired access token answering **401**. Seven checks, all passing. This is a script rather
+than a unit test because the admin API that erases an identity at the vendor is executed nowhere
+else in the project; mocked, it would have shipped never having run.
+
+**Found while running it, and worth keeping:** deleting a hosted auth identity does **not** remove
+its `public.users` mirror, because auth is hosted and data is local (D7) and no cascade crosses
+that gap. The next sign-in under the same address then mints a new id and hits the UNIQUE
+constraint on `users.email` — every request 500s and reads exactly like a broken session. This is
+D43's collision arriving from the other direction. The product path is unaffected precisely
+because of the ordering above; only a raw admin delete can orphan a mirror, which is what a
+crashed script leaves, so the verification script now cleans both sides.
+
+**Deliberately not built here:** identity linking (D31 — it needs a second provider to link *to*,
+and phone is not live yet), and the backup/analytics reach D15 describes, which belongs to
+`production-readiness` with the rest of the retention machinery.
