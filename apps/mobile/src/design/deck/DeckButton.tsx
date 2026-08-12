@@ -117,42 +117,6 @@ export function DeckButton({
   );
 }
 
-/**
- * A latching cap for a setting rather than an action — loop, and each speed step.
- *
- * Identical physics, deliberately: a golfer should not have to learn that one kind of cap latches
- * and another does not. What tells them apart is that this one stays in.
- */
-export function DeckToggle({
-  on,
-  onPress,
-  label,
-  disabled,
-  grow,
-  testID,
-  accessibilityLabel,
-}: {
-  on: boolean;
-  onPress: () => void;
-  label: string;
-  disabled?: boolean;
-  grow?: number;
-  testID?: string;
-  accessibilityLabel?: string;
-}) {
-  return (
-    <DeckButton
-      onPress={onPress}
-      depressed={on}
-      disabled={disabled}
-      label={label}
-      grow={grow}
-      testID={testID}
-      accessibilityLabel={accessibilityLabel ?? label}
-    />
-  );
-}
-
 const styles = StyleSheet.create({
   cap: {
     alignItems: "center",

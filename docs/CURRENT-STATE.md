@@ -570,7 +570,7 @@ anyone wanting a larger sample should take it before quoting a percentage.
   D36's 99.2% figure was taken at roughly 77, with no trace at all. Second and third worst are
   `pro_3` at the top (293) and `7wood-1` at impact (234); a typical clip sits near 110–200. `scripts/checkoverlay.ts` confirms every layer lands
   on the analyzer's Gate 1 burn-in on all ten fixtures (RUNBOOK §12a). What is NOT known is whether
-  frame-lock holds at 272 views, and that is the number the Skia question turns on. Reading it is
+  frame-lock holds at 461 views, and that is the number the Skia question turns on. Reading it is
   one screen: RUNBOOK §12b, Overlay drift with the trace on and with it off. **Do not conclude
   either way from the view count alone** — D23's rejection of Skia was on cost, not on merit, and
   reversing it needs a measurement rather than an inference.
@@ -588,13 +588,15 @@ anyone wanting a larger sample should take it before quoting a percentage.
 Stated as fact, with no implied ordering or plan. See
 [`PRODUCT-COVERAGE.md`](PRODUCT-COVERAGE.md) for this measured against the product target.
 
-- **The mobile app shows a golfer their swings, and nothing else yet.** An Expo/RN **Android**
-  client is installed on the S25+ with Google sign-in, a real swing log (contact-frame thumbnails,
-  scores, bands, pull-to-refresh) reading `/api/v1/swings`, navigation via React Navigation 7
-  native-stack, and a per-swing detail screen — all verified on the device 2026-08-12. **There is no
-  player** — tapping a swing shows its metadata and says playback is not here yet. No capture, no
-  upload, and no iOS build has ever been compiled. The only client that plays a swing is the
-  desktop-oriented Next.js web app.
+- **The mobile app shows a golfer their swings and plays them back, and nothing else yet.** An
+  Expo/RN **Android** client is installed on the S25+ with Google sign-in, a real swing log
+  (contact-frame thumbnails, scores, bands, pull-to-refresh) reading `/api/v1/swings`, navigation
+  via React Navigation 7 native-stack, and a full-bleed swing player: frame-exact transport on
+  `modules/frame-clock`, the analysis overlay (skeleton, club, trace, orientation rods, angle arcs)
+  drawn as rotated `View`s, a phase strip, and slide-up panels for the overlay switches and the
+  swing's numbers. **The overlay's frame lock with the trace on is still unmeasured on the device**
+  (§11b) and dual-view comparison does not exist. No capture, no upload, and no iOS build has ever
+  been compiled.
 - **No capture of any kind.** No in-app recording, no camera code, no multi-device sync.
 - **No upload flow.** Analysis is started by hand (`burnin.py`) or via the web app's re-analyze
   button on an already-indexed swing. There is no queue beyond the DB-backed reanalyze job.

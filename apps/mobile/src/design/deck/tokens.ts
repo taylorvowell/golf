@@ -41,13 +41,53 @@ export const DECK = {
    */
   travel: 2,
 
+  /**
+   * The ground the player floats on, and the accent everything active is lit with.
+   *
+   * Both are a hair greener than `theme.ts`'s app palette (`#080a0d` / `#a3e635`), and that is
+   * deliberate rather than drift: the player is the one screen that is *entirely* a control
+   * surface, sitting over grass, and the warmer accent survives being read next to it. The two
+   * palettes are close enough to sit in one app and far enough that the player reads as its own
+   * place. `mobile-app-shell` step 03 decides which of the two the rest of the app takes.
+   */
+  ground: "#050706",
+  accent: "#b8ff4a",
+
   radius: {
     /** The console slab itself. */
     slab: 26,
+    /** The floating dock — rounder than the slab, because it has an edge all the way round. */
+    dock: 28,
     /** A rectangular cap — a step key, a speed segment. */
     tile: 13,
+    /** A floating chip or a sheet's shoulder. */
+    chip: 17,
     /** Fully round. The transport button. */
     cap: 999,
+  },
+
+  /**
+   * Translucent surfaces that sit **over the picture** rather than on the slab.
+   *
+   * No `backdrop-filter`, and no `expo-blur`: real blur is a native module, which costs a fresh
+   * dev-client install on the device every time this design moves. Two stacked translucent fills
+   * plus a lit hairline read as glass at this size, and the difference is only visible against
+   * fine detail — which the picture behind these controls, being sky and grass, does not have.
+   */
+  glass: {
+    /** A floating control over the video — the back cap, the overlays chip. */
+    soft: "rgba(13,18,14,0.72)",
+    /** The dock. Denser, because the transport must never be ambiguous against a bright frame. */
+    dock: "rgba(17,22,18,0.86)",
+    /** A sheet. Denser still — it is a page, not a control. */
+    sheet: "rgba(10,14,11,0.97)",
+    /** A recessed group inside glass — the speed segment's well. */
+    well: "rgba(0,0,0,0.25)",
+    /** The lit top edge every glass surface carries. */
+    hairline: "rgba(255,255,255,0.10)",
+    /** A flat, unlit control on glass — the frame stepper's keys. */
+    key: "rgba(255,255,255,0.045)",
+    keyEdge: "rgba(255,255,255,0.09)",
   },
 
   /** Faces, lit from above: the top of a raised cap is lighter than its bottom. */
@@ -58,10 +98,10 @@ export const DECK = {
     sunkTop: "#0e131a",
     sunkBottom: "#161d26",
     /** The primary transport cap. Warmer, so the one control you press blind is findable. */
-    primaryTop: "#c6f062",
-    primaryBottom: "#8dc22a",
-    primarySunkTop: "#6f9c1f",
-    primarySunkBottom: "#a7d947",
+    primaryTop: "#c5ff58",
+    primaryBottom: "#9fe135",
+    primarySunkTop: "#7fb524",
+    primarySunkBottom: "#b6f04c",
   },
 
   /** The slab a set of caps is mounted on. Marginally above the page, never floating. */
@@ -100,6 +140,11 @@ export const DECK = {
       { offsetX: 0, offsetY: -10, blurRadius: 24, spreadDistance: -6, color: "rgba(0,0,0,0.7)" },
       { offsetX: 0, offsetY: 1, blurRadius: 0, spreadDistance: 0, color: "rgba(255,255,255,0.06)", inset: true },
     ],
+    /** A surface floating clear of the page — the dock, a sheet. Shadow on every side. */
+    float: [
+      { offsetX: 0, offsetY: 8, blurRadius: 28, spreadDistance: -4, color: "rgba(0,0,0,0.8)" },
+      { offsetX: 0, offsetY: 1, blurRadius: 0, spreadDistance: 0, color: "rgba(255,255,255,0.08)", inset: true },
+    ],
   },
 
   label: {
@@ -108,8 +153,12 @@ export const DECK = {
     /** On the primary cap — `theme.ts` carries the palette's one inverted pairing. */
     onPrimary: COLORS.onAcid,
     /** A cap that is engaged but not primary: lit, so "on" reads without a colour fill. */
-    engaged: COLORS.acid,
+    engaged: "#b8ff4a",
     dim: COLORS.dim,
+    /** A caption under a glyph on glass. Small, so it needs the contrast. */
+    caption: "rgba(255,255,255,0.55)",
+    /** A number that is context rather than content — a timecode. */
+    quiet: "rgba(255,255,255,0.38)",
   },
 
   /**

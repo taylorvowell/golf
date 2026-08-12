@@ -40,35 +40,6 @@ export function PauseGlyph({ size, color }: { size: number; color: string }) {
   );
 }
 
-/** A step: an arrow into a wall, like a tape deck's cue keys. `back` mirrors it. */
-export function StepGlyph({
-  size,
-  color,
-  back = false,
-}: {
-  size: number;
-  color: string;
-  back?: boolean;
-}) {
-  return (
-    <View style={[styles.row, back && styles.mirrored, { gap: size * 0.12 }]}>
-      <View
-        style={{
-          borderTopWidth: size * 0.5,
-          borderBottomWidth: size * 0.5,
-          borderLeftWidth: size * 0.62,
-          borderTopColor: "transparent",
-          borderBottomColor: "transparent",
-          borderLeftColor: color,
-        }}
-      />
-      <View
-        style={{ width: size * 0.2, height: size, borderRadius: size * 0.08, backgroundColor: color }}
-      />
-    </View>
-  );
-}
-
 /** Loop: a rounded rectangle with a corner bitten out and an arrowhead on it. */
 export function LoopGlyph({ size, color }: { size: number; color: string }) {
   return (
@@ -96,6 +67,78 @@ export function LoopGlyph({ size, color }: { size: number; color: string }) {
           borderLeftColor: color,
         }}
       />
+    </View>
+  );
+}
+
+/**
+ * A chevron: two adjacent borders of an empty box, turned 45°.
+ *
+ * `direction` rotates it, and the extra half-stroke of margin is because the drawn mark sits in
+ * the corner of its box rather than the middle — centring the box leaves the mark looking pushed
+ * towards the side it points away from.
+ */
+export function ChevronGlyph({
+  size,
+  color,
+  direction = "left",
+  weight = 2.2,
+}: {
+  size: number;
+  color: string;
+  direction?: "left" | "right" | "up" | "down";
+  weight?: number;
+}) {
+  const turn = { left: "45deg", up: "135deg", right: "225deg", down: "315deg" }[direction];
+  const nudge = { left: weight, right: -weight, up: 0, down: 0 }[direction];
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        marginLeft: nudge,
+        borderLeftWidth: weight,
+        borderBottomWidth: weight,
+        borderColor: color,
+        transform: [{ rotate: turn }],
+      }}
+    />
+  );
+}
+
+/** Overlays: two stacked plates seen at an angle — a square turned 45° and squashed. */
+export function LayersGlyph({ size, color }: { size: number; color: string }) {
+  const plate = size * 0.62;
+  const face = {
+    width: plate,
+    height: plate,
+    borderWidth: 1.7,
+    borderColor: color,
+    // Squashed after the turn, which is what puts it in perspective rather than merely on its
+    // corner. The order matters: RN applies these left to right.
+    transform: [{ rotate: "45deg" }, { scaleY: 0.58 }],
+  } as const;
+  return (
+    <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
+      <View style={[face, { position: "absolute", top: 0 }]} />
+      <View style={[face, { position: "absolute", top: size * 0.3, opacity: 0.55 }]} />
+    </View>
+  );
+}
+
+/** Metrics: three bars of unequal height, the universal "there are numbers behind this". */
+export function BarsGlyph({ size, color }: { size: number; color: string }) {
+  const bar = (h: number) => ({
+    width: Math.max(1.8, size * 0.13),
+    height: size * h,
+    borderRadius: size * 0.07,
+    backgroundColor: color,
+  });
+  return (
+    <View style={[styles.row, { height: size, alignItems: "flex-end", gap: size * 0.17 }]}>
+      <View style={bar(0.45)} />
+      <View style={bar(1)} />
+      <View style={bar(0.68)} />
     </View>
   );
 }

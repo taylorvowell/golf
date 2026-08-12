@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { PanResponder, StyleSheet, View, type LayoutChangeEvent } from "react-native";
 
-import { COLORS } from "../../theme";
+import { DECK } from "../../design/deck";
 import { fractionToFrame, frameToFraction, type Extent } from "./frames";
 
 /**
@@ -116,25 +116,37 @@ export function ScrubBar({
   );
 }
 
-const TRACK = 6;
-const THUMB = 22;
+/**
+ * The drawn track is a hairline and the touch target is not.
+ *
+ * `TOUCH` is also load-bearing for layout: the playhead line above this bar terminates at the
+ * thumb, and it finds it at `TOUCH / 2` from this view's top. Change one and the line stops
+ * halfway.
+ */
+const TRACK = 3;
+const THUMB = 20;
+export const SCRUB_TOUCH = 40;
 
 const styles = StyleSheet.create({
-  touch: { height: 44, justifyContent: "center" },
+  touch: { height: SCRUB_TOUCH, justifyContent: "center" },
   track: {
     height: TRACK,
     borderRadius: TRACK / 2,
-    backgroundColor: COLORS.border,
+    backgroundColor: "rgba(255,255,255,0.18)",
     overflow: "hidden",
   },
   trackDisabled: { opacity: 0.4 },
-  fill: { height: "100%", backgroundColor: COLORS.acid },
+  fill: { height: "100%", backgroundColor: DECK.accent },
+  // A ring, not a dot: it sits over the picture, and a filled disc the size of a fingertip hides
+  // exactly the part of the frame the golfer is scrubbing towards.
   thumb: {
     position: "absolute",
     width: THUMB,
     height: THUMB,
     borderRadius: THUMB / 2,
     marginLeft: -THUMB / 2,
-    backgroundColor: COLORS.text,
+    borderWidth: 5,
+    borderColor: DECK.accent,
+    backgroundColor: "#0b0e0c",
   },
 });

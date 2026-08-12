@@ -1,4 +1,4 @@
-import { ScrollView, StyleSheet, type ViewStyle } from "react-native";
+import { StyleSheet, Text, type ViewStyle } from "react-native";
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 
 import { SwingPlayer } from "./SwingPlayer";
@@ -90,7 +90,10 @@ it("disables the transport, and says why, when the swing cannot be stepped", asy
 });
 
 it("shows the frame-sync panel in development — the step's own oracle", async () => {
+  // Behind a development-only chip now, because the picture fills the screen and the instrument
+  // must not. It measures against a video that keeps playing behind the panel.
   const { getByTestId } = await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} />);
+  await act(async () => void fireEvent.press(getByTestId("sync-open")));
   await waitFor(() => expect(getByTestId("frame-sync-panel")).toBeTruthy());
 });
 
@@ -113,8 +116,12 @@ it("separates a missing artifact from a connection failure", async () => {
 
 it("draws the overlay once the artifact arrives", async () => {
   mockRequest.mockResolvedValue(makeAnalysis());
-  const { getByTestId } = await render(<SwingPlayer swingId="abc" frameCount={40} fps={60} />);
-  await waitFor(() => expect(getByTestId("overlay-controls")).toBeTruthy());
+  const api = await render(<SwingPlayer swingId="abc" frameCount={40} fps={60} />);
+  // The overlay draws into a measured box, so the viewport has to have been laid out — it renders
+  // nothing at all at zero size rather than drawing a skeleton at the origin.
+  await act(async () => viewport(api));
+  // The drawing itself, over the picture — not the switches, which now live behind a panel.
+  await waitFor(() => expect(api.getByTestId("swing-overlay")).toBeTruthy());
   await waitFor(() => expect(mockRequest).toHaveBeenCalledWith("swings/abc/analysis"));
 });
 
@@ -122,23 +129,21 @@ it("bounds the transport by the playback window, not by the file", async () => {
   // `playback_window` is the span the ANALYZER says is worth playing — address − 1s to finish + 1s.
   // A bar that spanned the whole file would spend its travel outside the swing.
   mockRequest.mockResolvedValue(makeAnalysis({ frameCount: 40, playbackWindow: [4, 30] }));
-  const { getByText } = await render(<SwingPlayer swingId="abc" frameCount={40} fps={60} />);
-  await waitFor(() => expect(getByText("4–30")).toBeTruthy());
+  const api = await render(<SwingPlayer swingId="abc" frameCount={40} fps={60} />);
+  await act(async () => viewport(api));
+  await waitFor(() => expect(api.getByTestId("swing-overlay")).toBeTruthy());
+  await act(async () => void fireEvent.press(api.getByTestId("sync-open")));
+  await waitFor(() => expect(api.getByText("4–30")).toBeTruthy());
 });
 
 /**
  * The console and its layout.
  *
  * These assert behaviour a golfer would notice on a range mat, not markup: that the swing starts
- * without being asked, that the transport survives being scrolled away from, and that pause is the
- * play button pushed IN rather than a different control. The last one is the reason `DeckButton`
- * separates a latched state from a finger-down state at all.
+ * without being asked, that the controls can be taken off the picture they are covering, and that
+ * pause is the play button pushed IN rather than a different control. The last one is the reason
+ * `DeckButton` separates a latched state from a finger-down state at all.
  */
-
-/** The video surface only reports its size once laid out; the console's release depends on it. */
-function layout(el: { props: { onLayout?: (e: unknown) => void } }, height: number) {
-  el.props.onLayout?.({ nativeEvent: { layout: { x: 0, y: 0, width: 393, height } } });
-}
 
 /** Drive the native `onReady`, which is what tells the player the clip exists. */
 function ready(el: { props: { onReady?: (e: unknown) => void } }) {
@@ -149,8 +154,10 @@ function ready(el: { props: { onReady?: (e: unknown) => void } }) {
 
 it("starts the swing playing on load, without being asked", async () => {
   mockRequest.mockResolvedValue(makeAnalysis({ frameCount: 40 }));
-  const { getByTestId } = await render(<SwingPlayer swingId="abc" frameCount={40} fps={60} />);
-  await waitFor(() => expect(getByTestId("overlay-controls")).toBeTruthy());
+  const api = await render(<SwingPlayer swingId="abc" frameCount={40} fps={60} />);
+  const { getByTestId } = api;
+  await act(async () => viewport(api));
+  await waitFor(() => expect(getByTestId("swing-overlay")).toBeTruthy());
 
   await act(async () => ready(getByTestId("swing-video")));
 
@@ -175,30 +182,6 @@ it("changes speed natively rather than by dropping frames", async () => {
   await waitFor(() => expect(quarter.props.accessibilityState.selected).toBe(true));
 });
 
-it("pulls the picture back into view when a control is touched", async () => {
-  const { getByTestId } = await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} />);
-  // Spied on the class, not on the rendered host element: the test renderer's host node carries
-  // props, not the imperative handle the component actually calls through its ref.
-  const spy = jest
-    .spyOn(ScrollView.prototype as unknown as { scrollTo: () => void }, "scrollTo")
-    .mockImplementation(() => {});
-  fireEvent.press(getByTestId("step-fwd-1"));
-  expect(spy).toHaveBeenCalledWith({ y: 0, animated: true });
-  spy.mockRestore();
-});
-
-it("keeps the console mounted while the picture is scrolled past", async () => {
-  // It slides out of the way rather than unmounting: a console that unmounted would drop the
-  // transport's state and lose the speed and loop the golfer had chosen.
-  const { getByTestId } = await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} />);
-  layout(getByTestId("swing-video").parent ?? getByTestId("swing-video"), 700);
-  fireEvent.scroll(getByTestId("swing-scroll"), {
-    nativeEvent: { contentOffset: { y: 900 }, contentSize: { height: 2000, width: 393 },
-                   layoutMeasurement: { height: 852, width: 393 } },
-  });
-  expect(getByTestId("player-console")).toBeTruthy();
-});
-
 it("draws the back control and the swing's name over the picture", async () => {
   const onBack = jest.fn();
   const { getByTestId, getByText } = await render(
@@ -209,23 +192,92 @@ it("draws the back control and the swing's name over the picture", async () => {
   expect(onBack).toHaveBeenCalled();
 });
 
+it("shows a score chip only when the swing has actually been scored", async () => {
+  // `overallScore` is nullable in the contract. A chip reading `—` under the word SCORE invites
+  // "you scored nothing", where the truth is "this has not been scored".
+  const unscored = await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} />);
+  expect(unscored.queryByTestId("score-chip")).toBeNull();
+
+  const scored = await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} score={82} />);
+  expect(scored.getByTestId("score-chip")).toBeTruthy();
+  expect(scored.getByText("82")).toBeTruthy();
+});
+
+/**
+ * The panels.
+ *
+ * The picture fills the screen, so there is no *below* for the swing's numbers or the overlay
+ * switches to live in. They come up over it. What these pin is that the panel is genuinely closed
+ * until asked for — a sheet mounted-but-hidden would keep its content in the accessibility tree
+ * and hand a screen-reader user controls they cannot see.
+ */
+
+it("keeps the overlay switches in a panel until they are asked for", async () => {
+  mockRequest.mockResolvedValue(makeAnalysis({ frameCount: 40 }));
+  const api = await render(<SwingPlayer swingId="abc" frameCount={40} fps={60} />);
+  const { getByTestId, queryByTestId } = api;
+  await act(async () => viewport(api));
+  await waitFor(() => expect(getByTestId("swing-overlay")).toBeTruthy());
+  expect(queryByTestId("overlay-controls")).toBeNull();
+
+  await act(async () => void fireEvent.press(getByTestId("overlays-open")));
+  await waitFor(() => expect(getByTestId("overlay-controls")).toBeTruthy());
+});
+
+it("takes the controls off the picture on a tap, and puts them back on the next one", async () => {
+  // The console covers the bottom third of the frame — on a down-the-line swing that is the ball,
+  // the feet and most of the finish. A toggle rather than a timed auto-hide: a transport that went
+  // away on its own while a golfer was studying one frame is a control vanishing for no reason.
+  const { getByTestId } = await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} />);
+  const tap = getByTestId("stage-tap");
+  expect(tap.props.accessibilityLabel).toBe("Hide controls");
+
+  await act(async () => void fireEvent.press(tap));
+  expect(getByTestId("console-dock").props.pointerEvents ?? "auto").toBe("none");
+  expect(getByTestId("stage-tap").props.accessibilityLabel).toBe("Show controls");
+
+  await act(async () => void fireEvent.press(getByTestId("stage-tap")));
+  expect(getByTestId("console-dock").props.pointerEvents ?? "auto").not.toBe("none");
+});
+
+it("opens the swing's facts from the dock", async () => {
+  const { getByTestId, getByText, queryByText } = await render(
+    <SwingPlayer swingId="abc" frameCount={240} fps={60}>
+      <Text>Pose coverage 98%</Text>
+    </SwingPlayer>,
+  );
+  expect(queryByText("Pose coverage 98%")).toBeNull();
+
+  await act(async () => void fireEvent.press(getByTestId("metrics-open")));
+  await waitFor(() => expect(getByText("Pose coverage 98%")).toBeTruthy());
+});
+
 /**
  * The picture's box, and the fact that it must never change size.
  *
  * The failure this pins is a layout one, not a rendering one: the stage used to default to 16:9,
- * so a portrait clip loaded squat and then jumped to full height the instant the artifact landed —
- * shoving the analysis below it down the screen while it was being read. The box now comes from
- * the swing list, which already has it before this screen mounts.
+ * so a portrait clip loaded squat and then jumped to full height the instant the artifact landed.
+ * The box now comes from the swing list, which already has it before this screen mounts.
+ *
+ * It is fitted in JS rather than by Yoga's `aspectRatio`, so these read a real width and height.
+ * That is the point of the change: with both axes pinned Yoga drops the aspect silently, and the
+ * overlay's normalized coordinates cannot survive a box that is not the artifact's shape.
  */
 
-function stageAspect(el: { props: { style?: unknown } }) {
-  const flat = StyleSheet.flatten(el.props.style as ViewStyle);
-  return flat.aspectRatio;
+/** The viewport only has a size once laid out, and the fitted box is derived from it. */
+function viewport(
+  api: { getByTestId: (id: string) => { props: { onLayout?: (e: unknown) => void } } },
+  width = 393,
+  height = 852,
+) {
+  api
+    .getByTestId("swing-player")
+    .props.onLayout?.({ nativeEvent: { layout: { x: 0, y: 0, width, height } } });
 }
 
-/** The stage is the placeholder's parent — the box whose height is in question. */
-function stageOf(api: { getByTestId: (id: string) => { parent: unknown } }) {
-  return api.getByTestId("stage-placeholder").parent as { props: { style?: unknown } };
+function stageBox(api: { getByTestId: (id: string) => { props: { style?: unknown } } }) {
+  const flat = StyleSheet.flatten(api.getByTestId("swing-stage").props.style as ViewStyle);
+  return { w: Number(flat.width), h: Number(flat.height) };
 }
 
 it("takes the picture's box from the swing list, before anything is fetched", async () => {
@@ -233,7 +285,10 @@ it("takes the picture's box from the swing list, before anything is fetched", as
   const api = await render(
     <SwingPlayer swingId="abc" frameCount={240} fps={60} aspectRatio={1080 / 1920} />,
   );
-  expect(stageAspect(stageOf(api))).toBeCloseTo(0.5625);
+  await act(async () => viewport(api));
+  const box = stageBox(api);
+  expect(box.w / box.h).toBeCloseTo(0.5625);
+  expect(box.w).toBe(393);
 });
 
 it("does not resize the box when the artifact arrives", async () => {
@@ -241,18 +296,34 @@ it("does not resize the box when the artifact arrives", async () => {
   const api = await render(
     <SwingPlayer swingId="abc" frameCount={40} fps={60} aspectRatio={1080 / 1920} />,
   );
-  const before = stageAspect(stageOf(api));
-  await waitFor(() => expect(api.getByTestId("overlay-controls")).toBeTruthy());
+  await act(async () => viewport(api));
+  const before = stageBox(api);
+  await waitFor(() => expect(api.getByTestId("swing-overlay")).toBeTruthy());
   // The fixture is 1080x1920 too, because both numbers come from the same probe. Equal, not close:
-  // a box that changed at all would push the analysis down the screen.
-  expect(stageAspect(stageOf(api))).toBe(before);
+  // a box that changed at all would move the picture under the golfer mid-swing.
+  expect(stageBox(api)).toEqual(before);
 });
 
 it("assumes portrait, not 16:9, when the swing never recorded a size", async () => {
   // A view analysed before those columns existed. Every clip this product has seen was filmed on a
   // phone held upright, and the landscape default is what made the picture load squashed.
   const api = await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} />);
-  expect(stageAspect(stageOf(api))).toBeCloseTo(9 / 16);
+  await act(async () => viewport(api));
+  const box = stageBox(api);
+  expect(box.w / box.h).toBeCloseTo(9 / 16);
+});
+
+it("holds the aspect by shrinking the width when the clip is taller than the screen", async () => {
+  // The case Yoga gets silently wrong. A 1080x2700 clip on a short viewport cannot be full width,
+  // and a box that stayed full width would stretch the picture — putting the drawn skeleton beside
+  // the golfer rather than on them, which reads as a pose failure rather than a layout one.
+  const api = await render(
+    <SwingPlayer swingId="abc" frameCount={240} fps={60} aspectRatio={0.4} />,
+  );
+  await act(async () => viewport(api, 400, 800));
+  const box = stageBox(api);
+  expect(box.h).toBe(800);
+  expect(box.w).toBeCloseTo(320);
 });
 
 it("holds a placeholder over the box until a frame has reached the glass", async () => {

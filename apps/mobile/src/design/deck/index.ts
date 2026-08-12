@@ -8,8 +8,12 @@
  * It is a control-surface system, not the app's design system. Type scale, spacing rhythm,
  * iconography and §41's contrast bar belong to `mobile-app-shell` step 03, which absorbs this
  * folder rather than colliding with it.
+ *
+ * Three parts, and nothing else belongs here until something outside the player needs it:
+ * `DeckButton` (a cap you press), `DeckSheet` (a panel that comes up from the bottom edge), and
+ * the glyphs, which are drawn from `View`s because this app ships no icon font and no SVG runtime.
  */
-export { DeckButton, DeckToggle, type DeckButtonProps } from "./DeckButton";
-export { DeckRow, DeckSurface, type DeckSurfaceProps } from "./DeckSurface";
-export { LoopGlyph, PauseGlyph, PlayGlyph, StepGlyph } from "./Glyphs";
+export { DeckButton, type DeckButtonProps } from "./DeckButton";
+export { DeckSheet, type DeckSheetProps } from "./DeckSheet";
+export { BarsGlyph, ChevronGlyph, LayersGlyph, LoopGlyph, PauseGlyph, PlayGlyph } from "./Glyphs";
 export { DECK, type DeckDepth } from "./tokens";

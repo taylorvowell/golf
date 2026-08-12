@@ -3,23 +3,22 @@ import {
   ActivityIndicator,
   Animated,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   View,
   type LayoutChangeEvent,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { SwingViewSummary } from "@swingsage/schema/contract";
 
 import { FrameClockView } from "../../../modules/frame-clock/src";
 import { api } from "../../platform/client";
+import { ChevronGlyph, DECK, DeckSheet, LayersGlyph } from "../../design/deck";
 import { COLORS } from "../../theme";
 import { FrameSyncPanel } from "./FrameSyncPanel";
 import { PlayerConsole } from "./PlayerConsole";
 import { isSeekable, windowBounds, type Bounds } from "./frames";
+import { phaseBands } from "./phaseBands";
 import { OverlayControls } from "./overlay/OverlayControls";
 import { SwingOverlay } from "./overlay/SwingOverlay";
 import { DEFAULT_TOGGLES, drawableAngles, type ToggleKey, type Toggles } from "./overlay/overlays";
@@ -29,23 +28,22 @@ import { useCorrections } from "./useCorrections";
 import { useFramePlayer } from "./useFramePlayer";
 
 /**
- * A swing, playing, with the analysis drawn on it and the transport pinned under your thumb.
+ * A swing, playing, with the analysis drawn on it and the transport under your thumb.
  *
  * The surface is `modules/frame-clock`, not `expo-video` (D50): it owns its own ExoPlayer and is
  * the only thing in this app that can report the frame actually on the glass.
  *
- * ## The layout, and why it is this way
+ * ## The picture is the page
  *
- * The picture is **full width at the top of the screen**, its height following the analysed
- * frame's aspect ratio, with the back button and the swing's name laid over it rather than in a
- * header bar. A phone screen is tall and a golf swing is filmed portrait; every point spent on
- * chrome above the video is a point taken off the golfer.
+ * The video is centred in the whole viewport at its own aspect, and everything else floats over it
+ * — the back control and the swing's name at the top, the timeline and dock at the bottom. A golf
+ * swing is filmed portrait on a phone held upright, so the frame is very nearly the shape of the
+ * screen; anything given its own strip of layout is taken directly off the golfer.
  *
- * The console is **pinned to the bottom of the window** while any part of the picture is on
- * screen, and slides out of the way once the picture has been scrolled past — at which point you
- * are reading the analysis, not driving the video, and a bar across the bottom is just something
- * covering the thing you scrolled down to read. Touching any control scrolls the picture back to
- * the top first, because a transport you cannot see is worse than no transport at all.
+ * That leaves nowhere *below* for the swing's numbers and the overlay switches to live, which is
+ * the whole reason `DeckSheet` exists: they come up over the picture and go away again. A panel is
+ * also the honest place for them — they are things you consult between looks at the swing, not
+ * things you read while it plays.
  *
  * Playback **starts on load**, looping, once the artifact has settled and the playhead has been
  * parked at the start of the swing window. The order matters and is the reason those three things
@@ -57,23 +55,32 @@ export interface SwingPlayerProps {
   swingId: string;
   frameCount: number;
   fps: number;
-  /** Drawn over the picture, top-left, beside the back control. */
+  /** Drawn over the picture, centred at the top. */
   title?: string;
+  /** A second line under the title — the date, the club. Context, never a control. */
+  subtitle?: string;
+  /**
+   * The overall score, for the chip at the top right.
+   *
+   * Null hides the chip rather than printing a dash. `overallScore` is nullable in the contract,
+   * and a chip reading `—` under the word SCORE invites the reading "you scored nothing" where the
+   * truth is "this has not been scored".
+   */
+  score?: number | null;
   /**
    * The analysed frame's shape, from the swing LIST — `width / height` off `SwingViewSummary`.
    *
    * Passed in rather than waited for, and that is the whole point: it is already on the device
    * before this screen mounts, so the picture's box is the right size on the very first frame of
    * layout. Without it the stage has to guess, and a guess that is wrong resizes the box the
-   * instant the artifact lands — which shoves everything below it down the screen while a golfer
-   * is reading it.
+   * instant the artifact lands.
    *
    * These clips are not one shape: the ten fixtures are 1080x1722 through 1080x2146. A "portrait"
    * default would still shift on eight of them.
    */
   aspectRatio?: number | null;
   onBack?: () => void;
-  /** Everything below the picture — the swing's facts. Scrolls under the console. */
+  /** The swing's facts. Shown in the **Metrics** panel, not below the picture — there is no below. */
   children?: ReactNode;
   /**
    * Which angle of a multi-view swing to play — a view **TYPE**, not a view id.
@@ -85,11 +92,16 @@ export interface SwingPlayerProps {
   view?: SwingViewSummary["view"] | null;
 }
 
+/** Which panel is up. One at a time — two stacked sheets have no way back to the picture. */
+type Panel = "overlays" | "metrics" | "sync" | null;
+
 export function SwingPlayer({
   swingId,
   frameCount,
   fps,
   title,
+  subtitle,
+  score,
   aspectRatio,
   onBack,
   children,
@@ -111,7 +123,8 @@ export function SwingPlayer({
   );
 
   const player = useFramePlayer(bounds);
-  const [stage, setStage] = useState({ w: 0, h: 0 });
+  const [viewport, setViewport] = useState({ w: 0, h: 0 });
+  const [panel, setPanel] = useState<Panel>(null);
   const [toggles, setToggles] = useState<Toggles>(DEFAULT_TOGGLES);
   const [angles, setAngles] = useState<string[]>([]);
   const traceCost = useRef(0);
@@ -145,6 +158,22 @@ export function SwingPlayer({
         : 9 / 16;
 
   /**
+   * The picture's box, fitted to the viewport in JS rather than by Yoga's `aspectRatio`.
+   *
+   * Yoga honours `aspectRatio` only while one axis is free. A full-width stage on a screen shorter
+   * than the clip is tall has both axes pinned, and the box silently stops matching the aspect —
+   * which is the one thing the overlay cannot survive. Fitting explicitly means the box is always
+   * exactly the artifact's shape and always inside the screen, and it hands the overlay the pixel
+   * size it needs anyway.
+   */
+  const stage = useMemo(() => fitBox(aspect, viewport.w, viewport.h), [aspect, viewport]);
+
+  const bands = useMemo(
+    () => phaseBands(analysis, corrections.phases, bounds),
+    [analysis, bounds, corrections.phases],
+  );
+
+  /**
    * Park at the start of the swing, then play. Once, when the artifact has settled.
    *
    * Not two effects: the window narrows when the analysis lands, and a play issued before that
@@ -161,38 +190,33 @@ export function SwingPlayer({
     play();
   }, [analysisState.kind, bounds.first, error, play, ready, seekable, seekTo]);
 
-  // ---- the console's pinning
-  const scrollRef = useRef<ScrollView>(null);
-  const [videoHeight, setVideoHeight] = useState(0);
-  const consoleY = useRef(new Animated.Value(0)).current;
-  const parked = useRef(true);
-
-  const onStageLayout = useCallback((e: LayoutChangeEvent) => {
+  const onViewportLayout = useCallback((e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
-    setStage((s) => (s.w === width && s.h === height ? s : { w: width, h: height }));
-    setVideoHeight(height);
+    setViewport((v) => (v.w === width && v.h === height ? v : { w: width, h: height }));
   }, []);
 
-  const onScroll = useCallback(
-    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-      // Released once the LAST pixel of the picture has gone. Releasing at the first pixel would
-      // take the transport away while the golfer is still watching the finish.
-      const past = videoHeight > 0 && e.nativeEvent.contentOffset.y >= videoHeight;
-      if (past === !parked.current) return;
-      parked.current = !past;
-      Animated.timing(consoleY, {
-        toValue: past ? 1 : 0,
-        duration: 180,
-        useNativeDriver: true,
-      }).start();
-    },
-    [consoleY, videoHeight],
-  );
+  const closePanel = useCallback(() => setPanel(null), []);
+  const openMetrics = useCallback(() => setPanel("metrics"), []);
 
-  /** Any control touch pulls the picture back to the top before the control acts. */
-  const onInteract = useCallback(() => {
-    scrollRef.current?.scrollTo({ y: 0, animated: true });
-  }, []);
+  /**
+   * Tapping the picture takes the controls away, and taps again to bring them back.
+   *
+   * The console covers the bottom third of the frame, which on a down-the-line swing is the ball,
+   * the feet and most of the finish — so the design needs a way to see what it is standing on.
+   * This is the video-player idiom every phone already teaches, and it is a toggle rather than a
+   * timed auto-hide on purpose: a transport that vanished on its own while a golfer was studying
+   * one frame would be a control disappearing for no reason they caused.
+   */
+  const [bare, setBare] = useState(false);
+  const chromeFade = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    Animated.timing(chromeFade, {
+      toValue: bare ? 0 : 1,
+      duration: 180,
+      useNativeDriver: true,
+    }).start();
+  }, [bare, chromeFade]);
+  const toggleBare = useCallback(() => setBare((b) => !b), []);
 
   const onToggle = useCallback(
     (key: ToggleKey, value: boolean) => setToggles((t) => ({ ...t, [key]: value })),
@@ -208,21 +232,15 @@ export function SwingPlayer({
       .filter((f): f is NonNullable<typeof f> => !!f);
   }, [analysis, angles]);
 
+  const notice = noticeFor(seekable, analysisState.kind);
+
   return (
-    <View style={styles.screen}>
-      <ScrollView
-        ref={scrollRef}
-        testID="swing-scroll"
-        onScroll={onScroll}
-        scrollEventThrottle={16}
-        // Room for the console, so the last line of the analysis is reachable rather than parked
-        // permanently under it.
-        contentContainerStyle={{ paddingBottom: CONSOLE_RESERVE + insets.bottom }}
-      >
-        <View style={[styles.stage, { aspectRatio: aspect }]} onLayout={onStageLayout}>
+    <View style={styles.screen} onLayout={onViewportLayout} testID="swing-player">
+      <View style={styles.stageWrap} pointerEvents="box-none">
+        <View style={[styles.stage, { width: stage.w, height: stage.h }]} testID="swing-stage">
           {/**
            * Mounted only once the authorized source resolves, but the BOX is already the right
-           * size — the stage above holds its aspect regardless. That separation is the fix: what
+           * size — the stage above holds its shape regardless. That separation is the fix: what
            * used to be missing was a picture, and what shifted the page was the container.
            */}
           {source ? (
@@ -242,6 +260,16 @@ export function SwingPlayer({
               {...player.handlers}
             />
           ) : null}
+
+          {/* Under everything that draws and over the video, so a tap anywhere on the picture
+              reaches it — the overlay layers above are all `pointerEvents="none"`. */}
+          <Pressable
+            testID="stage-tap"
+            accessibilityRole="button"
+            accessibilityLabel={bare ? "Show controls" : "Hide controls"}
+            onPress={toggleBare}
+            style={styles.fill}
+          />
 
           {/**
            * Held until a frame has actually reached the glass, then faded out over the picture.
@@ -267,100 +295,109 @@ export function SwingPlayer({
             />
           ) : null}
 
-          {/* Chrome over the picture. A scrim behind it, not a solid bar: the top of a
-              down-the-line frame is sky or trees and a white glyph on it is unreadable about half
-              the time, which is not a risk worth taking to save one gradient. */}
-          <View style={[styles.chrome, { paddingTop: insets.top + 6 }]} pointerEvents="box-none">
-            {onBack ? (
-              <Pressable
-                testID="player-back"
-                accessibilityRole="button"
-                accessibilityLabel="Back"
-                hitSlop={12}
-                onPress={onBack}
-                style={({ pressed }) => [styles.backCap, pressed && styles.backCapPressed]}
-              >
-                <View style={styles.backChevron} />
-              </Pressable>
-            ) : null}
-            {title ? (
-              <Text numberOfLines={1} style={styles.title}>
-                {title}
-              </Text>
-            ) : null}
-          </View>
-
           {error ? (
-            <View style={[StyleSheet.absoluteFill, styles.centre, styles.errorScrim]}>
+            <View style={[styles.fill, styles.centre, styles.errorScrim]}>
               <Text style={styles.errorTitle}>This swing would not play</Text>
               <Text style={styles.errorDetail}>{error}</Text>
             </View>
           ) : null}
         </View>
+      </View>
 
-        <View style={styles.below}>
-          {/**
-           * A swing the analyzer could not describe gets a video and no transport, and is told
-           * why. Buttons that move nothing and a bar reporting a position it invented are worse
-           * than a plain video: a golfer cannot tell a broken control from a still swing.
-           */}
-          {!seekable ? (
-            <Text style={styles.notice}>
-              This swing has no frame count or frame rate recorded, so it cannot be stepped frame by
-              frame. It will still play.
-            </Text>
-          ) : null}
-          {analysisState.kind === "not-analysed" ? (
-            <Text style={styles.notice}>
-              This swing has not been analysed, so there is nothing to draw on it. The video plays
-              and steps as normal.
-            </Text>
-          ) : null}
-          {analysisState.kind === "unreachable" ? (
-            <Text style={styles.notice}>
-              The analysis could not be loaded, so the overlays are missing. This is a connection
-              problem, not a problem with the swing.
-            </Text>
-          ) : null}
+      {/* Chrome over the picture. A scrim behind it, not a solid bar: the top of a down-the-line
+          frame is sky or trees and a white glyph on it is unreadable about half the time, which is
+          not a risk worth taking to save one gradient. */}
+      <Animated.View
+        style={[styles.chrome, { paddingTop: insets.top + 8, opacity: chromeFade }]}
+        pointerEvents={bare ? "none" : "box-none"}
+      >
+        <View style={styles.chromeRow} pointerEvents="box-none">
+          {/* The slot is held even with nothing in it, so the title is centred on the screen
+              rather than on whatever is left over beside it. */}
+          <View style={styles.chromeSlot}>
+            {onBack ? (
+              <Pressable
+                testID="player-back"
+                accessibilityRole="button"
+                accessibilityLabel="Back"
+                hitSlop={8}
+                onPress={onBack}
+                style={({ pressed }) => [styles.glassCap, pressed && styles.pressedGlass]}
+              >
+                <ChevronGlyph size={9} color={COLORS.text} direction="left" />
+              </Pressable>
+            ) : null}
+          </View>
 
-          <OverlayControls
-            analysis={analysis}
-            toggles={toggles}
-            onToggle={onToggle}
-            angles={angles}
-            onAngles={setAngles}
-          />
+          <View style={styles.titleBlock} pointerEvents="none">
+            {title ? (
+              <Text numberOfLines={1} style={styles.title}>
+                {title}
+              </Text>
+            ) : null}
+            {subtitle ? (
+              <Text numberOfLines={1} style={styles.subtitle}>
+                {subtitle}
+              </Text>
+            ) : null}
+          </View>
 
-          {children}
+          <View style={[styles.chromeSlot, styles.chromeSlotRight]}>
+            {typeof score === "number" ? (
+              <View style={styles.scoreChip} testID="score-chip">
+                <Text style={styles.scoreValue}>{Math.round(score)}</Text>
+                <Text style={styles.chipCaption}>Score</Text>
+              </View>
+            ) : null}
+          </View>
+        </View>
 
+        {/* In the chrome's flow rather than floating over it. Absolutely positioned, these sat on
+            top of the notice below whenever a swing had one to show. */}
+        <View style={styles.rail} pointerEvents="box-none">
+          <Pressable
+            testID="overlays-open"
+            accessibilityRole="button"
+            accessibilityLabel="Overlays"
+            hitSlop={8}
+            onPress={() => setPanel("overlays")}
+            style={({ pressed }) => [styles.glassChip, pressed && styles.pressedGlass]}
+          >
+            <LayersGlyph size={20} color={COLORS.text} />
+          </Pressable>
+
+          {/* The step's own oracle, and development only. It measures against a picture that keeps
+              playing behind the panel, so reading it does not disturb what it is measuring. */}
           {__DEV__ ? (
-            <FrameSyncPanel
-              state={player.state}
-              playerRef={player.ref}
-              fps={fps}
-              bounds={bounds}
-              traceCostRef={traceCost}
-              onReset={player.actions.resetMeasurement}
-              onSweep={player.actions.runSeekSweep}
-            />
+            <Pressable
+              testID="sync-open"
+              accessibilityRole="button"
+              accessibilityLabel="Frame sync"
+              hitSlop={8}
+              onPress={() => setPanel("sync")}
+              style={({ pressed }) => [styles.glassChip, pressed && styles.pressedGlass]}
+            >
+              <Text style={styles.chipCaption}>Sync</Text>
+            </Pressable>
           ) : null}
         </View>
-      </ScrollView>
+
+        {/**
+         * A swing the analyzer could not describe gets a video and no transport, and is told why.
+         * This stays on the picture rather than moving into a panel: it explains a control that is
+         * missing, and an explanation behind a button is not one.
+         */}
+        {notice ? (
+          <View style={styles.notice}>
+            <Text style={styles.noticeText}>{notice}</Text>
+          </View>
+        ) : null}
+      </Animated.View>
 
       <Animated.View
-        style={[
-          styles.consoleDock,
-          {
-            transform: [
-              {
-                translateY: consoleY.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, CONSOLE_RESERVE + insets.bottom],
-                }),
-              },
-            ],
-          },
-        ]}
+        testID="console-dock"
+        style={[styles.console, { opacity: chromeFade }]}
+        pointerEvents={bare ? "none" : "box-none"}
       >
         <PlayerConsole
           state={player.state}
@@ -368,19 +405,98 @@ export function SwingPlayer({
           bounds={bounds}
           fps={fps}
           seekable={seekable}
-          onInteract={onInteract}
+          bands={bands}
+          onMetrics={openMetrics}
           bottomInset={insets.bottom}
         />
       </Animated.View>
 
+      <DeckSheet
+        testID="overlays-sheet"
+        visible={panel === "overlays"}
+        onClose={closePanel}
+        title="Overlays"
+        subtitle="What is drawn on the swing"
+      >
+        {analysis ? (
+          <OverlayControls
+            analysis={analysis}
+            toggles={toggles}
+            onToggle={onToggle}
+            angles={angles}
+            onAngles={setAngles}
+          />
+        ) : (
+          <Text style={styles.sheetEmpty}>
+            There is no analysis for this swing, so there is nothing to draw on it.
+          </Text>
+        )}
+      </DeckSheet>
+
+      <DeckSheet
+        testID="metrics-sheet"
+        visible={panel === "metrics"}
+        onClose={closePanel}
+        title="This swing"
+        subtitle={subtitle}
+      >
+        {children}
+      </DeckSheet>
+
+      {__DEV__ ? (
+        <DeckSheet
+          testID="sync-sheet"
+          visible={panel === "sync"}
+          onClose={closePanel}
+          title="Frame sync"
+          subtitle="Development instrument — Gate 2"
+        >
+          <FrameSyncPanel
+            state={player.state}
+            playerRef={player.ref}
+            fps={fps}
+            bounds={bounds}
+            traceCostRef={traceCost}
+            onReset={player.actions.resetMeasurement}
+            onSweep={player.actions.runSeekSweep}
+          />
+        </DeckSheet>
+      ) : null}
     </View>
   );
 }
 
 /**
+ * The largest box of the given shape that fits inside `w × h`.
+ *
+ * Zero until the viewport has been measured. Zero rather than a guess: a stage that appeared at a
+ * default size and then corrected itself is the layout shift this whole chain exists to prevent,
+ * and one frame of nothing is invisible where one frame of the wrong size is not.
+ */
+function fitBox(aspect: number, w: number, h: number): { w: number; h: number } {
+  if (!(aspect > 0) || w <= 0 || h <= 0) return { w: 0, h: 0 };
+  const byWidth = w / aspect;
+  return byWidth <= h ? { w, h: byWidth } : { w: h * aspect, h };
+}
+
+/** The one thing worth saying over the picture, or nothing. Ordered most-blocking first. */
+function noticeFor(seekable: boolean, analysis: string): string | null {
+  if (!seekable) {
+    return "This swing has no frame count or frame rate recorded, so it cannot be stepped frame by frame. It will still play.";
+  }
+  if (analysis === "not-analysed") {
+    return "This swing has not been analysed, so there is nothing to draw on it. The video plays and steps as normal.";
+  }
+  if (analysis === "unreachable") {
+    return "The analysis could not be loaded, so the overlays are missing. This is a connection problem, not a problem with the swing.";
+  }
+  return null;
+}
+
+/**
  * What fills the picture's box before there is a picture.
  *
- * It exists because the box is now correct from the first layout pass — so the only thing missing
+ * It exists because the box is correct from the first layout pass — so the only thing missing
  * during load is the image, and the honest thing to show is that it is coming. Nothing here may
  * change the stage's size; it is an absolute fill inside a box whose height was already decided.
  */
@@ -405,12 +521,6 @@ function StagePlaceholder({ visible }: { visible: boolean }) {
     </Animated.View>
   );
 }
-
-/**
- * How far the console travels when it is released, and how much room the scroll content leaves for
- * it. One number for both, so the content can never end up shorter than the thing covering it.
- */
-const CONSOLE_RESERVE = 236;
 
 /**
  * The video URL together with the headers that authorize it.
@@ -443,9 +553,11 @@ function useMediaSource(swingId: string, view?: SwingViewSummary["view"] | null)
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: COLORS.bg },
-  stage: { width: "100%", backgroundColor: "#000" },
-  centre: { flex: 1, alignItems: "center", justifyContent: "center", gap: 8, padding: 20 },
+  screen: { flex: 1, backgroundColor: DECK.ground },
+  stageWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
+  stage: { backgroundColor: "#000", overflow: "hidden" },
+  fill: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
+  centre: { alignItems: "center", justifyContent: "center", gap: 8, padding: 20 },
   placeholder: {
     position: "absolute",
     top: 0,
@@ -458,51 +570,98 @@ const styles = StyleSheet.create({
     // background changing colour underneath it.
     backgroundColor: "#000",
   },
+
   chrome: {
     position: "absolute",
     left: 0,
     right: 0,
     top: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
     paddingHorizontal: 12,
-    paddingBottom: 28,
+    paddingBottom: 30,
     experimental_backgroundImage:
-      "linear-gradient(180deg, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.28) 55%, rgba(0,0,0,0) 100%)",
+      "linear-gradient(180deg, rgba(0,0,0,0.58) 0%, rgba(0,0,0,0.26) 58%, rgba(0,0,0,0) 100%)",
   },
-  backCap: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(10,14,20,0.55)",
-  },
-  backCapPressed: { backgroundColor: "rgba(10,14,20,0.85)" },
-  backChevron: {
-    width: 11,
-    height: 11,
-    marginLeft: 4,
-    borderLeftWidth: 2.5,
-    borderBottomWidth: 2.5,
-    borderColor: COLORS.text,
-    transform: [{ rotate: "45deg" }],
-  },
+  chromeRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
+  chromeSlot: { width: 52, alignItems: "flex-start" },
+  chromeSlotRight: { alignItems: "flex-end" },
+  titleBlock: { flex: 1, alignItems: "center", justifyContent: "center", minHeight: 48, gap: 2 },
   title: {
-    flex: 1,
     color: COLORS.text,
-    fontSize: 17,
-    fontWeight: "700",
+    fontSize: 15,
+    fontWeight: "600",
+    letterSpacing: -0.3,
     // The picture behind this is whatever the golfer filmed, so the type carries its own shadow
     // rather than trusting the scrim alone.
     textShadowColor: "rgba(0,0,0,0.85)",
     textShadowRadius: 6,
   },
-  below: { padding: 16, gap: 14 },
-  notice: { color: COLORS.amber, fontSize: 12, lineHeight: 17 },
+  subtitle: {
+    color: "rgba(255,255,255,0.5)",
+    fontSize: 12,
+    textShadowColor: "rgba(0,0,0,0.85)",
+    textShadowRadius: 6,
+  },
+
+  glassCap: {
+    width: 48,
+    height: 48,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: DECK.glass.soft,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.15)",
+  },
+  glassChip: {
+    minWidth: 44,
+    height: 44,
+    paddingHorizontal: 8,
+    borderRadius: DECK.radius.chip,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: DECK.glass.soft,
+    borderWidth: 1,
+    borderColor: DECK.glass.hairline,
+  },
+  pressedGlass: { opacity: 0.6 },
+  scoreChip: {
+    minWidth: 52,
+    height: 48,
+    paddingHorizontal: 8,
+    borderRadius: DECK.radius.chip,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 3,
+    backgroundColor: DECK.glass.soft,
+    borderWidth: 1,
+    borderColor: DECK.glass.hairline,
+  },
+  scoreValue: { color: COLORS.text, fontSize: 16, fontWeight: "600", lineHeight: 17 },
+  chipCaption: {
+    color: DECK.label.caption,
+    fontSize: 7,
+    fontWeight: "700",
+    letterSpacing: 1.5,
+    textTransform: "uppercase",
+  },
+
+  notice: {
+    marginTop: 10,
+    marginHorizontal: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: "rgba(5,7,6,0.72)",
+    borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.35)",
+  },
+  noticeText: { color: COLORS.amber, fontSize: 12, lineHeight: 17 },
+
+  rail: { flexDirection: "row", justifyContent: "flex-end", gap: 8, marginTop: 10, marginRight: 4 },
+  console: { position: "absolute", left: 0, right: 0, bottom: 0 },
+
   errorScrim: { backgroundColor: "rgba(8,10,13,0.88)" },
   errorTitle: { color: COLORS.text, fontSize: 15, fontWeight: "700", textAlign: "center" },
   errorDetail: { color: COLORS.muted, fontSize: 12, lineHeight: 17, textAlign: "center" },
-  consoleDock: { position: "absolute", left: 0, right: 0, bottom: 0 },
+  sheetEmpty: { color: COLORS.muted, fontSize: 13, lineHeight: 19 },
 });

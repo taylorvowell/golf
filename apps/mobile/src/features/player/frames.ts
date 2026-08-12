@@ -120,17 +120,6 @@ export function fractionToFrame(fraction: number, e: Extent): number {
 }
 
 /**
- * `frame · seconds` — what the transport shows.
- *
- * The frame number leads because it is the number this product is judged on and the one every
- * debug script speaks; the time is there so a viewer can relate it to a video they filmed.
- */
-export function formatPosition(frame: number, fps: number): string {
-  const seconds = Number.isFinite(fps) && fps > 0 ? frame / fps : 0;
-  return `${frame} · ${seconds.toFixed(2)}s`;
-}
-
-/**
  * Whether the container's own frame rate disagrees with the rate the analysis was measured at.
  *
  * This is a real failure mode with no visible symptom: every frame index would be wrong while the

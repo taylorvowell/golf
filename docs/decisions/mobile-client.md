@@ -274,10 +274,13 @@ Provenance for the pick is `burnin.py`'s `TRACE_MODES` and `club.py`'s `smooth_t
 
 ### Deck — the control-surface system, and why controls have depth
 
-**Decision:** Player controls are built from **Deck** (`src/design/deck/`): a slab, and caps that sit
-at one of three depths on it. One rule governs everything — **light comes from directly above** — so
-a raised cap catches a highlight on its top rim and casts a shadow below itself, and a cap pushed in
-inverts both. **Pause is the play cap latched down**, not a second icon.
+**Decision:** Player controls are built from **Deck** (`src/design/deck/`): caps that sit at one of
+three depths, panels that come up from the bottom (`DeckSheet`), and glyphs drawn from `View`s. One
+rule governs everything — **light comes from directly above** — so a raised cap catches a highlight
+on its top rim and casts a shadow below itself, and a cap pushed in inverts both. **Pause is the
+play cap latched down**, not a second icon. Deck's ground (`#050706`) and accent (`#b8ff4a`) are a
+shade greener than `theme.ts`'s app palette, deliberately: the player is the one screen that is
+entirely a control surface sitting over grass.
 **Gotchas:** §41's conditions are bright sunlight, one hand, a driving range, and flat design fails
 all three at once: in glare a filled rectangle converges with its background and there is no shape
 cue left. **Depth survives washout where colour does not**, and it gives state somewhere to live
@@ -290,23 +293,69 @@ folder rather than colliding with it — Deck layers on `theme.ts`'s tokens inst
 Built on RN 0.86's `boxShadow` (multi-shadow, `inset`) and `experimental_backgroundImage`
 gradients; an earlier React Native would have needed nine-patch images for the same effect.
 
-### The swing screen has no header, and its transport is pinned
+### The picture is the page; everything else floats over it or comes up from the bottom
 
-**Decision:** `SwingDetail` sets `headerShown: false`. The picture is full width at the top of the
-screen at the analysed frame's aspect ratio, with the back control and the swing's name laid over
-it. The console is pinned to the bottom of the window while any part of the picture is on screen and
-slides out of the way once it has been scrolled past. **Touching any control scrolls the picture
-back to the top first.** Playback starts on load, looping, at 1×.
+**Decision:** `SwingDetail` sets `headerShown: false` and the swing screen does not scroll. The
+picture is centred in the whole viewport at the analysed frame's aspect, with the back control, the
+swing's name and the score chip laid over the top and the timeline and dock over the bottom. The
+swing's numbers, the overlay switches and the development instrument live in **panels that come up
+from the bottom edge** (`DeckSheet`), never below the picture — there is no below. **Tapping the
+picture takes the chrome away and tapping again brings it back.** Playback starts on load, looping,
+at 1×.
 **Gotchas:** Park-then-play is **one effect, not three**. The artifact arrives after the video does
 and narrows the transport to `playback_window`, so a play issued on `ready` alone is cut off a
 moment later by the seek that follows it. The effect waits for `analysisState` to leave `loading`,
 which also covers the swing that has no artifact — it settles on `not-analysed` and playback still
-starts. The console **slides rather than unmounting**: unmounting would drop the speed and loop the
-golfer had chosen.
+starts. The stage's box is fitted **in JS, not by Yoga's `aspectRatio`**: Yoga honours the aspect
+only while one axis is free, and a clip taller than the screen pins both — silently producing a box
+that is not the artifact's shape, which is the one thing the normalized overlay cannot survive.
+The tap-to-hide is a toggle rather than a timed auto-hide, because a transport that vanished on its
+own while a golfer was studying one frame is a control disappearing for no reason they caused.
 **Scope:** Looping defaults ON because a swing is about a second and a half; a player that stops
 dead at the finish makes a golfer press play for every look at the same two frames. Speeds are 1×,
 ½×, ¼×, ⅒× and are applied natively (`setPlaybackSpeed`) — a JS timer would drop frames and show a
-quarter of the swing while calling it slow motion.
+quarter of the swing while calling it slow motion. The console covers roughly the bottom third of
+the frame, which is why the tap toggle is not optional polish.
+
+### `DeckSheet` — one panel primitive, built on `Modal`
+
+**Decision:** Secondary content on a screen whose primary content fills the viewport lives in a
+`DeckSheet`: a panel that slides up from the bottom edge over everything else. It is a React Native
+`Modal` (`transparent`, `statusBarTranslucent`, `animationType="none"`), animating itself, with
+drag-to-dismiss on `PanResponder`. **Closed means unmounted** — the caller passes plain boolean
+state and the sheet outlives `visible` only long enough to slide away.
+**Gotchas:** `Modal` rather than an absolutely-positioned view for three things that are each
+annoying by hand: the Android **hardware back button** (`onRequestClose` is the only supported
+hook), escaping the player's stack of absolutely-positioned chrome layers, and covering the status
+bar so a tall sheet is a page rather than a panel with video peeking over it. `animationType="slide"`
+is not used because it cannot be interrupted and gives no way to couple the backdrop — here the
+backdrop's opacity is **derived from the panel's position**, so half a drag is half a backdrop.
+A sheet that stayed mounted while hidden would keep its controls in the accessibility tree.
+**Scope:** Gesture handling is `PanResponder` from React Native itself —
+`react-native-gesture-handler` is excluded from autolinking (D47) and this is one axis with one
+decision at the end of it. Glass is two translucent fills plus a lit hairline, **not `expo-blur`**:
+real backdrop blur is a native module, and every design change would then cost a fresh dev-client
+install on the device.
+
+### The timeline strip is the swing's phases, drawn to scale — not a filmstrip
+
+**Decision:** The strip above the scrub bar is the five phases of the swing (setup, backswing,
+downswing, through, run-out) cut from the analyzer's events, **each band's width being its
+duration**, tappable to seek to its start. Backswing and downswing carry the same two colours their
+trace is drawn in over the picture. The playhead, its frame badge, the strip and the scrub thumb all
+read one x mapping over one full-width box.
+**Gotchas:** The design this came from shows a wheel of video frames, and **no endpoint serves a
+frame** — `/thumb` serves the single contact image. Seven decorative gradients that look like frames
+would be the analysis engine's own named failure (a confident wrong picture) moved into the UI, so
+it is phases instead. Nothing in the group is padded, gapped or inset: gaps are taken out of a row
+before flex divides what is left, so four 4pt gaps would push every boundary up to 16pt away from
+the frame it marks, and the playhead would cross a phase boundary at a visibly different moment from
+the picture. Bands recede by `scaleY` alone, never uniformly — a uniform scale would change a band's
+width, and the width is the meaning.
+**Scope:** Drawn to scale, backswing against downswing **is tempo**, which is the reason the strip
+earns its space at all; equal-width cells would look identical on a 3:1 swing and a 1:1 one. An
+artifact with no events yields an empty list and the strip hides rather than guessing at where the
+top of the backswing was.
 
 ### The picture's box is sized from the swing list, and never resizes
 

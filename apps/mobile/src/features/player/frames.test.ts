@@ -1,6 +1,5 @@
 import {
   clampFrame,
-  formatPosition,
   fpsDisagrees,
   fractionToFrame,
   frameToFraction,
@@ -115,15 +114,5 @@ describe("isSeekable", () => {
     expect(isSeekable(240, 60)).toBe(true);
     expect(isSeekable(0, 60)).toBe(false);
     expect(isSeekable(240, 0)).toBe(false);
-  });
-});
-
-describe("formatPosition", () => {
-  it("leads with the frame and follows with seconds", () => {
-    expect(formatPosition(120, 60)).toBe("120 · 2.00s");
-  });
-
-  it("does not produce NaN without a rate", () => {
-    expect(formatPosition(120, 0)).toBe("120 · 0.00s");
   });
 });

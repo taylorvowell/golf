@@ -6,12 +6,12 @@ import { useAppNavigation } from "../navigation";
 import { COLORS } from "../theme";
 
 /**
- * One swing: the picture, then the facts about it.
+ * One swing: the picture, and the facts about it a panel away.
  *
- * **The screen has no header.** `SwingPlayer` owns the whole viewport — full-width picture at the
- * top with the back control and the swing's name laid over it, the facts scrolling beneath, and
- * the transport pinned to the bottom of the window. A navigation bar above the video would spend
- * the most valuable strip of a tall screen on a title that is already on the picture.
+ * **The screen has no header.** `SwingPlayer` owns the whole viewport — the picture centred in it,
+ * the back control and the swing's name laid over the top, the transport over the bottom. A
+ * navigation bar above the video would spend the most valuable strip of a tall screen on a title
+ * that is already on the picture.
  *
  * The metadata is not filler. Pose coverage and trace availability are confidence signals, and a
  * swing the model barely tracked has to say so next to its own score rather than present it as
@@ -71,10 +71,14 @@ export function SwingDetailScreen({ id }: SwingDetailScreenProps) {
       frameCount={swing.frameCount}
       fps={swing.fps}
       title={swing.label}
+      subtitle={formatDate(swing.createdAt)}
+      score={scored ? (swing.overallScore as number) : null}
       aspectRatio={aspectRatio}
       onBack={navigation.canGoBack() ? navigation.goBack : undefined}
     >
       <View testID="swing-detail" style={styles.panel}>
+        {/* The chip over the picture carries the number; the band is the part that qualifies it,
+            and a grade with no number beside it is not a fact anyone can act on. */}
         <Row
           label="Score"
           value={scored ? `${Math.round(swing.overallScore as number)}${swing.band ? ` · ${swing.band}` : ""}` : "Not scored"}
@@ -89,6 +93,13 @@ export function SwingDetailScreen({ id }: SwingDetailScreenProps) {
       </View>
     </SwingPlayer>
   );
+}
+
+function formatDate(epoch: number): string {
+  // `createdAt` is an integer in the contract. Seconds and milliseconds are both plausible and
+  // silently differ by 50 years, so it is normalized rather than assumed.
+  const ms = epoch < 1e12 ? epoch * 1000 : epoch;
+  return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 function Row({ label, value }: { label: string; value: string }) {
@@ -106,20 +117,17 @@ function viewName(v: { view: string }): string {
 
 const styles = StyleSheet.create({
   centre: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10, padding: 24 },
-  panel: {
-    backgroundColor: COLORS.panel,
-    borderColor: COLORS.border,
-    borderWidth: 1,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-  },
+  // No border and no fill: this now sits inside a `DeckSheet`, which is already a surface. A
+  // panel drawn on a panel is the box-in-a-box the sheet exists to remove.
+  panel: { paddingVertical: 2 },
   row: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingVertical: 10,
+    paddingVertical: 11,
     gap: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(255,255,255,0.08)",
   },
   rowLabel: { color: COLORS.muted, fontSize: 13 },
   rowValue: { color: COLORS.text, fontSize: 14, fontWeight: "600", flexShrink: 1, textAlign: "right" },
