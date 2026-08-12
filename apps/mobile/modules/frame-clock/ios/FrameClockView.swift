@@ -72,16 +72,51 @@ class FrameClockView: ExpoView {
     playerLayer.frame = bounds
   }
 
+  private var sourceUri: String?
+  private var sourceHeaders: [String: String] = [:]
+  /// What is currently prepared, so re-applying identical props does not restart playback.
+  private var appliedSource: String?
+
   func setSource(_ uri: String?) {
+    sourceUri = uri
+    applySource()
+  }
+
+  /// The headers every media request carries — in practice `Authorization` and the client version.
+  ///
+  /// Separate from `setSource` because props arrive in whatever order the view receives them, and
+  /// an item created before its headers landed would fetch unauthenticated exactly once. Both
+  /// funnel through `applySource`, so whichever arrives second prepares the player.
+  ///
+  /// **Unverified.** There is no Mac and no iOS device (D31); this is parity with the Android path
+  /// that was measured, not a tested claim.
+  func setHeaders(_ headers: [String: String]) {
+    sourceHeaders = headers
+    applySource()
+  }
+
+  private func applySource() {
     stopDisplayLink()
     statusObservation = nil
 
-    guard let uri, !uri.isEmpty, let url = URL(string: uri) else {
+    guard let uri = sourceUri, !uri.isEmpty, let url = URL(string: uri) else {
+      appliedSource = nil
       player.replaceCurrentItem(with: nil)
       return
     }
 
-    let item = AVPlayerItem(url: url)
+    let fingerprint = uri + "\u{1}" + sourceHeaders.sorted { $0.key < $1.key }
+      .map { "\($0.key)=\($0.value)" }.joined(separator: "\u{1}")
+    if appliedSource == fingerprint { return }
+    appliedSource = fingerprint
+
+    // `AVURLAssetHTTPHeaderFieldsKey` is the only way to authorize an AVFoundation media load;
+    // there is no per-request hook once the asset exists.
+    let asset = AVURLAsset(
+      url: url,
+      options: sourceHeaders.isEmpty ? nil : ["AVURLAssetHTTPHeaderFieldsKey": sourceHeaders]
+    )
+    let item = AVPlayerItem(asset: asset)
 
     // 32BGRA because the buffers are drained and discarded — nothing here renders them, the
     // layer does that. The output exists purely as a clock.
@@ -204,6 +239,11 @@ class FrameClockView: ExpoView {
       "seekErrorFrames": seekError.toDictionary(),
       "onScreenFrame": onScreenFrame(),
       "queuedFrame": queuedFrame,
+      // The player's OWN bookkeeping — a third answer to "where are we", reported next to the
+      // other two precisely so a disagreement is visible.
+      "positionMs": CMTimeGetSeconds(player.currentTime()).isFinite
+        ? CMTimeGetSeconds(player.currentTime()) * 1000 : 0,
+      "playing": player.timeControlStatus == .playing,
       "fps": fps
     ]
   }

@@ -24,4 +24,7 @@ dependencies {
   def androidxMedia3Version = "1.9.0"
   implementation "androidx.media3:media3-exoplayer:${androidxMedia3Version}"
   implementation "androidx.media3:media3-common:${androidxMedia3Version}"
+  // Declared rather than leant on transitively: the player supplies its own HTTP data source so
+  // the request can carry the session (D50), and that class lives here.
+  implementation "androidx.media3:media3-datasource:${androidxMedia3Version}"
 }

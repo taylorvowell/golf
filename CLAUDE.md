@@ -157,7 +157,9 @@ the template in `.claude/ai-instructions/00 - README.md`). The macro index is
 `_STATUS.json`, never hand-written into the roadmap.
 
 The track marked `spine: true` is what `/build` targets; exactly one active track may carry it,
-and the flag moves forward as phases complete. Currently: **`platform-foundation`**.
+and the flag moves forward as phases complete. **Resolve it from `.claude/ROADMAP.json` every
+time — it moves, and a name written here goes stale.** As of 2026-08-12 it is `mobile-player`;
+`platform-foundation` and `mobile-app-shell` remain active and launch-blocking behind it.
 
 - `/build` — advance the spine track. `/feature <name>` — advance any track.
 - `/roadmap` — the macro picture (read-only). `/status`, `/verify`, `/skip`, `/reset-step`,

@@ -92,3 +92,26 @@ server change.
 Overlays are step 02, the scorecard and findings are step 03, and dual-view is step 04. Ending
 here — a proven clock with nothing drawn on it — is what makes a later overlay bug diagnosable as
 an overlay bug.
+
+---
+
+### Appended 2026-08-12 during execution — the surface is `frame-clock`, not `expo-video` (D50)
+
+`Steps` 1 and 3 above cannot both be satisfied as written, and the reason was not visible when this
+file was authored: **`modules/frame-clock` is not a sidecar to `expo-video`, it is a complete
+player.** `FrameClockView` builds its own `ExoPlayer`, owns its own `SurfaceView`, and exposes
+`setSource` / `play` / `pause` / `seekToFrame`. Rendering through `expo-video` *and* observing
+through `frame-clock` would put two decoders on one clip, and `expo-video` surfaces no
+presented-frame callback for the other to observe — which is the module's own stated reason for
+existing.
+
+So `FrameClockView` is the video surface for this step and `expo-video` renders nothing. Everything
+step 3 asks for is thereby native and measured rather than self-reported, and the step's on-device
+criterion — requested == presented across 200+ seeks — is read straight off `seekErrorFrames`,
+which is scored on the playback thread at the moment the frame reaches the glass.
+
+Consequence, since it was not in scope as written: `frame-clock` had **no way to carry an
+`Authorization` header** (`MediaItem.fromUri`, no data-source factory), and the media driver here is
+local, so `/video` streams bytes and requires the bearer token. That is the D48 trap in native form
+and it is fixed in this step rather than worked around — `headers`, `positionMs` and `playing` are
+added to the module. Full rationale in `docs/decisions/ARCHIVE-numbered.md` D50.

@@ -62,3 +62,45 @@ jest.mock("expo-image", () => {
   const { Image: RNImage } = require("react-native");
   return { Image: (props) => React.createElement(RNImage, props) };
 });
+
+/**
+ * `modules/frame-clock` is a local Expo module, so `requireNativeView("FrameClock")` throws under
+ * jest at *import* — before any component renders — exactly like the two mocks above.
+ *
+ * The stand-in is a `View` that also exposes the imperative handle, because the player's whole
+ * job is driving that handle: a test asserts that stepping a frame called `seekToFrame` with the
+ * right index, which is the one thing about this player worth asserting off-device. The handle's
+ * methods are re-created per instance so parallel tests cannot see each other's calls.
+ */
+jest.mock("./modules/frame-clock/src/FrameClockView", () => {
+  const React = require("react");
+  const { View } = require("react-native");
+
+  const EMPTY_STAT = { count: 0, mean: 0, p50: 0, p95: 0, max: 0, exactShare: 0 };
+
+  const FrameClockView = React.forwardRef((props, ref) => {
+    React.useImperativeHandle(ref, () => ({
+      play: jest.fn().mockResolvedValue(undefined),
+      pause: jest.fn().mockResolvedValue(undefined),
+      seekToFrame: jest.fn().mockResolvedValue(undefined),
+      markOverlayCommitted: jest.fn().mockResolvedValue(undefined),
+      setSeekMode: jest.fn().mockResolvedValue(undefined),
+      setPlaybackSpeed: jest.fn().mockResolvedValue(undefined),
+      getStats: jest.fn().mockResolvedValue({
+        overlayDriftFrames: EMPTY_STAT,
+        leadTimeMs: EMPTY_STAT,
+        seekErrorFrames: EMPTY_STAT,
+        onScreenFrame: 0,
+        queuedFrame: 0,
+        positionMs: 0,
+        playing: false,
+        fps: 60,
+      }),
+      resetStats: jest.fn().mockResolvedValue(undefined),
+    }));
+    return React.createElement(View, props);
+  });
+  FrameClockView.displayName = "FrameClockView";
+
+  return { __esModule: true, default: FrameClockView };
+});

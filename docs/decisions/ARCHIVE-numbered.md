@@ -2683,3 +2683,52 @@ and closing it is part of step 01 rather than a follow-up nobody schedules.
 
 **`mobile-app-shell` stays `active`** with steps 02–03 open, and its dependency from `mobile-player`
 is non-blocking — a fact about ordering, not a prerequisite.
+
+## D50 — The mobile video surface is `frame-clock`, because `expo-video` cannot be observed
+
+**Date:** 2026-08-12 · **Track:** mobile-player step 01 · **Status:** done
+
+`mobile-player` step 01 was written to render through `expo-video` and separately "wire
+`modules/frame-clock` so the presented frame is observable". Those two instructions are not
+compatible, and the incompatibility is only visible from inside the module.
+
+**`frame-clock` is not an observer, it is a player.** `FrameClockView` constructs its own
+`ExoPlayer`, attaches its own `SurfaceView`, sets `SeekParameters.EXACT`, and exposes `setSource`,
+`play`, `pause` and `seekToFrame`. Composing it with `expo-video` would mean two decoders on one
+clip, two seek positions to reconcile, and twice the bandwidth — and it would still not work,
+because `expo-video` exposes no per-frame presented-frame callback for anything to observe. That
+absence is the module's own stated reason for existing.
+
+**So `frame-clock` renders the picture and `expo-video` renders nothing.** The gain is that the
+step's oracle stops being a self-report: `seekErrorFrames` is scored on the playback thread when the
+frame reaches the glass, comparing the requested frame against the presentation timestamp actually
+decoded. "Requested == presented across 200 seeks" is then a measurement, not an assertion that the
+player did what it was asked. Every measured number behind this decision — 99.2% frame-lock, 100%
+frame-exact seeking, zero added error over HTTP — was measured through this class and none of it
+transfers to `expo-video`.
+
+**The cost, named rather than absorbed:** `expo-video` stays installed and is now unused by any
+screen. It is not removed — it is a config plugin, removing it needs a native rebuild, and a
+lightweight non-frame-exact preview (a coach's message attachment, a drill clip) is a plausible
+consumer. If nothing claims it by the end of this track, delete it then. `frame-clock` is also
+spike-grade next to `expo-video`'s buffering, error and lifecycle handling; the gap is real and
+closes as this track needs it, starting with the error and not-ready states this step renders.
+
+**Three additions the module needed, all of which were missing because a spike harness never hit
+them:**
+
+- **`headers`.** `setSource` used `MediaItem.fromUri` with the default data-source factory, so it
+  could not carry an `Authorization` header. The media driver here is `local`
+  (`MEDIA_DRIVER` unset), so `/api/v1/swings/:id/video` streams bytes itself and requires the
+  bearer token — an unauthenticated request is answered as the `DEV_USER_EMAIL` identity and comes
+  back **404, not 401**, exactly as D48 found for thumbnails. The spike played a bundled asset and
+  a fixture server on `:8790`, neither of which had auth, so the gap could not appear. Fixed with a
+  `DefaultHttpDataSource.Factory` carrying default request properties, with cross-protocol
+  redirects allowed so the Supabase driver's 307-to-signed-URL path works unchanged.
+- **`positionMs`.** The player's own bookkeeping, needed as the third column of the frame-sync
+  panel — the whole point of the panel is that the requested frame, the presented frame and the
+  player's reported position are three different numbers and a bug shows up as a disagreement.
+- **`playing`.** The transport must reflect the player's real state, not JS's intent.
+
+iOS gets the same three for parity via `AVURLAssetHTTPHeaderFieldsKey`. It is **unverified** —
+there is no Mac and no iOS device (D31), unchanged by this entry.

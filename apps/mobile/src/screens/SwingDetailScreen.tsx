@@ -1,18 +1,19 @@
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
 
+import { SwingPlayer } from "../features/player/SwingPlayer";
 import { useSwing } from "../features/swings/useSwings";
 import { COLORS } from "../theme";
 
 /**
- * One swing, before the player exists.
+ * One swing: the player, then the facts about it.
  *
- * This screen is deliberately the end of step 01 rather than the start of the player. Navigation
- * and playback are separate risks and proving them together is how a routing bug gets diagnosed as
- * a video bug — the same reasoning behind this project's Gate 1 / Gate 2 split between pose and
- * frame sync.
+ * The player is deliberately overlay-free — Gate 2 of this project's verification strategy in its
+ * mobile form. Pose and frame sync are unrelated causes of "the stick figure looks wrong", so a
+ * proven clock ships with nothing drawn on it and the skeleton follows in step 02.
  *
- * What it must not do is look broken. "Playback arrives with the player release" is a true
- * sentence a golfer can act on; a blank screen is not.
+ * The metadata below it is not filler. Pose coverage and trace availability are confidence
+ * signals, and a swing the model barely tracked has to say so next to its own score rather than
+ * present it as equally trustworthy.
  */
 
 export interface SwingDetailScreenProps {
@@ -49,6 +50,13 @@ export function SwingDetailScreen({ id }: SwingDetailScreenProps) {
     <ScrollView contentContainerStyle={styles.content} testID="swing-detail">
       <Text style={styles.heading}>{swing.label}</Text>
 
+      <SwingPlayer
+        swingId={swing.id}
+        frameCount={swing.frameCount}
+        fps={swing.fps}
+        viewId={swing.primaryViewId}
+      />
+
       <View style={styles.panel}>
         <Row
           label="Score"
@@ -64,8 +72,8 @@ export function SwingDetailScreen({ id }: SwingDetailScreenProps) {
       </View>
 
       <Text style={styles.detail}>
-        Playback, overlays and the full scorecard arrive with the player release. This swing is
-        analysed and safe.
+        Overlays and the full scorecard arrive with the next player release. This swing is analysed
+        and safe.
       </Text>
     </ScrollView>
   );

@@ -13,8 +13,11 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.SeekParameters
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import expo.modules.kotlin.AppContext
 import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
@@ -130,6 +133,27 @@ class FrameClockView(context: Context, appContext: AppContext) : ExpoView(contex
     }
   }
 
+  /**
+   * The HTTP data source the player reads through, so a request can carry the session.
+   *
+   * `MediaItem.fromUri` on the default factory has no way to set a header, and the media route is
+   * behind auth: an unauthenticated request is answered as the development fallback identity and
+   * returns **404, not 401**, so the video reads as a swing that does not exist (D48, D50). The
+   * spike never hit this because it played a bundled asset and an unauthenticated fixture server.
+   *
+   * Cross-protocol redirects are allowed because the Supabase media driver answers `/video` with a
+   * 307 to a signed https CDN URL while this app talks to the LAN server over http; refusing the
+   * redirect would make the cloud driver fail in a way the local driver never shows.
+   *
+   * **Declared above `init`, and that placement is load-bearing.** Kotlin runs property
+   * initializers and `init` blocks in source order, so a declaration below this block leaves the
+   * field null while `buildPlayer()` reads it. Expo catches the resulting throw and substitutes an
+   * `ErrorGroupView`, so the failure surfaces on the JS side as
+   * `ErrorGroupView cannot be cast to FrameClockView` from whichever view function is called next
+   * — naming a function that is fine, about a view that never got built.
+   */
+  private val httpFactory = DefaultHttpDataSource.Factory().setAllowCrossProtocolRedirects(true)
+
   init {
     // The player must exist before props arrive; source is applied when the prop lands.
     buildPlayer()
@@ -137,7 +161,11 @@ class FrameClockView(context: Context, appContext: AppContext) : ExpoView(contex
   }
 
   private fun buildPlayer() {
-    val exo = ExoPlayer.Builder(context).build()
+    val exo = ExoPlayer.Builder(context)
+      .setMediaSourceFactory(
+        DefaultMediaSourceFactory(DefaultDataSource.Factory(context, httpFactory))
+      )
+      .build()
     // DEFAULT is already EXACT in media3 1.9.0, but state it: a future default change would
     // silently turn frame-exact seeking into nearest-sync seeking, and the failure mode is a
     // player that looks fine and is up to a GOP out.
@@ -233,12 +261,47 @@ class FrameClockView(context: Context, appContext: AppContext) : ExpoView(contex
     videoSurface = surface
   }
 
+  private var sourceUri: String? = null
+  private var sourceHeaders: Map<String, String> = emptyMap()
+
+  /** What is currently prepared, so re-applying identical props does not restart playback. */
+  private var appliedSource: Pair<String, Map<String, String>>? = null
+
   fun setSource(uri: String?) {
+    sourceUri = uri
+    applySource()
+  }
+
+  /**
+   * The headers every media request carries — in practice `Authorization` and the client version.
+   *
+   * Set independently of [setSource] because props arrive in whatever order the view receives
+   * them, and a source prepared before its headers landed would fetch unauthenticated exactly
+   * once — which is the failure this exists to prevent. Both setters funnel through [applySource],
+   * which is idempotent, so whichever arrives second is the one that prepares the player.
+   */
+  fun setHeaders(headers: Map<String, String>) {
+    sourceHeaders = headers
+    applySource()
+  }
+
+  private fun applySource() {
     val exo = player ?: return
+    val uri = sourceUri
     if (uri.isNullOrBlank()) {
+      appliedSource = null
       exo.clearMediaItems()
       return
     }
+
+    val next = uri to sourceHeaders
+    if (appliedSource == next) return
+    appliedSource = next
+
+    // Set on the factory rather than per-item: `DefaultHttpDataSource` reads its default request
+    // properties when each data source is created, and the player creates one per load — including
+    // the ones a seek triggers, which is most of them in this app.
+    httpFactory.setDefaultRequestProperties(sourceHeaders)
     exo.setMediaItem(MediaItem.fromUri(Uri.parse(uri)))
     exo.prepare()
   }
@@ -364,6 +427,12 @@ class FrameClockView(context: Context, appContext: AppContext) : ExpoView(contex
     "seekErrorFrames" to seekError.toMap(),
     "onScreenFrame" to onScreenFrame(),
     "queuedFrame" to queuedFrame,
+    // The player's OWN bookkeeping, which is a third answer to "where are we" and deliberately
+    // reported next to the other two. The sync panel exists because those three numbers can
+    // disagree, and a disagreement is the bug — a position that advances while the picture does
+    // not is a stall, and a position that matches nothing is wrong fps.
+    "positionMs" to (player?.currentPosition ?: 0L),
+    "playing" to (player?.isPlaying ?: false),
     "fps" to fps
   )
 

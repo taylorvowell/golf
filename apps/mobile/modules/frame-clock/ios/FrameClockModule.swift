@@ -11,6 +11,12 @@ public class FrameClockModule: Module {
         view.setSource(uri)
       }
 
+      // The session travels with the media request. Declaring it before `source` would be no help
+      // — prop order is not a contract — so the view applies whichever arrives second (D50).
+      Prop("headers") { (view: FrameClockView, headers: [String: String]?) in
+        view.setHeaders(headers ?? [:])
+      }
+
       Prop("fps") { (view: FrameClockView, fps: Double) in
         view.fps = fps
       }

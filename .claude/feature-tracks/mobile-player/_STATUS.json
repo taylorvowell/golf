@@ -3,13 +3,32 @@
   "featureName": "mobile-player",
   "currentStep": "01",
   "phase": "Core Golfer Experience",
-  "lastUpdated": "2026-08-12T04:40:00Z",
+  "lastUpdated": "2026-08-12T06:05:00Z",
   "steps": {
-    "01": { "status": "not-started" },
-    "02": { "status": "not-started" },
-    "03": { "status": "not-started" },
-    "04": { "status": "not-started" }
+    "01": {
+      "status": "in-progress",
+      "startedAt": "2026-08-12T04:50:00Z",
+      "note": "Built and verified as far as automation reaches; open ONLY on the on-device seek measurement. D50: the surface is modules/frame-clock, not expo-video - frame-clock owns its own ExoPlayer and is the only thing that can report the frame on the glass, so the two cannot compose. That forced three native additions the spike never needed: `headers` (the media route is behind auth and an unauthenticated request returns 404 not 401 - D48 in native form), `positionMs` and `playing`. Found and fixed on device: declaring `httpFactory` BELOW the init block left it null in buildPlayer(), so Expo substituted an ErrorGroupView and the only symptom was `ErrorGroupView cannot be cast to FrameClockView` from getStats - a healthy function named for a view that never got built. Verified: mobile tsc clean, 83 jest (+38), `verify:media` 10/10 over the running server, Gradle assembleDebug BUILD SUCCESSFUL, APK installed on the S25+, app launched and a swing opened with a CLEAN logcat, and the player renders - scrub bar, transport, and the frame-sync panel reading 519 frames at 60 fps. BLOCKED on: the phone's proximity sensor is covered, so Samsung's Accidental touch protection swallows every `adb shell input` event; screen_off_pocket=0, `dumpsys sensorservice restrict` and force-stopping com.samsung.android.gesture all failed to dismiss it. HANDOFF row open; procedure in RUNBOOK 11 - tap `Run 250 seeks` and read two lines."
+    },
+    "02": {
+      "status": "not-started"
+    },
+    "03": {
+      "status": "not-started"
+    },
+    "04": {
+      "status": "not-started"
+    }
   },
-  "blockers": [],
+  "blockers": [
+    {
+      "step": "01",
+      "classification": "USER-ACTION-NEEDED",
+      "raised": "2026-08-12",
+      "what": "The on-device seek measurement needs the phone uncovered.",
+      "why": "Samsung's Accidental touch protection (window `UnintentionalLcdOn`) consumes every injected touch while the proximity sensor is covered, and no adb command dismisses it.",
+      "unblocks": "Tap `Run 250 seeks` on the Frame sync panel and report the two exactness lines. RUNBOOK 11."
+    }
+  ],
   "skipped": []
 }

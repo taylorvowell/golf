@@ -37,18 +37,24 @@ fails with `ERR_PNPM_ENOENT` while Metro or `pnpm dev` holds files — stop both
 
 ## Native modules
 
-### Two local Expo modules are load-bearing and have no consumer in the tree
+### Two local Expo modules are load-bearing; `high-speed-camera` has no consumer in the tree
 
 **Decision:** `modules/frame-clock` and `modules/high-speed-camera` are permanent, not spike
-leftovers. They were the step 02 spike's actual deliverable and the harness that used them is
-deleted, so **they will read as dead code to any sweep.** Do not delete them.
+leftovers. They were the step 02 spike's actual deliverable. `frame-clock` gained its consumer with
+the player (below); `high-speed-camera` still has none and **will read as dead code to any sweep.**
+Do not delete it.
 
 - **`frame-clock`** wraps Media3's `VideoFrameMetadataListener`. No Expo/RN video component
   surfaces a per-frame presented-frame callback, and the whole overlay depends on one.
 - **`high-speed-camera`** wraps a Camera2 constrained-high-speed session.
 
-**Gotchas:** `frame-clock` pins media3 to the version `expo-video` resolves — two media3 versions
-on the classpath fail at **runtime**, not at build time. In `high-speed-camera`, the working call
+**Gotchas:** In any local Expo module, **declare every property the `init` block uses above that
+block.** Kotlin runs initializers in source order, so a field declared lower is null when `init`
+reads it; Expo swallows the throw and substitutes an `ErrorGroupView`, and the only symptom is
+`ErrorGroupView cannot be cast to <YourView>` raised by whichever view function JS calls next — a
+message naming a healthy function, about a view that was never built. `frame-clock` pins media3 to
+the version `expo-video` resolves — two media3 versions on the classpath fail at **runtime**, not
+at build time. In `high-speed-camera`, the working call
 is the **deprecated** `createConstrainedHighSpeedCaptureSession(surfaces, callback, handler)`
 overload; the modern `SessionConfiguration(SESSION_HIGH_SPEED, …)` is silently swallowed on the
 S25+ with no callback and no error. **Do not "fix" that deprecation** — it removes 240 fps.
@@ -62,6 +68,20 @@ unnecessary. Rejected on cost, not on merit.
 **See:** ARCHIVE D23, D36.
 
 ## Playback and capture rules
+
+### The video surface is `modules/frame-clock`; `expo-video` renders nothing
+
+**Decision:** Swing playback goes through `FrameClockView`, which owns its own `ExoPlayer` and
+`SurfaceView`. It is a **player, not an observer** — composing it with `expo-video` would put two
+decoders on one clip, and `expo-video` exposes no presented-frame callback for anything to observe.
+Its source carries `headers` from `api.mediaSource()`.
+**Gotchas:** Without those headers `/video` is answered as the `DEV_USER_EMAIL` identity and returns
+**404 rather than 401** — D48's trap, in native form. `expo-video` remains installed and unused; if
+nothing claims it by the end of `mobile-player`, delete it (it is a config plugin, so that is a
+native rebuild). `frame-clock` is spike-grade next to `expo-video` on buffering, error and lifecycle
+handling — that gap closes as the track needs it.
+**Scope:** Anything needing frame-exactness. A non-frame-exact preview clip may use `expo-video`.
+**See:** ARCHIVE D50.
 
 ### Seek to `frame / fps` on Android — never the web player's `(frame + 0.5) / fps`
 

@@ -32,6 +32,16 @@ export interface FrameClockStats {
   onScreenFrame: number;
   /** The newest frame the decoder has queued. Ahead of `onScreenFrame` by the lead time. */
   queuedFrame: number;
+  /**
+   * The player's own reported position, in milliseconds.
+   *
+   * A third answer to "where are we", and reported alongside the other two because the frame-sync
+   * panel exists to show that they can disagree. A position advancing while `onScreenFrame` does
+   * not is a stall; a position matching neither is the wrong `fps`.
+   */
+  positionMs: number;
+  /** The player's real state, not JS's intent — the transport reflects this, never its own wish. */
+  playing: boolean;
   fps: number;
 }
 
@@ -60,6 +70,14 @@ export type SurfaceType = "surfaceView" | "textureView";
 
 export type FrameClockViewProps = {
   source?: string | null;
+  /**
+   * Headers sent with every media request — `Authorization` above all.
+   *
+   * Without it the media route is answered as the development fallback identity and returns **404
+   * rather than 401**, so an auth failure renders as a swing that does not exist (D48, D50). Pass
+   * `api.mediaSource(path)`'s two fields together; they are produced together for this reason.
+   */
+  headers?: Record<string, string> | null;
   fps?: number;
   emitFrames?: boolean;
   surfaceType?: SurfaceType;
@@ -67,12 +85,17 @@ export type FrameClockViewProps = {
   onReady?: (event: { nativeEvent: ReadyEvent }) => void;
   onPlayerError?: (event: { nativeEvent: { message: string } }) => void;
   style?: StyleProp<ViewStyle>;
+  testID?: string;
 };
 
 export interface FrameClockHandle {
   play: () => Promise<void>;
   pause: () => Promise<void>;
-  /** Seek to the middle of the frame's display interval — `(frame + 0.5) / fps`. */
+  /**
+   * Seek to a frame's own presentation timestamp — `frame / fps`, **not** the web player's
+   * midpoint rule. media3 resolves a seek forward to the next boundary, so aiming at the middle of
+   * frame N lands on N+1 (D40). Measured 100% frame-exact at this target.
+   */
   seekToFrame: (frame: number) => Promise<void>;
   /** Call immediately after committing an overlay, so native can score the drift. */
   markOverlayCommitted: (frame: number) => Promise<void>;

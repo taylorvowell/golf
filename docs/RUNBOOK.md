@@ -99,8 +99,10 @@ smoothing variants, silhouette, isolation, butt line, angles), read the scorecar
 narrative, compare two swings, place head markers, and trigger a re-analysis. It is a desktop-first
 layout on a phone screen.
 
-**This is still the only way to WATCH a swing on the phone.** The native app (§6) signs in and lists
-your swings with thumbnails and scores, but has no player yet — that is the `mobile-player` track.
+**It is no longer the only way to watch a swing on the phone.** The native app (§6) plays one
+frame-exactly as of `mobile-player` step 01 — verify it with §11. What the web player still has and
+the native one does not is every **overlay**: skeleton, club, trace, silhouette, angles, the
+scorecard and the coach narrative. Those are steps 02–03.
 
 ---
 
@@ -150,7 +152,7 @@ look at the frame before believing any club number.
 
 # clients — from the repo root
 pnpm --filter web test                            # vitest, 167 tests
-pnpm --filter mobile test                         # jest-expo, 45 tests (logic + components)
+pnpm --filter mobile test                         # jest-expo, 83 tests (logic + components)
 pnpm --filter web exec tsc --noEmit && pnpm --filter web lint
 pnpm --filter mobile exec tsc --noEmit
 
@@ -312,7 +314,9 @@ use on the S25+. The repo describes what the product *is*; only the device knows
 `decisions/` D5. The step 02 spike harness that used to live behind sign-in is **deleted**
 (D44) — its measurements are recorded in D34–D40 and the two native modules it justified survive
 in `modules/`. What runs today is Google sign-in, a real **swing log** with thumbnails and scores,
-and a per-swing detail screen. **There is no player yet** — that is the `mobile-player` track.
+a per-swing detail screen, and — since `mobile-player` step 01 — a **frame-exact player** on that
+screen: video, scrub bar, play/pause, ±1 and ±10 frame steps, and a development-only frame-sync
+panel. No overlays yet; those are step 02. Verifying the player is §11.
 
 Navigation is React Navigation 7 native-stack, not Expo Router (D47). Two build faults that look
 like something else: a native dependency failing with `ninja: error … Filename longer than 260
@@ -572,3 +576,50 @@ starts Apple's annual $99 clock early. Begin enrolment around step 07 for buffer
 13 Nov 2023 must run a closed test with 12 testers opted in for 14 continuous days before it can
 publish, while an **organization** account is exempt but needs D-U-N-S verification. See spine
 step 10 for the full comparison.
+
+---
+
+## 11. Verifying the player on the phone — the 30-second pass
+
+The one part of `mobile-player` step 01 that automation cannot do. Everything up to this point is
+already run and green: `tsc`, 83 jest tests, `verify:media`, the Gradle build, the install, and a
+launch with a clean logcat.
+
+**Before anything, uncover the phone.** If it is face-down or has something on it, the proximity
+sensor raises Samsung's *Accidental touch protection* and **every** `adb shell input` event is
+swallowed — taps report success and land nowhere. Check with:
+
+```bash
+adb shell dumpsys window | grep mCurrentFocus     # UnintentionalLcdOn = protection is up
+```
+
+There is no way to dismiss it over adb. See `ENVIRONMENT.md` → Machine-level faults.
+
+Then, on the phone:
+
+1. Open **SwingSage** → tap any swing (e.g. **6iron3**). The video appears with a scrub bar under
+   it and the transport below that.
+2. In the **Frame sync** panel at the bottom, tap **Run 250 seeks**. It seeks to 250 pseudo-random
+   frames, waiting for each to reach the glass before asking for the next, and takes about 15–30
+   seconds.
+3. Read two lines:
+   - **Seeks exact (JS)** — `250/250 · 100.0%` is the pass. This is the requested frame compared
+     against the frame the native callback reported.
+   - **Seeks exact (native)** — scored on the playback thread when the frame is decoded. It should
+     agree with the line above; a divergence means the bridge is dropping or reordering events,
+     which is why both are shown.
+4. Tap **+1** and **−1** at both ends of the clip. One tap must move exactly one frame, and at
+   frame 0 and the last frame the control must do nothing rather than wrap.
+5. Drag the scrub bar quickly end to end. The picture should track the finger; **Drift** in the
+   panel reads `0 — locked` when the presented frame equals the requested one.
+
+Report the two exactness figures — they are the step's measurement and go into `CURRENT-STATE.md`
+§11b, which currently records scrubbing as unmeasured.
+
+```bash
+# rebuild and reinstall after a NATIVE change (a JS change only needs Metro)
+cd apps/mobile/android && unset ANDROID_SDK_ROOT && ./gradlew :app:assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb logcat -c && adb shell monkey -p com.swingsage.spike -c android.intent.category.LAUNCHER 1
+adb logcat -d | grep -E "ReactNativeJS|has been rejected"    # empty is the pass
+```
