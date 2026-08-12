@@ -247,3 +247,50 @@ describe("what the exactness figure is measured over", () => {
     expect(view.result.current.state.seeking).toBe(false);
   });
 });
+
+/**
+ * Looping, which no longer has a button.
+ *
+ * The loop control was removed from the dock — a swing is about a second and a half, so a player
+ * that stops dead at the finish makes a golfer press play for every look at the same two frames,
+ * and in a year nobody has wanted it off. That makes this the ONLY place the behaviour is checked:
+ * with no control to poke, a regression here would be silent on screen until someone noticed the
+ * swing had stopped repeating.
+ */
+describe("looping", () => {
+  it("is on by default", async () => {
+    const { view } = await setup();
+    expect(view.result.current.state.looping).toBe(true);
+  });
+
+  it("restarts at the window start instead of stopping at its end", async () => {
+    const { handle, view } = await setup();
+    await act(async () => {
+      view.result.current.actions.play();
+    });
+    handle.seekToFrame.mockClear();
+
+    // The last frame of the window arrives during playback, with no seek outstanding.
+    await act(async () => view.result.current.handlers.onFrameRendered(rendered(239)));
+
+    // Seeks without pausing: pausing at the finish and playing again on the landing produces a
+    // visible hitch on every single loop, at the frame a golfer looks at most.
+    expect(handle.seekToFrame).toHaveBeenCalledWith(0);
+    expect(handle.pause).not.toHaveBeenCalled();
+    expect(view.result.current.state.playing).toBe(true);
+  });
+
+  it("stops at the end once looping is off", async () => {
+    const { handle, view } = await setup();
+    await act(async () => {
+      view.result.current.actions.setLooping(false);
+      view.result.current.actions.play();
+    });
+    handle.seekToFrame.mockClear();
+
+    await act(async () => view.result.current.handlers.onFrameRendered(rendered(239)));
+
+    expect(handle.pause).toHaveBeenCalled();
+    expect(view.result.current.state.playing).toBe(false);
+  });
+});

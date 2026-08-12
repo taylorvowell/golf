@@ -9,14 +9,16 @@ import {
   type LayoutChangeEvent,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { SwingViewSummary } from "@swingsage/schema/contract";
+import type { SwingSummary, SwingViewSummary } from "@swingsage/schema/contract";
 
 import { FrameClockView } from "../../../modules/frame-clock/src";
 import { api } from "../../platform/client";
-import { ChevronGlyph, DECK, DeckSheet, LayersGlyph } from "../../design/deck";
+import { ChevronGlyph, CompareGlyph, DECK, DeckSheet, LayersGlyph } from "../../design/deck";
 import { COLORS } from "../../theme";
+import { AnalysisPanel } from "./AnalysisPanel";
+import { ComparePanel } from "./ComparePanel";
 import { FrameSyncPanel } from "./FrameSyncPanel";
-import { PlayerConsole } from "./PlayerConsole";
+import { PlayerConsole, formatSpeed } from "./PlayerConsole";
 import { isSeekable, windowBounds, type Bounds } from "./frames";
 import { phaseBands } from "./phaseBands";
 import { OverlayControls } from "./overlay/OverlayControls";
@@ -26,6 +28,7 @@ import { playbackWindow } from "./overlay/playbackWindow";
 import { useAnalysis } from "./useAnalysis";
 import { useCorrections } from "./useCorrections";
 import { useFramePlayer } from "./useFramePlayer";
+import { useReport } from "./useReport";
 
 /**
  * A swing, playing, with the analysis drawn on it and the transport under your thumb.
@@ -67,6 +70,8 @@ export interface SwingPlayerProps {
    * truth is "this has not been scored".
    */
   score?: number | null;
+  /** Backswing:downswing, for the comparison panel. Null when the analyzer would not stand by it. */
+  tempoRatio?: number | null;
   /**
    * The analysed frame's shape, from the swing LIST — `width / height` off `SwingViewSummary`.
    *
@@ -93,7 +98,7 @@ export interface SwingPlayerProps {
 }
 
 /** Which panel is up. One at a time — two stacked sheets have no way back to the picture. */
-type Panel = "overlays" | "metrics" | "sync" | null;
+type Panel = "overlays" | "metrics" | "analysis" | "compare" | "speed" | null;
 
 export function SwingPlayer({
   swingId,
@@ -102,6 +107,7 @@ export function SwingPlayer({
   title,
   subtitle,
   score,
+  tempoRatio,
   aspectRatio,
   onBack,
   children,
@@ -197,6 +203,24 @@ export function SwingPlayer({
 
   const closePanel = useCallback(() => setPanel(null), []);
   const openMetrics = useCallback(() => setPanel("metrics"), []);
+  const openAnalysis = useCallback(() => setPanel("analysis"), []);
+  const openSpeed = useCallback(() => setPanel("speed"), []);
+
+  /**
+   * The scorecard is fetched only once someone asks for it.
+   *
+   * It stays requested after the panel closes — `enabled` latches — so re-opening is instant.
+   * Re-fetching on every open would spend a request to redisplay numbers that cannot have changed
+   * without a re-analysis, and a re-analysis mints a new revision anyway.
+   */
+  const [wantsReport, setWantsReport] = useState(false);
+  useEffect(() => {
+    if (panel === "analysis") setWantsReport(true);
+  }, [panel]);
+  const report = useReport(swingId, view, wantsReport);
+
+  /** The swing being held up against this one. Null is the normal state. */
+  const [reference, setReference] = useState<SwingSummary | null>(null);
 
   /**
    * Tapping the picture takes the controls away, and taps again to bring them back.
@@ -366,21 +390,45 @@ export function SwingPlayer({
             <LayersGlyph size={20} color={COLORS.text} />
           </Pressable>
 
-          {/* The step's own oracle, and development only. It measures against a picture that keeps
-              playing behind the panel, so reading it does not disturb what it is measuring. */}
-          {__DEV__ ? (
-            <Pressable
-              testID="sync-open"
-              accessibilityRole="button"
-              accessibilityLabel="Frame sync"
-              hitSlop={8}
-              onPress={() => setPanel("sync")}
-              style={({ pressed }) => [styles.glassChip, pressed && styles.pressedGlass]}
-            >
-              <Text style={styles.chipCaption}>Sync</Text>
-            </Pressable>
-          ) : null}
+          <Pressable
+            testID="compare-open"
+            accessibilityRole="button"
+            accessibilityLabel="Compare with another swing"
+            hitSlop={8}
+            onPress={() => setPanel("compare")}
+            style={({ pressed }) => [
+              styles.glassChip,
+              reference ? styles.glassChipOn : null,
+              pressed && styles.pressedGlass,
+            ]}
+          >
+            <CompareGlyph size={19} color={reference ? DECK.accent : COLORS.text} />
+          </Pressable>
         </View>
+
+        {/* What this swing is currently being held up against. On the picture rather than only
+            inside the panel, because a comparison you have forgotten you set is one that quietly
+            changes what the numbers underneath mean. */}
+        {reference ? (
+          <View style={styles.referenceRow}>
+            <Pressable
+              testID="reference-clear"
+              accessibilityRole="button"
+              accessibilityLabel={`Comparing with ${reference.referenceLabel ?? reference.label}. Clear`}
+              hitSlop={8}
+              onPress={() => setReference(null)}
+              style={({ pressed }) => [styles.referenceChip, pressed && styles.pressedGlass]}
+            >
+              <Text style={styles.referenceText} numberOfLines={1}>
+                vs {reference.referenceLabel ?? reference.label}
+              </Text>
+              <View style={styles.referenceClose}>
+                <View style={styles.referenceBarA} />
+                <View style={styles.referenceBarB} />
+              </View>
+            </Pressable>
+          </View>
+        ) : null}
 
         {/**
          * A swing the analyzer could not describe gets a video and no transport, and is told why.
@@ -406,7 +454,11 @@ export function SwingPlayer({
           fps={fps}
           seekable={seekable}
           bands={bands}
+          swingId={swingId}
+          view={view}
+          onSpeed={openSpeed}
           onMetrics={openMetrics}
+          onAnalysis={openAnalysis}
           bottomInset={insets.bottom}
         />
       </Animated.View>
@@ -441,30 +493,115 @@ export function SwingPlayer({
         subtitle={subtitle}
       >
         {children}
+
+        {/* Gate 2's instrument, development only, and it lives here because the picture keeps
+            playing behind an open panel — so reading it does not disturb what it measures. */}
+        {__DEV__ ? (
+          <View style={styles.devBlock}>
+            <Text style={styles.devTitle}>Frame sync · development</Text>
+            <FrameSyncPanel
+              state={player.state}
+              playerRef={player.ref}
+              fps={fps}
+              bounds={bounds}
+              traceCostRef={traceCost}
+              onReset={player.actions.resetMeasurement}
+              onSweep={player.actions.runSeekSweep}
+            />
+          </View>
+        ) : null}
       </DeckSheet>
 
-      {__DEV__ ? (
-        <DeckSheet
-          testID="sync-sheet"
-          visible={panel === "sync"}
-          onClose={closePanel}
-          title="Frame sync"
-          subtitle="Development instrument — Gate 2"
-        >
-          <FrameSyncPanel
-            state={player.state}
-            playerRef={player.ref}
-            fps={fps}
-            bounds={bounds}
-            traceCostRef={traceCost}
-            onReset={player.actions.resetMeasurement}
-            onSweep={player.actions.runSeekSweep}
-          />
-        </DeckSheet>
-      ) : null}
+      <DeckSheet
+        testID="analysis-sheet"
+        visible={panel === "analysis"}
+        onClose={closePanel}
+        title="Analysis"
+        subtitle="Scored from the swing, with no AI in it"
+      >
+        <AnalysisPanel state={report} />
+      </DeckSheet>
+
+      <DeckSheet
+        testID="compare-sheet"
+        visible={panel === "compare"}
+        onClose={closePanel}
+        title="Compare"
+        subtitle={
+          reference
+            ? "Timing and scores — the parts that survive two different cameras"
+            : "Pick a reference swing or one of your own"
+        }
+      >
+        <ComparePanel
+          swingId={swingId}
+          fps={fps}
+          frameCount={frameCount}
+          bands={bands}
+          score={typeof score === "number" ? score : null}
+          tempoRatio={tempoRatio ?? null}
+          reference={reference}
+          onReference={setReference}
+        />
+      </DeckSheet>
+
+      {/* Short, so it opens at full height and never offers an expand that reveals nothing. */}
+      <DeckSheet
+        testID="speed-sheet"
+        visible={panel === "speed"}
+        onClose={closePanel}
+        title="Playback speed"
+        subtitle="Retimed natively, so every frame is still presented"
+        scrolls={false}
+      >
+        <View style={styles.speedList}>
+          {SPEEDS.map((s) => (
+            <Pressable
+              key={s.value}
+              testID={`speed-${String(s.value).replace(".", "-")}`}
+              accessibilityRole="button"
+              accessibilityState={{ selected: player.state.speed === s.value }}
+              accessibilityLabel={`${formatSpeed(s.value)} speed`}
+              onPress={() => {
+                player.actions.setSpeed(s.value);
+                closePanel();
+              }}
+              style={({ pressed }) => [
+                styles.speedRow,
+                player.state.speed === s.value && styles.speedRowOn,
+                pressed && styles.pressedGlass,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.speedRowValue,
+                  player.state.speed === s.value && styles.speedRowValueOn,
+                ]}
+              >
+                {formatSpeed(s.value)}
+              </Text>
+              <Text style={styles.speedRowHint}>{s.hint}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </DeckSheet>
     </View>
   );
 }
+
+/**
+ * Real time and three slow speeds, each with the reason it exists.
+ *
+ * Quarter speed is the coaching one — at 60fps it presents a true 15 frames a second, slow enough
+ * to watch the club through impact and still fast enough to read as motion. Tenth exists for the
+ * transition, which is over in about four frames.
+ */
+const SPEEDS = [
+  { value: 1, hint: "Real time" },
+  { value: 0.5, hint: "Half — the whole shape, slower" },
+  { value: 0.25, hint: "Quarter — the coaching speed" },
+  { value: 0.1, hint: "Tenth — for the transition" },
+] as const;
 
 /**
  * The largest box of the given shape that fits inside `w × h`.
@@ -623,7 +760,64 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: DECK.glass.hairline,
   },
+  glassChipOn: { borderColor: DECK.accent, backgroundColor: "rgba(184,255,74,0.14)" },
   pressedGlass: { opacity: 0.6 },
+
+  referenceRow: { flexDirection: "row", justifyContent: "flex-end", marginTop: 8, marginRight: 4 },
+  referenceChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    maxWidth: "72%",
+    height: 32,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    backgroundColor: DECK.glass.soft,
+    borderWidth: 1,
+    borderColor: DECK.accent,
+  },
+  referenceText: { color: DECK.accent, fontSize: 12, fontWeight: "700", flexShrink: 1 },
+  referenceClose: { width: 12, height: 12, alignItems: "center", justifyContent: "center" },
+  referenceBarA: {
+    position: "absolute",
+    width: 11,
+    height: 1.5,
+    backgroundColor: DECK.accent,
+    transform: [{ rotate: "45deg" }],
+  },
+  referenceBarB: {
+    position: "absolute",
+    width: 11,
+    height: 1.5,
+    backgroundColor: DECK.accent,
+    transform: [{ rotate: "-45deg" }],
+  },
+
+  devBlock: { gap: 10, paddingTop: 16, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.08)" },
+  devTitle: {
+    color: COLORS.dim,
+    fontSize: 9,
+    fontWeight: "700",
+    letterSpacing: 1.6,
+    textTransform: "uppercase",
+  },
+
+  speedList: { gap: 8 },
+  speedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    minHeight: 54,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    backgroundColor: DECK.glass.key,
+    borderWidth: 1,
+    borderColor: DECK.glass.keyEdge,
+  },
+  speedRowOn: { borderColor: DECK.accent, backgroundColor: "rgba(184,255,74,0.09)" },
+  speedRowValue: { color: COLORS.text, fontSize: 19, fontWeight: "700", minWidth: 40 },
+  speedRowValueOn: { color: DECK.accent },
+  speedRowHint: { color: COLORS.muted, fontSize: 12.5, flexShrink: 1 },
   scoreChip: {
     minWidth: 52,
     height: 48,

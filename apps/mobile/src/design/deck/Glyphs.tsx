@@ -40,33 +40,46 @@ export function PauseGlyph({ size, color }: { size: number; color: string }) {
   );
 }
 
-/** Loop: a rounded rectangle with a corner bitten out and an arrowhead on it. */
-export function LoopGlyph({ size, color }: { size: number; color: string }) {
+/**
+ * Analysis: the two-diamond sparkle.
+ *
+ * A diamond is a four-point star with straight edges, and two of them at different sizes is the
+ * motif this whole category of feature has settled on. Concave points would need a path, which
+ * would need SVG, which this app deliberately does not ship.
+ */
+export function SparkGlyph({ size, color }: { size: number; color: string }) {
+  const diamond = (d: number, left: number, top: number, opacity = 1) => ({
+    position: "absolute" as const,
+    left,
+    top,
+    width: d,
+    height: d,
+    borderRadius: d * 0.16,
+    backgroundColor: color,
+    opacity,
+    transform: [{ rotate: "45deg" }],
+  });
   return (
-    <View style={{ width: size, height: size * 0.78, justifyContent: "center" }}>
-      <View
-        style={{
-          width: size,
-          height: size * 0.62,
-          borderWidth: Math.max(1.5, size * 0.11),
-          borderColor: color,
-          borderRadius: size * 0.28,
-        }}
-      />
-      {/* The arrowhead, sitting on the top edge and pointing the way round. */}
-      <View
-        style={{
-          position: "absolute",
-          right: size * 0.06,
-          top: 0,
-          borderTopWidth: size * 0.2,
-          borderBottomWidth: size * 0.2,
-          borderLeftWidth: size * 0.26,
-          borderTopColor: "transparent",
-          borderBottomColor: "transparent",
-          borderLeftColor: color,
-        }}
-      />
+    <View style={{ width: size, height: size }}>
+      <View style={diamond(size * 0.6, size * 0.04, size * 0.16)} />
+      <View style={diamond(size * 0.3, size * 0.62, size * 0.0, 0.75)} />
+    </View>
+  );
+}
+
+/** Compare: two panels side by side. */
+export function CompareGlyph({ size, color }: { size: number; color: string }) {
+  const panel = {
+    width: size * 0.4,
+    height: size * 0.78,
+    borderWidth: 1.6,
+    borderColor: color,
+    borderRadius: size * 0.12,
+  };
+  return (
+    <View style={[styles.row, { width: size, height: size, gap: size * 0.14, justifyContent: "center" }]}>
+      <View style={panel} />
+      <View style={panel} />
     </View>
   );
 }

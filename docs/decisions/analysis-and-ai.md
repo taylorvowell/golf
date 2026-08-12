@@ -59,3 +59,21 @@ re-analysis.
 the band assumes. Nine rotation checks once shipped reading a quantity that decreases as a golfer
 turns, and one of them scored 100 and looked healthy. Before trusting a new check, print its raw
 value across all fixtures and confirm the number moves the way the band assumes.
+
+### The scorecard has its own route, separate from the artifact
+
+**Decision:** `GET /api/v1/swings/:id/report` serves `coach_report.json` — Stage 8's whole output,
+with no AI in it. Clients fetch it **lazily**, only when someone opens the analysis panel, and a
+404 means `--no-scoring` rather than a failure.
+**Gotchas:** Separate from `/analysis` because the two have different sizes and lifetimes: the
+artifact is megabytes of per-frame geometry the overlay needs immediately, the report is a few
+kilobytes nothing needs until asked for. A client that only wants to *explain* a swing should not
+download every keypoint to do it — and "analysis must be explainable" is a product
+non-negotiable, not a screen. `no-store`, because a re-score rewrites the report in place under
+the same revision.
+**Scope:** Any surface showing the scorecard must print **coverage next to the headline**: `65
+from 41 of 58 checks` and `65 from 6 of 58` are different claims about the same number. The two
+reasons a check did not score stay apart — *skipped for this swing* is about the clip, *deferred*
+is the config refusing to score a metric it does not trust yet, and merging them reports our gap
+as the golfer's.
+

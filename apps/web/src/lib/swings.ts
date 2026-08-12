@@ -1,5 +1,6 @@
 import type {
   Analysis,
+  CoachReport,
   Silhouette,
   SwingSummary,
   SwingViewSummary,
@@ -148,6 +149,18 @@ export async function listSwings(tx: DbTx, userId: string): Promise<SwingSummary
 /** By address — the caller resolves a swing id to a view first (`db/views.ts`). */
 export async function getAnalysis(address: ViewAddress): Promise<Analysis | null> {
   return readArtifact<Analysis>(address, "analysis.json");
+}
+
+/**
+ * The scorecard — Stage 8's whole output, with no AI in it.
+ *
+ * Separate from `analysis.json` deliberately: scoring is a pure function of the artifact plus a
+ * versioned config, so `rescore.py` rewrites this without touching the geometry. Null when the
+ * swing was analysed with `--no-scoring`, which is a real state and not an error — a client shows
+ * the swing and says it has not been scored rather than inventing a number for it.
+ */
+export async function getCoachReport(address: ViewAddress): Promise<CoachReport | null> {
+  return readArtifact<CoachReport>(address, "coach_report.json");
 }
 
 /**

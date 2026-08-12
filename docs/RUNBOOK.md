@@ -121,7 +121,12 @@ From `services/analyzer/`, always via the venv interpreter:
 
 .venv/Scripts/python.exe scripts/rescore.py      # re-run ONLY scoring over every out/
 .venv/Scripts/python.exe scripts/resegment.py    # add ONLY silhouette + butt line
+.venv/Scripts/python.exe scripts/refilmstrip.py  # add ONLY filmstrip.jpg — the scrubber's picture
 ```
+
+`burnin.py` writes `filmstrip.jpg` itself now, so `refilmstrip.py` is only for swings analysed
+before it did. It reads pixels and `playback_window` and runs no stage, so unlike a re-run it
+cannot damage a good club solve. Publish it with `pnpm --filter web db:backfill`.
 
 **Omitting `--club-detector` silently regenerates the club trace on the weaker classical-only
 path and overwrites the better artifact.** This has actually happened. Pass it on every fixture
@@ -658,16 +663,20 @@ device, since every stroke is one — and how many angle fields drew versus abst
 A JS change needs no rebuild: Metro is already serving it, so shake the device (or `adb shell input
 keyevent 82`) → **Reload**.
 
-The swing screen is now full-bleed, so both things this needs are behind chips on the **right-hand
-side, just under the title**: **⧉** opens *Overlays*, **SYNC** opens *Frame sync*. SYNC is
-development-only and is absent from a release build. Both panels slide up over the picture, which
-keeps playing behind them — so reading the instrument does not disturb what it is measuring. Swipe
-a panel down, tap outside it, or press the Android back button to close it.
+The swing screen is full-bleed, so everything lives in panels that slide up over the picture — which
+keeps playing behind them, so reading the instrument does not disturb what it is measuring. Swipe a
+panel down to close it, up to make it taller; tapping outside or the Android back button also
+closes it.
+
+Two chips sit on the **right-hand side, just under the title**: **⧉** opens *Overlays* (the tiles
+that turn each drawing on) and **▯▯** opens *Compare*. The frame-sync instrument is at the **bottom
+of the Metrics panel** and is development-only — it is absent from a release build.
 
 1. Open **SwingSage** → any swing. The skeleton and the club-head trace are on by default.
-2. Tap **SYNC**. Read **Overlay drift** — `100.0% locked · p95 0 · max 0` is the pass. It is scored
-   natively, against the frame actually on the glass.
-3. Read **Trace views** beside it. Close the panel, tap **⧉**, turn the **Club head trace** chip
+2. Tap **METRICS** in the dock and scroll to the bottom. Read **Overlay drift** —
+   `100.0% locked · p95 0 · max 0` is the pass. It is scored natively, against the frame actually
+   on the glass.
+3. Read **Trace views** beside it. Close the panel, tap **⧉**, turn the **Club head trace** tile
    off, close, and read Overlay drift again. **The two drift figures, with the trace on and with it
    off, are the measurement** — they answer whether plain `View`s carry a hundred-plus-segment
    polyline at 60 fps, which is the one open question the overlay step owes a number for.

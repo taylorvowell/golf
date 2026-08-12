@@ -72,11 +72,13 @@ Stages, in execution order, all in `services/analyzer/swingsage/`:
 
 Per-swing output in `out/<stem>/`: `analysis.json`, `coach_report.json`, `silhouette.json`,
 `isolation.json`, `source_timing.json`, `club_only.json`, `normalized.mp4`, `analysis.mp4`,
-`overlay.mp4` (skeleton burned into pixels — the reference render), `contact.jpg`, plus debug
+`overlay.mp4` (skeleton burned into pixels — the reference render), `contact.jpg` (a 6x4 grid with
+the skeleton burned in and frame numbers stamped — a debug sheet), `filmstrip.jpg` (one row of 12
+**clean** frames across `playback_window`, which is what the mobile scrubber draws), plus debug
 sheets.
 
-Two stages can be added to an already-analysed folder without a full re-run: `resegment.py`
-(silhouette + butt line) and `rescore.py` (Stage 8 only).
+Three things can be added to an already-analysed folder without a full re-run: `resegment.py`
+(silhouette + butt line), `rescore.py` (Stage 8 only) and `refilmstrip.py` (`filmstrip.jpg`).
 
 **Operational trap that has bitten before:** re-running `burnin.py` on a fixture without
 `--club-detector runs/clubhead/weights/best.pt` silently regenerates the club trace on the

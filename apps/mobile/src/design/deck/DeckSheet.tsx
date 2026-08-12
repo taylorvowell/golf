@@ -21,8 +21,20 @@ import { DECK } from "./tokens";
  *
  * This is Deck's answer to "where does secondary content live on a screen whose primary content
  * fills the viewport". The swing player is the first case and will not be the last: the picture is
- * the page, so the overlay switches, the swing's numbers and the development instruments cannot be
+ * the page, so the overlay switches, the swing's numbers and the comparison picker cannot be
  * *below* anything — there is no below. They come up over it and go away again.
+ *
+ * ## It has two heights, and your thumb chooses
+ *
+ * A sheet tall enough to hold a scrollable list covers the swing; a sheet short enough to leave the
+ * swing visible cannot hold one. So it has both: it opens **half-height**, drags up to full, drags
+ * back down to half, and drags down again to close. The detents are computed from the content —
+ * a panel with little in it has only one height and simply closes on a downward drag, because
+ * offering an "expand" that reveals nothing is a gesture that appears broken.
+ *
+ * Releasing snaps to whichever detent the throw was *aimed* at, not the one it happened to stop
+ * nearest: the release position is projected forward by the fling velocity first. Without that, a
+ * fast flick that has only travelled 20pt snaps back where it came from and the sheet feels stuck.
  *
  * ## Why a `Modal` rather than an absolutely-positioned view
  *
@@ -45,9 +57,8 @@ import { DECK } from "./tokens";
  * shows you what letting go will do, which is the entire difference between a sheet that feels
  * physical and one that feels like a screen transition.
  *
- * Drag-to-dismiss is `PanResponder`, from React Native itself. `react-native-gesture-handler` is
- * deliberately excluded from autolinking (D47), and the gesture here is one axis with one decision
- * at the end of it.
+ * Drag is `PanResponder`, from React Native itself. `react-native-gesture-handler` is deliberately
+ * excluded from autolinking (D47), and the gesture here is one axis with one decision at the end.
  */
 
 export interface DeckSheetProps {
@@ -57,29 +68,38 @@ export interface DeckSheetProps {
   title?: string;
   /** A short line under the title. For saying what this panel is *for*, not for instructions. */
   subtitle?: string;
+  /** Sits opposite the title, in the drag header. A segmented control, a count, a reset. */
+  accessory?: ReactNode;
   children: ReactNode;
   /**
-   * How much of the screen the panel may take before its content starts scrolling.
+   * How much of the screen the panel may take at full height.
    *
    * Under 1 on purpose: a sheet that reaches the top edge has become a screen, and the strip of
    * picture left showing above it is what tells a golfer they are still inside the swing.
    */
   maxHeightFraction?: number;
+  /** The height it opens at, when its content is tall enough to have two. */
+  restHeightFraction?: number;
+  /** The content scrolls itself — the sheet must not wrap it in a second ScrollView. */
+  scrolls?: boolean;
   testID?: string;
 }
 
-/** How far down you must drag before letting go dismisses instead of springing back. */
-const DISMISS_DISTANCE = 88;
-/** …or how fast you must flick, regardless of distance. A flick is an intention. */
-const DISMISS_VELOCITY = 0.6;
+/** How far past the lowest detent a throw must be aimed before it dismisses instead of snapping. */
+const DISMISS_OVERSHOOT = 70;
+/** How far a fling is projected past where the finger let go. */
+const FLING_PROJECTION_MS = 140;
 
 export function DeckSheet({
   visible,
   onClose,
   title,
   subtitle,
+  accessory,
   children,
-  maxHeightFraction = 0.74,
+  maxHeightFraction = 0.88,
+  restHeightFraction = 0.52,
+  scrolls = true,
   testID,
 }: DeckSheetProps) {
   const insets = useSafeAreaInsets();
@@ -98,20 +118,46 @@ export function DeckSheet({
   /** The panel has finished coming up at least once, so layout must not re-trigger the entrance. */
   const opened = useRef(false);
 
+  /**
+   * Where the panel can rest, as `translateY` offsets. `0` is full height, and the last entry is
+   * where it opens. One entry means the content is short enough that there is nothing to expand to.
+   */
+  const detents = useMemo(() => {
+    const rest = screenHeight * restHeightFraction;
+    // The 32pt margin is what stops a "drag up to reveal 20 more points" detent existing at all.
+    return height > rest + 32 ? [0, height - rest] : [0];
+  }, [height, restHeightFraction, screenHeight]);
+
+  const detentsRef = useRef(detents);
+  detentsRef.current = detents;
+  /** The detent the panel is currently sitting at — a drag is measured from here, not from zero. */
+  const resting = useRef(0);
+
   const settle = useCallback(
-    (to: number, duration: number, easing: (v: number) => number, then?: () => void) => {
-      Animated.timing(translate, { toValue: to, duration, easing, useNativeDriver: true }).start(
-        ({ finished }) => {
-          if (finished) then?.();
-        },
-      );
+    (to: number, velocity = 0) => {
+      resting.current = to;
+      Animated.spring(translate, {
+        toValue: to,
+        velocity,
+        damping: 26,
+        stiffness: 260,
+        mass: 0.9,
+        useNativeDriver: true,
+      }).start();
     },
     [translate],
   );
 
   const slideAway = useCallback(() => {
-    settle(height || screenHeight, 200, Easing.in(Easing.cubic), () => setMounted(false));
-  }, [height, screenHeight, settle]);
+    Animated.timing(translate, {
+      toValue: height || screenHeight,
+      duration: 200,
+      easing: Easing.in(Easing.cubic),
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) setMounted(false);
+    });
+  }, [height, screenHeight, translate]);
 
   useEffect(() => {
     if (visible) {
@@ -122,6 +168,10 @@ export function DeckSheet({
     // `mounted` is read, not depended on: adding it would re-run the exit every time the exit's own
     // completion flipped it, which lands the panel back on screen for a frame.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
+
+  useEffect(() => {
+    if (!visible) opened.current = false;
   }, [visible]);
 
   const onPanelLayout = useCallback(
@@ -135,56 +185,62 @@ export function DeckSheet({
       // tall it turned out to be. Starting from the screen's height makes a short sheet arrive
       // late and fast.
       translate.setValue(h);
-      settle(0, 260, Easing.out(Easing.cubic));
+      const rest = screenHeight * restHeightFraction;
+      settle(h > rest + 32 ? h - rest : 0);
     },
-    [settle, translate],
+    [restHeightFraction, screenHeight, settle, translate],
   );
-
-  useEffect(() => {
-    if (!visible) opened.current = false;
-  }, [visible]);
 
   /**
    * The backdrop reads the panel's position rather than being animated alongside it.
    *
    * That coupling is what makes the drag legible: half a drag is half a backdrop, and letting go
    * from there springs both back together. Two independent timings could not stay in step under a
-   * gesture that can be reversed mid-flight.
+   * gesture that can be reversed mid-flight. It is capped below full so the swing is never wholly
+   * hidden — this panel is about the picture behind it.
    */
   const backdrop = useMemo(
     () =>
       translate.interpolate({
         inputRange: [0, Math.max(1, height || screenHeight)],
-        outputRange: [1, 0],
+        outputRange: [0.72, 0],
         extrapolate: "clamp",
       }),
     [height, screenHeight, translate],
   );
 
-  const closing = useRef(false);
-  closing.current = !visible;
-
   const pan = useMemo(
     () =>
       PanResponder.create({
-        // Only after the finger has committed to a downward move — otherwise the responder steals
+        // Only after the finger has committed to a vertical move — otherwise the responder steals
         // the first touch from the controls sitting inside the sheet's header.
-        onMoveShouldSetPanResponder: (_e, g) => g.dy > 4 && g.dy > Math.abs(g.dx),
+        onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dy) > 4 && Math.abs(g.dy) > Math.abs(g.dx),
         onPanResponderMove: (_e, g) => {
-          // Downward only. Dragging a bottom sheet UP past its own top edge is a gesture with
+          // Never above the top detent. Dragging a sheet past its own full height is a gesture with
           // nothing behind it, and allowing it exposes the gap under the panel.
-          translate.setValue(Math.max(0, g.dy));
+          translate.setValue(Math.max(0, resting.current + g.dy));
         },
         onPanResponderRelease: (_e, g) => {
-          if (g.dy > DISMISS_DISTANCE || g.vy > DISMISS_VELOCITY) onClose();
-          else settle(0, 180, Easing.out(Easing.cubic));
+          const stops = detentsRef.current;
+          const lowest = stops[stops.length - 1];
+          const projected = resting.current + g.dy + g.vy * FLING_PROJECTION_MS;
+          if (projected > lowest + DISMISS_OVERSHOOT) {
+            onClose();
+            return;
+          }
+          const nearest = stops.reduce((a, b) =>
+            Math.abs(b - projected) < Math.abs(a - projected) ? b : a,
+          );
+          settle(nearest, g.vy);
         },
-        onPanResponderTerminate: () => settle(0, 180, Easing.out(Easing.cubic)),
+        onPanResponderTerminate: () => settle(resting.current),
       }),
     [onClose, settle, translate],
   );
 
   if (!mounted) return null;
+
+  const expandable = detents.length > 1;
 
   return (
     <Modal
@@ -212,13 +268,19 @@ export function DeckSheet({
           style={[
             styles.panel,
             {
+              // Padded for the detent, not for the visible height: when the panel is resting low,
+              // its bottom edge is off screen and the content above it must still clear the
+              // gesture bar once it is dragged up.
               maxHeight: screenHeight * maxHeightFraction,
               paddingBottom: 16 + insets.bottom,
               transform: [{ translateY: translate }],
             },
           ]}
         >
-          <View {...pan.panHandlers}>
+          {/* The whole header is the grab area, and it is deliberately tall: this is the only
+              surface the drag can start from, so a thin grip line would make the gesture a
+              matter of aim. */}
+          <View {...pan.panHandlers} style={styles.header}>
             <View style={styles.grip} />
             {title ? (
               <View style={styles.titleRow}>
@@ -226,15 +288,29 @@ export function DeckSheet({
                   <Text style={styles.title}>{title}</Text>
                   {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
                 </View>
+                {accessory}
                 {/* Dragging is not available to a screen reader, and neither is tapping a
-                    backdrop it does not describe. This is the accessible way out. */}
+                    backdrop it does not describe. This is the accessible way out — and, when the
+                    sheet has two heights, the accessible way between them. */}
+                {expandable ? (
+                  <Pressable
+                    testID={testID ? `${testID}-expand` : undefined}
+                    accessibilityRole="button"
+                    accessibilityLabel={resting.current === 0 ? "Collapse" : "Expand"}
+                    hitSlop={12}
+                    onPress={() => settle(resting.current === 0 ? detents[1] : 0)}
+                    style={({ pressed }) => [styles.headerCap, pressed && styles.headerCapPressed]}
+                  >
+                    <View style={styles.expandChevron} />
+                  </Pressable>
+                ) : null}
                 <Pressable
                   testID={testID ? `${testID}-close` : undefined}
                   accessibilityRole="button"
                   accessibilityLabel="Close"
                   hitSlop={12}
                   onPress={onClose}
-                  style={({ pressed }) => [styles.closeCap, pressed && styles.closeCapPressed]}
+                  style={({ pressed }) => [styles.headerCap, pressed && styles.headerCapPressed]}
                 >
                   <View style={styles.closeBarA} />
                   <View style={styles.closeBarB} />
@@ -243,13 +319,17 @@ export function DeckSheet({
             ) : null}
           </View>
 
-          <ScrollView
-            style={styles.scroll}
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-          >
-            {children}
-          </ScrollView>
+          {scrolls ? (
+            <ScrollView
+              style={styles.scroll}
+              contentContainerStyle={styles.scrollContent}
+              showsVerticalScrollIndicator={false}
+            >
+              {children}
+            </ScrollView>
+          ) : (
+            <View style={[styles.scroll, styles.scrollContent]}>{children}</View>
+          )}
         </Animated.View>
       </View>
     </Modal>
@@ -258,7 +338,7 @@ export function DeckSheet({
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  backdropFill: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.55)" },
+  backdropFill: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "#000" },
   panel: {
     position: "absolute",
     left: 0,
@@ -273,6 +353,7 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     boxShadow: DECK.shadow.slab,
   },
+  header: { paddingBottom: 4 },
   grip: {
     alignSelf: "center",
     width: 38,
@@ -280,11 +361,11 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: "rgba(255,255,255,0.22)",
   },
-  titleRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingTop: 14 },
+  titleRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingTop: 14 },
   titleText: { flex: 1, gap: 2 },
   title: { color: DECK.label.onFace, fontSize: 17, fontWeight: "700", letterSpacing: -0.3 },
   subtitle: { color: DECK.label.caption, fontSize: 12, lineHeight: 16 },
-  closeCap: {
+  headerCap: {
     width: 32,
     height: 32,
     borderRadius: DECK.radius.cap,
@@ -294,7 +375,16 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: DECK.glass.keyEdge,
   },
-  closeCapPressed: { opacity: 0.6 },
+  headerCapPressed: { opacity: 0.6 },
+  expandChevron: {
+    width: 9,
+    height: 9,
+    marginTop: 3,
+    borderLeftWidth: 1.8,
+    borderBottomWidth: 1.8,
+    borderColor: DECK.label.caption,
+    transform: [{ rotate: "135deg" }],
+  },
   // An ✕ as two crossed bars — the same "no icon font, no SVG" rule the transport glyphs follow.
   closeBarA: {
     position: "absolute",
@@ -312,8 +402,7 @@ const styles = StyleSheet.create({
     backgroundColor: DECK.label.caption,
     transform: [{ rotate: "-45deg" }],
   },
-  // `flexGrow: 0` so a short sheet hugs its content: without it the ScrollView claims the whole
-  // `maxHeight` and every panel is the same tall box regardless of what is in it.
-  scroll: { flexGrow: 0 },
-  scrollContent: { paddingTop: 16, gap: 14 },
+  // `flexShrink` so the content gives way to `maxHeight` rather than pushing the panel past it.
+  scroll: { flexShrink: 1 },
+  scrollContent: { paddingTop: 14, paddingBottom: 4, gap: 14 },
 });

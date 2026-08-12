@@ -55,3 +55,24 @@ resolves to an object nobody ever published there. `db:claim-fixtures` did exact
 **Scope:** Applies to every future owner change — a coach transfer, an account merge, identity
 linking (D31). §4.3 deletion already sweeps `u/<userId>` for the same reason.
 **See:** ARCHIVE D33, D45, D47.
+
+### `filmstrip.jpg` — the scrubber's picture, one artifact rather than N requests
+
+**Decision:** The analyzer writes `filmstrip.jpg` beside `analysis.json`: **one row of 12 clean
+frames**, centre-cropped to 3:4, sampled evenly across `playback_window`. It joins the `ARTIFACTS`
+manifest, publishes with everything else, and is served by `GET /api/v1/swings/:id/filmstrip`.
+`scripts/refilmstrip.py` adds it to a swing analysed before it existed.
+**Gotchas:** It carries **no metadata**, and that is the contract — the cell count and cell shape
+are constants in `swingsage/render.py`, so a client maps cell `i` onto a frame from the playback
+window it already holds. Changing either without changing every client silently misaligns the
+scrubber. It is emphatically **not `contact.jpg`**, which burns the skeleton in and stamps a frame
+number on every tile: right for reading a swing at a glance in a debug folder, wrong under a
+golfer's thumb, where two renderings of the same pose a centimetre apart would disagree. Cell
+*centres* sit at evenly-spaced frames, so the picture under the playhead can be up to half a cell
+— about 4% of the swing — from the frame the playhead names; it is a preview, and the video above
+it is the authority.
+**Scope:** One ~30–60 KB fetch and one decode, against twelve of each for individual thumbnails.
+This product is used on a course on cellular, and that is the whole argument. A short read repeats
+the previous cell rather than going black — a black gap reads as "the swing is missing here",
+which is a claim about the golfer's video that a failed seek has no business making.
+

@@ -85,15 +85,15 @@ it("disables the transport, and says why, when the swing cannot be stepped", asy
   );
 
   await waitFor(() => expect(getByTestId("play-toggle").props.accessibilityState.disabled).toBe(true));
-  expect(getByTestId("step-fwd-1").props.accessibilityState.disabled).toBe(true);
+  expect(getByTestId("speed-open").props.accessibilityState.disabled).toBe(true);
   expect(getByText(/cannot be stepped frame by frame/i)).toBeTruthy();
 });
 
 it("shows the frame-sync panel in development — the step's own oracle", async () => {
-  // Behind a development-only chip now, because the picture fills the screen and the instrument
-  // must not. It measures against a video that keeps playing behind the panel.
+  // Inside the Metrics panel now, and development only: the picture fills the screen, and the
+  // instrument must not. It measures against a video that keeps playing behind the panel.
   const { getByTestId } = await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} />);
-  await act(async () => void fireEvent.press(getByTestId("sync-open")));
+  await act(async () => void fireEvent.press(getByTestId("metrics-open")));
   await waitFor(() => expect(getByTestId("frame-sync-panel")).toBeTruthy());
 });
 
@@ -132,7 +132,7 @@ it("bounds the transport by the playback window, not by the file", async () => {
   const api = await render(<SwingPlayer swingId="abc" frameCount={40} fps={60} />);
   await act(async () => viewport(api));
   await waitFor(() => expect(api.getByTestId("swing-overlay")).toBeTruthy());
-  await act(async () => void fireEvent.press(api.getByTestId("sync-open")));
+  await act(async () => void fireEvent.press(api.getByTestId("metrics-open")));
   await waitFor(() => expect(api.getByText("4–30")).toBeTruthy());
 });
 
@@ -168,18 +168,16 @@ it("starts the swing playing on load, without being asked", async () => {
   expect(getByTestId("play-toggle").props.accessibilityLabel).toBe("Pause");
 });
 
-it("loops by default — a swing is a second and a half long", async () => {
-  const { getByTestId } = await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} />);
-  await waitFor(() =>
-    expect(getByTestId("loop-toggle").props.accessibilityState.selected).toBe(true),
-  );
-});
-
 it("changes speed natively rather than by dropping frames", async () => {
+  // Speed is chosen rarely and read constantly, so the dock shows the current one and the rest
+  // live behind it. `setPlaybackSpeed` retimes the decoder — a JS timer would drop frames and
+  // show a quarter of the swing while calling it slow motion.
   const { getByTestId } = await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} />);
-  const quarter = getByTestId("speed-0-25");
-  await act(async () => quarter.props.onClick?.() ?? fireEvent.press(quarter));
-  await waitFor(() => expect(quarter.props.accessibilityState.selected).toBe(true));
+  await act(async () => void fireEvent.press(getByTestId("speed-open")));
+  await act(async () => void fireEvent.press(getByTestId("speed-0-25")));
+  await waitFor(() => expect(getByTestId("speed-open").props.accessibilityLabel).toBe(
+    "Playback speed, ¼×",
+  ));
 });
 
 it("draws the back control and the swing's name over the picture", async () => {

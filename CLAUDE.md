@@ -190,6 +190,8 @@ python scripts/rescore.py                 re-run ONLY Stage 8 over every out/<st
                                           is a pure function of analysis.json + the config, so
                                           a scoring change never needs a full re-run
 python scripts/resegment.py               add ONLY the silhouette + butt line to an existing out/
+python scripts/refilmstrip.py             add ONLY filmstrip.jpg (the mobile scrubber's picture)
+                                          to an existing out/ — burnin.py writes it from now on
 
 # verification tooling — run these before trusting anything
 python scripts/checkclub.py out/<stem>    the club drawn over the real frame at each event

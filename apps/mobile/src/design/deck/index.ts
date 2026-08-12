@@ -15,5 +15,13 @@
  */
 export { DeckButton, type DeckButtonProps } from "./DeckButton";
 export { DeckSheet, type DeckSheetProps } from "./DeckSheet";
-export { BarsGlyph, ChevronGlyph, LayersGlyph, LoopGlyph, PauseGlyph, PlayGlyph } from "./Glyphs";
+export {
+  BarsGlyph,
+  ChevronGlyph,
+  CompareGlyph,
+  LayersGlyph,
+  PauseGlyph,
+  PlayGlyph,
+  SparkGlyph,
+} from "./Glyphs";
 export { DECK, type DeckDepth } from "./tokens";

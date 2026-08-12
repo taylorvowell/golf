@@ -90,3 +90,33 @@ it("stays mounted long enough to slide away, then goes", async () => {
   expect(queryByText("Pose coverage 98%")).toBeTruthy();
   await waitFor(() => expect(queryByText("Pose coverage 98%")).toBeNull());
 });
+
+/**
+ * Two heights, and when a second one is offered at all.
+ *
+ * The detents come from the content: a panel with a scrollable list opens half-height and drags up
+ * to full, while a short one has a single height and simply closes on a downward drag. Offering an
+ * "expand" that reveals nothing is a gesture that appears broken, which is why the control is
+ * absent rather than disabled.
+ * */
+
+it("offers a second height only when there is something to expand into", async () => {
+  const short = await render(
+    <DeckSheet testID="sheet" visible onClose={() => {}} title="This swing">
+      {body}
+    </DeckSheet>,
+  );
+  // Nothing has been laid out, so there is one height and no expand control.
+  expect(short.queryByTestId("sheet-expand")).toBeNull();
+});
+
+it("closes on the Android back button whichever height it is resting at", async () => {
+  const onClose = jest.fn();
+  const { getByTestId } = await render(
+    <DeckSheet testID="sheet" visible onClose={onClose} title="Compare">
+      {body}
+    </DeckSheet>,
+  );
+  await act(async () => void getByTestId("sheet").props.onRequestClose());
+  expect(onClose).toHaveBeenCalledTimes(1);
+});

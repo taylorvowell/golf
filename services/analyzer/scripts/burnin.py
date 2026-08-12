@@ -935,7 +935,12 @@ def main() -> int:
     render.burn_in(norm.path, series.frames, out / "overlay.mp4",
                    detected=series.detected, fps=norm.fps)
     render.contact_sheet(norm.path, series.frames, out / "contact.jpg")
-    print(f"rendered   overlay.mp4 + contact.jpg ({time.time() - t:.1f}s)")
+    # The scrubber's picture, and clean — no skeleton, no stamped numbers. Sampled across the
+    # playback window rather than the file, so cell i maps onto a position the transport can
+    # actually reach.
+    _fs = ev["playback_window"] or [0, len(series.frames) - 1]
+    render.filmstrip(norm.path, out / "filmstrip.jpg", first=int(_fs[0]), last=int(_fs[1]))
+    print(f"rendered   overlay.mp4 + contact.jpg + filmstrip.jpg ({time.time() - t:.1f}s)")
 
     # --- Quality report -------------------------------------------------------------
     print(f"\ndetection coverage {q['detection_coverage'] * 100:.1f}%  "

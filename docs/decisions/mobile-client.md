@@ -322,40 +322,82 @@ the frame, which is why the tap toggle is not optional polish.
 **Decision:** Secondary content on a screen whose primary content fills the viewport lives in a
 `DeckSheet`: a panel that slides up from the bottom edge over everything else. It is a React Native
 `Modal` (`transparent`, `statusBarTranslucent`, `animationType="none"`), animating itself, with
-drag-to-dismiss on `PanResponder`. **Closed means unmounted** — the caller passes plain boolean
-state and the sheet outlives `visible` only long enough to slide away.
+drag on `PanResponder`. It has **two detents**: it opens half-height, drags up to full, drags back
+down to half, and drags down again to close. **Closed means unmounted** — the caller passes plain
+boolean state and the sheet outlives `visible` only long enough to slide away.
 **Gotchas:** `Modal` rather than an absolutely-positioned view for three things that are each
 annoying by hand: the Android **hardware back button** (`onRequestClose` is the only supported
 hook), escaping the player's stack of absolutely-positioned chrome layers, and covering the status
 bar so a tall sheet is a page rather than a panel with video peeking over it. `animationType="slide"`
 is not used because it cannot be interrupted and gives no way to couple the backdrop — here the
 backdrop's opacity is **derived from the panel's position**, so half a drag is half a backdrop.
-A sheet that stayed mounted while hidden would keep its controls in the accessibility tree.
+A sheet that stayed mounted while hidden would keep its controls in the accessibility tree. The
+detents are computed from the content: a short panel has one height and simply closes on a downward
+drag, because offering an expand that reveals nothing is a gesture that appears broken. A release
+snaps to whichever detent the throw was *aimed* at — the position is projected forward by the fling
+velocity first — or a fast flick that has travelled 20pt springs back and the sheet feels stuck.
 **Scope:** Gesture handling is `PanResponder` from React Native itself —
 `react-native-gesture-handler` is excluded from autolinking (D47) and this is one axis with one
 decision at the end of it. Glass is two translucent fills plus a lit hairline, **not `expo-blur`**:
 real backdrop blur is a native module, and every design change would then cost a fresh dev-client
 install on the device.
 
-### The timeline strip is the swing's phases, drawn to scale — not a filmstrip
+### The scrubber is the swing's own frames, with its phases drawn to scale under them
 
-**Decision:** The strip above the scrub bar is the five phases of the swing (setup, backswing,
-downswing, through, run-out) cut from the analyzer's events, **each band's width being its
-duration**, tappable to seek to its start. Backswing and downswing carry the same two colours their
-trace is drawn in over the picture. The playhead, its frame badge, the strip and the scrub thumb all
-read one x mapping over one full-width box.
-**Gotchas:** The design this came from shows a wheel of video frames, and **no endpoint serves a
-frame** — `/thumb` serves the single contact image. Seven decorative gradients that look like frames
-would be the analysis engine's own named failure (a confident wrong picture) moved into the UI, so
-it is phases instead. Nothing in the group is padded, gapped or inset: gaps are taken out of a row
-before flex divides what is left, so four 4pt gaps would push every boundary up to 16pt away from
-the frame it marks, and the playhead would cross a phase boundary at a visibly different moment from
-the picture. Bands recede by `scaleY` alone, never uniformly — a uniform scale would change a band's
-width, and the width is the meaning.
-**Scope:** Drawn to scale, backswing against downswing **is tempo**, which is the reason the strip
-earns its space at all; equal-width cells would look identical on a 3:1 swing and a 1:1 one. An
-artifact with no events yields an empty list and the strip hides rather than guessing at where the
-top of the backswing was.
+**Decision:** Above the scrub bar sits `filmstrip.jpg` drawn whole — twelve clean frames across the
+playback window, continuous and draggable — with a 4pt band beneath it showing the five phases
+(setup, backswing, downswing, through, run-out) **at their true durations**. The playhead, its
+frame badge, the strip, the phase band and the scrub thumb all read one x mapping over one
+full-width box, and `useSeekSurface` is the single copy of that arithmetic.
+**Gotchas:** Nothing in the group is padded, gapped or inset. Gaps are taken out of a row before
+flex divides what is left, so four 4pt gaps would push every phase boundary up to 16pt away from
+the frame it marks and the playhead would cross a boundary at a visibly different moment from the
+picture. The film sprockets are therefore drawn *over* the image, not between cells. A swing with
+no `filmstrip.jpg` — analysed before the artifact existed — still scrubs and still shows its
+phases; it simply has no pictures, and nothing here fabricates a frame it could not fetch.
+**Scope:** Drawn to scale, backswing against downswing **is tempo**, which is why the phase band
+survived having pictures put above it. Two swings' phase durations are also the only thing that
+can honestly be compared across two clips, which is what `ComparePanel` reads.
+
+### Compare puts timing and scores side by side, never geometry
+
+**Decision:** The compare panel picks a reference swing — split into *reference swings* (those
+carrying `referenceLabel`) and *my swings* — and then shows the two against each other on score,
+tempo and **phase durations in seconds**.
+**Gotchas:** Two swings filmed on two days from two distances have normalized coordinates that mean
+different things, so drawing one golfer's trace over another's would be a picture the pipeline
+cannot justify — this project's rule against fabricating a measurement, applied to a comparison.
+Durations are in **seconds, not frames**: the clips need not share a frame rate, and "24 frames vs
+31" is meaningless across 60fps and 120fps. There is no seeded catalogue of pros, so the reference
+tab is honest about being whatever reference swings actually exist rather than showing an empty tab
+that looks broken.
+**Scope:** The chosen reference shows as a chip on the picture, not only inside the panel — a
+comparison you have forgotten you set quietly changes what the numbers underneath mean. Side-by-side
+*playback* is dual-view's, and is not what this is.
+
+### The overlay switches are tiles that draw what they turn on
+
+**Decision:** Each overlay is a square tile carrying a **miniature of its actual mark** —
+`OverlayPreview` draws a stick figure, two orientation rods, a shaft and head, a dashed-then-solid
+trace — in the overlay's own colours, straight from `TRACE_COLOR` and `ANGLE_COLORS`.
+**Gotchas:** A preview painted in its own palette would be a picture of a different feature. Angles
+stay a chip row rather than becoming tiles: there are dozens of fields and every one draws the same
+*kind* of mark, so forty previews of an arc would be forty identical pictures — the row gets one
+tile to say what an angle looks like, and the chips choose which.
+**Scope:** A group the artifact cannot support is still hidden, never disabled.
+
+### One speed button, no loop button, no frame stepper
+
+**Decision:** The dock is: a **speed button** showing the current rate and opening a picker; the
+round play cap centred; **Metrics** and **Analysis** to the right. Looping is permanently on and
+has no control. There is no frame-stepper overlay.
+**Gotchas:** Removing the loop button removed the only place its behaviour was observable, so
+`useFramePlayer.test.ts` now carries it — default on, restart-at-window-start without pausing,
+and stop-at-end when off. Without that, a regression would be silent on screen until someone
+noticed the swing had stopped repeating.
+**Scope:** Speed is chosen rarely and read constantly, so the dock spends its width showing the
+current one. It is still applied natively (`setPlaybackSpeed`) — a JS timer would drop frames and
+show a quarter of the swing while calling it slow motion.
 
 ### The picture's box is sized from the swing list, and never resizes
 

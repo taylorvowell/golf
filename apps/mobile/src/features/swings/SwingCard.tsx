@@ -1,9 +1,8 @@
-import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import type { SwingSummary } from "@swingsage/schema/contract";
 
-import { api } from "../../platform/client";
+import { useAuthenticatedImage } from "../../platform/useAuthenticatedImage";
 import { COLORS } from "../../theme";
 
 /**
@@ -80,35 +79,6 @@ export function SwingCard({ swing, onPress }: SwingCardProps) {
       </View>
     </Pressable>
   );
-}
-
-/**
- * Resolve a media path into a source carrying the session, or null until it is ready.
- *
- * Asynchronous because the access token is — `getSession()` may refresh it. Returning null for
- * that first render is why `SwingCard` draws a placeholder rather than an `Image` with no source.
- *
- * **The component this feeds must be `expo-image`, not React Native's `Image`.** RN's `Image`
- * accepts `headers` on its source and silently does not send them on Android — the request arrives
- * unauthenticated, and because a development fallback identity exists it is answered as *that*
- * user rather than refused, so the route returns 404 (no such swing for this owner) instead of
- * 401. The visible symptom is a blank thumbnail with a plausible-looking status and nothing in the
- * client to suggest authentication was ever involved.
- */
-function useAuthenticatedImage(path: string) {
-  const [source, setSource] = useState<{ uri: string; headers: Record<string, string> } | null>(
-    null,
-  );
-  useEffect(() => {
-    let live = true;
-    void api.mediaSource(path).then((s) => {
-      if (live) setSource(s);
-    });
-    return () => {
-      live = false;
-    };
-  }, [path]);
-  return source;
 }
 
 function formatDate(epoch: number): string {

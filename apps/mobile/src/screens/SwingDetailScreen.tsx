@@ -73,6 +73,7 @@ export function SwingDetailScreen({ id }: SwingDetailScreenProps) {
       title={swing.label}
       subtitle={formatDate(swing.createdAt)}
       score={scored ? (swing.overallScore as number) : null}
+      tempoRatio={swing.tempoRatio}
       aspectRatio={aspectRatio}
       onBack={navigation.canGoBack() ? navigation.goBack : undefined}
     >
