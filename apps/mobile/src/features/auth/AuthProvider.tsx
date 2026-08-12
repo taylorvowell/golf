@@ -92,3 +92,19 @@ export async function currentAccessToken(): Promise<string | null> {
   const { data } = await supabase.auth.getSession();
   return data.session?.access_token ?? null;
 }
+
+/**
+ * Run `cb` every time the access token changes under a signed-in session. Returns unsubscribe.
+ *
+ * This exists for sources that CAPTURE a token instead of asking per request — media URLs handed
+ * to a native player or `expo-image`, which fetch bytes themselves. `request()` never needs it;
+ * anything holding a `{ uri, headers }` pair does, because after a background refresh those
+ * headers are a dead credential and the media route answers them as the dev fallback identity:
+ * 404, not 401, on a swing that exists (D48).
+ */
+export function onAccessTokenRefreshed(cb: () => void): () => void {
+  const { data } = supabase.auth.onAuthStateChange((event) => {
+    if (event === "TOKEN_REFRESHED" || event === "SIGNED_IN") cb();
+  });
+  return () => data.subscription.unsubscribe();
+}

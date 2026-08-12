@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { SwingListResponse, SwingSummary } from "@swingsage/schema/contract";
 
 import { ApiClientError } from "../../platform/api";
 import { api } from "../../platform/client";
+import { supabase } from "../auth/supabase";
 
 /**
  * The golfer's swing log.
@@ -31,26 +32,77 @@ export interface SwingsHook {
   refresh: () => void;
 }
 
+/**
+ * The last list the server confirmed, shared by every mount of this hook.
+ *
+ * This is what lets the detail screen open a swing WITHOUT paying a serial round trip first: the
+ * log fetched the list moments ago, the tap that navigated here happened on a row of it, and the
+ * label/fps/frameCount/aspect the player needs are all in that response. Each mount still
+ * revalidates in the background (stale-while-revalidate) — the cache decides what draws first,
+ * never what is true. Cleared on 401 and on sign-out, because a cached list outliving its
+ * session is a leak across the auth boundary.
+ */
+let lastGood: SwingSummary[] | null = null;
+
+/** The auth-boundary hook and the tests' reset seam — never a per-screen convenience. */
+export function clearSwingsCache(): void {
+  lastGood = null;
+}
+
+// Registered once at module scope — the same pattern supabase.ts uses for its AppState hook.
+// SIGNED_OUT fires on explicit sign-out and between two different users' sessions, which is
+// exactly when a seeded list would otherwise draw one golfer's swings for another.
+supabase.auth.onAuthStateChange((event) => {
+  if (event === "SIGNED_OUT") clearSwingsCache();
+});
+
 export function useSwings(): SwingsHook {
-  const [state, setState] = useState<SwingsState>({ kind: "loading" });
+  const [state, setState] = useState<SwingsState>(() =>
+    lastGood ? { kind: "ok", swings: lastGood } : { kind: "loading" },
+  );
   const [refreshing, setRefreshing] = useState(false);
 
+  /** The mount's lifetime, for the fetch that outlives it. Aborting stops the body download and
+   *  the JSON parse — a `live` flag alone only discards the result after paying for it. */
+  const abortRef = useRef<AbortController | null>(null);
+  const liveRef = useRef(true);
+
   const load = useCallback(async (isRefresh: boolean) => {
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     if (isRefresh) setRefreshing(true);
-    else setState({ kind: "loading" });
+    // A seeded mount revalidates silently: blanking a drawn list to say "loading" about data the
+    // screen already has is the flash the refreshing flag exists to prevent.
+    else if (!lastGood) setState({ kind: "loading" });
     try {
-      const body = await api.request<SwingListResponse>("swings");
-      setState({ kind: "ok", swings: body.swings });
+      const body = await api.request<SwingListResponse>("swings", { signal: controller.signal });
+      lastGood = body.swings;
+      if (liveRef.current) setState({ kind: "ok", swings: body.swings });
     } catch (err) {
+      if (!liveRef.current || controller.signal.aborted) return;
       const declined = err instanceof ApiClientError && err.status === 401;
-      setState({ kind: declined ? "signed-out" : "unreachable" });
+      if (declined) {
+        lastGood = null;
+        setState({ kind: "signed-out" });
+      } else if (!lastGood) {
+        // With a confirmed list on hand, a failed revalidate keeps drawing it — stale beats a
+        // network-error screen about data the device demonstrably has. Without one, be honest.
+        setState({ kind: "unreachable" });
+      }
     } finally {
-      if (isRefresh) setRefreshing(false);
+      if (liveRef.current && isRefresh) setRefreshing(false);
     }
   }, []);
 
   useEffect(() => {
+    liveRef.current = true;
     void load(false);
+    return () => {
+      liveRef.current = false;
+      abortRef.current?.abort();
+    };
   }, [load]);
 
   return {
@@ -67,7 +119,8 @@ export function useSwings(): SwingsHook {
  * per-swing endpoint** and inventing one here would be a server change smuggled into a client
  * step. At ten swings the cost is nothing; when the log is long enough for that to matter, the fix
  * is `GET /api/v1/swings/:id` on the contract, which is an additive change (D41) rather than a
- * rewrite of this hook.
+ * rewrite of this hook. The module cache above already makes this instant for any swing reached
+ * from the log.
  */
 export function useSwing(id: string | undefined): { state: SwingsState; swing: SwingSummary | null } {
   const { state } = useSwings();

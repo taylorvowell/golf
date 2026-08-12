@@ -63,6 +63,12 @@ export interface ApiClientOptions {
 const isUpgradeBody = (b: unknown): b is UpgradeRequired =>
   typeof b === "object" && b !== null && (b as ApiError).error === "upgrade_required";
 
+/**
+ * Long enough for a cold LAN fetch of the largest artifact, short enough that "unreachable"
+ * arrives while the golfer is still looking. Overridable per call for anything genuinely slow.
+ */
+const DEFAULT_TIMEOUT_MS = 12_000;
+
 export class ApiClient {
   private readonly baseUrl: string;
   private readonly clientVersion: string;
@@ -99,11 +105,37 @@ export class ApiClient {
     return h;
   }
 
-  async request<T>(path: string, init: RequestInit = {}): Promise<T> {
-    const res = await this.doFetch(this.url(path), {
-      ...init,
-      headers: await this.headers(init.headers),
-    });
+  async request<T>(path: string, init: RequestInit = {}, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<T> {
+    /**
+     * Every request times out. React Native's OkHttp stack ships with NO timeouts — a phone that
+     * half-loses range Wi-Fi leaves fetch neither resolving nor rejecting for minutes, and the
+     * carefully separated `unreachable` states are never reached: the golfer just gets a spinner.
+     * The timeout aborts through the same controller a caller-supplied signal feeds into, so a
+     * screen's own AbortController still cancels early and its AbortError is re-thrown untouched.
+     */
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const external = init.signal;
+    if (external) {
+      if (external.aborted) controller.abort();
+      else external.addEventListener("abort", () => controller.abort(), { once: true });
+    }
+
+    let res: Response;
+    try {
+      res = await this.doFetch(this.url(path), {
+        ...init,
+        signal: controller.signal,
+        headers: await this.headers(init.headers),
+      });
+    } catch (err) {
+      if (controller.signal.aborted && !external?.aborted) {
+        throw new ApiClientError(0, "timeout", `no answer from ${path} within ${timeoutMs}ms`);
+      }
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
 
     if (res.status === 426) {
       const body: unknown = await res.json().catch(() => null);

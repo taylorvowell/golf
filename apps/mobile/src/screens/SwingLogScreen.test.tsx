@@ -1,4 +1,4 @@
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, renderHook, waitFor } from "@testing-library/react-native";
 
 import { ApiClientError } from "../platform/api";
 
@@ -28,6 +28,7 @@ jest.mock("../navigation", () => ({ useAppNavigation: () => ({ navigate: mockNav
 jest.mock("../features/auth/AccountBar", () => ({ AccountBar: () => null }));
 
 import { SwingLogScreen } from "./SwingLogScreen";
+import { clearSwingsCache, useSwings } from "../features/swings/useSwings";
 
 function swing(over: Record<string, unknown> = {}) {
   return {
@@ -55,6 +56,9 @@ function swing(over: Record<string, unknown> = {}) {
 beforeEach(() => {
   mockRequest.mockReset();
   mockNavigate.mockReset();
+  // The list cache is module-level by design (it is what lets the detail screen open without a
+  // serial refetch); tests reset it so each one exercises a cold start unless it says otherwise.
+  clearSwingsCache();
 });
 
 describe("SwingLogScreen", () => {
@@ -72,6 +76,25 @@ describe("SwingLogScreen", () => {
     await waitFor(() => expect(getByText("Cannot reach SwingSage")).toBeTruthy());
     expect(queryByText("No swings yet")).toBeNull();
     expect(getByTestId("swing-log-retry")).toBeTruthy();
+  });
+
+  it("keeps a confirmed list when a re-fetch fails", async () => {
+    // The failure invariant above is about a log that has NOTHING — a log holding real,
+    // recently-confirmed swings keeps drawing them through a failed re-fetch, because stale truth
+    // beats a network-error screen about data the device demonstrably has. Pinned at the hook:
+    // the same `lastGood` retention is what lets the detail screen open a swing without a serial
+    // refetch. (jest-expo's RCTRefreshControl mock strips testID, so the pull gesture itself is
+    // not reachable here — the hook's refresh() is the same code path.)
+    mockRequest.mockResolvedValue({ swings: [swing()] });
+    const { result } = await renderHook(() => useSwings());
+    await waitFor(() => expect(result.current.state.kind).toBe("ok"));
+
+    mockRequest.mockRejectedValue(new TypeError("Network request failed"));
+    await act(async () => {
+      result.current.refresh();
+    });
+    expect(result.current.state).toEqual({ kind: "ok", swings: [swing()] });
+    expect(result.current.refreshing).toBe(false);
   });
 
   it("distinguishes a declined session from an unreachable server", async () => {

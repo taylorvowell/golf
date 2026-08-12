@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { SwingSummary, SwingViewSummary } from "@swingsage/schema/contract";
 
 import { FrameClockView } from "../../../modules/frame-clock/src";
-import { api } from "../../platform/client";
+import { useAuthenticatedImage } from "../../platform/useAuthenticatedImage";
 import { ChevronGlyph, CompareGlyph, DECK, DeckSheet, LayersGlyph } from "../../design/deck";
 import { COLORS } from "../../theme";
 import { AnalysisPanel } from "./AnalysisPanel";
@@ -630,31 +630,19 @@ function StagePlaceholder({ visible }: { visible: boolean }) {
 /**
  * The video URL together with the headers that authorize it.
  *
- * Asynchronous because the access token is — supabase-js refreshes in the background, so a token
- * captured at construction is stale by the first long session. Null until it resolves, which is
- * why the stage shows a spinner rather than mounting a player with an unauthenticated source: the
- * media route answers an unauthenticated request as the development fallback identity and returns
- * **404, not 401**, so the failure would read as a swing that does not exist (D48, D50).
+ * Delegates to `useAuthenticatedImage` — one home for the resolve-and-refresh discipline — because
+ * the video source has exactly the same failure mode as the thumbnails: a captured token that
+ * outlives a background refresh is answered as the dev fallback identity, **404, not 401**, on a
+ * swing that exists (D48, D50). Null until it resolves, which is why the stage shows a spinner
+ * rather than mounting a player with an unauthenticated source. When the headers change,
+ * `FrameClockView` re-applies them; the header-only native path keeps that from restarting
+ * playback.
  */
 function useMediaSource(swingId: string, view?: SwingViewSummary["view"] | null) {
-  const [source, setSource] = useState<{ uri: string; headers: Record<string, string> } | null>(
-    null,
-  );
-
-  useEffect(() => {
-    let live = true;
-    const path = view
-      ? `swings/${swingId}/video?view=${encodeURIComponent(view)}`
-      : `swings/${swingId}/video`;
-    void api.mediaSource(path).then((s) => {
-      if (live) setSource(s);
-    });
-    return () => {
-      live = false;
-    };
-  }, [swingId, view]);
-
-  return source;
+  const path = view
+    ? `swings/${swingId}/video?view=${encodeURIComponent(view)}`
+    : `swings/${swingId}/video`;
+  return useAuthenticatedImage(path);
 }
 
 const styles = StyleSheet.create({

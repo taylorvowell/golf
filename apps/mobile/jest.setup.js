@@ -15,6 +15,16 @@ process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID = "test-web-client-id.apps.googleus
 process.env.EXPO_PUBLIC_API_BASE_URL = "http://api.test.invalid";
 
 /**
+ * AsyncStorage is a native module, and `src/features/auth/supabase.ts` reaches it at *import* —
+ * so any file whose import graph touches the auth layer (the media-source hook does, for its
+ * token-refresh subscription) fails to load with `NativeModule: AsyncStorage is null` before a
+ * single test runs. The package ships an official in-memory mock for exactly this.
+ */
+jest.mock("@react-native-async-storage/async-storage", () =>
+  require("@react-native-async-storage/async-storage/jest/async-storage-mock"),
+);
+
+/**
  * Google Sign-In is a native module, so importing it under jest throws
  * `TurboModuleRegistry.getEnforcing('RNGoogleSignin')` before a single line of our code runs.
  *

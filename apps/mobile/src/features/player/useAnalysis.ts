@@ -45,6 +45,10 @@ export function useAnalysis(swingId: string | undefined, view?: string | null): 
       return;
     }
     let live = true;
+    // Aborted on unmount, not merely ignored: this route serves the whole-clip artifact — the
+    // largest payload the app moves — and a `live` flag alone lets a popped screen keep streaming
+    // it and then JSON-parse all of it on the JS thread, right through the pop transition.
+    const controller = new AbortController();
     setState({ kind: "loading" });
 
     const path = view
@@ -52,7 +56,7 @@ export function useAnalysis(swingId: string | undefined, view?: string | null): 
       : `swings/${swingId}/analysis`;
 
     void api
-      .request<Analysis>(path)
+      .request<Analysis>(path, { signal: controller.signal })
       .then((analysis) => {
         if (live) setState({ kind: "ok", analysis });
       })
@@ -66,6 +70,7 @@ export function useAnalysis(swingId: string | undefined, view?: string | null): 
 
     return () => {
       live = false;
+      controller.abort();
     };
   }, [swingId, view, attempt]);
 

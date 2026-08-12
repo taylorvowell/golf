@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AppState } from "react-native";
 
 import type {
   FrameClockHandle,
@@ -266,6 +267,33 @@ export function useFramePlayer(bounds: Extent): FramePlayer {
     else play();
   }, [pause, play]);
 
+  /**
+   * Nothing plays while the app is backgrounded.
+   *
+   * Media3 leaves player lifecycle to the app — `playWhenReady` survives the activity stopping —
+   * and this transport's end-of-window looping runs FROM JS on frame events, which stop when the
+   * surface goes away. Left alone, home-button-mid-playback is a decoder running headless for
+   * nothing while `playing` stays true against a picture that has run past the window. Pausing
+   * here keeps the state machine truthful; a swing that was playing resumes on return, because
+   * the golfer did not press pause and the loop starting again is what "nothing happened" looks
+   * like.
+   */
+  const resumeOnActive = useRef(false);
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (next) => {
+      if (next === "active") {
+        if (resumeOnActive.current) {
+          resumeOnActive.current = false;
+          play();
+        }
+      } else if (playingRef.current) {
+        resumeOnActive.current = true;
+        pause();
+      }
+    });
+    return () => sub.remove();
+  }, [pause, play]);
+
   const setLooping = useCallback((on: boolean) => setLoopingState(on), []);
 
   const setSpeed = useCallback((next: number) => {
@@ -353,6 +381,10 @@ export function useFramePlayer(bounds: Extent): FramePlayer {
 
       let seed = 20260812;
       for (let i = 0; i < count; i++) {
+        // The surface is gone — the ref is nulled on unmount — so every remaining seek would
+        // no-op and the sweep would sit out its full timeout per iteration: a 250-seek run
+        // abandoned by a back-press is otherwise ~6 minutes of dead timers holding this closure.
+        if (!ref.current) return;
         seed = (seed * 1103515245 + 12345) & 0x7fffffff;
         const wanted = first + (seed % (span + 1));
 

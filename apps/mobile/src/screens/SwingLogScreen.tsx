@@ -56,6 +56,7 @@ export function SwingLogScreen() {
           // from the `loading` state above.
           refreshControl={
             <RefreshControl
+              testID="swing-log-refresh"
               refreshing={refreshing}
               onRefresh={refresh}
               tintColor={COLORS.muted}

@@ -7,7 +7,7 @@
 |---|---|---|---|---|---|
 | 0 | Re-baseline against the moving tree | complete | 2026-08-12 | 2026-08-12 | typecheck+239 tests green; bundle 2.7 MB; device numbers pending (phone offline) |
 | 1 | Hot-path render hygiene | complete | 2026-08-12 | 2026-08-12 | all five fixes landed; checkoverlay counts identical on all 10 fixtures (461/400 at pro_3 impact) |
-| 2 | Lifecycle & network (JS) | pending | | | |
+| 2 | Lifecycle & network (JS) | complete | 2026-08-12 | 2026-08-12 | +1 test (SWR keeps-list invariant); AsyncStorage jest mock added; decision logged in mobile-client.md |
 | 3 | frame-clock native fixes | pending | | | dev-client rebuild |
 | 4 | Shell, startup & native config | pending | | | ONE prebuild --clean covers all |
 | 5 | Contract & parity | pending | | | touches schema + web |

@@ -58,11 +58,13 @@ export function useCorrections(swingId: string | undefined, view?: string | null
       return;
     }
     let live = true;
+    const controller = new AbortController();
     const q = view ? `?view=${encodeURIComponent(view)}` : "";
+    const init = { signal: controller.signal };
 
     void Promise.all([
-      api.request<StagesResponse>(`swings/${swingId}/stages${q}`).catch(() => null),
-      api.request<MarkersResponse>(`swings/${swingId}/markers${q}`).catch(() => null),
+      api.request<StagesResponse>(`swings/${swingId}/stages${q}`, init).catch(() => null),
+      api.request<MarkersResponse>(`swings/${swingId}/markers${q}`, init).catch(() => null),
     ]).then(([s, m]) => {
       if (!live) return;
 
@@ -87,6 +89,7 @@ export function useCorrections(swingId: string | undefined, view?: string | null
 
     return () => {
       live = false;
+      controller.abort();
     };
   }, [swingId, view]);
 

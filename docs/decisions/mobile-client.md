@@ -406,6 +406,26 @@ stop-at-end when off.
 **Scope:** Speed is still applied natively (`setPlaybackSpeed`) — a JS timer would drop frames and
 show a tenth of the swing while calling it slow motion.
 
+## Data and networking
+
+### Server state draws stale-while-revalidate; every request times out; media auth re-resolves
+
+**Decision:** The swing list keeps a module-level cache of the last server-confirmed response:
+a mount seeds from it synchronously and revalidates in the background, which is what lets the
+detail screen open a swing without a serial list refetch ahead of the video/analysis requests.
+The cache never decides truth — a 401 clears it, sign-out clears it (auth boundary), and a failed
+revalidate keeps drawing the confirmed list rather than a network-error screen about data the
+device has. Every `ApiClient.request` carries a default **12 s AbortController timeout** (RN's
+OkHttp ships none) mapped to a typed `timeout` error that renders as `unreachable`; fetch hooks
+pass abort signals so a popped screen stops downloading and parsing. Captured media credentials
+(`useAuthenticatedImage`, the player's video source) re-resolve on `TOKEN_REFRESHED`/`SIGNED_IN`,
+because a `{uri, headers}` pair is a captured token and the media route answers a dead one 404,
+not 401 (D48). Playback pauses on AppState leaving `active` and resumes on return if it was
+playing.
+**Gotchas:** `clearSwingsCache()` is the auth-boundary/test seam — never a per-screen
+convenience. The native header-only re-apply in `frame-clock` is what keeps a token rotation
+from restarting playback; without it the refreshed headers prop re-prepares the source.
+
 ## Standards
 
 ### `.claude/rules/react-native.md` is the mobile client's binding rulebook
