@@ -499,7 +499,11 @@ D34–D39 carry the reasoning; this is the standing summary.
 | Artifact parse on device | 13.7 MB `analysis.json` parses in **199 ms** | — |
 | Slow-motion playback | `setPlaybackSpeed`; 240 fps at 0.25× is a true 60 fps on screen | `frame-clock` |
 
-**Two modules are load-bearing and must survive the spike's deletion:**
+The harness that produced these numbers was **deleted on 2026-08-11 (D44)**. The numbers stand;
+the instruments do not, and a repeat measurement is rebuilt against the real player rather than
+resurrected.
+
+**Two modules survived that deletion because they are load-bearing:**
 
 - **`modules/frame-clock`** — Media3 `VideoFrameMetadataListener`. `mobile-player` needs the same
   frame callback, and no Expo/RN video component surfaces one.
@@ -514,7 +518,7 @@ D34–D39 carry the reasoning; this is the standing summary.
 |---|---|
 | `react-native-vision-camera` v5 for high speed | Accepted 120/240 and **silently delivered 60** |
 | CameraX 1.5 high-speed | Refuses — gates on `CamcorderProfile`, which this device leaves empty |
-| Skia for the overlay | Unnecessary. Plain rotated `View`s hit 99.2%; the retest `Skeleton.tsx` warned about is cancelled |
+| Skia for the overlay | Unnecessary. Plain rotated `View`s drawing 49 keypoints hit 99.2%, so the Skia retest is cancelled |
 | React state as the overlay paint path | Not the bottleneck — removing it entirely scored no better (99.0%) |
 
 ### Known limits and open items
@@ -527,9 +531,10 @@ D34–D39 carry the reasoning; this is the standing summary.
   or the stop edge, not a rate cap. Needs one look before `in-app-capture` relies on an exact rate.
 - **Scrubbing is unmeasured.** Four instrument revisions could not measure it honestly; a seeked
   frame is displayed on arrival so there is **no lead** on that path, unlike playback's 49 ms. Any
-  scrub design must draw for a target it already knows. Verification belongs to
-  `scripts/measure_overlay.py`, which compares the drawn marker and the burned-in bar within one
-  screenshot.
+  scrub design must draw for a target it already knows. The instrument that was to verify it
+  (`measure_overlay.py`, comparing the drawn marker and the burned-in bar within one screenshot)
+  went with the harness in D44 — the measurement is now `mobile-player`'s to make against the
+  real player, and it is an open item, not a solved one.
 - **Transfer, not parsing, is the artifact problem** — 13.7 MB took 2781 ms over LAN. A lean
   per-view API payload is a step 07 input.
 - **iOS is entirely unmeasured** — no Mac, no device. Android leads by D31's amendment.
@@ -543,15 +548,20 @@ D34–D39 carry the reasoning; this is the standing summary.
 Stated as fact, with no implied ordering or plan. See
 [`PRODUCT-COVERAGE.md`](PRODUCT-COVERAGE.md) for this measured against the product target.
 
-- **No mobile app.** The only client is a desktop-oriented Next.js web app.
+- **No mobile app a golfer could use.** An Expo/RN **Android** client exists and is installed on
+  the S25+, but it is sign-in plus a placeholder home screen — no player, no capture, no swing
+  list, and no iOS build has ever been compiled. The only client that shows a swing is the
+  desktop-oriented Next.js web app.
 - **No capture of any kind.** No in-app recording, no camera code, no multi-device sync.
 - **No upload flow.** Analysis is started by hand (`burnin.py`) or via the web app's re-analyze
   button on an already-indexed swing. There is no queue beyond the DB-backed reanalyze job.
 - **No AI anywhere.** No provider abstraction, no Claude integration, no AI-generated
   narrative, no AI coach chat — the coach text is deterministic Stage 8 output.
-- **No auth.** One seeded admin user owns every swing; `users.email` is nullable and no
-  provider is wired. The schema carries real `user_id` FKs throughout, so auth is a data
-  change, not a schema change.
+- **Auth is one provider deep.** Google native sign-in works on Android and the server accepts
+  that session as a bearer token against forced RLS (D42, D43) — verified on the phone. Phone
+  OTP, Sign in with Apple, account deletion and identity linking are **not** built, and the
+  `DEV_USER_EMAIL` development identity still exists because deleting it before phone sign-in
+  lands would leave no way in. The ten local fixtures belong to that identity, not to a person.
 - **No roles, no coach features, no messaging, no notifications.**
 - **No subscriptions, entitlements, or payments.**
 - **No drill library, no trends/history views, no goals, no equipment inventory.**

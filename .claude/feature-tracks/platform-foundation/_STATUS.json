@@ -3,7 +3,7 @@
   "featureName": "platform-foundation",
   "currentStep": "04",
   "phase": "Platform Foundation",
-  "lastUpdated": "2026-08-11T23:40:00Z",
+  "lastUpdated": "2026-08-12T00:44:00Z",
   "steps": {
     "01": {
       "status": "complete",
@@ -22,7 +22,7 @@
     "04": {
       "status": "in-progress",
       "startedAt": "2026-08-11T01:20:00Z",
-      "note": "D43 (2026-08-11): Google native sign-in is live on Android and the server accepts a native session as a bearer token; web tsc/lint clean, 157 vitest, 84 jest, 100 schema vitest, Android assembleDebug SUCCESSFUL with RNGoogleSigninPackage linked, and a real Supabase session proven end-to-end against the running server (valid token 200, garbage token 401 rather than the dev fallback, new account sees 0 swings). Two traps found by inspection: the DEV_USER_EMAIL fallback would have answered the phone's requests regardless of its token, and the development identity squatted Taylor's real address against a UNIQUE users.email so the first real Google sign-in would have raised a unique violation. Still open: on-device verification (phone not reachable - wireless debugging off; procedure in RUNBOOK section 6), phone OTP (needs the local Supabase stack), Apple ($99 + hardware), real SMS (A2P 10DLC), account deletion, identity linking, and the deletion of email OTP / seeded admin / DEV_USER_EMAIL which D31 gates on phone also being live."
+      "note": "D43 (2026-08-11): Google native sign-in is live on Android and the server accepts a native session as a bearer token; web tsc/lint clean, 157 vitest, 84 jest, 100 schema vitest, Android assembleDebug SUCCESSFUL with RNGoogleSigninPackage linked, and a real Supabase session proven end-to-end against the running server (valid token 200, garbage token 401 rather than the dev fallback, new account sees 0 swings). Two traps found by inspection: the DEV_USER_EMAIL fallback would have answered the phone's requests regardless of its token, and the development identity squatted Taylor's real address against a UNIQUE users.email so the first real Google sign-in would have raised a unique violation. Still open: on-device verification (phone not reachable - wireless debugging off; procedure in RUNBOOK section 6), phone OTP (needs the local Supabase stack), Apple ($99 + hardware), real SMS (A2P 10DLC), account deletion, identity linking, and the deletion of email OTP / seeded admin / DEV_USER_EMAIL which D31 gates on phone also being live. | D44 (2026-08-12): on-device verification DONE - Google sign-in works on the S25+, session survives restart, new account sees 0 swings. The screen behind sign-in was the step 02 probe harness; it is deleted (src/spike/, six probe scripts, the synthetic clip, ServerCheck, expo-asset, the :8790 fixture server) and replaced by src/screens/HomeScreen.tsx, which distinguishes 'no swings' from 'could not ask'. modules/frame-clock and modules/high-speed-camera kept and now consumer-less by design. Cost named: measure_overlay.py is gone, so scrubbing stays unmeasured and moves to mobile-player. Verified: web tsc/lint, 157 vitest, mobile tsc, 34 jest, Android assembleDebug SUCCESSFUL + installed, served bundle has zero spike strings. Step stays open on: package still com.swingsage.spike (needs one Google Cloud Console visit to add an OAuth client for the new name before renaming), phone OTP, Apple, account deletion, identity linking, and deleting DEV_USER_EMAIL."
     },
     "05": {
       "status": "not-started"
@@ -30,7 +30,7 @@
     "06": {
       "status": "complete",
       "completedAt": "2026-08-11T03:35:00Z",
-      "note": "Shipped in two halves by D28: the additive equipment/session/organization model (migration 0005), then the §7.1 multi-view restructure and uuid swing identity (migration 0006, D30). All ten analysed fixtures survived with their scores; verified by src/db/multiView.test.ts and the Playwright end-to-end path."
+      "note": "Shipped in two halves by D28: the additive equipment/session/organization model (migration 0005), then the \u00a77.1 multi-view restructure and uuid swing identity (migration 0006, D30). All ten analysed fixtures survived with their scores; verified by src/db/multiView.test.ts and the Playwright end-to-end path."
     },
     "07": {
       "status": "complete",

@@ -57,13 +57,12 @@ function envKeys(relPath, keys) {
 const lines = [];
 const say = (s) => lines.push(s);
 
-const [devices, docker, lanIp, web, metro, fixtureSrv] = await Promise.all([
+const [devices, docker, lanIp, web, metro] = await Promise.all([
   run("adb", ["devices", "-l"]),
   run("docker", ["ps", "--format", "{{.Names}} {{.Status}}"]),
   run("node", ["-e", "const n=require('os').networkInterfaces();for(const a of Object.values(n).flat())if(a&&a.family==='IPv4'&&!a.internal&&a.address.startsWith('10.'))console.log(a.address)"]),
   portOpen("127.0.0.1", 3000),
   portOpen("127.0.0.1", 8081),
-  portOpen("127.0.0.1", 8790),
 ]);
 
 say("## Running system (scripts/env-probe.mjs)");
@@ -93,7 +92,7 @@ if (online.length) {
 
 // --- machine + services ------------------------------------------------------------------
 say(`- this PC on the LAN: ${lanIp || "no 10.x address found"} (phones reach the API here, never localhost)`);
-say(`- next dev :3000 ${web ? "UP" : "down"}   metro :8081 ${metro ? "UP" : "down"}   fixture server :8790 ${fixtureSrv ? "UP" : "down"}`);
+say(`- next dev :3000 ${web ? "UP" : "down"}   metro :8081 ${metro ? "UP" : "down"}`);
 
 const containers = (docker ?? "").split("\n").filter((l) => l.toLowerCase().includes("golf"));
 say(`- docker: ${containers.length ? containers.join("; ") : "no golf containers running (`docker compose up -d`)"}`);

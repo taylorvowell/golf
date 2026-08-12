@@ -8,8 +8,8 @@ import UpgradeRequiredScreen from "./UpgradeRequiredScreen";
  * code, and the only part of it a golfer ever experiences.
  *
  * `render`/`fireEvent` are awaited: @testing-library/react-native v14 made both async, and
- * destructuring the un-awaited Promise silently yields `undefined` for every query — see
- * `spike/ProbeCard.test.tsx` for the full account of that trap.
+ * destructuring the un-awaited Promise silently yields `undefined` for every query. The symptom is
+ * a suite that passes while asserting nothing, so it is worth restating in every file that renders.
  */
 
 const detail: UpgradeRequired = {

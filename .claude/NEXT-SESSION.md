@@ -1,95 +1,83 @@
 # Where the build is, and what to do next
 
-Written 2026-08-11 to end a long session cleanly. Read this, then
-[`.claude/ROADMAP.md`](ROADMAP.md) for the macro picture.
+Written 2026-08-11. Read this, then [`.claude/ROADMAP.md`](ROADMAP.md) for the macro picture and
+[`docs/CURRENT-STATE.md`](../docs/CURRENT-STATE.md) for what actually exists.
 
-## Spine track: `platform-foundation` — 5 of 10 steps complete
+## Spine track: `platform-foundation` — 7 of 10 steps complete
 
 | Step | State | Notes |
 |---|---|---|
 | 01 Architecture Decisions | ✅ | |
-| **02 Mobile Client Spike** | ✅ **closed 2026-08-11** | Every probe measured on a Galaxy S25+. D34–D40. |
-| 03 Supabase Migration | 🔄 | Schema + 11 RLS tests shipped. Open only because D10 wants a project *per environment* and one exists. |
-| 04 Passwordless Auth | 🔄 | Email OTP works. Deferred by D27; provider set changed to phone/Google/Apple by **D31**. Known gap: RLS inert because the app connects as superuser (**D26**). |
+| 02 Mobile Client Spike | ✅ | Every probe measured on a Galaxy S25+. D34–D40. **Harness deleted 2026-08-11 (D44)** — the modules survive, the instruments do not. |
+| 03 Supabase Migration | ✅ | App connects as a non-superuser; RLS is real, not decorative (D42). |
+| **04 Passwordless Auth** | 🔄 **← CURRENT** | Google native sign-in **verified on the phone** (D43). Blocked from closing by Apple ($99 + hardware), phone OTP (local Supabase stack), account deletion and identity linking. |
 | 05 Roles/Onboarding/Profiles | ⬜ | Constrained by **D32** — one identity, onboarding forks, not auth. |
 | 06 Swing/Session/Equipment | ✅ | A swing owns views; identity is a uuid (D30). |
-| **07 API Contract + Shared Schema** | ⬜ | **← NEXT** |
+| 07 API Contract + Shared Schema | ✅ | One schema generates both clients; `/api/v1/`; 426 upgrade path (D41). |
 | 08 Entitlement Engine | ⬜ | |
 | 09 Media Storage | ✅ | Media addressed by identity, not folder name (D33). |
 | 10 Environments + Release | ⬜ | |
 
-## Next step: 07 — API Contract and Shared Schema
+## What runs right now
 
-**Why it is next, and why it is app work rather than web work.** A native app cannot be
-force-updated. `analysis.json` is at `schema_version: 9` — nine contract changes that were free
-because the web client shipped in the same commit; every one would have been an outage on a store
-build. Step 07's own Verification runs `pnpm --filter mobile exec tsc --noEmit`, and it generates
-the types `apps/mobile` will import. Step 02's progress note already says hand-writing those now
-"would only create the duplicate that step deletes."
+Sign in with Google on the S25+ → **Your swings** → `No swings yet`. That is the whole mobile app,
+and it is honest about being that. The web player at `127.0.0.1:3000` is still the only surface
+that renders a swing.
 
-Two measurements from this session feed directly into it:
+## Next: 05 — Roles, Onboarding, and Profiles
 
-- **`analysis.json` is 2.8–13.7 MB.** Parsing is cheap (199 ms on device); **transfer is not**
-  (2781 ms over LAN for 13.7 MB). Pose frames dominate. The API likely needs a lean per-view
-  payload, and that is a schema decision to make *before* the schema is authored.
-- **Supabase Free caps uploads at 50 MB/file**, below a 270–330 MB phone video. Relevant to
-  `media-pipeline`, not 07, but it is the same class of constraint.
+04 cannot close without Apple hardware and a local Supabase stack, and neither blocks 05. 05 is
+also the first step that needs a screen a golfer navigates *to*, which is the natural point to
+stop placeholdering the mobile shell.
 
-Start with: `/build` (the orchestrator resolves the spine track automatically).
+Before starting it, decide whether `mobile-app-shell` should take the spine flag: 05's onboarding
+is mobile UI, and building it inside a single placeholder screen would build the navigation
+problem twice.
 
-## What was proven on the phone, and what must survive
+## One thing waiting on Taylor
 
-Full detail in [`docs/CURRENT-STATE.md`](../docs/CURRENT-STATE.md) §11b. Headlines:
+**The Android package is `com.swingsage.spike`** and should be `com.swingsage.app` — permanent
+from the first store upload, and visible in the Play Store URL forever. It was not renamed with
+the rest of the spike because Google binds an OAuth client to one *package + SHA-1* pair, so
+renaming first breaks the sign-in verified hours earlier. Needs one Google Cloud Console visit to
+add a second Android client (free, additive); the rename is a one-line change after that. D44.
 
-| | Result |
-|---|---|
-| Overlay locked to the presented frame | **99.2% exact**, ~49 ms draw budget |
-| Frame-exact seeking | **100% exact** with target `frame / fps` |
-| Seeking over HTTP | identical to bundled — network adds **zero** error |
-| High-frame-rate capture | **1080p @ 231 fps** |
-
-**Two modules are load-bearing and must NOT be deleted with the spike:**
-
-- `apps/mobile/modules/frame-clock` — no Expo/RN video component surfaces a frame callback.
-- `apps/mobile/modules/high-speed-camera` — Camera2 constrained high-speed, on the **deprecated**
-  overload. "Fixing" that deprecation removes 240 fps with no error to explain it.
-
-**Two traps worth re-reading before touching mobile video:**
+## Traps worth re-reading before touching mobile
 
 1. **Never port the web player's `(frame + 0.5) / fps` seek rule to Android.** media3 resolves
    seeks *forward* to the next boundary; HTML video seeks to the frame *containing* the time. The
    conventions are opposite and the web rule costs exactly one frame on every seek (D40).
-2. **A measurement harness that can fail silently is not a harness.** An async probe that threw
-   with no `try`/`catch` left its button dead and nothing logged — indistinguishable from never
-   having been tapped. It cost a round three separate times.
+2. **Do not "fix" the deprecated `createConstrainedHighSpeedCaptureSession` overload** in
+   `modules/high-speed-camera`. The modern `SessionConfiguration` API is silently swallowed on
+   this device — no callback, no error, no 240 fps.
+3. **`modules/frame-clock` and `modules/high-speed-camera` have no consumer in the tree** since
+   D44 and will read as dead code to any sweep. They are step 02's actual deliverable. Do not
+   delete them.
+4. **Metro must not be backgrounded with a shell `&`** in an interactive terminal — every instance
+   started that way became a zombie whose socket stayed `LISTENING` while `127.0.0.1` returned
+   `000`, which looks exactly like a firewall block.
+5. **`pnpm install` fails with `ERR_PNPM_ENOENT` while Metro or `pnpm dev` is running** — they hold
+   files in the hoisted tree. Stop both, install, restart. `pnpm install --force` repairs a tree
+   left half-written by the failure.
 
 ## Running it again
 
 ```bash
-# web + db
 docker compose up -d
 pnpm --filter web db:migrate && pnpm --filter web db:backfill
 pnpm dev                       # http://127.0.0.1:3000, or http://<LAN-IP>:3000 from the phone
 
-# mobile spike (still installed as com.swingsage.spike)
-cd apps/mobile && npx expo start          # keep it in the FOREGROUND — see below
+cd apps/mobile && npx expo start          # keep it in the FOREGROUND
 ANDROID_SDK_ROOT="C:\Users\taylo\AppData\Local\Android\Sdk" npx expo run:android   # native changes only
-node scripts/pull-probe-results.mjs       # read probe results out of logcat
 ```
-
-**Metro must not be backgrounded with a shell `&`.** Every instance started that way became a
-zombie — the socket stayed `LISTENING` while even `127.0.0.1` returned `000` — which looked exactly
-like a firewall block and cost most of an afternoon. Run it in its own terminal.
 
 `ANDROID_SDK_ROOT` still needs overriding per-invocation until the Windows user variable is fixed
 (its value contains its own name). See [`docs/RUNBOOK.md`](../docs/RUNBOOK.md) §6.
 
 ## Open items, named rather than buried
 
-- **Scrubbing is unmeasured** on mobile. Four instrument revisions could not measure it honestly;
-  a seeked frame is displayed on arrival so there is no lead on that path. Reassigned to
-  `apps/mobile/scripts/measure_overlay.py`, which compares the drawn marker and the burned-in bar
-  inside one screenshot.
+- **Scrubbing is unmeasured** on mobile, and the instrument assigned to measure it went with the
+  spike (D44). Rebuilt against the real player in `mobile-player`, not resurrected.
 - **231 fps against a requested 240** is 3.6% short — likely encoder ramp or the stop edge, not a
   rate cap. One look before `in-app-capture` relies on an exact rate.
 - **iOS is entirely untested.** No Mac, no device. Android leads by D31's amendment.
@@ -99,10 +87,5 @@ like a firewall block and cost most of an afternoon. Run it in its own terminal.
   third needs Pro at $25/mo. Taylor's call.
 - **`lib/jobs.ts` re-analyses without `--club-detector`** — a standing trap CLAUDE.md names by
   hand. Pre-existing, left alone by D30 because fixing it changes analyzer invocation.
-
-## The spike's own future
-
-`apps/mobile/src/spike/` is one directory to delete when `mobile-app-shell` starts — `App.tsx` was
-written for exactly that. Do **not** delete `modules/`. The probe screen now shows only unanswered
-questions, and every settled one carries its verdict and decision number, so nothing is lost when
-it goes.
+- **The `DEV_USER_EMAIL` development identity and the seeded admin are still in the tree**, and
+  own the ten local fixtures. D31 deletes them once phone sign-in works, not before.

@@ -57,7 +57,6 @@ connected, the only way forward is someone reading two numbers off the screen.
 | 3000 | `pnpm dev` — Next, bound `0.0.0.0` so the phone can reach it |
 | 5433 | local Postgres (`golf-postgres-1`), needs Docker Desktop |
 | 8081 | Metro |
-| 8790 | the spike's static fixture server |
 
 `localhost` on a phone means the phone. Anything the device fetches must use this PC's LAN address
 (`10.0.1.x`, from the probe). `192.168.x` means you are on the wrong network or reading the wrong

@@ -1,6 +1,7 @@
 import { ActivityIndicator, StyleSheet, View, type ViewProps } from "react-native";
 
 import { useAuth } from "./AuthProvider";
+import { COLORS } from "../../theme";
 import { SignInScreen } from "./SignInScreen";
 
 export interface AuthGateProps {
@@ -24,7 +25,7 @@ export function AuthGate({ children }: AuthGateProps) {
   if (status === "loading") {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color="#8b7bff" size="large" />
+        <ActivityIndicator color={COLORS.violet} size="large" />
       </View>
     );
   }
@@ -35,5 +36,5 @@ export function AuthGate({ children }: AuthGateProps) {
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, backgroundColor: "#080a0d", alignItems: "center", justifyContent: "center" },
+  center: { flex: 1, backgroundColor: COLORS.bg, alignItems: "center", justifyContent: "center" },
 });

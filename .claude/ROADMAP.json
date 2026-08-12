@@ -202,7 +202,7 @@
         ".claude/ai-instructions/PROJECT_MAIN.md#41-accessibility-and-general-usability"
       ],
       "owns": [
-        "apps/mobile/src/app",
+        "apps/mobile/src/screens",
         "apps/mobile/src/features/auth",
         "apps/mobile/src/features/profile"
       ],

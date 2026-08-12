@@ -224,8 +224,8 @@ async. Destructuring a Promise succeeds and hands back `undefined` for every nam
 the symptom pointed nowhere near the cause. Component tests must therefore be `async`:
 
 ```tsx
-const { getByText } = await render(<ProbeCard probe={probe} />);
-await fireEvent.press(getByText("Run probe"));
+const { getByText } = await render(<HomeScreen />);
+await fireEvent.press(getByText("Try again"));
 ```
 
 Two supporting details, both silent when wrong:
@@ -259,7 +259,7 @@ is always two commands. Look at the diff before accepting it: a snapshot only pr
 
 ---
 
-## 6. Mobile app — running the spike on your Android
+## 6. Mobile app — running it on your Android
 
 ### First: ask the DEVICE what is installed, never the repo
 
@@ -281,8 +281,10 @@ use on the S25+. The repo describes what the product *is*; only the device knows
 *installed*. The `agent-device` and `dogfood` skills automate the rest of this loop.
 
 `apps/mobile/` exists as of spine step 02: **Expo 57 / React Native 0.86 / React 19**, chosen in
-`DECISIONS.md` D5. Right now it is a **spike harness, not the product** — three probe cards for
-the questions that decide whether the framework choice holds.
+`DECISIONS.md` D5. The step 02 spike harness that used to live behind sign-in is **deleted**
+(D44) — its measurements are recorded in D34–D40 and the two native modules it justified survive
+in `modules/`. What runs today is sign-in plus a placeholder home; the screens proper are the
+`mobile-app-shell` and `mobile-player` tracks.
 
 ### Which of the two ways to run it you need
 
@@ -290,12 +292,13 @@ the questions that decide whether the framework choice holds.
 |---|---|---|
 | Setup | install an app, scan a QR | one build, then same as Expo Go |
 | Runs the UI | yes | yes |
-| **Runs the probes** | **no** | **yes** |
+| **Runs sign-in** | **no** | **yes** |
+| **Hosts `modules/`** | **no** | **yes** |
 
-Expo Go cannot host native modules, and all three probes are native-module questions. So Expo Go
-is only useful for confirming the toolchain reaches the phone; **the measurements need a
-development build.** After that build is installed once, the day-to-day loop is identical —
-save a file, the phone reloads.
+Expo Go cannot host native modules, and Google Sign-In is one — so Expo Go is only useful for
+confirming the toolchain reaches the phone; **anything past the sign-in screen needs a development
+build.** After that build is installed once, the day-to-day loop is identical — save a file, the
+phone reloads.
 
 ### Expo Go (2 minutes, no build)
 
@@ -343,9 +346,8 @@ USB works too (plug in, enable USB debugging, accept the RSA prompt) but is neve
 
 That compiles the APK, installs it, and starts Metro. **After the first install nothing needs a
 cable or a rebuild**: `pnpm --filter mobile start`, edit a file, Metro pushes it over wifi and the
-phone reloads. Only a change to the module's **native** code (`modules/frame-clock/**.kt|.swift`)
-needs `npx expo run:android` again — JS and TS changes never do. Running the probes is just
-tapping buttons in the app.
+phone reloads. Only a change to a module's **native** code (`modules/*/android/**.kt`,
+`modules/*/ios/**.swift`) needs `npx expo run:android` again — JS and TS changes never do.
 
 **Two machine-level faults were found and fixed while getting this to build** — both were
 pre-existing, both broke *every* Android build on this PC, and one is still only worked around:
@@ -442,8 +444,8 @@ build (~10-15 min) but it is the **only** route to iOS, since there is no Mac (D
 
 ### Signing in on the phone (step 04, D43)
 
-The app is behind sign-in now. The first screen is **Sign in**, with a Google button; the spike
-harness is behind it.
+The app is behind sign-in. The first screen is **Sign in**, with a Google button; the home screen
+is behind it.
 
 **Before the first run**, `apps/mobile/.env` must carry four values — copy them from
 `apps/mobile/.env.example`, which holds the real (public) ones for this project:
@@ -464,24 +466,28 @@ the first install after adding the module needs a rebuild.
 
 **What proves it worked, in order:**
 
-1. The **Sign in** screen appears (not the spike) — the gate is on.
+1. The **Sign in** screen appears — the gate is on.
 2. Tapping *Sign in with Google* opens the account chooser **inside the app**, no browser.
-3. The app swaps to the harness, with an **account bar** at the top showing the Google address.
-4. The **Server** card reads `authenticated — N swings on this account`. That is the whole chain
-   proven: Google → Supabase session → bearer token → `/api/v1/swings` → row-level security. A new
-   account correctly shows **0 swings** — the fixtures belong to the development identity until
+3. The app swaps to **Your swings**, with an **account bar** at the top showing the Google address.
+4. It reads **No swings yet** (or a count). That is the whole chain proven: Google → Supabase
+   session → bearer token → `/api/v1/swings` → row-level security. A new account correctly has
+   none — the fixtures belong to the development identity until
    `pnpm --filter web db:claim-fixtures <email>` moves them.
-5. Force-stop and reopen the app: it goes straight to the harness, no sign-in. That is §4.2's
+5. Force-stop and reopen the app: straight back to **Your swings**, no sign-in. That is §4.2's
    session-survives-restart requirement.
-6. *Sign out* returns to the sign-in screen, and tapping Google again offers the **chooser** rather
-   than silently reusing the last account.
+6. *Sign out* (top **left** — the dev-client bubble sits over the top right and swallows taps)
+   returns to the sign-in screen, and tapping Google again offers the **chooser** rather than
+   silently reusing the last account.
 
-The **Server** card is the diagnostic, and each failure means something different:
+Anything other than a swing count is the home screen's diagnostic, and each means something
+different. Note it never says "No swings yet" when it could not reach the server — the two are
+deliberately separate states, because a network failure rendering as an empty log reads as lost
+data:
 
 | It says | What is actually wrong |
 |---|---|
-| `Network request failed` | `EXPO_PUBLIC_API_BASE_URL` is wrong or `pnpm dev` is not running. The phone must reach this PC — check `ipconfig`, and that Next is bound to `0.0.0.0` (see §3). |
-| `401 — the server did not accept this session` | The request arrived and was declined. Usually `AUTH_ALLOWED_EMAILS` in `apps/web/.env` not listing the Google address you signed in with. |
+| `Cannot reach SwingSage` | `EXPO_PUBLIC_API_BASE_URL` is wrong or `pnpm dev` is not running. The phone must reach this PC — check `ipconfig`, and that Next is bound to `0.0.0.0` (see §3). |
+| `Your session has expired` | A 401: the request arrived and was declined. Usually `AUTH_ALLOWED_EMAILS` in `apps/web/.env` not listing the Google address you signed in with. |
 | `Google returned no ID token` | `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` is the Android id, or the build's signing SHA-1 does not match the Android OAuth client. |
 | `DEVELOPER_ERROR` from Google | Same fingerprint mismatch, reported by Google instead. Check the SHA-1 table above. |
 
@@ -491,35 +497,25 @@ out of one must not sign out the other — both paths use `scope: "local"` preci
 
 ### What you will see, and what it means
 
-A **Device** card, then a video panel playing `assets/frameclock.mp4` — a generated 600-frame,
-exactly-60fps, GOP-10 clip with its own frame number burned into every frame, plus a green bar
-that advances 1/599 of the width per frame. A **white marker drawn by JS** sits on top of it.
+**Account bar** (sign out on the left, the signed-in Google address on the right), then **Your
+swings** — a count, or `No swings yet`. That is the whole app today, and it is deliberately the
+whole app: the swing log, the player and capture are the `mobile-player`, `mobile-app-shell` and
+`in-app-capture` tracks.
 
-> **The white marker and the green bar should be exactly on top of each other.** Any visible gap
-> between them *is* the overlay drift, readable by eye and on a screen recording. That is the
-> phone-side equivalent of the analyzer's Gate 1 burn-in: the truth drawn onto the pixels it
-> describes. Regenerate the clip with `node scripts/make-frame-clip.mjs`.
+The probe harness that used to sit here is gone (D44). If a measurement from it needs repeating,
+it gets rebuilt against the real player rather than resurrected — the harness measured a
+throwaway screen, and re-running it would prove things about code nobody ships. What survives:
 
-Then the three probe cards:
+| | |
+|---|---|
+| `modules/frame-clock` | Per-frame presented-frame callback. Neither platform's high-level API exposes one, and the whole overlay depends on it. Load-bearing for `mobile-player`. |
+| `modules/high-speed-camera` | Camera2 constrained-high-speed session. 120/240fps is invisible to every higher-level API (D38). Load-bearing for `in-app-capture`. |
+| D34–D40 | Every number the harness produced, with its method. |
 
-1. **Overlay locked to the presented frame** — the one that matters. Press *Run probe*: it plays
-   for 5s and reports drift in frames (p50/p95/max) plus the share of frames exactly locked. The
-   bar is **p95 = 0**, which is D13's stated criterion, not a rounding of "close enough".
-2. **Frame-exact seeking** — seeks to 20 fixed targets chosen to sit on, just after, and just
-   before a keyframe, since Android decodes-and-skips from the preceding sync point and a target
-   just *before* one is the worst case. Bar is **max error = 0 frames**.
-3. **Sustained 60fps capture** — still **NEEDS CAMERA**: no camera path is wired yet, and it is
-   third because probes 1 and 2 carry the risk that could invalidate D5.
-
-A probe cannot display PASS or FAIL without a measurement attached to it — that invariant is
-enforced in `src/spike/probes.ts` and covered by the mobile test suite, because a card claiming
-PASS with nothing behind it would quietly convert "untested" into "validated".
-
-> **The S25+ is a flagship, and step 02 asks for a mid-range Android.** Read its result
-> asymmetrically: a **failure** is decisive and kills the framework choice outright, but a
-> **pass** does not close the step — a flagship has the headroom to absorb exactly the dropped
-> frames a mid-range device would expose. Label S25+ numbers as flagship data and keep a mid-range
-> measurement outstanding. See the note appended to the step 02 file.
+> **The S25+ is a flagship, and the spike's numbers are flagship numbers.** Read them
+> asymmetrically: a **failure** would have been decisive, but the passes do not generalize
+> downward — a flagship has the headroom to absorb exactly the dropped frames a mid-range device
+> would expose. A mid-range measurement is still outstanding and now belongs to `mobile-player`.
 
 ### iOS
 

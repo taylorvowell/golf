@@ -1,7 +1,7 @@
 import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
 import type { UpgradeRequired } from "@swingsage/schema/contract";
 
-import { COLORS } from "../spike/styles";
+import { COLORS } from "../theme";
 
 export interface UpgradeRequiredScreenProps {
   detail: UpgradeRequired;
@@ -81,5 +81,5 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: "center",
   },
-  buttonText: { color: "#0b0f14", fontSize: 15, fontWeight: "700" },
+  buttonText: { color: COLORS.onAcid, fontSize: 15, fontWeight: "700" },
 });

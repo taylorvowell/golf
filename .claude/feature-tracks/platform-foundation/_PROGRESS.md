@@ -20,6 +20,43 @@ closing.
 
 ---
 
+## 04 — Passwordless Authentication (in progress) — spike harness removed 2026-08-12
+
+**Logged:** 2026-08-12 00:44 UTC
+**Phase:** Platform Foundation
+**Status:** step 04 stays `in-progress` — this entry records work inside it, not its completion.
+
+**Summary:** Google sign-in was verified on the S25+, and the screen behind it was the step 02
+probe harness. Deleted it (D44): `src/spike/` (11 files, ~2,100 lines), all six probe scripts in
+`apps/mobile/scripts/`, the 729 KB synthetic ground-truth clip and two generated 8 MB fixtures,
+the developer-facing `ServerCheck` card, the `expo-asset` dependency and the orphaned `:8790`
+fixture server. Replaced by `src/screens/HomeScreen.tsx` — a placeholder that is nonetheless a
+product surface, and which keeps the harness's one load-bearing property: a request that never
+reached the server renders as "Cannot reach SwingSage", never as "No swings yet".
+
+**Notes:**
+
+- **Kept deliberately:** `modules/frame-clock` and `modules/high-speed-camera`. They were the
+  spike's actual deliverable and are load-bearing for `mobile-player` and `in-app-capture`. They
+  now have **no consumer in the tree** and will read as dead code to any sweep.
+- **A named cost:** `measure_overlay.py` was the instrument assigned to close step 02's one open
+  measurement — scrubbing. It is gone, scrubbing stays unmeasured, and that is recorded in
+  `CURRENT-STATE.md` §11b as `mobile-player`'s problem rather than quietly closed.
+- The palette moved out of the spike into `src/theme.ts`; four screens had been hardcoding the
+  same ten hex values because the canonical copy lived in a directory the plan called throwaway.
+- `src/app/` was renamed `src/screens/` mid-run — Expo's CLI reported "Using src/app as the root
+  directory for Expo Router", and installing `expo-router` later would have silently reinterpreted
+  the entry point. `mobile-app-shell`'s `owns` path in `ROADMAP.json` moved with it.
+- **Verified:** web tsc/lint clean, 157 vitest, mobile tsc clean, 34 jest, Android
+  `assembleDebug` BUILD SUCCESSFUL and installed on the S25+, and the served Android bundle
+  contains the new home screen with **zero** occurrences of any spike string.
+- **Not verified on the device's screen** — the phone was in use. One relaunch is all it needs.
+- **Still open, and blocking step 04:** the package is still `com.swingsage.spike` (needs one
+  Google Cloud Console visit before renaming, D44), phone OTP, Apple, account deletion, identity
+  linking, and deleting the `DEV_USER_EMAIL` identity.
+
+---
+
 ## 03 — Supabase Project and Data Platform Migration ✅ 2026-08-11
 
 **Completed:** 2026-08-11 16:45 UTC

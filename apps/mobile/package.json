@@ -8,7 +8,6 @@
     "@supabase/supabase-js": "^2.112.2",
     "@swingsage/schema": "workspace:*",
     "expo": "~57.0.11",
-    "expo-asset": "~57.0.10",
     "expo-dev-client": "~57.0.11",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.2",

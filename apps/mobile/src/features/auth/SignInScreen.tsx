@@ -3,6 +3,7 @@ import { useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 import { useAuth } from "./AuthProvider";
+import { COLORS } from "../../theme";
 import { GoogleSignInCancelled } from "./google";
 
 /**
@@ -60,7 +61,7 @@ export function SignInScreen() {
           disabled={busy}
           onPress={() => void onGoogle()}
         />
-        {busy ? <ActivityIndicator color="#8b7bff" /> : null}
+        {busy ? <ActivityIndicator color={COLORS.violet} /> : null}
         {error ? (
           <Text style={styles.error} accessibilityRole="alert">
             {error}
@@ -74,13 +75,13 @@ export function SignInScreen() {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: "#080a0d", padding: 24, justifyContent: "center", gap: 28 },
+  root: { flex: 1, backgroundColor: COLORS.bg, padding: 24, justifyContent: "center", gap: 28 },
   header: { gap: 6 },
-  eyebrow: { color: "#a3e635", fontSize: 10, fontWeight: "700", letterSpacing: 2 },
-  h1: { color: "#f7f8f5", fontSize: 32, fontWeight: "700", letterSpacing: -0.5 },
-  lede: { color: "#7e8691", fontSize: 14, lineHeight: 21 },
+  eyebrow: { color: COLORS.acid, fontSize: 10, fontWeight: "700", letterSpacing: 2 },
+  h1: { color: COLORS.text, fontSize: 32, fontWeight: "700", letterSpacing: -0.5 },
+  lede: { color: COLORS.muted, fontSize: 14, lineHeight: 21 },
   actions: { gap: 14, alignItems: "stretch" },
   google: { width: "100%", height: 48 },
-  error: { color: "#e5484d", fontSize: 13, lineHeight: 19 },
-  footer: { color: "#5b636e", fontSize: 12, lineHeight: 18 },
+  error: { color: COLORS.red, fontSize: 13, lineHeight: 19 },
+  footer: { color: COLORS.dim, fontSize: 12, lineHeight: 18 },
 });

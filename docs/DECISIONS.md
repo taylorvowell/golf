@@ -2318,3 +2318,80 @@ $99 and Apple hardware, and **the seeded admin and `DEV_USER_EMAIL` are still in
 rule is that email OTP dies once Google *and* phone are live on Android — deleting the development
 identity before the second provider works would leave no way to use the app on the days in between.
 It is deleted, not disabled, when 04 closes.
+
+---
+
+## D44 — The step 02 spike harness is deleted, not archived; its numbers live in decisions, not in code
+
+**Date:** 2026-08-11 · **Track:** platform-foundation, step 04 · **Status:** done
+
+Google sign-in was verified on the S25+ (D43's appendix), and the first thing a signed-in golfer
+saw was a probe harness: three measurement cards, a burned-in test clip, a raw `Server` diagnostic
+printing HTTP faults, and a video panel whose purpose was to expose overlay drift. That is what
+step 02 built and it did its job — but it had become the product's front door.
+
+**Deleted:**
+
+| | |
+|---|---|
+| `apps/mobile/src/spike/` | 11 files, ~2,100 lines — the harness, its probe definitions, its pose renderer and its palette |
+| `apps/mobile/scripts/` | all six probe instruments: `make-frame-clip.mjs`, `make_real_clip.py`, `measure-capture.mjs`, `measure_overlay.py`, `pull-probe-results.mjs`, `serve-fixtures.mjs` |
+| `apps/mobile/assets/frameclock.mp4` | the 729 KB synthetic ground-truth clip, plus the two generated 8 MB fixtures |
+| `ServerCheck.tsx` | a developer-facing card that showed a golfer raw fetch errors |
+| `expo-asset` | only the harness bundled local media |
+| the `:8790` fixture server | orphaned; removed from `env-probe.mjs` and `ENVIRONMENT.md` |
+
+**Kept, deliberately:** `modules/frame-clock` and `modules/high-speed-camera`. They were the
+spike's actual deliverable — a per-frame presented-frame callback and a Camera2
+constrained-high-speed session, neither reachable through any higher-level API — and both are
+load-bearing for `mobile-player` and `in-app-capture`. They now have **no consumer in the tree**,
+which is correct and will read as dead code to any sweep that does not know why.
+
+**The reasoning, because "delete the throwaway" is the easy half.** The harness was an
+*instrument*, and an instrument's value is the reading it took, not its continued existence. Every
+reading is written down: D34–D40 carry the numbers and the method that produced each. Keeping the
+harness to re-run later would preserve the ability to measure a screen nobody ships — the spike
+drew its own test clip into its own component tree, so a repeat run says nothing about the real
+player. When `mobile-player` needs the same numbers it builds the instrument against the real
+thing, which is the only version of the measurement that would be evidence.
+
+The cost is named rather than hidden: **`measure_overlay.py` was the tool assigned to close step
+02's one open measurement — scrubbing — and it is gone.** Scrubbing stays unmeasured and is now
+`mobile-player`'s problem. That is a real debt and it is recorded in `CURRENT-STATE.md` §11b as an
+open item, not quietly closed by deleting the thing that would have exposed it.
+
+**What replaced it.** `src/screens/HomeScreen.tsx` — a placeholder that is nonetheless a product
+surface. Its one non-obvious property is that it keeps the harness's state machine: a request that
+never reached the server renders as *"Cannot reach SwingSage"*, never as *"No swings yet"*. An
+empty log shown to a golfer whose swings exist reads as data loss, and the project's standing rule
+is that an uncertain answer is never presented as a fact. That distinction is the subject of the
+new tests, not the layout.
+
+The palette moved out to `src/theme.ts`, which is tokens only. Four screens had been hardcoding the
+same ten hex values because the canonical copy lived inside the directory the plan called
+throwaway. The design system proper is `mobile-app-shell`; pre-empting it here would recreate the
+duplication this move exists to remove.
+
+### Not done, and it needs one interactive action
+
+**The Android package is still `com.swingsage.spike`** — in `app.json` for both platforms, in the
+installed APK, and in `ENVIRONMENT.md`. It should be `com.swingsage.app`, and this is not
+cosmetic: a package name is permanent from the first store upload and appears in the Play Store
+URL forever.
+
+It was **not** renamed here because Google binds an Android OAuth client to exactly one *package
+name + signing SHA-1* pair. Renaming without first registering a client for the new name breaks
+the sign-in that was verified hours earlier, with a `DEVELOPER_ERROR` that looks like a code fault.
+The fix is additive and free — a second Android OAuth client on the same SHA-1 — but it requires an
+interactive Google Cloud Console session, which is Taylor's to run. Recorded here so the rename
+does not get discovered under submission pressure at step 10.
+
+**Addendum — `src/app/` was renamed to `src/screens/` before it shipped.** The replacement home
+screen was first placed in `apps/mobile/src/app/`, which is the path `.claude/ROADMAP.json` had
+assigned to `mobile-app-shell`. Expo's CLI immediately reported *"Using src/app as the root
+directory for Expo Router"* — `src/app` is a **convention with meaning**, and this project uses a
+plain `index.ts` → `App.tsx` entry with `expo-router` not installed. Nothing broke today, but
+installing `expo-router` later would have silently switched the entry point and reinterpreted
+`HomeScreen.tsx` as a route. Renamed to `src/screens/`, and the track's `owns` entry moved with
+it, so that adopting Expo Router stays a decision somebody makes rather than one a directory name
+made for them.

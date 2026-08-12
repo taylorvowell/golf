@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { useAuth } from "./AuthProvider";
+import { COLORS } from "../../theme";
 
 /**
  * Who is signed in, and the way out.
@@ -54,19 +55,19 @@ const styles = StyleSheet.create({
     paddingTop: 48,
     paddingHorizontal: 20,
     paddingBottom: 10,
-    backgroundColor: "#080a0d",
-    borderBottomColor: "#232a33",
+    backgroundColor: COLORS.bg,
+    borderBottomColor: COLORS.border,
     borderBottomWidth: 1,
   },
   // `paddingRight` keeps the address clear of the same dev-client bubble.
-  who: { color: "#7e8691", fontSize: 12, flexShrink: 1, textAlign: "right", paddingRight: 56 },
+  who: { color: COLORS.muted, fontSize: 12, flexShrink: 1, textAlign: "right", paddingRight: 56 },
   button: {
-    borderColor: "#232a33",
+    borderColor: COLORS.border,
     borderWidth: 1,
     borderRadius: 999,
     paddingHorizontal: 14,
     paddingVertical: 8,
   },
   buttonPressed: { opacity: 0.6 },
-  buttonText: { color: "#f7f8f5", fontSize: 12, fontWeight: "700" },
+  buttonText: { color: COLORS.text, fontSize: 12, fontWeight: "700" },
 });

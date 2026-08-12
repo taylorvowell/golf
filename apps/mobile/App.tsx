@@ -1,19 +1,17 @@
 import { StyleSheet, View } from "react-native";
 
+import { HomeScreen } from "./src/screens/HomeScreen";
 import { AccountBar } from "./src/features/auth/AccountBar";
 import { AuthGate } from "./src/features/auth/AuthGate";
 import { AuthProvider } from "./src/features/auth/AuthProvider";
-import { ServerCheck } from "./src/features/auth/ServerCheck";
-import SpikeScreen from "./src/spike/SpikeScreen";
 
 /**
- * Entry point. The spike lives in `src/spike/` so that when step 02 closes and the harness is
- * replaced by the real app shell (mobile-app-shell track), the whole thing is one directory to
- * delete rather than a screen to disentangle from App.tsx.
+ * Entry point.
  *
- * Auth wraps it rather than living inside it: `src/features/auth/` survives the spike's deletion,
- * and gating here means every screen added later is behind sign-in by default instead of by
- * remembering.
+ * Auth wraps the whole tree rather than living inside a screen: gating here means every screen
+ * added later is behind sign-in by default instead of by remembering. Navigation, onboarding and
+ * the real screens are the `mobile-app-shell` track; `HomeScreen` is the single placeholder that
+ * stands in front of a golfer until then.
  */
 export default function App() {
   return (
@@ -21,9 +19,8 @@ export default function App() {
       <AuthGate>
         <View style={styles.root}>
           <AccountBar />
-          <ServerCheck />
           <View style={styles.body}>
-            <SpikeScreen />
+            <HomeScreen />
           </View>
         </View>
       </AuthGate>
