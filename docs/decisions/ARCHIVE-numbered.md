@@ -2732,3 +2732,46 @@ them:**
 
 iOS gets the same three for parity via `AVURLAssetHTTPHeaderFieldsKey`. It is **unverified** —
 there is no Mac and no iOS device (D31), unchanged by this entry.
+
+---
+
+## D51 — The trace ships on plain `View`s with its frame-lock cost UNMEASURED, so the Skia question stays open
+
+**Date:** 2026-08-13
+**Track:** `mobile-player` step 02
+**Status:** A named shortfall, not a resolved question. Recorded so it cannot quietly become settled.
+
+`mobile-player` step 02 asked for exactly one number the device alone can produce: **Overlay drift
+with the club-head trace on, and again with it off.** That number was **not taken**. Taylor declined
+it — *"I don't want to measure. skip this"* — and the step closed on its automated oracles (`tsc`
+clean, 245 jest across 22 suites) plus the geometry half of Gate 3, which does pass on all ten
+fixtures.
+
+**What the decline costs, stated exactly.** D23 measured **99.2% frame-lock for 49 keypoints as
+rotated `View`s**, and D36 found that removing React from the paint path scored no better. Both were
+taken at roughly **77 views**. The trace is a polyline of a hundred-plus segments, and step 02
+measured the real cost: **peak 461 views at impact on `pro_3`, 400 of them trace** — six times the
+view count either Skia decision was made against. Whether the lock survives that is **an assumption,
+not a result**, and it is now an assumption the product ships on.
+
+**Why this matters more than a missing datapoint.** D23 and D36 rejected Skia **on cost, not on
+merit**. A rejection-on-cost is reversible the moment the cost changes — but only by a measurement.
+It cannot be reversed, or upheld, by argument. So the honest position is: *the overlay stays in
+TypeScript because it was cheaper, and nobody has checked whether that still holds with a trace on
+the screen.*
+
+**This was declined while available, not while blocked.** The earlier blocker — the phone
+disconnected, and Samsung's Accidental touch protection swallowing every `adb shell input` while the
+proximity sensor was covered — had cleared. The device was reachable at `10.0.1.123:39593`, input
+was landing, Metro was serving, and the readout is one screen away. Nothing technical prevents it.
+
+**How to settle it**, in about a minute (RUNBOOK §12b): open any swing → **METRICS** panel → read
+**Overlay drift** (`100.0% locked · p95 0 · max 0` is the pass) and **Trace views** → close, tap
+**⧉**, turn the **Club head trace** tile off → read Overlay drift again. The pair of figures is the
+answer. If the trace-on figure holds, D23/D36 stand on evidence for the first time at real view
+counts. If it does not, Skia is back on the table and this entry is why.
+
+**The standing trap this sits under.** This project's own history is that *"a check that scores well
+is not evidence the check works"* and that coverage numbers have overstated quality three separate
+times. A view count is not a frame-lock. Do not let 461 views be re-described as "measured
+performance" — the count was measured; the lock was not.

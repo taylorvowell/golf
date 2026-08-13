@@ -573,7 +573,8 @@ anyone wanting a larger sample should take it before quoting a percentage.
   frame-lock holds at 461 views, and that is the number the Skia question turns on. Reading it is
   one screen: RUNBOOK §12b, Overlay drift with the trace on and with it off. **Do not conclude
   either way from the view count alone** — D23's rejection of Skia was on cost, not on merit, and
-  reversing it needs a measurement rather than an inference.
+  reversing it needs a measurement rather than an inference. **The reading was offered and declined
+  on 2026-08-13 (D51)**, so this stays open by decision rather than by obstacle.
 
 - **Transfer, not parsing, is the artifact problem** — 13.7 MB took 2781 ms over LAN. A lean
   per-view API payload is a step 07 input.
@@ -588,15 +589,21 @@ anyone wanting a larger sample should take it before quoting a percentage.
 Stated as fact, with no implied ordering or plan. See
 [`PRODUCT-COVERAGE.md`](PRODUCT-COVERAGE.md) for this measured against the product target.
 
-- **The mobile app shows a golfer their swings and plays them back, and nothing else yet.** An
-  Expo/RN **Android** client is installed on the S25+ with Google sign-in, a real swing log
-  (contact-frame thumbnails, scores, bands, pull-to-refresh) reading `/api/v1/swings`, navigation
-  via React Navigation 7 native-stack, and a full-bleed swing player: frame-exact transport on
-  `modules/frame-clock`, the analysis overlay (skeleton, club, trace, orientation rods, angle arcs)
-  drawn as rotated `View`s, a phase strip, and slide-up panels for the overlay switches and the
-  swing's numbers. **The overlay's frame lock with the trace on is still unmeasured on the device**
-  (§11b) and dual-view comparison does not exist. No capture, no upload, and no iOS build has ever
-  been compiled.
+- **The mobile app shows a golfer their swings, plays them back, and explains them — and nothing
+  else yet.** An Expo/RN **Android** client is installed on the S25+ with Google sign-in, a real
+  swing log (contact-frame thumbnails, scores, bands, pull-to-refresh) reading `/api/v1/swings`,
+  navigation via React Navigation 7 native-stack, and a full-bleed swing player: frame-exact
+  transport on `modules/frame-clock`, the analysis overlay (skeleton, club, trace, orientation rods,
+  angle arcs) drawn as rotated `View`s, a phase strip, and slide-up panels for the overlay switches
+  and the swing's numbers. The **Analysis panel** renders the whole of `coach_report.json` — the
+  headline with its coverage split, the primary fix and drill, the findings, the per-position
+  scores, and every individual check with its measured value against the band it was judged on —
+  and **any row anchored to a coaching position seeks the player to that frame**. Its two "not
+  scored" reasons stay distinct at every level. **The overlay's frame lock with the trace on is
+  still unmeasured on the device** (§11b) and dual-view comparison does not exist. The Analysis
+  panel's automated oracles pass but it has **not been looked at on the glass** — layout at phone
+  width and the landing frame of a tap are unverified. No capture, no upload, and no iOS build has
+  ever been compiled.
 - **No capture of any kind.** No in-app recording, no camera code, no multi-device sync.
 - **No upload flow.** Analysis is started by hand (`burnin.py`) or via the web app's re-analyze
   button on an already-indexed swing. There is no queue beyond the DB-backed reanalyze job.

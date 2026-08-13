@@ -287,7 +287,26 @@ export function SwingPlayer({
     [analysis, toggles, onToggle, angles],
   );
 
-  const analysisContent = useMemo(() => <AnalysisPanel state={report} />, [report]);
+  /**
+   * A scorecard row seeks the picture and gets out of the way.
+   *
+   * Closing the panel is the point, not a side effect: the reason a finding is tappable at all is
+   * so a golfer lands on the frame it describes, and leaving the sheet up would seek to a picture
+   * they cannot see. Depends only on `seekTo`, which is ref-backed and stable, so this callback
+   * does not churn `analysisContent`'s memo at frame rate.
+   */
+  const seekFromPanel = useCallback(
+    (frame: number) => {
+      seekTo(frame);
+      setPanel(null);
+    },
+    [seekTo],
+  );
+
+  const analysisContent = useMemo(
+    () => <AnalysisPanel state={report} analysis={analysis} onSeekToFrame={seekFromPanel} />,
+    [report, analysis, seekFromPanel],
+  );
 
   const compareContent = useMemo(
     () => (

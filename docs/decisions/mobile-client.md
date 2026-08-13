@@ -65,7 +65,13 @@ S25+ with no callback and no error. **Do not "fix" that deprecation** — it rem
 **Decision:** Do not draw the overlay natively. Plain rotated `View`s drawing 49 keypoints reach
 99.2% frame-lock, and removing React state from the paint path scored no better (99.0%). Skia is
 unnecessary. Rejected on cost, not on merit.
-**See:** ARCHIVE D23, D36.
+**Gotchas:** That 99.2% was measured at roughly **77 views**. With the club-head trace on, the
+overlay peaks at **461 views** (400 of them trace) at impact on `pro_3`, and **the frame lock at
+that count has never been read off a device** — the measurement was declined, not taken. A
+rejection-on-cost is only reversible by a measurement, so treat Skia as an **open** question, not a
+closed one, and never re-describe the view count as a performance result. Settling it is one screen:
+RUNBOOK §12b.
+**See:** ARCHIVE D23, D36, D51.
 
 ## Playback and capture rules
 

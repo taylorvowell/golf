@@ -287,10 +287,16 @@ looked healthy and were wrong. Build the debug view when the work starts, not af
   hardware that does not exist. Those are not approval gates.
 - **Keep autonomy reversible.** Contract and schema changes stay append-only and logged, so a
   wrong call is a revert rather than a migration.
-- **Verify on the Android phone whenever a change is visible.** There is an Android device and
-  no iPhone; anything renderable should be checked there, and any instructions handed over
-  should be concrete enough to follow without re-deriving them. See
-  [`docs/RUNBOOK.md`](docs/RUNBOOK.md) §3 (web over LAN) and §6 (the native dev build).
+- **Verify on the Android phone whenever a change is visible — but NEVER drive the phone without
+  Taylor saying so in the current conversation.** The S25+ is his daily-driver, not a test rig:
+  `adb shell input`, taps, force-stop/relaunch and screenshot loops all need an explicit go-ahead
+  each time, even when the device is connected and input is landing. Read-only queries (`adb
+  devices`, `pidof`, `dumpsys`) are always fine. Run every automated half first (`tsc`, jest, the
+  Metro bundle, `scripts/checkoverlay.ts`), then **state the ask and stop** — a `HANDOFF` row with
+  the exact taps, and one line in the reply naming what is unverified as a result. Close the step
+  on its automated oracles with the device pass as a **named shortfall**; never imply an on-glass
+  check that did not happen. See [`docs/RUNBOOK.md`](docs/RUNBOOK.md) §3 (web over LAN) and §6
+  (the native dev build).
 - **"What can I look at right now?" is a question about the RUNNING SYSTEM, not the repository.**
   There are two SwingSage surfaces on the phone — the web player over LAN and the installed native
   dev build — and source code knows about neither's state. Ask the device (`adb devices -l`,

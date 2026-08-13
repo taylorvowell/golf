@@ -140,6 +140,12 @@ along.
 - **Tests pin behaviour a golfer or the server would notice** (the auth header on the media
   source, the box that must not resize, seek coalescing) — not markup. Mock with phone-shaped
   insets so inset bugs fail in CI.
+- **After a `fireEvent` that re-renders, query with `findBy*`, never `getBy*`.** This root flushes
+  a press-driven state update on a microtask, so a synchronous query reads the **pre-press** tree
+  and fails on a component that works — with a diff showing the old state, which reads like a
+  broken handler. A press asserted only through a `jest.fn()` passes either way (no re-render is
+  involved), so the two failure modes sit side by side and look unrelated. `render` is awaited
+  here for the same reason.
 - Comment convention: every non-obvious decision carries **the failure it prevents**, and every
   deliberate divergence from the web player is named at the divergence site.
 - A change that alters a decision edits `docs/decisions/mobile-client.md` **in the same session**,

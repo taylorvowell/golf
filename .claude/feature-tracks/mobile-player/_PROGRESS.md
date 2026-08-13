@@ -29,6 +29,69 @@ consumer in the tree** — `frame-clock` is this track's, and it is why the spik
 
 ---
 
+## 03 - The Swing, Explained
+**Completed:** 2026-08-13 04:12 UTC
+**Phase:** Core Golfer Experience
+**Summary:** The scorecard became an explanation. `findings[]`, `checkpoints{}` and
+`categories[].checks[]` were all being fetched and rendered **nowhere in the product** — not on
+mobile and not on web — and all three now draw. Anything anchored to a coaching position **seeks
+the player to that frame** and closes the panel, which is the honest end of *"analysis must be
+explainable"* on a video player. New: `scoreDisplay.ts` (ported from web, minus its web-only colour
+ramp) and `checkpointFrames.ts`. `tsc` clean, **266 jest across 24 suites (+21)**, Metro bundles for
+Android (6.19 MB) — a Reload, not a rebuild.
+
+**Notes:**
+
+- **Three things the real artifacts caught that no test would have.** All three came from printing
+  `coach_report.json` and `analysis.json` across all ten fixtures *before* trusting the shapes:
+  1. **The checkpoint key is a P-code, not a GolfDB event name.** Both are `string | null`, so
+     routing through `analysis.events` compiles, looks correct, and silently fails on **P6 and P9**
+     — precisely the two positions the eight events do not cover. `analysis.checkpoints` is the
+     right source; **33–34 references per report, zero unresolved, all ten fixtures**.
+  2. **`Finding.detail` is a category slug**, not prose — rendering it raw puts `downswing_plane`
+     in front of a golfer.
+  3. **A real bug:** the config's positive icon is **`✓`**, not the `↑` the allow-list guessed, so
+     every positive finding silently lost its glyph. Nothing threw. Both are pinned now.
+- **A test-harness fact worth keeping:** this root flushes a press-driven re-render on a
+  microtask, so a synchronous `getBy*` after `fireEvent.press` reads the **pre-press** tree and
+  fails on a panel that works. Use `findBy*` after any press that re-renders. The one press test
+  that passed was asserting a mock call, which needs no re-render — which is exactly why the
+  difference was confusing.
+- **NOT DONE, named rather than rounded away: the on-device visual pass.** The device was
+  reachable and the bundle was serving, but Taylor was using the phone — the Claude app took focus
+  mid-check — so driving it further would have been fighting him for the screen. The seek is
+  unit-tested; **the look of it on glass is not verified**: that the panel lays out at phone width,
+  and that a tap lands on the right picture. HANDOFF row *"Eye the rebuilt swing screen"* covers it.
+
+---
+
+## 02 - Overlays on the Proven Clock — CLOSED with one measurement declined
+**Completed:** 2026-08-13 03:46 UTC
+**Phase:** Core Golfer Experience
+**Summary:** Closed on Taylor's *"I don't want to measure. skip this"*. The blocker below was
+cleared **by decision, not by measurement** — the phone had since reconnected and input was no
+longer being swallowed, so the reading was available and was declined rather than unavailable.
+Oracles green at close: `tsc` clean, **245 jest across 22 suites** (+65 since the entry below,
+from `6d2b588`).
+
+**Notes:**
+
+- **One Definition-of-Done item is UNMET and is named, not rounded away:** *"the trace's
+  frame-lock cost is measured and written down, and the Skia question is answered with that
+  number rather than by assumption."* Overlay drift with the trace **on** versus **off** was
+  never read off the S25+.
+- **The consequence, stated plainly:** the trace ships on plain rotated `View`s at a measured
+  **peak of 461 views** at impact on `pro_3` (400 of them trace), against roughly **77** for the
+  run D23's 99.2% frame-lock figure came from. That the lock holds at 461 is an **assumption**.
+  D23/D36 rejected Skia on **cost rather than merit**, so that decision cannot be reversed by
+  argument — it needs the number. Recorded as **D51**.
+- **Re-taking it is one screen and about a minute** — RUNBOOK §12b, bottom of the METRICS panel.
+  Nothing about it is blocked any more.
+- Gate 3's geometry half **did** pass, on all ten fixtures at Address/Top/Impact, and caught the
+  `analysis.club`-vs-`defaultClubVar` port bug that no test would have.
+
+---
+
 ## 02 - Overlays on the Proven Clock — BLOCKED on one on-device reading
 **Started:** 2026-08-12 09:05 UTC
 **Phase:** Core Golfer Experience
