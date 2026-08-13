@@ -77,3 +77,14 @@ reasons a check did not score stay apart — *skipped for this swing* is about t
 is the config refusing to score a metric it does not trust yet, and merging them reports our gap
 as the golfer's.
 
+### Pose runs on CUDA when it is genuinely available
+
+**Decision:** `pose_device()` probes for a usable CUDA provider and returns `cuda` or `cpu`;
+`SWINGSAGE_POSE_DEVICE=cpu|cuda` forces it. Measured **2.32x** (70.4 -> 30.4 ms/frame) on a GTX 1080.
+**Gotchas:** "Available" is a claim, not a capability — a provider can be listed and still fail to
+create, falling back to CPU **without raising**. Always ask a real session `get_providers()`. There
+is no CUDA toolkit on this machine: the CUDA 12 + cuDNN 9 DLLs come from **torch's** `torch/lib`, so
+importing torch is load-bearing. `onnxruntime-gpu` must match the CUDA major version (**1.22** for
+CUDA 12; 1.28 wants CUDA 13). CPU and CUDA agree to **0.94 px** but are **not bit-identical**, so a
+golden snapshot is only valid against the device that produced it.
+**See:** ARCHIVE D53.

@@ -17,6 +17,8 @@ Two design choices worth stating:
 """
 from __future__ import annotations
 
+import os
+
 import cv2
 import numpy as np
 
@@ -172,6 +174,67 @@ def _hand_grip(pts, sc, w, h, conf_of, min_conf=0.25):
     return ([float(c[0]) / w, float(c[1]) / h, float(np.mean(confs))], per_side)
 
 
+def _enable_cuda_dlls() -> None:
+    """
+    Make onnxruntime's CUDA provider loadable. Without this it silently runs on the CPU.
+
+    There is **no CUDA toolkit installed on this machine**. The CUDA 12 + cuDNN 9 DLLs that
+    `onnxruntime-gpu` links against are the ones **torch ships**, in `site-packages/torch/lib`,
+    and importing torch is what puts that directory on the DLL search path. So this import is
+    load-bearing, not incidental — skip it and `InferenceSession(..., providers=["CUDA..."])`
+    returns a session whose providers are `["CPUExecutionProvider"]`, with no exception raised.
+
+    That silence is the whole hazard: every symptom of "CUDA is not set up" looks identical to
+    "the GPU does not help", and the second one is a conclusion about hardware you would then
+    buy, or not buy, a host for.
+    """
+    try:
+        import torch  # noqa: F401
+    except Exception:
+        pass
+
+
+def pose_device() -> str:
+    """
+    Which device RTMPose runs on: `"cuda"` when the runtime can actually do it, else `"cpu"`.
+
+    Pose is the slowest stage in the pipeline and ran on the CPU for the whole life of this project
+    while a CUDA GPU sat idle — not because anything chose that, but because the installed
+    `onnxruntime` was the CPU-only build, whose provider list contains no CUDA at all. Changing the
+    string alone would have done nothing; `onnxruntime-gpu` is what makes this reachable.
+
+    **Probed, never assumed.** The provider list is the runtime's own answer to "can I", which is
+    the only trustworthy one — a CUDA build on a machine with no driver, a Pascal card too old for
+    a given build, or a missing cuDNN all present as an available-provider list without CUDA in it,
+    or as a session that fails to create. Falling back to CPU is always correct and merely slower;
+    guessing wrong the other way fails the whole analysis.
+
+    `SWINGSAGE_POSE_DEVICE=cpu|cuda` forces it, which is what the CPU-vs-CUDA measurement uses and
+    what a host with a GPU it does not want spent on pose would set.
+    """
+    forced = os.environ.get("SWINGSAGE_POSE_DEVICE", "").strip().lower()
+    if forced == "cpu":
+        return "cpu"
+    if forced == "cuda":
+        # Still register the DLLs. An earlier version returned here directly, which meant the one
+        # caller that forces "cuda" — the CPU-vs-CUDA benchmark — was the one caller that skipped
+        # the setup CUDA needs, so it silently measured CPU against CPU and reported 1.00x.
+        _enable_cuda_dlls()
+        return "cuda"
+    try:
+        import onnxruntime as ort
+
+        if "CUDAExecutionProvider" not in ort.get_available_providers():
+            return "cpu"
+
+        _enable_cuda_dlls()
+        return "cuda"
+    except Exception:
+        # Anything failing here means CUDA is not usable. CPU is always correct and merely
+        # slower; guessing the other way fails the whole analysis.
+        return "cpu"
+
+
 def estimate(video_path, boxes, mode: str = "performance", progress=None,
              wholebody: bool = False) -> RawPoseSeries:
     from rtmlib import RTMPose
@@ -179,7 +242,7 @@ def estimate(video_path, boxes, mode: str = "performance", progress=None,
     url, input_size = (WHOLEBODY_MODELS if wholebody else POSE_MODELS)[mode]
     mapping = WHOLEBODY_TO_NATIVE if wholebody else HALPE26_TO_NATIVE
     model = RTMPose(url, model_input_size=input_size,
-                    backend="onnxruntime", device="cpu")
+                    backend="onnxruntime", device=pose_device())
 
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():

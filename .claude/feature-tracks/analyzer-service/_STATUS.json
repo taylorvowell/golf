@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "featureName": "analyzer-service",
+  "currentStep": "02",
+  "phase": "Platform Foundation",
+  "lastUpdated": "2026-08-13T09:45:00Z",
+  "steps": {
+    "01": {
+      "status": "complete",
+      "completedAt": "2026-08-13T09:45:00Z",
+      "note": "MEASURED: CUDA is 2.32x faster than CPU for pose (70.4 -> 30.4 ms/frame) on a GTX 1080, and agrees to within 0.94px across 6150 keypoints (worst conf delta 8e-6) - sub-pixel but NOT bit-identical. Three false results came first, all the same shape - CUDA silently falling back to CPU while the benchmark reported the non-difference: (1) the installed onnxruntime was the CPU-only build, so device='cpu' was not even the binding constraint; (2) onnxruntime-gpu 1.28 wants CUDA 13 on a CUDA 12.6 machine - it ADVERTISED the provider, failed to create it, and reported 0.98x; (3) pose_device()'s forced-device branch returned before the torch import that registers the CUDA DLLs, so the one caller that forces cuda (the benchmark) was the one that skipped enabling it - 1.00x. Each reads as 'the GPU does not help', which would have chosen the production worker host off CPU-vs-CPU. The durable fix is that posebench.py now asks the REAL session get_providers() and refuses to time a fallback. Analyzer suite green: 123 passed, 2 skipped, 1 xfailed."
+    }
+  },
+  "blockers": [],
+  "skipped": []
+}

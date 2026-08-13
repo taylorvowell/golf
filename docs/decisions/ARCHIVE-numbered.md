@@ -2826,3 +2826,62 @@ makes the check mean anything. (P10 must sort after P2, which a string compare g
 
 **Not decided here:** whether two decoders are affordable. That is a device measurement, unmade —
 see the step's note and D51's precedent.
+
+---
+
+## D53 — Pose runs on CUDA when it is genuinely available, and "available" is never taken on trust
+
+**Date:** 2026-08-13
+**Track:** `analyzer-service` step 01
+
+Pose is the slowest stage in the pipeline and had run on the CPU for the entire life of the project
+while a CUDA GPU sat idle. Not by choice — `swingsage/pose_rtm.py` hardcoded `device="cpu"`, and the
+installed `onnxruntime` was the **CPU-only build**, so the GPU was not merely unused, it was
+unreachable. Changing the string alone would have done nothing.
+
+**Measured on a GTX 1080** (a 2016 card — the floor, not the ceiling):
+
+| | CPU | CUDA |
+|---|---|---|
+| per frame | 70.4 ms | **30.4 ms** |
+| speedup | | **2.32x** |
+
+**And it is the same swing.** Across 6,150 compared keypoints the worst x/y disagreement is
+**0.001305 normalized ≈ 0.94 px** on the 720 frame the CV stage consumes, and the worst confidence
+delta is **0.000008** — far below `MIN_CONF` resolution, so no gate flips. It is **not
+bit-identical**, though, and that has a consequence worth stating: an artifact regenerated on a GPU
+host will differ from a CPU-generated one in the last digits, so **golden snapshots are only valid
+against the device that produced them**. Re-freeze deliberately, never mid-migration.
+
+`pose_device()` probes rather than assumes, and `SWINGSAGE_POSE_DEVICE=cpu|cuda` forces it — for the
+benchmark, and for a host with a GPU it would rather not spend on pose. CPU is always a correct
+fallback and merely slower; guessing the other way fails the whole analysis.
+
+### The part worth remembering: this produced three false results first
+
+All three had the same shape — **CUDA silently falling back to CPU, with the benchmark dutifully
+reporting the resulting non-difference.**
+
+1. `onnxruntime` was the CPU-only build. Providers: `Azure`, `CPU`.
+2. `onnxruntime-gpu` **1.28 requires CUDA 13**; this machine has 12.6. It *advertised*
+   `CUDAExecutionProvider`, failed to create it, fell back **without raising**, and the benchmark
+   reported **0.98x**. Pinning **1.22.0** fixed the pairing.
+3. There is **no CUDA toolkit installed**. The CUDA 12 + cuDNN 9 DLLs onnxruntime links against are
+   the ones **torch ships** in `site-packages/torch/lib`, and importing torch is what puts that
+   directory on the DLL search path. `pose_device()` did that import — but returned early on the
+   forced-device branch, which is exactly what the benchmark sets. So the one caller that asked for
+   CUDA was the one that skipped enabling it: **1.00x**.
+
+Every one of those reads as *"the GPU does not help"*. That is a conclusion about hardware, and it
+would have chosen the production worker host.
+
+**The durable fix is none of the three.** It is that `scripts/posebench.py` now asks the **real
+session** `get_providers()` and **refuses to time** a CUDA pass that fell back to CPU. `available`
+is a claim; a session is the capability. This is the same standing trap the project already knows in
+another costume — a number that scores well is not evidence the thing works.
+
+### What this does NOT decide
+
+The worker host. 2.32x on a 2016 card says a GPU is worth having and that Railway's lack of one is a
+real cost — it does not say what to buy. That decision is Taylor's (money), and it now has evidence
+attached instead of a guess.
