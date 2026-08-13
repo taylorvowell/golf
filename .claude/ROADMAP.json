@@ -192,7 +192,7 @@
     },
     {
       "id": "mobile-app-shell",
-      "spine": false,
+      "spine": true,
       "lifecycle": "active",
       "phase": "golfer-core",
       "goal": "Mobile client scaffold for iPhone and Android: navigation, auth flows, onboarding with role selection, profile and goals UI, the shared design system, and §41's real-golf-conditions usability bar (bright sunlight, one-handed, large capture controls) as stated acceptance criteria rather than an aspiration.",
@@ -213,12 +213,12 @@
           "blocking": false
         }
       ],
-      "sequencingNote": "Step 01 (navigation + the swing log) is complete; steps 02 (onboarding, role, profile) and 03 (design system, §41 usability) remain open and launch-blocking. The spine moved on to mobile-player 2026-08-12 (D49) because neither gates watching a swing, and the player is the largest unproven risk in the product."
+      "sequencingNote": "Step 01 (navigation + the swing log) is complete; steps 02 (onboarding, role, profile) and 03 (design system, §41 usability) remain open and launch-blocking. The spine moved on to mobile-player 2026-08-12 (D49) because neither gates watching a swing, and the player is the largest unproven risk in the product. THE SPINE CAME BACK HERE 2026-08-13 when mobile-player completed all four steps: this is the remaining launch-blocking work in the golfer-core phase, and Deck (the player's control surface) is explicitly waiting on step 03 to absorb it rather than collide with it."
     },
     {
       "id": "mobile-player",
-      "spine": true,
-      "lifecycle": "active",
+      "spine": false,
+      "lifecycle": "complete",
       "phase": "golfer-core",
       "goal": "Re-express the frame-accurate player and overlay system on mobile, plus the analysis results surface (scores, findings, priorities) and the swing log. The rendering RULES survive the port even though the React components may not — frame-exact seeking, endpoint-exact trace smoothing, never interpolating a gap.",
       "statusFile": ".claude/feature-tracks/mobile-player/_STATUS.json",
@@ -237,7 +237,7 @@
           "blocking": false
         }
       ],
-      "sequencingNote": "Made the spine 2026-08-12 (D49). Deliberately NOT blocked on swing-ingest — ten analysed swings already exist on disk and are served over the versioned API, so the largest single piece of UI risk in the product can be proven against real artifacts now. The mobile-app-shell dependency is non-blocking: its step 01 delivered the navigation this needs, and its remaining steps do not gate playback. D40 already measured that Android resolves seeks FORWARD, so the web player’s midpoint rule is wrong here — the rules port, the arithmetic does not."
+      "sequencingNote": "COMPLETE 2026-08-13, all four steps. Two things it did NOT prove, both named rather than absorbed: the overlay's frame lock with the club-head trace on (declined, D51 — so the Skia question stays open) and the cost of two decoders for side-by-side comparison. Neither is a code gap; both are one device reading. Made the spine 2026-08-12 (D49). Deliberately NOT blocked on swing-ingest — ten analysed swings already exist on disk and are served over the versioned API, so the largest single piece of UI risk in the product can be proven against real artifacts now. The mobile-app-shell dependency is non-blocking: its step 01 delivered the navigation this needs, and its remaining steps do not gate playback. D40 already measured that Android resolves seeks FORWARD, so the web player’s midpoint rule is wrong here — the rules port, the arithmetic does not."
     },
     {
       "id": "swing-ingest",

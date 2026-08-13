@@ -602,8 +602,11 @@ Stated as fact, with no implied ordering or plan. See
   scored" reasons stay distinct at every level. **The overlay's frame lock with the trace on is
   still unmeasured on the device** (§11b) and dual-view comparison does not exist. The Analysis
   panel's automated oracles pass but it has **not been looked at on the glass** — layout at phone
-  width and the landing frame of a tap are unverified. No capture, no upload, and no iOS build has
-  ever been compiled.
+  width and the landing frame of a tap are unverified. **Side-by-side comparison** puts a second
+  swing beside the first and holds it at the same *position in the swing* — mapped through the
+  P-codes both artifacts carry, so five-fold differences in clip length and differing frame rates
+  both work (D52); an unalignable pair says so rather than drifting. Whether two decoders are
+  affordable is **unmeasured**. No capture, no upload, and no iOS build has ever been compiled.
 - **No capture of any kind.** No in-app recording, no camera code, no multi-device sync.
 - **No upload flow.** Analysis is started by hand (`burnin.py`) or via the web app's re-analyze
   button on an already-indexed swing. There is no queue beyond the DB-backed reanalyze job.

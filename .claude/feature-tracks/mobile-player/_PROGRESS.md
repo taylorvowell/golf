@@ -29,6 +29,46 @@ consumer in the tree** — `frame-clock` is this track's, and it is why the spik
 
 ---
 
+## 04 - Two Swings, One Scrub — TRACK COMPLETE
+**Completed:** 2026-08-13 04:52 UTC
+**Phase:** Core Golfer Experience
+**Summary:** The comparison got its picture. `ComparePanel` already compared the numbers, and its
+own prop comment said the reference was *"held by the player so the picture can show it too"* —
+which it never did. A second `FrameClockView` now sits beside the first, driven from the leader's
+frame through a position mapping. `tsc` clean, **283 jest across 26 suites (+17)**, Metro bundles
+6.20 MB — a Reload, not a rebuild. **This closes the `mobile-player` track.**
+
+**Notes:**
+
+- **Frames and seconds are both wrong answers, and that is the whole design.** Frame 143 of one
+  swing means nothing in another; seconds cancel out exactly the tempo difference a golfer is
+  comparing. The only shared vocabulary two clips have is **the swing itself**, so `align.ts` maps
+  position-to-position through the P-codes both artifacts carry — find the segment the leader's
+  frame falls in, take the fraction across it, land at that fraction of the follower's own
+  segment. Differing lengths and differing frame rates both fall out for free. Recorded as **D52**.
+- **Validated on real data, not only in unit tests.** All **90 ordered fixture pairs** align with
+  zero unalignable and zero non-monotonic or out-of-range frames, and `swing1`'s ten positions map
+  **exactly** onto `pro_3`'s — two swings differing in length by more than five times (93 frames of
+  swing against 1267).
+- **A design flaw caught by a failing test rather than by review.** `anchorsOf` originally sorted
+  by **frame** and then asserted the frames were strictly increasing — which is vacuous, because
+  sorting orders any table into compliance. A swing whose top was detected before its address would
+  have passed and run the follower backwards through its own swing. It now sorts by **P-code
+  ordinal**, which makes the check mean something. (P10 must also sort after P2, which a string
+  compare gets wrong.)
+- **Refusals are first-class.** An unanalysed reference, or fewer than two shared positions, renders
+  an explicit notice — a silently misaligned pair looks exactly like a working one, and a golfer
+  would read two different points in two swings as a difference in their own.
+- **Neither pane wears the other's overlay**, for the reason `ComparePanel` already states about
+  geometry: two swings' normalized coordinates are not comparable.
+- **NOT DONE, named rather than rounded away: the device cost.** Two ExoPlayer decoders on screen
+  at once, and whether the leader's frame-lock survives it, is this step's own open question and
+  only the phone answers it. The phone was not driven (Taylor's standing rule). Structurally the
+  two players are safe — every piece of `frame-clock`'s state is a per-instance field, no
+  singletons — but safe is not free. The side-by-side layout has not been seen on glass either.
+
+---
+
 ## 03 - The Swing, Explained
 **Completed:** 2026-08-13 04:12 UTC
 **Phase:** Core Golfer Experience

@@ -2775,3 +2775,54 @@ counts. If it does not, Skia is back on the table and this entry is why.
 is not evidence the check works"* and that coverage numbers have overstated quality three separate
 times. A view count is not a frame-lock. Do not let 461 views be re-described as "measured
 performance" — the count was measured; the lock was not.
+
+---
+
+## D52 — Two swings are aligned by POSITION, never by frame or by time
+
+**Date:** 2026-08-13
+**Track:** `mobile-player` step 04
+**Status:** Implemented in `apps/mobile/src/features/player/align.ts`, validated across all 90
+ordered fixture pairs.
+
+Synchronized comparison needs an answer to "where is the other swing right now". Two obvious
+answers are both wrong, and wrong in ways that look plausible on screen:
+
+**Frames don't transfer.** Frame 143 of one swing has no relationship to frame 143 of another. The
+clips are different lengths, start at different moments, and need not share a frame rate.
+
+**Seconds are worse, because they look right.** Scaling one clip's duration onto the other's
+cancels precisely the thing a golfer is comparing — a tour swing reaches the top faster than an
+amateur's *by design*, and a mapping that normalizes that difference away has erased the finding.
+
+The only vocabulary two clips genuinely share is **the swing itself**. Both artifacts carry
+`checkpoints` — the ten coaching positions P1…P10 with the frame each was detected at — so the
+mapping is piecewise-linear between shared positions: find the segment the leader's frame falls in,
+take the fraction across it, land at that fraction of the follower's own segment. Address is
+address in both; the top is the top in both. Differing lengths and differing frame rates both fall
+out for free, because nothing in the mapping ever touches absolute time.
+
+**Measured:** `swing1` (P1@150 → P10@243) against `pro_3` (P1@210 → P10@1477) — more than five
+times longer — maps all ten positions **exactly** onto their counterparts, and stays monotonic and
+in range across every frame of the clip. All **90 ordered fixture pairs** align: zero unalignable,
+zero out-of-range.
+
+**Two refusals are part of the decision, not omissions:**
+
+- **It never extrapolates outside the detected swing.** Before address and after finish there is
+  only footage — no corresponding position exists — so the map clamps to the ends. Extrapolating
+  would invent an alignment out where neither swing is swinging.
+- **It uses only positions BOTH artifacts detected**, and fewer than two shared positions means
+  there is no segment to interpolate within. Then the answer is `null`, and the UI must **say** the
+  two cannot be lined up. A silently misaligned pair is the failure mode this guards: it looks
+  exactly like a working one, and a golfer would read two different points in two swings as a
+  difference in their own swing.
+
+**A flaw worth recording because it nearly shipped.** The anchor table was first sorted by *frame*
+and then checked for strictly-increasing frames — a vacuous test, since sorting orders any table
+into compliance. A swing whose top was detected before its address would have passed, and the
+follower would have run backwards through its own swing. Ordering by **P-code ordinal** is what
+makes the check mean anything. (P10 must sort after P2, which a string compare gets wrong.)
+
+**Not decided here:** whether two decoders are affordable. That is a device measurement, unmade —
+see the step's note and D51's precedent.

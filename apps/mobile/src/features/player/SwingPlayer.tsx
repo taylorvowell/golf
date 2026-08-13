@@ -18,6 +18,7 @@ import { ChevronGlyph, CompareGlyph, DECK, DeckSheet, LayersGlyph } from "../../
 import { COLORS } from "../../theme";
 import { AnalysisPanel } from "./AnalysisPanel";
 import { ComparePanel } from "./ComparePanel";
+import { ReferencePane } from "./ReferencePane";
 import { FrameSyncPanel } from "./FrameSyncPanel";
 import { PlayerConsole } from "./PlayerConsole";
 import { isSeekable, windowBounds, type Bounds } from "./frames";
@@ -173,7 +174,23 @@ export function SwingPlayer({
    * exactly the artifact's shape and always inside the screen, and it hands the overlay the pixel
    * size it needs anyway.
    */
-  const stage = useMemo(() => fitBox(aspect, viewport.w, viewport.h), [aspect, viewport]);
+  /** The swing being held up against this one. Null is the normal state. Declared above the stage
+   *  because it is what decides the stage's width. */
+  const [reference, setReference] = useState<SwingSummary | null>(null);
+
+  /**
+   * Half the width once a reference is up, so both swings fit side by side at the same size.
+   *
+   * Fitted rather than scaled: the overlay's coordinates are normalized against the analysed
+   * frame, so a stage that keeps its aspect keeps the drawing on the golfer at any size — and
+   * giving the two pictures unequal boxes would read as a difference in the swing rather than in
+   * the layout.
+   */
+  const stageWidth = reference ? Math.floor((viewport.w - COMPARE_GAP) / 2) : viewport.w;
+  const stage = useMemo(
+    () => fitBox(aspect, stageWidth, viewport.h),
+    [aspect, stageWidth, viewport.h],
+  );
 
   const bands = useMemo(
     () => phaseBands(analysis, corrections.phases, bounds),
@@ -218,9 +235,6 @@ export function SwingPlayer({
     if (panel === "analysis") setWantsReport(true);
   }, [panel]);
   const report = useReport(swingId, view, wantsReport);
-
-  /** The swing being held up against this one. Null is the normal state. */
-  const [reference, setReference] = useState<SwingSummary | null>(null);
 
   /**
    * Tapping the picture takes the controls away, and taps again to bring them back.
@@ -415,6 +429,24 @@ export function SwingPlayer({
             </View>
           ) : null}
         </View>
+
+        {/**
+         * The swing being compared against, beside this one and driven from its frame.
+         *
+         * A follower with no clock of its own — see `ReferencePane`. It is a sibling of the stage
+         * rather than a layer over it because the point of a comparison is seeing both at once;
+         * the two boxes are the same size because a difference in scale would read as a difference
+         * in the swing.
+         */}
+        {reference ? (
+          <ReferencePane
+            reference={reference}
+            leaderAnalysis={analysis}
+            frame={player.state.scrubbing ? player.state.presented : player.state.frame}
+            width={stage.w}
+            height={stage.h}
+          />
+        ) : null}
       </View>
 
       {/* Chrome over the picture. A scrim behind it, not a solid bar: the top of a down-the-line
@@ -688,9 +720,18 @@ function useMediaSource(swingId: string, view?: SwingViewSummary["view"] | null)
   return useAuthenticatedImage(path);
 }
 
+/** The gutter between two swings shown side by side — enough to read as two pictures, not a seam. */
+const COMPARE_GAP = 4;
+
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: DECK.ground },
-  stageWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
+  stageWrap: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: COMPARE_GAP,
+  },
   stage: { backgroundColor: "#000", overflow: "hidden" },
   fill: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
   centre: { alignItems: "center", justifyContent: "center", gap: 8, padding: 20 },

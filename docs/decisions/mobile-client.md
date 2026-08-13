@@ -89,6 +89,20 @@ handling — that gap closes as the track needs it.
 **Scope:** Anything needing frame-exactness. A non-frame-exact preview clip may use `expo-video`.
 **See:** ARCHIVE D50.
 
+### Two swings are compared by POSITION, never by frame or by time
+
+**Decision:** A synchronized comparison maps the leader's frame onto the follower's through the
+**P-codes both artifacts carry** — piecewise-linear between shared positions. Address is address in
+both, the top is the top in both, and differing lengths and frame rates fall out for free.
+**Gotchas:** Frames don't transfer between clips, and scaling by duration is worse because it
+cancels exactly the tempo difference being compared. The map **clamps** outside the detected swing
+rather than extrapolating, and uses **only positions both artifacts detected** — fewer than two
+shared means unalignable, which the UI must *state*, because a silently misaligned pair looks
+exactly like a working one. Build the anchor table sorted by **P-code ordinal**: sorting by frame
+makes the strictly-increasing check vacuous and lets a swing whose top was detected before its
+address run the follower backwards.
+**See:** ARCHIVE D52.
+
 ### Seek to `frame / fps` on Android — never the web player's `(frame + 0.5) / fps`
 
 **Decision:** The seek target on Android is `frame / fps`.
