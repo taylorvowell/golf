@@ -372,7 +372,12 @@ export function SwingPlayer({
             >
               <SwingOverlay
                 analysis={analysis}
-                frame={player.state.frame}
+                /**
+                 * Mid-drag the overlay draws what the PICTURE shows, not what the finger asks:
+                 * skeleton and video chase the thumb as one coherent scene. Everywhere else it
+                 * draws the transport's frame — the seek target it already knows (D36).
+                 */
+                frame={player.state.scrubbing ? player.state.presented : player.state.frame}
                 toggles={toggles}
                 angles={selectedAngles}
                 w={stage.w}

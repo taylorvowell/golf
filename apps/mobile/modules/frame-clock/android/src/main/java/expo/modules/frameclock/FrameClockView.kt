@@ -201,7 +201,9 @@ class FrameClockView(context: Context, appContext: AppContext) : ExpoView(contex
       val expected = pendingSeekFrame
       if (expected != null) {
         pendingSeekFrame = null
-        seekError.add((frame - expected).toDouble())
+        // Scrub seeks are keyframe-fast and DELIBERATELY inexact — scoring them would let a drag
+        // wreck the exactness figure for the one path that is still promised exact (D40).
+        if (!scrubbing) seekError.add((frame - expected).toDouble())
       }
 
       if (emitFrames) {
@@ -342,6 +344,27 @@ class FrameClockView(context: Context, appContext: AppContext) : ExpoView(contex
   /** "start" by default — media3 resolves seeks forward, so the midpoint rule lands late (D40). */
   var seekMode: String = "start"
 
+  /**
+   * Fast-scrub mode: media3's own scrubbing mode while a finger is down.
+   *
+   * The clips' GOP is short (a keyframe every 10 frames — measured, not assumed), so per-seek
+   * DECODE was never the cost; the cost is ExoPlayer's ordinary seek pipeline — renderer flush
+   * and codec round-trip on every touch sample — which is why the overlay (drawing the target it
+   * already knows, D36) tracked a finger while the picture trailed it. `setScrubbingModeEnabled`
+   * exists for exactly this (media3 1.7+): it suppresses the per-seek teardown, drops audio, and
+   * preempts superseded seeks, keeping seeks FRAME-EXACT while landing fast. Seek parameters stay
+   * EXACT — this is not the keyframe-compromise design; it was tried first and its granularity
+   * read as "not live". CLOSEST_SYNC remains the fallback lever if a device proves too slow even
+   * in scrubbing mode.
+   */
+  @Volatile private var scrubbing = false
+
+  fun setScrubbing(active: Boolean) {
+    val exo = player ?: return
+    scrubbing = active
+    exo.setScrubbingModeEnabled(active)
+  }
+
   fun seekToFrame(frame: Int) {
     val exo = player ?: return
     pendingSeekFrame = frame
@@ -377,6 +400,9 @@ class FrameClockView(context: Context, appContext: AppContext) : ExpoView(contex
    * having a lead — and late is counted in frames.
    */
   fun markOverlayCommitted(frame: Int) {
+    // Mid-drag the overlay deliberately draws the PRESENTED frame — commits would score the
+    // instrument against its own output and pollute the drift record scrubbing is excluded from.
+    if (scrubbing) return
     val now = System.nanoTime()
     val displayAtNs = synchronized(scheduleLock) {
       scheduled.firstOrNull { it.first == frame }?.second
@@ -428,6 +454,12 @@ class FrameClockView(context: Context, appContext: AppContext) : ExpoView(contex
    */
   fun setPlaybackSpeed(speed: Float) {
     player?.setPlaybackSpeed(speed)
+  }
+
+  /** Audio only — the scrub chase plays the video at whatever rate follows the finger, and the
+   *  soundtrack at 4x is noise, not information. Video timing is unaffected by volume. */
+  fun setMuted(muted: Boolean) {
+    player?.volume = if (muted) 0f else 1f
   }
 
   fun resetStats() {

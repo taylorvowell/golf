@@ -101,8 +101,16 @@ export interface FrameClockHandle {
   markOverlayCommitted: (frame: number) => Promise<void>;
   /** Which seek target to aim at: "mid" | "start" | "early" | "prevMid". See seekTargetMs. */
   setSeekMode: (mode: string) => Promise<void>;
+  /**
+   * Keyframe-fast seeks while a finger is down; frame-exactness restored on release. The caller
+   * re-issues the final target after turning this off — a drag's seeks are deliberately inexact
+   * and are excluded from the exactness instrument for the same reason.
+   */
+  setScrubbing: (active: boolean) => Promise<void>;
   /** 1 = real time, 0.25 = quarter speed. A 240fps clip at 0.25 plays at a true 60fps. */
   setPlaybackSpeed: (speed: number) => Promise<void>;
+  /** Audio only. The scrub chase mutes while it drives playback at finger-following rates. */
+  setMuted: (muted: boolean) => Promise<void>;
   getStats: () => Promise<FrameClockStats>;
   resetStats: () => Promise<void>;
 }

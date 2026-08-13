@@ -24,12 +24,12 @@ machine-level faults that have already cost time.
 | No iPhone | iOS is unbuildable locally: no Mac, no device (D5, D12). |
 | adb serial | `R3CY10EZ19E` |
 | App package | `com.swingsage.spike` |
-| Last known address | `10.0.1.125:37913` (2026-08-11). **The port changes on every reboot** — the IP usually does not. |
+| Last known address | `10.0.1.123:39593` (2026-08-12; was .125 the day before — the IP moves too, just rarely). **The port changes on every reboot** — the IP usually does not. |
 
 **Connecting.** Pairing survives reboots, so this is normally one command:
 
 ```bash
-adb connect 10.0.1.125:PORT      # PORT read off the phone; IP is usually stable
+adb connect 10.0.1.123:PORT      # PORT read off the phone; IP is usually stable
 adb devices -l                   # must say `device`, not `unauthorized`
 ```
 

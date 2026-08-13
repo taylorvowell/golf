@@ -60,8 +60,15 @@ class FrameClockModule : Module() {
       AsyncFunction("setSeekMode") { view: FrameClockView, mode: String ->
         view.seekMode = mode
       }
+      // Keyframe seeks while a finger is down; EXACT restored on release (see setScrubbing).
+      AsyncFunction("setScrubbing") { view: FrameClockView, active: Boolean ->
+        view.setScrubbing(active)
+      }
       AsyncFunction("setPlaybackSpeed") { view: FrameClockView, speed: Double ->
         view.setPlaybackSpeed(speed.toFloat())
+      }
+      AsyncFunction("setMuted") { view: FrameClockView, muted: Boolean ->
+        view.setMuted(muted)
       }
       AsyncFunction("getStats") { view: FrameClockView ->
         view.stats()

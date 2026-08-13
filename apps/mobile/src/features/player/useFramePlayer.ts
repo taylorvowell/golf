@@ -40,6 +40,16 @@ import { clampFrame, fileBounds, stepFrame, type Extent } from "./frames";
 /** A seek that has not landed within this long is assumed lost, and the next one is issued fresh. */
 const SEEK_TIMEOUT_MS = 1500;
 
+/**
+ * While a finger is down, seeks are fire-and-forget at most this often — the coalescer is
+ * BYPASSED, and media3's scrubbing mode preempts superseded seeks natively. The picture's update
+ * rate is the seek pipeline's ceiling; what makes a drag read as coherent is that the OVERLAY
+ * draws the PRESENTED frame during a scrub (state.scrubbing), so the skeleton and the picture
+ * move together, chasing the thumb as one scene — a jog-shuttle chase driven by playback rate
+ * was tried here and read worse, not better.
+ */
+const SCRUB_SEEK_INTERVAL_MS = 33;
+
 export interface FramePlayerState {
   /** What the transport draws: the seek target while one is outstanding, else what is presented. */
   frame: number;
@@ -60,6 +70,13 @@ export interface FramePlayerState {
   painted: boolean;
   /** True while a seek is outstanding — the presented frame is expected to disagree meanwhile. */
   seeking: boolean;
+  /**
+   * True for the whole of a drag. The overlay switches to drawing the PRESENTED frame while this
+   * is on, so the skeleton and the picture chase the thumb as ONE scene — a skeleton pinned to
+   * the finger over a picture that cannot keep up reads as the overlay tearing off the video,
+   * which is the exact perceived failure frame-sync exists to prevent.
+   */
+  scrubbing: boolean;
   /** Playback restarts at the window start instead of stopping at its end. */
   looping: boolean;
   /** 1 = real time. A swing is 1.5s long, so this is not a nicety. */
@@ -86,6 +103,10 @@ export interface FramePlayerActions {
   toggle: () => void;
   play: () => void;
   pause: () => void;
+  /** Finger down on a scrub surface: keyframe-fast seeks until `endScrub`. */
+  beginScrub: () => void;
+  /** Finger up: exactness restored, the final target re-issued so the landing frame is exact. */
+  endScrub: () => void;
   setLooping: (on: boolean) => void;
   /**
    * Change playback rate.
@@ -139,6 +160,7 @@ export function useFramePlayer(bounds: Extent): FramePlayer {
   const [ready, setReady] = useState<ReadyEvent | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [painted, setPainted] = useState(false);
+  const [scrubbing, setScrubbing] = useState(false);
   const [measure, setMeasure] = useState({ issued: 0, landed: 0, exact: 0, worst: 0 });
   /**
    * Looping defaults ON, and that is a golf decision rather than a media-player one. A swing is
@@ -186,6 +208,8 @@ export function useFramePlayer(bounds: Extent): FramePlayer {
    */
   const presentedRef = useRef(0);
   const targetRef = useRef<number | null>(null);
+  /** The UI's chosen speed, for the chase to restore after driving its own rates. */
+  const speedRef = useRef(1);
   useEffect(() => {
     boundsRef.current = typeof bounds === "number" ? fileBounds(bounds) : bounds;
   }, [bounds]);
@@ -218,6 +242,18 @@ export function useFramePlayer(bounds: Extent): FramePlayer {
       // Seeking is not playing. Leaving playback running would have the decoder advancing past
       // wherever the seek lands, so the frame a golfer stopped on is not the frame they get.
       if (playingRef.current) pause();
+
+      // The drag path: throttled fire-and-forget under media3 scrubbing mode — outside the
+      // coalescer and outside the exactness tally. `endScrub` re-issues the final target through
+      // the normal path below, which is what makes the landing frame exact again.
+      if (scrubbingRef.current) {
+        const now = Date.now();
+        if (now - lastScrubSeekAt.current >= SCRUB_SEEK_INTERVAL_MS) {
+          lastScrubSeekAt.current = now;
+          void ref.current?.seekToFrame(wanted);
+        }
+        return;
+      }
 
       const outstanding = inFlight.current;
       const stale = outstanding !== null && Date.now() - inFlightAt.current > SEEK_TIMEOUT_MS;
@@ -296,7 +332,39 @@ export function useFramePlayer(bounds: Extent): FramePlayer {
 
   const setLooping = useCallback((on: boolean) => setLoopingState(on), []);
 
+  /**
+   * The scrub lifecycle, from the seek surface's grant and release.
+   *
+   * While a finger is down the native player seeks keyframe-fast (`setScrubbing(true)`) so the
+   * PICTURE keeps up with the drag — the overlay always kept up, because it draws the target it
+   * already knows (D36), and the gap between the two is exactly what read as "the video lags the
+   * scrub". On release, exactness is restored and the final target is re-issued through the
+   * normal coalescing path, so the frame the golfer stopped on is the frame that lands, exact.
+   */
+  const scrubbingRef = useRef(false);
+  const lastScrubSeekAt = useRef(0);
+
+  const beginScrub = useCallback(() => {
+    scrubbingRef.current = true;
+    setScrubbing(true);
+    lastScrubSeekAt.current = 0;
+    // Drop any outstanding exact seek: its landing would be scored against a target the finger
+    // has already left, and the drag path does not use the coalescer at all.
+    inFlight.current = null;
+    queued.current = null;
+    void ref.current?.setScrubbing(true);
+  }, []);
+
+  const endScrub = useCallback(() => {
+    scrubbingRef.current = false;
+    setScrubbing(false);
+    void ref.current?.setScrubbing(false);
+    const wanted = targetRef.current;
+    if (wanted !== null) seekTo(wanted);
+  }, [seekTo]);
+
   const setSpeed = useCallback((next: number) => {
+    speedRef.current = next;
     setSpeedState(next);
     void ref.current?.setPlaybackSpeed(next);
   }, []);
@@ -312,6 +380,10 @@ export function useFramePlayer(bounds: Extent): FramePlayer {
       presentedRef.current = arrived;
       setPresented(arrived);
       setPainted(true);
+
+      // Scrub frames update `presented` (the overlay draws it mid-drag) but take no part in
+      // landing bookkeeping or the window-stop logic — the drag owns the transport until release.
+      if (scrubbingRef.current) return;
 
       const wanted = inFlight.current;
       if (wanted === null) {
@@ -425,6 +497,7 @@ export function useFramePlayer(bounds: Extent): FramePlayer {
       error,
       painted,
       seeking: target !== null,
+      scrubbing,
       looping,
       speed,
       seeksIssued: measure.issued,
@@ -432,12 +505,12 @@ export function useFramePlayer(bounds: Extent): FramePlayer {
       seeksExact: measure.exact,
       worstSeekError: measure.worst,
     }),
-    [error, looping, measure, painted, playing, presented, ready, speed, target],
+    [error, looping, measure, painted, playing, presented, ready, scrubbing, speed, target],
   );
 
   const actions = useMemo<FramePlayerActions>(
-    () => ({ seekTo, step, toggle, play, pause, setLooping, setSpeed, resetMeasurement, runSeekSweep }),
-    [pause, play, resetMeasurement, runSeekSweep, seekTo, setLooping, setSpeed, step, toggle],
+    () => ({ seekTo, step, toggle, play, pause, beginScrub, endScrub, setLooping, setSpeed, resetMeasurement, runSeekSweep }),
+    [beginScrub, endScrub, pause, play, resetMeasurement, runSeekSweep, seekTo, setLooping, setSpeed, step, toggle],
   );
 
   const handlers = useMemo(

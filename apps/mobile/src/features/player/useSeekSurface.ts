@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PanResponder, type LayoutChangeEvent } from "react-native";
 
-import { fractionToFrame, type Extent } from "./frames";
-
 /**
  * Turns any full-width view into something you can scrub with.
  *
@@ -34,7 +32,12 @@ export interface SeekSurface {
 }
 
 export function useSeekSurface(
-  bounds: Extent,
+  /**
+   * The transport's ONE x↔frame mapping (`scrubMap`), not raw bounds arithmetic: the surface,
+   * the strip, the fill and the playhead must all agree about where frame N is, weighted bands
+   * included, or the thumb crosses a phase boundary at a different x than the strip draws it.
+   */
+  toFrame: (fraction: number) => number,
   onSeek: (frame: number) => void,
   disabled: boolean,
   onScrubbingChange?: (scrubbing: boolean) => void,
@@ -43,7 +46,7 @@ export function useSeekSurface(
 
   const widthRef = useRef(0);
   const seekRef = useRef(onSeek);
-  const boundsRef = useRef(bounds);
+  const toFrameRef = useRef(toFrame);
   const disabledRef = useRef(disabled);
   const scrubbingRef = useRef(onScrubbingChange);
   // Synced in an effect, not the render body: a render that never commits must not leak its
@@ -52,10 +55,10 @@ export function useSeekSurface(
   // allowed — because a grant can arrive before the commit that follows the layout.
   useEffect(() => {
     seekRef.current = onSeek;
-    boundsRef.current = bounds;
+    toFrameRef.current = toFrame;
     disabledRef.current = disabled;
     scrubbingRef.current = onScrubbingChange;
-  }, [bounds, onSeek, disabled, onScrubbingChange]);
+  }, [toFrame, onSeek, disabled, onScrubbingChange]);
 
   const originRef = useRef(0);
 
@@ -63,7 +66,7 @@ export function useSeekSurface(
     function seekAtPage(pageX: number) {
       const w = widthRef.current;
       if (w <= 0 || disabledRef.current) return;
-      seekRef.current(fractionToFrame((pageX - originRef.current) / w, boundsRef.current));
+      seekRef.current(toFrameRef.current((pageX - originRef.current) / w));
     }
 
     return PanResponder.create({

@@ -212,13 +212,28 @@ class FrameClockView: ExpoView {
 
   func pause() { player.pause() }
 
+  /// Keyframe-fast seeks while a finger is down — the Android twin's `setScrubbing`. An exact
+  /// seek decodes from the previous keyframe on every touch sample, which is why the picture
+  /// lagged a drag while the overlay (drawing its known target) did not. Unverified on a device:
+  /// no Mac. Mirrored so the twins do not diverge in shape.
+  private var scrubbing = false
+
+  func setScrubbing(_ active: Bool) {
+    scrubbing = active
+  }
+
   /// Zero tolerance in both directions — the iOS equivalent of `SeekParameters.EXACT`. Without
   /// this AVPlayer is free to land on a nearby sync sample, which looks correct and is up to a
-  /// GOP out.
+  /// GOP out. While scrubbing, infinite tolerance instead — the keyframe-fast path; the caller
+  /// re-issues the final target exactly on release.
   func seekToFrame(_ frame: Int) {
     pendingSeekFrame = frame
     let target = CMTime(seconds: seekTargetSeconds(frame: frame, fps: fps), preferredTimescale: 600)
-    player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero)
+    if scrubbing {
+      player.seek(to: target, toleranceBefore: .positiveInfinity, toleranceAfter: .positiveInfinity)
+    } else {
+      player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero)
+    }
   }
 
   func markOverlayCommitted(_ frame: Int) {

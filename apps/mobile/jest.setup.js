@@ -95,6 +95,8 @@ jest.mock("./modules/frame-clock/src/FrameClockView", () => {
       seekToFrame: jest.fn().mockResolvedValue(undefined),
       markOverlayCommitted: jest.fn().mockResolvedValue(undefined),
       setSeekMode: jest.fn().mockResolvedValue(undefined),
+      setScrubbing: jest.fn().mockResolvedValue(undefined),
+      setMuted: jest.fn().mockResolvedValue(undefined),
       setPlaybackSpeed: jest.fn().mockResolvedValue(undefined),
       getStats: jest.fn().mockResolvedValue({
         overlayDriftFrames: EMPTY_STAT,

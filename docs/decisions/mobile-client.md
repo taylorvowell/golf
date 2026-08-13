@@ -182,19 +182,44 @@ needs `Path2D` + even-odd fill to put its holes back, which is why the analyzer 
 no outer/hole distinction. They stay web-only until something else draws them.
 **See:** ARCHIVE D23, D36.
 
-### The mobile overlay draws the transport's frame, not the presented frame
+### The mobile overlay draws the transport's frame — except mid-drag, when it draws the picture's
 
 **Decision:** The overlay paints `target ?? presented` — the seek target while a seek is
 outstanding, the presented frame otherwise — and calls `markOverlayCommitted(frame)` in a layout
-effect immediately after.
-**Gotchas:** The two paths were measured and they differ. During playback JS learns about a frame
-~49 ms **before** it is displayed, so reacting to the frame event is comfortably in budget. On a
-seek there is **no lead at all** — a seeked frame is displayed essentially on arrival — so an
-overlay that waited for the event would always be a frame behind while scrubbing, which is the one
-interaction where a golfer is studying a position.
+effect immediately after. **While a finger is on a scrub surface (`state.scrubbing`) it paints
+`presented` instead**: the skeleton and the picture chase the thumb as one coherent scene, at
+whatever rate the seek pipeline can land frames. A skeleton pinned to the finger over a picture
+that cannot keep up reads as the overlay tearing off the video — dogfooded 2026-08-12, and the
+tear was the whole perceived failure.
+**Gotchas:** The two non-drag paths were measured and they differ. During playback JS learns about
+a frame ~49 ms **before** it is displayed, so reacting to the frame event is comfortably in
+budget. On a single seek there is **no lead at all** — the landing is displayed on arrival — so
+target-drawing is what keeps a step from being one frame behind. Mid-drag commits are excluded
+from the drift instrument natively (the overlay would be scoring the instrument against its own
+output).
 **Scope:** `markOverlayCommitted` is what makes the sync panel's `Overlay drift` a native
 measurement scored on the playback thread rather than a JS self-report.
 **See:** ARCHIVE D36.
+
+### Scrubbing streams preemptible seeks under media3's scrubbing mode; the release lands exact
+
+**Decision:** While a finger is down the transport bypasses its one-in-flight seek coalescer and
+fires `seekToFrame` at most every 33 ms, with `ExoPlayer.setScrubbingModeEnabled(true)` letting
+media3 preempt superseded seeks and skip per-seek pipeline teardown. Seek parameters stay
+**EXACT** throughout. On release the final finger frame is re-issued through the normal coalesced
+path, so the landing is frame-exact and measured. Drag seeks are excluded from the exactness
+instrument — they are deliberately preemptible.
+**Gotchas:** Three designs lost to this one on the same evening, on feel: (1) `CLOSEST_SYNC`
+keyframe seeks — granular, read as "not live" even at a 10-frame GOP; (2) a jog/shuttle chase
+driving `setPlaybackSpeed` toward the finger — read worse than seeking; (3) predictive lead
+(velocity × pipeline latency) — masked latency but not the overlay/picture tear, which the
+presented-frame overlay rule above actually fixed. The coalescer CANNOT serve a drag: its landing
+detection is "a new frame rendered", and a preempted or same-position seek renders nothing, which
+stalls it into its 1.5 s lost-seek timeout.
+**Scope:** The clips' GOP is short (a keyframe every 10 frames — measured with ffprobe, not
+assumed), so per-seek decode was never the bottleneck; pipeline overhead was. If a future device
+still cannot keep up, the next lever is a pre-decoded frame cache (editor-style scrub stills),
+not a faster seek loop.
 
 ### The mobile transport is bounded by `playback_window`, not by the file
 
@@ -364,9 +389,15 @@ before flex divides what is left, so four 4pt gaps would push every phase bounda
 from the frame it marks, and the playhead would cross a boundary at a visibly different moment from
 the picture. `useSeekSurface` is the single copy of the x↔frame arithmetic the bar and the scrub
 track both read.
-**Scope:** Drawn to scale, backswing against downswing **is tempo**, which is the whole reason the
-bar earns any height. `git show f05eaee` has the filmstrip if it is ever wanted back — the artifact,
-the route and `refilmstrip.py` all went with it rather than being left as surface with no consumer.
+**Scope:** WITHIN the swing the bar stays drawn to scale — backswing against downswing **is
+tempo**, which is the whole reason the bar earns any height. The analyzer's padding is not swing:
+setup and run-out are **compressed to `PADDING_SCRUB_WEIGHT` (0.3) of their true width** so the
+swing owns most of the bar's travel, which also lowers frames-per-pixel through the part a golfer
+actually studies. `scrubMap` (phaseBands.ts) is the ONE weighted x↔frame mapping — the strip's
+flex widths, the fill, the playhead and `useSeekSurface`'s touch arithmetic all read it; a second
+copy of that mapping is how a tap and a drawn boundary stop agreeing. `git show f05eaee` has the
+filmstrip if it is ever wanted back — the artifact, the route and `refilmstrip.py` all went with
+it rather than being left as surface with no consumer.
 
 ### Compare puts timing and scores side by side, never geometry
 

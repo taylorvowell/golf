@@ -1,7 +1,8 @@
 import { StyleSheet, View } from "react-native";
 
 import { DECK } from "../../design/deck";
-import { frameToFraction, stepFrame, type Extent } from "./frames";
+import { stepFrame, type Extent } from "./frames";
+import type { ScrubMap } from "./phaseBands";
 import { useSeekSurface } from "./useSeekSurface";
 
 /**
@@ -28,6 +29,8 @@ export interface ScrubBarProps {
    * the span it is drawing.
    */
   bounds: Extent;
+  /** The transport's one x↔frame mapping — weighted bands included. See `scrubMap`. */
+  map: ScrubMap;
   onSeek: (frame: number) => void;
   /** Fires on touch-down and release so the caller can show that the scrub is live. */
   onScrubbingChange?: (scrubbing: boolean) => void;
@@ -38,12 +41,13 @@ export function ScrubBar({
   frame,
   fps = 0,
   bounds,
+  map,
   onSeek,
   onScrubbingChange,
   disabled = false,
 }: ScrubBarProps) {
-  const surface = useSeekSurface(bounds, onSeek, disabled, onScrubbingChange);
-  const fraction = frameToFraction(frame, bounds);
+  const surface = useSeekSurface(map.toFrame, onSeek, disabled, onScrubbingChange);
+  const fraction = map.toFraction(frame);
 
   /**
    * A drag is not a gesture a screen reader can make.

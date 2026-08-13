@@ -1,11 +1,11 @@
-import { memo, useCallback, useEffect, useRef } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef } from "react";
 import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { BarsGlyph, DECK, DeckButton, PauseGlyph, PlayGlyph, SparkGlyph } from "../../design/deck";
 import { PhaseStrip } from "./PhaseStrip";
 import { ScrubBar, SCRUB_TOUCH } from "./ScrubBar";
-import { activeBand, type PhaseBand } from "./phaseBands";
-import { frameToFraction, type Extent } from "./frames";
+import { activeBand, scrubMap, type PhaseBand } from "./phaseBands";
+import { type Extent } from "./frames";
 import type { FramePlayerActions, FramePlayerState } from "./useFramePlayer";
 
 /**
@@ -87,13 +87,26 @@ export const PlayerConsole = memo(function PlayerConsole({
   const { frame, playing, speed } = state;
 
   const onSeek = useCallback((f: number) => actions.seekTo(f), [actions]);
-  const fraction = frameToFraction(frame, bounds);
+  // The drag's lifecycle drives the fast-scrub path: streamed seeks while the finger is down so
+  // the picture keeps up, one exact landing on release. See useFramePlayer.beginScrub.
+  const onScrubbingChange = useCallback(
+    (scrubbing: boolean) => (scrubbing ? actions.beginScrub() : actions.endScrub()),
+    [actions],
+  );
   const active = activeBand(bands, frame);
   const here = active >= 0 ? bands[active].label : null;
 
   const first = typeof bounds === "number" ? 0 : bounds.first;
   const last = typeof bounds === "number" ? Math.max(0, bounds - 1) : bounds.last;
   const rate = Number.isFinite(fps) && fps > 0 ? fps : 0;
+
+  /**
+   * The ONE x↔frame mapping every position on the transport reads — playhead, strip widths, fill
+   * and touch surface. Weighted: the swing owns most of the bar, the analyzer's padding is
+   * compressed (see `PADDING_SCRUB_WEIGHT`).
+   */
+  const map = useMemo(() => scrubMap(bands, { first, last }), [bands, first, last]);
+  const fraction = map.toFraction(frame);
 
   return (
     // `box-none`: the scrim is a gradient over the picture, and the picture underneath it is still
@@ -114,8 +127,22 @@ export const PlayerConsole = memo(function PlayerConsole({
 
         {/* The one box every position reads from. Nothing inset, nothing gapped. */}
         <View style={styles.track}>
-          <PhaseStrip bands={bands} active={active} onSeek={onSeek} disabled={disabled} />
-          <ScrubBar frame={frame} bounds={bounds} fps={fps} onSeek={onSeek} disabled={disabled} />
+          <PhaseStrip
+            bands={bands}
+            weights={map.weights}
+            active={active}
+            onSeek={onSeek}
+            disabled={disabled}
+          />
+          <ScrubBar
+            frame={frame}
+            bounds={bounds}
+            map={map}
+            fps={fps}
+            onSeek={onSeek}
+            onScrubbingChange={onScrubbingChange}
+            disabled={disabled}
+          />
 
           {!disabled ? (
             <View

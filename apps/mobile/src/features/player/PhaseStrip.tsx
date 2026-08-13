@@ -25,6 +25,12 @@ import type { PhaseBand } from "./phaseBands";
 
 export interface PhaseStripProps {
   bands: readonly PhaseBand[];
+  /**
+   * Screen weight per band, from `scrubMap` — the transport's ONE x↔frame mapping. The strip
+   * must divide the row exactly as the scrub surface divides x, or a tap on a band boundary and
+   * the playhead crossing it stop agreeing. Defaults to true durations when absent.
+   */
+  weights?: readonly number[];
   /** Index of the band the playhead is in; `-1` when it is outside all of them. */
   active: number;
   onSeek: (frame: number) => void;
@@ -33,6 +39,7 @@ export interface PhaseStripProps {
 
 export const PhaseStrip = memo(function PhaseStrip({
   bands,
+  weights,
   active,
   onSeek,
   disabled = false,
@@ -43,6 +50,7 @@ export const PhaseStrip = memo(function PhaseStrip({
     <View style={styles.strip} testID="phase-strip">
       {bands.map((band, i) => {
         const span = band.to - band.from;
+        const weight = weights?.[i] ?? span;
         return (
           <Pressable
             key={band.key}
@@ -54,7 +62,7 @@ export const PhaseStrip = memo(function PhaseStrip({
             onPress={() => onSeek(band.from)}
             // Small drawing, full-size target: the bar is 6pt tall and the reachable area is not.
             hitSlop={{ top: 12, bottom: 12 }}
-            style={{ flexGrow: span, flexShrink: span, flexBasis: 0 }}
+            style={{ flexGrow: weight, flexShrink: weight, flexBasis: 0 }}
           >
             <View
               style={[

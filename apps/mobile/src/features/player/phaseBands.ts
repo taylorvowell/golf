@@ -3,7 +3,7 @@ import type { Analysis } from "@swingsage/schema/contract";
 import { TRACE_COLOR } from "./overlay/skeleton";
 import { traceSpans } from "./overlay/model";
 import type { PhaseOverrides } from "./useCorrections";
-import { type Bounds } from "./frames";
+import { clampFrame, fractionToFrame, frameToFraction, type Bounds } from "./frames";
 
 /**
  * The swing, cut into the phases it is actually made of.
@@ -92,4 +92,83 @@ export function phaseBands(
 /** Which band the playhead is in, or `-1` when it is outside all of them. */
 export function activeBand(bands: readonly PhaseBand[], frame: number): number {
   return bands.findIndex((b) => frame >= b.from && frame < b.to);
+}
+
+/**
+ * How much of its true duration a padding band keeps on the scrub bar.
+ *
+ * The strip stays proportional WITHIN the swing — backswing against downswing is tempo, and that
+ * ratio is untouched — but the analyzer's padding (setup, run-out) is compressed so the part a
+ * golfer actually scrubs through takes most of the bar's width. A second of setup is worth
+ * having; a second of setup owning a quarter of the screen's most valuable control is not.
+ */
+export const PADDING_SCRUB_WEIGHT = 0.3;
+
+/**
+ * One x↔frame mapping for every position on the transport.
+ *
+ * The playhead, the frame badge, the strip's band widths, the scrub fill and the touch surface
+ * must all read THIS object — the moment two of them map x differently, the playhead crosses a
+ * phase boundary at a visibly different instant from the picture behind it, which is the failure
+ * the one-mapping rule exists to prevent. Piecewise linear: within any band, frames still map
+ * evenly; only the bands' screen shares are weighted.
+ */
+export interface ScrubMap {
+  toFraction(frame: number): number;
+  toFrame(fraction: number): number;
+  /** Screen weight per band, aligned with the bands array — what the strip's flex divides by. */
+  weights: number[];
+}
+
+export function scrubMap(bands: readonly PhaseBand[], bounds: Bounds): ScrubMap {
+  const { first, last } = bounds;
+
+  // Nothing to weight — no artifact, or a degenerate span. The bar stays honestly linear.
+  if (!bands.length || last <= first) {
+    return {
+      toFraction: (frame) => frameToFraction(frame, bounds),
+      toFrame: (fraction) => fractionToFrame(fraction, bounds),
+      weights: bands.map((b) => b.to - b.from),
+    };
+  }
+
+  const weights = bands.map(
+    (b) => (b.to - b.from) * (b.padding ? PADDING_SCRUB_WEIGHT : 1),
+  );
+  const total = weights.reduce((n, w) => n + w, 0);
+  // Cumulative screen offset at each band's left edge, in weight units.
+  const starts: number[] = [];
+  let acc = 0;
+  for (const w of weights) {
+    starts.push(acc);
+    acc += w;
+  }
+
+  return {
+    weights,
+    toFraction(frame) {
+      const f = clampFrame(frame, bounds);
+      for (let i = 0; i < bands.length; i++) {
+        const b = bands[i];
+        const lastBand = i === bands.length - 1;
+        if (f < b.to || lastBand) {
+          const within = Math.min(Math.max((f - b.from) / (b.to - b.from), 0), 1);
+          return Math.min(Math.max((starts[i] + within * weights[i]) / total, 0), 1);
+        }
+      }
+      return 1;
+    },
+    toFrame(fraction) {
+      const x = Math.min(Math.max(Number.isFinite(fraction) ? fraction : 0, 0), 1) * total;
+      for (let i = 0; i < bands.length; i++) {
+        const lastBand = i === bands.length - 1;
+        if (x < starts[i] + weights[i] || lastBand) {
+          const within = Math.min(Math.max((x - starts[i]) / weights[i], 0), 1);
+          const b = bands[i];
+          return clampFrame(b.from + within * (b.to - b.from), bounds);
+        }
+      }
+      return last;
+    },
+  };
 }

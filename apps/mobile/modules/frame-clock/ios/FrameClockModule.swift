@@ -48,6 +48,10 @@ public class FrameClockModule: Module {
         view.seekToFrame(frame)
       }
 
+      AsyncFunction("setScrubbing") { (view: FrameClockView, active: Bool) in
+        view.setScrubbing(active)
+      }
+
       AsyncFunction("markOverlayCommitted") { (view: FrameClockView, frame: Int) in
         view.markOverlayCommitted(frame)
       }
