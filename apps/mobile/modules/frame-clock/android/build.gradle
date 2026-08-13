@@ -18,9 +18,9 @@ android {
 }
 
 dependencies {
-  // Pinned to the version expo-video resolves, so a single ExoPlayer lands in the APK.
-  // If expo-video moves, move this with it — two media3 versions on the classpath fail at
-  // runtime, not at build time.
+  // This module owns the app's ONLY media3 pin — expo-video was removed once D50 made this view
+  // the sole playback surface. If any dependency ever brings media3 back onto the classpath, the
+  // versions must match: two media3 versions fail at runtime, not at build time.
   def androidxMedia3Version = "1.9.0"
   implementation "androidx.media3:media3-exoplayer:${androidxMedia3Version}"
   implementation "androidx.media3:media3-common:${androidxMedia3Version}"

@@ -3,6 +3,7 @@ import type { SwingListResponse, SwingSummary } from "@swingsage/schema/contract
 
 import { ApiClientError } from "../../platform/api";
 import { api } from "../../platform/client";
+import { reportUpgradeRequired, upgradeDetailOf } from "../../platform/VersionGate";
 import { supabase } from "../auth/supabase";
 
 /**
@@ -82,6 +83,12 @@ export function useSwings(): SwingsHook {
       if (liveRef.current) setState({ kind: "ok", swings: body.swings });
     } catch (err) {
       if (!liveRef.current || controller.signal.aborted) return;
+      // A 426 is not "unreachable" — it is the server refusing this build, and it must render as
+      // the upgrade screen, not as a network problem the golfer will retry forever.
+      if (err instanceof ApiClientError && err.isUpgradeRequired) {
+        reportUpgradeRequired(upgradeDetailOf(err));
+        return;
+      }
       const declined = err instanceof ApiClientError && err.status === 401;
       if (declined) {
         lastGood = null;

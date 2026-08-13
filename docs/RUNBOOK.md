@@ -409,6 +409,25 @@ pre-existing, both broke *every* Android build on this PC, and one is still only
    the build died on *"did not have a source.properties file"*. The empty stub was deleted so
    Gradle re-downloads it properly. **Already fixed**, no action needed.
 
+### Any app.json native-config change needs `prebuild --clean` before the next run
+
+`expo run:android` only generates `android/` when it is **absent** — it never reconciles an
+existing one. An edit to app.json that touches native config (scheme, permissions, plugins,
+orientation, allowBackup, build properties) therefore silently never lands on the installed
+build until:
+
+```bash
+cd apps/mobile
+npx expo prebuild -p android --clean
+npx expo run:android
+```
+
+This is how the `swingsage://` scheme sat declared-but-unregistered for days. `--clean` also
+deletes `android/local.properties`; the next `expo run:android` rewrites it, but a bare
+`gradlew` invocation in between hits the broken `ANDROID_SDK_ROOT` (ENVIRONMENT.md) — either
+`unset ANDROID_SDK_ROOT` first or recreate `local.properties` with
+`sdk.dir=C:/Users/taylo/AppData/Local/Android/Sdk`.
+
 ### The Android signing key — where it is, and what its fingerprint is for
 
 Google OAuth binds an Android client to a **package name + signing SHA-1**, so this comes up any

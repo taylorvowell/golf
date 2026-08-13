@@ -5,6 +5,8 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AuthGate } from "./src/features/auth/AuthGate";
 import { AuthProvider } from "./src/features/auth/AuthProvider";
+import { ErrorBoundary } from "./src/platform/ErrorBoundary";
+import { VersionGate } from "./src/platform/VersionGate";
 import { DeleteAccountRoute } from "./src/screens/DeleteAccountRoute";
 import { SwingDetailRoute } from "./src/screens/SwingDetailRoute";
 import { SwingLogScreen } from "./src/screens/SwingLogScreen";
@@ -42,8 +44,14 @@ export default function App() {
       {/* Light content, set once. Per-screen status bars are how one screen ends up with
           invisible text that nobody notices until it is on a real phone outdoors. */}
       <StatusBar style="light" />
-      <AuthProvider>
-        <AuthGate>
+      {/* The boundary is outermost and the gate sits above auth: a render throw must degrade to a
+          screen instead of a hard exit ("quality gates degrade, they don't crash"), and a build
+          below the server's floor must learn that before — and regardless of — signing in. The
+          gate's fetch is unauthenticated and parallel to the session restore, never serial. */}
+      <ErrorBoundary>
+        <VersionGate>
+          <AuthProvider>
+            <AuthGate>
           <NavigationContainer theme={theme}>
             <Stack.Navigator
               screenOptions={{
@@ -73,8 +81,10 @@ export default function App() {
               />
             </Stack.Navigator>
           </NavigationContainer>
-        </AuthGate>
-      </AuthProvider>
+            </AuthGate>
+          </AuthProvider>
+        </VersionGate>
+      </ErrorBoundary>
     </SafeAreaProvider>
   );
 }

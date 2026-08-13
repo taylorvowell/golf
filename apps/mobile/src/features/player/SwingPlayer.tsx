@@ -12,6 +12,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { SwingSummary, SwingViewSummary } from "@swingsage/schema/contract";
 
 import { FrameClockView } from "../../../modules/frame-clock/src";
+import { ErrorBoundary } from "../../platform/ErrorBoundary";
 import { useAuthenticatedImage } from "../../platform/useAuthenticatedImage";
 import { ChevronGlyph, CompareGlyph, DECK, DeckSheet, LayersGlyph } from "../../design/deck";
 import { COLORS } from "../../theme";
@@ -352,17 +353,35 @@ export function SwingPlayer({
           <StagePlaceholder visible={!painted && !error} />
 
           {analysis ? (
-            <SwingOverlay
-              analysis={analysis}
-              frame={player.state.frame}
-              toggles={toggles}
-              angles={selectedAngles}
-              w={stage.w}
-              h={stage.h}
-              corrections={corrections}
-              playerRef={player.ref}
-              traceCostRef={traceCost}
-            />
+            /**
+             * Behind its own boundary: the overlay is geometry math over an artifact the client
+             * did not produce, and a shape it did not expect must degrade to plain video — the
+             * swing is still watchable, which is the whole reason the overlay is optional. Keyed
+             * on the swing so one malformed artifact cannot blank the overlay for every swing
+             * opened after it.
+             */
+            <ErrorBoundary
+              resetKey={`${swingId}:${view ?? ""}`}
+              fallback={() => (
+                <View pointerEvents="none" style={[styles.fill, styles.overlayFailed]}>
+                  <Text style={styles.overlayFailedText}>
+                    The overlays could not be drawn for this swing. The video plays as normal.
+                  </Text>
+                </View>
+              )}
+            >
+              <SwingOverlay
+                analysis={analysis}
+                frame={player.state.frame}
+                toggles={toggles}
+                angles={selectedAngles}
+                w={stage.w}
+                h={stage.h}
+                corrections={corrections}
+                playerRef={player.ref}
+                traceCostRef={traceCost}
+              />
+            </ErrorBoundary>
           ) : null}
 
           {error ? (
@@ -809,6 +828,16 @@ const styles = StyleSheet.create({
 
   rail: { flexDirection: "row", justifyContent: "flex-end", gap: 8, marginTop: 10, marginRight: 4 },
   console: { position: "absolute", left: 0, right: 0, bottom: 0 },
+
+  overlayFailed: { justifyContent: "flex-end", padding: 14 },
+  overlayFailedText: {
+    color: COLORS.amber,
+    fontSize: 12,
+    lineHeight: 17,
+    textAlign: "center",
+    textShadowColor: "rgba(0,0,0,0.85)",
+    textShadowRadius: 6,
+  },
 
   errorScrim: { backgroundColor: "rgba(8,10,13,0.88)" },
   errorTitle: { color: COLORS.text, fontSize: 15, fontWeight: "700", textAlign: "center" },
