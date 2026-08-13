@@ -1,4 +1,5 @@
 import { memo } from "react";
+import { MIN_CONF } from "@swingsage/schema/contract";
 import type { Club } from "@swingsage/schema/contract";
 
 import type { HeadMarks } from "../useCorrections";
@@ -35,8 +36,6 @@ export interface ClubLayerProps {
   h: number;
 }
 
-const WEAK_CONF = 0.35;
-
 export const ClubLayer = memo(function ClubLayer({ club, frame, marks, w, h }: ClubLayerProps) {
   const cf = club.frames?.[frame];
   if (!cf) return null;
@@ -44,8 +43,9 @@ export const ClubLayer = memo(function ClubLayer({ club, frame, marks, w, h }: C
   const stroke = Math.max(2, w / 200);
   const mark = marks?.get(frame);
   // A placed head is a correction, not a detection: it is never dimmed for low confidence, because
-  // the confidence being reported belongs to the answer it replaced.
-  const weak = !mark && cf.conf < WEAK_CONF;
+  // the confidence being reported belongs to the answer it replaced. The floor is the contract's
+  // MIN_CONF — the same value the analyzer measures with — not a local copy that a retune misses.
+  const weak = !mark && cf.conf < MIN_CONF;
   const shaftColor = weak ? "rgba(241,245,249,0.45)" : "#F1F5F9";
   // The shaft is re-drawn from the grip to the placed head, so the club stays one rigid body
   // attached to the hands rather than a line pointing at where the detector used to think it was.

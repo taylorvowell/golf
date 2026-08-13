@@ -4,7 +4,7 @@
  * Duplicated rather than shared because the only workspace package a phone build already
  * resolves is `@swingsage/schema`, and adding a second one means Metro resolution and a native
  * rebuild to move pure array math. The trigger to un-duplicate is the THIRD consumer, or the
- * first time the two copies are found to have diverged — see D51.
+ * first time the two copies are found to have diverged — see docs/decisions/mobile-client.md, "analysis.json is duplicated into the mobile tree". verbatimCopies.test.ts is the tripwire.
  *
  * It is here because `scripts/checkoverlay.ts` caught the mobile port drawing the PRIMARY club
  * solution while the web player draws a selected variant — two different lines over the same

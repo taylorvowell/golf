@@ -1,3 +1,4 @@
+import { MIN_CONF } from "@swingsage/schema/contract";
 import type { Analysis } from "@swingsage/schema/contract";
 
 /**
@@ -47,8 +48,8 @@ import type { Analysis } from "@swingsage/schema/contract";
  * finish frame while your follow-through completes is an accepted trade.
  */
 
-/** Matches `metrics.MIN_CONF` — below it the analyzer treated the point as missing. */
-const MIN_CONF = 0.35;
+// MIN_CONF comes from the contract package — one home, matching `metrics.py` on the producing
+// side, so an analyzer retune cannot leave this file gating on a stale copy.
 
 /** Per-frame hand movement below this fraction of typical movement is treated as zero, so
  *  keypoint jitter doesn't accumulate arc across a motionless address hold. */

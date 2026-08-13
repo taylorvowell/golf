@@ -1,3 +1,4 @@
+import { MIN_CONF } from "@swingsage/schema/contract";
 import type { AngleField, Analysis, Keypoint, PointExpr } from "@swingsage/schema/contract";
 
 /**
@@ -14,15 +15,16 @@ import type { AngleField, Analysis, Keypoint, PointExpr } from "@swingsage/schem
  */
 
 /**
- * Matches `metrics.MIN_CONF`. Below this the analyzer treated the point as missing, so drawing on
- * it would hang a confident-looking arc off a keypoint the number never used.
+ * `MIN_CONF` comes from the contract package — one home, matching `metrics.py` on the producing
+ * side. Below it the analyzer treated the point as missing, so drawing on it would hang a
+ * confident-looking arc off a keypoint the number never used.
  *
  * **This is the measurement bar, not the drawing bar.** The stick figure draws anything with
- * `conf > 0`; anything that reads as a measurement — angles, orientation rods — is held here.
- * Collapsing the two is a bug in both directions: one bar either deletes the skeleton or
- * fabricates measurements.
+ * `conf > 0`; anything that reads as a measurement — angles, orientation rods — is held at
+ * `MIN_CONF`. Collapsing the two is a bug in both directions: one bar either deletes the
+ * skeleton or fabricates measurements. Re-exported so the overlay keeps one import site.
  */
-export const MIN_CONF = 0.35;
+export { MIN_CONF };
 
 /** Distinguishable at small sizes against the skeleton's green / yellow / cyan. */
 export const ANGLE_COLORS = ["#FB923C", "#F472B6", "#A78BFA", "#38BDF8", "#FACC15"];

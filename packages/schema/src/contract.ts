@@ -45,6 +45,21 @@ export const EVENT_ORDER = [
 export type EventName = (typeof EVENT_ORDER)[number];
 
 /**
+ * The confidence floor below which a keypoint is not MEASURED from.
+ *
+ * The producing-side twin is `services/analyzer/swingsage/metrics.py` (`MIN_CONF = 0.35`) — the
+ * two must stay equal, because root CLAUDE.md's contract rule is that every consumer re-applies
+ * the analyzer's exact gate: truncated confidences compared **inclusively** (`conf >= MIN_CONF`),
+ * never rounded first. It lives here rather than in each client because a retune to 0.30 must be
+ * one edit, not a hunt through five hand-copied literals — the copy that gets missed is the
+ * client that silently draws angles the analyzer refused to score.
+ *
+ * Drawing is a different bar on purpose: skeletons render at `conf > 0` (showing what the model
+ * saw), measurement gates here. See each renderer's own comment for that split.
+ */
+export const MIN_CONF = 0.35;
+
+/**
  * Strict event ordering is an invariant the analyzer's own test suite enforces, but it cannot
  * be expressed in JSON Schema — so it lives here, where both clients can apply the same check
  * to an artifact they did not produce.

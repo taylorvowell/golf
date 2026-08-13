@@ -1,12 +1,3 @@
-/**
- * COPIED VERBATIM from `apps/web/src/lib/model.ts`. Do not edit one copy alone.
- *
- * Duplicated rather than shared because the only workspace package a phone build already
- * resolves is `@swingsage/schema`, and adding a second one means Metro resolution and a native
- * rebuild to move pure array math. The trigger to un-duplicate is the THIRD consumer, or the
- * first time the two copies are found to have diverged — see docs/decisions/mobile-client.md,
- * "analysis.json is duplicated into the mobile tree". verbatimCopies.test.ts is the tripwire.
- */
 import { MIN_CONF } from "@swingsage/schema/contract";
 import type { Analysis, Club } from "@swingsage/schema/contract";
 

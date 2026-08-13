@@ -9,9 +9,13 @@ import { CLEARED_TOGGLES, type ToggleKey, type Toggles } from "@/lib/overlays";
 import type { Player } from "@/lib/usePlayer";
 import { useHeadMarkers } from "@/lib/useHeadMarkers";
 import { useSilhouette } from "@/lib/useSilhouette";
-import { buildTracePath, cutAt, DEFAULT_SMOOTHING, type SmoothingKey,
-         type TracePiece } from "@/lib/traceSmoothing";
+import { cutAt, DEFAULT_SMOOTHING, type SmoothingKey } from "@/lib/traceSmoothing";
 import { defaultClubVar } from "@/lib/clubVariants";
+import {
+  ORIENT_PAIRS, ORIENT_WEAK_CONF, ORIENT_WEAK_SPAN,
+  clubSolution, traceSpans as modelTraceSpans, buildTraceFor, orientationHold,
+  type HeadMarks,
+} from "@/lib/model";
 import OverlayMenu from "./OverlayMenu";
 import HeadMarkerBar, { type HeadPoint } from "./HeadMarkerBar";
 import type { SwingStages } from "@/lib/useSwingStages";
@@ -62,95 +66,8 @@ const ORIENT_EXTEND = 0.5;
  */
 const ORIENT_CAP = 0.011;
 
-/** The two pairs the orientation rods run through. Anatomical names — these are keypoints. */
-const ORIENT_PAIRS: [string, string][] = [
-  ["left_shoulder", "right_shoulder"],
-  ["left_hip", "right_hip"],
-];
-
-/**
- * The projected span, as a share of body height, below which the rod draws dimmed.
- *
- * Frame-to-frame change in a pair's angle, pooled over all ten fixtures and bucketed by
- * projected span ÷ body height:
- *
- * ```
- *   span      n     median   p90     max
- *   <1%       63     13.3°   62.9°   89.9°
- *   1-2%     506      0.8°    6.1°   73.1°
- *   2-3%     765      0.5°    2.5°   59.6°
- *   4-6%    1766      0.1°    1.3°   32.8°
- *   >10%    7265      0.1°    0.3°    5.6°
- * ```
- *
- * Below a couple of percent the two keypoints sit inside each other's noise and the rod's
- * direction is whichever way the jitter fell. Proportional extension already contains the damage
- * — a 9px span draws a 27px stub, so a 60° error moves its ends by a few pixels rather than
- * swinging a foot-long bar across the frame — but the angle is still not to be trusted at that
- * length, and the overlay says so rather than looking equally certain throughout.
- *
- * **Raised 0.03 -> 0.06.** Down the line the FAR shoulder and hip are behind the body, so the
- * model is inferring them — their confidences run well below the near side's on every fixture.
- * An inferred joint does not jump, it slides, so no filter removes it: swing1's shoulder angle
- * ramps 138.6° to -160° smoothly across f125-175 while its span grows 43 to 195px, which draws as
- * a big confident turn the golfer is not making. Foreshortening is what makes the projected angle
- * hypersensitive to that slide — a 3px error across a 43px span is 4° — so the span is the
- * available proxy for "one end of this bar is a guess". At 6% the approach dims on 8 of 10
- * fixtures while the swing itself stays bright (0-19% of address-to-top dimmed, and every
- * fixture's top sits at 19-24%).
- *
- * A confidence gate was measured as the alternative and rejected: 0.55 keeps only 34-53% of the
- * address-to-top frames on half the fixtures, so it would delete the swing to fix the setup.
- */
-const ORIENT_WEAK_SPAN = 0.06;
-
-/**
- * The keypoint confidence below which the rod also draws dimmed.
- *
- * Just above `MIN_CONF`, and deliberately not at the obvious 0.5: RTMW's confidences on these
- * fixtures sit around 0.55, so a 0.5 rule dims 24% of frames and flips state on 1.7% of frame
- * steps — a rod strobing roughly once a second, which reads as a rendering fault rather than as
- * a confidence signal. At 0.4 it dims 1.0% of frames and flips on 0.2% of steps, so a dim rod
- * means something happened. Angular reliability is governed by the projected span above, not by
- * confidence in this range, which is why the span thresholds carry most of the work.
- */
-const ORIENT_WEAK_CONF = 0.4;
-
-/**
- * The span, as a share of body height, at which a bar starts following its pair's angle again,
- * and the one at which it stops. Hysteresis, so a span hovering on a single threshold cannot
- * flicker between held and live - which it did, and each re-entry committed the whole accumulated
- * drift in one jump.
- *
- * **Not a phase gate.** Nothing here knows where the swing is; the test is whether this pair, on
- * this frame, is open enough to the camera to be measured. Hips that turn before the takeaway
- * still show, provided they are turned far enough to see - which is the same bar every other part
- * of this overlay is held to.
- *
- * Down the line the far shoulder and hip sit behind the body and the model is inferring them.
- * That inference slides rather than jitters, and foreshortening multiplies it: across a 43px
- * shoulder span a 3px slip is 4 degrees. The result is an overlay that turns hard while the
- * golfer stands still over the ball. Measured as angle travelled, approach vs the whole backswing:
- *
- * ```
- *            shoulders            hips
- *            raw     held         raw     held
- *   swing1    83  ->   6    |     129  ->   1
- *   pro_2    110  ->   0    |     179  ->   0
- *   swing2   119  ->   0    |      27  ->   0
- * ```
- *
- * - against backswings of 15, 29 and 33 degrees. The setup was moving the bars four to eight
- * times as far as the swing does. Holding below these thresholds leaves the real rotation intact
- * (swing1 15 -> 15, pro_3 32 -> 32).
- *
- * A plain deadband on the angle was tried first and does nothing: the drift is a smooth ramp, so
- * every step clears the threshold and total travel is unchanged (83 -> 84). So was a stillness
- * gate on the near shoulder - it does not separate the cases, since two fixtures move more before
- * address than during the backswing.
- */
-const ORIENT_LIVE_SPAN = 0.09;
-const ORIENT_HOLD_SPAN = 0.06;
+// ORIENT_PAIRS, the span/confidence thresholds and their measured rationale now live in
+// `@/lib/model` — the byte-locked web/mobile pair — beside the hold walk that uses them.
 
 /**
  * The video stage: picture and overlay canvas.
@@ -273,13 +190,7 @@ export default function SwingStage({
   const [localClubVar] = useState(() => defaultClubVar(analysis));
   const clubVar = clubVarProp ?? localClubVar;
 
-  const club = useMemo(() => {
-    const c = analysis.club;
-    if (!c) return null;
-    const v = clubVar !== "primary" ? c.variants?.[clubVar] : undefined;
-    return v ? { ...c, frames: v.frames, trace: v.trace, trace_frames: v.trace_frames,
-                 coverage: v.coverage } : c;
-  }, [analysis, clubVar]);
+  const club = useMemo(() => clubSolution(analysis, clubVar), [analysis, clubVar]);
 
   /**
    * Hand-placed club-head positions. Only the primary stage edits them; the comparison pane
@@ -325,20 +236,13 @@ export default function SwingStage({
    * colour. Falls back to the analyzer's own when no corrections are in play (the comparison
    * pane, or a swing nobody has touched).
    */
-  const spans = useMemo(() => {
-    const e = analysis.events;
-    if (!e) return null;
-    const p = phases;
-    const back = p ? p.backswing_start : e.address.frame;
-    const down = p ? p.downswing_start : e.top.frame;
-    const imp = p ? p.impact : e.impact.frame;
-    const fin = p ? p.finish_start : e.finish.frame;
-    return {
-      backswing: [back, down] as [number, number],
-      downswing: [down, imp] as [number, number],
-      followthrough: [imp, fin] as [number, number],
-    };
-  }, [analysis, phases]);
+  const spans = useMemo(() => modelTraceSpans(analysis, phases ?? undefined), [analysis, phases]);
+
+  /** Hand-placed heads in the shared model's shape — frame to normalized point. */
+  const headMarks = useMemo<HeadMarks>(
+    () => new Map([...marks.values()].map((m) => [m.frame, [m.x, m.y] as [number, number]])),
+    [marks],
+  );
 
   /**
    * The finished, smoothed trace — built once per segment and then revealed frame by frame,
@@ -352,93 +256,10 @@ export default function SwingStage({
    * Built in video-pixel space, not canvas pixels, so it survives a resize and is recomputed
    * only when the samples, the markers or the method actually change.
    */
-  const tracePath = useMemo(() => {
-    const out: Record<string, TracePiece[]> = {};
-    if (!club?.trace || !spans) return out;
-    const vw = analysis.video.width, vh = analysis.video.height;
-    const KEYS = ["backswing", "downswing", "followthrough"] as const;
-
-    /**
-     * Re-cut the trace at the CORRECTED boundaries.
-     *
-     * The analyzer ships its trace already split into three arrays at its own event frames, so
-     * simply reading `club.trace.backswing` draws the machine's idea of where the backswing
-     * ended however the boundaries have since been corrected — the trace kept changing colour at
-     * the old top. Every point knows the frame it was measured on (`trace_frames`), so pooling
-     * them and re-splitting by frame moves the colour change with the correction.
-     *
-     * Only possible when every segment carries real frames. Artifacts older than `trace_frames`
-     * fall through to the per-segment path below, which cannot be re-cut because a synthetic
-     * index says nothing about when a point was measured.
-     */
-    const recuttable = KEYS.every((k) => {
-      const n = (club.trace?.[k] ?? []).length;
-      return n < 2 || club.trace_frames?.[k]?.length === n;
-    });
-    if (recuttable) {
-      const pooled = new Map<number, [number, number]>();
-      for (const k of KEYS) {
-        const pts = (club.trace[k] ?? []) as [number, number][];
-        const tf = club.trace_frames?.[k];
-        if (!tf) continue;
-        tf.forEach((f, i) => pooled.set(f, pts[i]));
-      }
-      // Hand-placed heads replace the analyzer's point on their frame and are inserted where it
-      // had none — so a correction shows in the line and not only under the cursor, and
-      // correcting a frame inside a bridge closes the bridge, which is the whole reason to.
-      for (const m of marks.values()) pooled.set(m.frame, [m.x, m.y]);
-      const ordered = [...pooled.keys()].sort((p, q) => p - q);
-      for (const key of KEYS) {
-        const [a, b] = spans[key];
-        // Inclusive at both ends so consecutive spans share their boundary point and the line
-        // stays joined where it changes colour.
-        const fs = ordered.filter((f) => f >= a && f <= b);
-        if (fs.length < 2) continue;
-        const pts = fs.map((f) => {
-          const [x, y] = pooled.get(f)!;
-          return [x * vw, y * vh] as [number, number];
-        });
-        out[key] = buildTracePath(pts, fs, smoothing);
-      }
-      return out;
-    }
-
-    for (const key of KEYS) {
-      const pts = (club.trace[key] ?? []) as [number, number][];
-      if (pts.length < 2) continue;
-      const [a, b] = spans[key];
-      const tf = club.trace_frames?.[key];
-      const known = tf?.length === pts.length;
-      // Older artifacts predate `trace_frames`; spread their points evenly and treat the whole
-      // segment as measured, since a synthetic index says nothing about what was detected.
-      let fs: number[] = known
-        ? tf
-        : pts.map((_, i) => a + Math.round((i * (b - a)) / Math.max(1, pts.length - 1)));
-      let seg: [number, number][] = pts;
-
-      // Fold in the hand-placed heads. A marker replaces the analyzer's point on its own frame
-      // and is inserted where the analyzer had none, so a correction shows in the line and not
-      // only under the cursor — and correcting a frame inside a bridge closes the bridge, which
-      // is the whole reason to correct one.
-      if (known && marks.size) {
-        const inSeg = [...marks.values()].filter((m) => m.frame >= a && m.frame <= b);
-        if (inSeg.length) {
-          const merged = new Map<number, [number, number]>();
-          fs.forEach((f, i) => merged.set(f, pts[i]));
-          for (const m of inSeg) merged.set(m.frame, [m.x, m.y]);
-          const order = [...merged.keys()].sort((p, q) => p - q);
-          fs = order;
-          seg = order.map((f) => merged.get(f)!);
-        }
-      }
-      // A segment with no real frames must not be chopped into bridges by a synthetic index,
-      // so push the steps below the threshold by handing over a dense synthetic sequence.
-      const framesIn = known ? fs : fs.map((_, i) => a + i);
-      out[key] = buildTracePath(seg.map(([x, y]) => [x * vw, y * vh]), framesIn, smoothing)
-        .map((piece) => ({ ...piece, bridge: known ? piece.bridge : false }));
-    }
-    return out;
-  }, [club, spans, marks, smoothing, analysis]);
+  const tracePath = useMemo(
+    () => buildTraceFor(club, analysis, spans, smoothing, headMarks),
+    [club, spans, headMarks, smoothing, analysis],
+  );
 
   /**
    * The direction each orientation bar is drawn along, per frame - the pair's own angle wherever
@@ -452,31 +273,7 @@ export default function SwingStage({
    * Angles are in VIDEO pixel space. The canvas preserves the frame's aspect ratio, so the same
    * angle is correct there without rescaling.
    */
-  const orientHold = useMemo(() => {
-    const n = analysis.pose.frames.length;
-    const bodyN = (analysis.metrics?.body_height_norm || 0.4) * analysis.video.height;
-    const vw = analysis.video.width, vh = analysis.video.height;
-    return ORIENT_PAIRS.map(([ln, rn]) => {
-      const dir = new Float64Array(n);
-      const held = new Uint8Array(n);
-      let live = false, last = NaN;
-      for (let f = 0; f < n; f++) {
-        const kp = analysis.pose.frames[f]?.kp;
-        const a = kp?.[idx[ln]], b = kp?.[idx[rn]];
-        let ang = NaN, span = 0;
-        if (a && b && a[2] >= MIN_CONF && b[2] >= MIN_CONF) {
-          const dx = (b[0] - a[0]) * vw, dy = (b[1] - a[1]) * vh;
-          span = Math.hypot(dx, dy) / bodyN;
-          ang = Math.atan2(dy, dx);
-        }
-        live = live ? span >= ORIENT_HOLD_SPAN : span >= ORIENT_LIVE_SPAN;
-        if (live && !Number.isNaN(ang)) last = ang;
-        dir[f] = last;
-        held[f] = live ? 0 : 1;
-      }
-      return { dir, held };
-    });
-  }, [analysis, idx]);
+  const orientHold = useMemo(() => orientationHold(analysis, idx), [analysis, idx]);
 
   /**
    * The club head this frame is currently showing — the hand-placed one if there is one, else
@@ -766,7 +563,8 @@ export default function SwingStage({
         ctx.lineTo(mk.x * w, mk.y * h);
         ctx.stroke();
       } else if (cf?.shaft) {
-        const weak = cf.conf < 0.35;
+        // The contract's MIN_CONF — the analyzer's own floor, not a local copy a retune misses.
+        const weak = cf.conf < MIN_CONF;
         ctx.strokeStyle = weak ? "rgba(255,255,255,.45)" : "#F1F5F9";
         ctx.lineWidth = Math.max(2, w / 360);
         ctx.setLineDash(weak ? [6, 5] : []);

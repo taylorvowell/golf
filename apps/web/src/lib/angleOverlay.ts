@@ -11,11 +11,13 @@
  * space, (x·W/H, y), which is pixel space under a uniform scale — and uniform scales preserve
  * angles. So the arc drawn at (x·w, y·h) is exactly the angle in the label.
  */
+import { MIN_CONF } from "@swingsage/schema/contract";
 import type { AngleField, Analysis, Keypoint, PointExpr } from "@swingsage/schema/contract";
 
-/** Matches metrics.MIN_CONF — below this the analyzer treated the point as missing, so
- *  drawing it would put a confident-looking arc on a keypoint the number never used. */
-export const MIN_CONF = 0.35;
+/** From the contract package — one home, matching `metrics.py`. Below it the analyzer treated
+ *  the point as missing, so drawing it would put a confident-looking arc on a keypoint the
+ *  number never used. Re-exported: this file is the web overlay's established import site. */
+export { MIN_CONF };
 
 /** Distinguishable at small sizes against the skeleton's green / yellow / cyan. */
 export const ANGLE_COLORS = ["#FB923C", "#F472B6", "#A78BFA", "#38BDF8", "#FACC15"];

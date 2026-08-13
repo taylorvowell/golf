@@ -10,7 +10,7 @@
 | 2 | Lifecycle & network (JS) | complete | 2026-08-12 | 2026-08-12 | +1 test (SWR keeps-list invariant); AsyncStorage jest mock added; decision logged in mobile-client.md |
 | 3 | frame-clock native fixes | complete | 2026-08-12 | 2026-08-12 | compileDebugKotlin green; iOS twin patched unverified (no Mac); device drift re-run pending |
 | 4 | Shell, startup & native config | complete | 2026-08-12 | 2026-08-12 | prebuild --clean landed everything; R8 release APK builds (77MB universal); device runtime verify pending |
-| 5 | Contract & parity | pending | | | touches schema + web |
+| 5 | Contract & parity | complete | 2026-08-12 | 2026-08-12 | MIN_CONF single home; 5-pair tripwire (red/green-verified); model.ts unified web+mobile on mobile semantics; checkoverlay all 10 |
 | 6 | Polish & a11y | pending | | | |
 | 7 | Measured experiments | pending | | | may close with zero code changes |
 

@@ -211,9 +211,16 @@ rather than deriving one.
 
 ### `analysis.json` is duplicated into the mobile tree, not shared
 
-**Decision:** `traceSmoothing.ts`, `playbackWindow.ts` and `skeleton.ts` are **copied verbatim**
-from `apps/web/src/lib/` into `apps/mobile/src/features/player/overlay/`, with their tests, and each
-carries a banner saying so.
+**Decision:** `traceSmoothing.ts`, `playbackWindow.ts`, `skeleton.ts`, `clubVariants.ts` and
+`model.ts` are **copied verbatim** from `apps/web/src/lib/` into
+`apps/mobile/src/features/player/overlay/`, with their tests, and each carries a banner saying so.
+`verbatimCopies.test.ts` byte-compares every pair on each mobile test run — the divergence
+trigger below is now mechanically watched, not comment-enforced. `model.ts` (spans, trace
+re-cut, orientation hold, club-solution selection) was unified 2026-08-12 on the mobile port's
+semantics — the phase-ordering clamps, the `pts[i]` guard and per-field phase overrides are
+defensive supersets with identical output on every well-formed artifact, and
+`scripts/checkoverlay.ts` proves the shared code against the Gate 1 burn-in on all ten fixtures.
+The web stage's memos are now thin wrappers over it.
 **Gotchas:** This is knowingly-carried debt, not an oversight. The only workspace package a phone
 build already resolves is `@swingsage/schema`; adding a second means Metro resolution config and a
 native rebuild to move pure array math, on a tree that already had to be hoisted (D21) to build for
