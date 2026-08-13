@@ -61,8 +61,10 @@ const styles = StyleSheet.create({
     borderBottomColor: COLORS.border,
     borderBottomWidth: 1,
   },
-  // `paddingRight` keeps the address clear of the same dev-client bubble.
-  who: { color: COLORS.muted, fontSize: 12, flexShrink: 1, textAlign: "right", paddingRight: 56 },
+  // `paddingRight` keeps the address clear of the dev-client bubble — which exists only in
+  // development builds, so release keeps the full width for exactly the identifier this
+  // component exists to show.
+  who: { color: COLORS.muted, fontSize: 12, flexShrink: 1, textAlign: "right", paddingRight: __DEV__ ? 56 : 0 },
   button: {
     borderColor: COLORS.border,
     borderWidth: 1,

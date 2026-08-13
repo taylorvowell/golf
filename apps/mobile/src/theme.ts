@@ -19,6 +19,8 @@ export const COLORS = {
   acid: "#a3e635",
   violet: "#8b7bff",
   amber: "#f59e0b",
+  /** `amber` at 35% — the border of a notice that warns without shouting. Derived, not free. */
+  amberEdge: "rgba(245,158,11,0.35)",
   red: "#e5484d",
   /** Text on top of an `acid` fill — the palette's only inverted pairing. */
   onAcid: "#0b0f14",

@@ -722,7 +722,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: DECK.glass.soft,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.15)",
+    borderColor: DECK.glass.hairlineStrong,
   },
   glassChip: {
     minWidth: 44,
@@ -820,9 +820,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 12,
+    // DECK.ground at 72% — a scrim that mutes the picture behind one line of text.
     backgroundColor: "rgba(5,7,6,0.72)",
     borderWidth: 1,
-    borderColor: "rgba(245,158,11,0.35)",
+    borderColor: COLORS.amberEdge,
   },
   noticeText: { color: COLORS.amber, fontSize: 12, lineHeight: 17 },
 

@@ -1,4 +1,5 @@
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AccountBar } from "../features/auth/AccountBar";
 import { useAppNavigation } from "../navigation";
@@ -18,6 +19,10 @@ import { COLORS } from "../theme";
 export function SwingLogScreen() {
   const navigation = useAppNavigation();
   const { state, refreshing, refresh } = useSwings();
+  // Edge-to-edge is on and the nav bar is transparent, so the list draws under it. The bottom
+  // inset keeps the last card — and the Delete-account footer, the one irreversible control on
+  // this screen — tappable above the system bar on 3-button navigation (~48dp).
+  const insets = useSafeAreaInsets();
 
   return (
     <View style={styles.root}>
@@ -49,7 +54,9 @@ export function SwingLogScreen() {
           data={state.swings}
           keyExtractor={(s) => s.id}
           contentContainerStyle={
-            state.swings.length ? styles.list : [styles.list, styles.listEmpty]
+            state.swings.length
+              ? [styles.list, { paddingBottom: 32 + insets.bottom }]
+              : [styles.list, styles.listEmpty, { paddingBottom: 32 + insets.bottom }]
           }
           // Pull-to-refresh rather than a button: the list is the whole screen, and a refresh
           // control never blanks what is already drawn — which is why `refreshing` is separate
