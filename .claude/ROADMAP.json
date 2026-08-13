@@ -200,6 +200,7 @@
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#2-core-product-principles",
         ".claude/ai-instructions/PROJECT_MAIN.md#4-authentication-and-account-management",
+        ".claude/ai-instructions/PROJECT_MAIN.md#5-user-profiles",
         ".claude/ai-instructions/PROJECT_MAIN.md#41-accessibility-and-general-usability"
       ],
       "owns": [
@@ -296,6 +297,7 @@
         ".claude/ai-instructions/PROJECT_MAIN.md#23-high-frame-rate-capture",
         ".claude/ai-instructions/PROJECT_MAIN.md#9-in-app-swing-recording",
         ".claude/ai-instructions/PROJECT_MAIN.md#94-long-recording-support",
+        ".claude/ai-instructions/PROJECT_MAIN.md#95-rapid-re-recording-and-delayed-start",
         ".claude/ai-instructions/PROJECT_MAIN.md#40-platform-and-device-compatibility-goals"
       ],
       "owns": [
@@ -331,14 +333,41 @@
       ]
     },
     {
+      "id": "swing-style-engine",
+      "spine": false,
+      "lifecycle": "planned",
+      "phase": "coaching",
+      "goal": "Style-aware analysis (§15.4): classify each golfer into one of four swing styles — STY-01 Rotator, STY-02 Lifter, STY-03 Slider-Bomber, STY-04 Stacker — from measured video markers plus optional launch data, emitting primary style + confidence + secondary style with an honest hybrid bucket, seeded by the onboarding self-report as a prior. Then gate the scoring config by style: [REL]/[TGT]/[SWP] modifiers on style-dependent rows so a legitimate style trait (a bowed lead wrist, a flat plane, lateral drive) is never flagged as a fault, while the seven universal [U] rows never gate and stay highest-weighted. Style stays constant across the bag — the club dimension gates within it, and a driver/iron pattern disagreement surfaces as an insight, not two labels. Style also selects the default professional reference (§19.2) and shapes AI Coach framing (§17.4).",
+      "statusFile": ".claude/feature-tracks/swing-style-engine/_STATUS.json",
+      "specRefs": [
+        ".claude/ai-instructions/PROJECT_MAIN.md#154-swing-styles-and-style-aware-scoring",
+        ".claude/ai-instructions/PROJECT_MAIN.md#54-onboarding-personalization",
+        ".claude/ai-instructions/PROJECT_MAIN.md#153-confidence-and-uncertainty"
+      ],
+      "owns": [
+        "services/analyzer/swingsage/style.py",
+        "services/analyzer/scoring_config/styles"
+      ],
+      "dependsOn": [
+        {
+          "track": "analysis-ground-truth"
+        },
+        {
+          "track": "platform-foundation"
+        }
+      ],
+      "sequencingNote": "Ahead of priority-engine deliberately: style gating changes WHICH findings exist, and prioritizing a fault the golfer's style legitimizes is exactly the mis-coaching this feature exists to prevent. The three most mis-flagged categories gate first: lead-wrist condition, shaft plane, lateral movement. Depends on analysis-ground-truth because every classification marker is subject to the standing trap — print raw values across all fixtures and confirm each moves the way the tree assumes before trusting a threshold; a classifier tuned on unvalidated markers is unfalsifiable. All fixtures are DTL and right-handed today, and Step 1 of the tree needs face-on markers — the ground-truth track's face-on fixture is a hard prerequisite, not a nice-to-have."
+    },
+    {
       "id": "priority-engine",
       "spine": false,
       "lifecycle": "planned",
       "phase": "coaching",
-      "goal": "Replace weakest-check-first ordering with a real priority model: dependencies between faults, order of operations, severity weighed against confidence, golfer goals, and recurrence across swings.",
+      "goal": "Replace weakest-check-first ordering with a real priority model: dependencies between faults, order of operations, severity weighed against confidence, golfer goals, and recurrence across swings. Goals are the curated §5.3 set — each selection re-weights a named group of checks (2–3 goals max, and the distance-vs-fairways tension is surfaced, not averaged away). Findings arrive already style-gated by swing-style-engine, and the active session focus (§8.2) concentrates in-session priority.",
       "statusFile": ".claude/feature-tracks/priority-engine/_STATUS.json",
       "specRefs": [
-        ".claude/ai-instructions/PROJECT_MAIN.md#16-priority-coaching-system"
+        ".claude/ai-instructions/PROJECT_MAIN.md#16-priority-coaching-system",
+        ".claude/ai-instructions/PROJECT_MAIN.md#53-goal-customization"
       ],
       "owns": [
         "services/analyzer/swingsage/scoring.py"
@@ -346,6 +375,9 @@
       "dependsOn": [
         {
           "track": "analysis-ground-truth"
+        },
+        {
+          "track": "swing-style-engine"
         }
       ]
     },
@@ -406,7 +438,10 @@
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#17-ai-coach",
         ".claude/ai-instructions/PROJECT_MAIN.md#24-analysis-must-be-explainable",
-        ".claude/ai-instructions/PROJECT_MAIN.md#34-privacy-permissions-and-data-control"
+        ".claude/ai-instructions/PROJECT_MAIN.md#34-privacy-permissions-and-data-control",
+        ".claude/ai-instructions/PROJECT_MAIN.md#154-swing-styles-and-style-aware-scoring",
+        ".claude/ai-instructions/PROJECT_MAIN.md#55-advanced-golfer-profile",
+        ".claude/ai-instructions/PROJECT_MAIN.md#82-session-focus"
       ],
       "owns": [
         "services/ai",
@@ -447,11 +482,12 @@
       "spine": false,
       "lifecycle": "planned",
       "phase": "improvement",
-      "goal": "Comparison that surfaces the differences rather than showing two videos, selection logic (previous, same club, best, favourite), and the golfer-facing professional reference library fed by the admin surface — replacing today's hardcoded two-entry list.",
+      "goal": "Comparison that surfaces the differences rather than showing two videos, selection logic (previous, same club, best, favourite), and the golfer-facing professional reference library fed by the admin surface — replacing today's hardcoded two-entry list. The DEFAULT professional reference is matched to the golfer: same swing style (§15.4), handedness, and club where available — pros are tagged with the STY taxonomy in the admin surface.",
       "statusFile": ".claude/feature-tracks/comparison-and-reference/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#19-swing-comparison",
-        ".claude/ai-instructions/PROJECT_MAIN.md#20-professional-reference-swing-library"
+        ".claude/ai-instructions/PROJECT_MAIN.md#20-professional-reference-swing-library",
+        ".claude/ai-instructions/PROJECT_MAIN.md#154-swing-styles-and-style-aware-scoring"
       ],
       "owns": [
         "apps/mobile/src/features/compare"
@@ -483,6 +519,41 @@
           "track": "history-and-trends"
         }
       ]
+    },
+    {
+      "id": "practice-loop",
+      "spine": false,
+      "lifecycle": "planned",
+      "phase": "improvement",
+      "goal": "The simulator/range session experience (§8.1–8.3, §9.5) — the product's primary usage loop. Start a session and get a proposed session focus with a tip or drill (suggestions, zero required taps), then a rapid capture loop built for a phone on a stand: big record button, configurable countdown (none/5/10/15s, default 5s, changeable on the capture screen), post-swing quick feedback ('top tips', 'things I noticed') that accounts for goals, the session focus, and the earlier swings in this session — with the next recording never more than one tap away. Ends with a session summary of what improved and what still needs work; a focus persists across sessions until improvement is sustained. The focus card and quick feedback render from deterministic priority output when AI is unavailable.",
+      "statusFile": ".claude/feature-tracks/practice-loop/_STATUS.json",
+      "specRefs": [
+        ".claude/ai-instructions/PROJECT_MAIN.md#8-practice-sessions",
+        ".claude/ai-instructions/PROJECT_MAIN.md#95-rapid-re-recording-and-delayed-start",
+        ".claude/ai-instructions/PROJECT_MAIN.md#41-accessibility-and-general-usability"
+      ],
+      "owns": [
+        "apps/mobile/src/features/session-loop"
+      ],
+      "dependsOn": [
+        {
+          "track": "in-app-capture"
+        },
+        {
+          "track": "swing-ingest"
+        },
+        {
+          "track": "priority-engine"
+        },
+        {
+          "track": "history-and-trends"
+        },
+        {
+          "track": "ai-coach",
+          "blocking": false
+        }
+      ],
+      "sequencingNote": "The capture mechanics — countdown, capture-screen controls, review/retake — are in-app-capture's (§9.5 sits in both tracks' specRefs); this track builds the session loop AROUND capture: the focus card, quick feedback, one-tap-next, and the session summary. ai-coach is non-blocking because §8.2 requires focus and feedback to degrade to deterministic priority output — AI narrative is an enhancement, never a hard dependency. The quick-feedback promise also leans on the analysis-latency SLO: 'record another right away' only feels right if analysis keeps up, so the analyzer-service capacity numbers bound what this screen can honestly promise."
     },
     {
       "id": "billing-iap",
@@ -665,6 +736,9 @@
         },
         {
           "track": "sharing-and-export"
+        },
+        {
+          "track": "practice-loop"
         }
       ]
     },

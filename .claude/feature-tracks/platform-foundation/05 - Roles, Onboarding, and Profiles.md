@@ -109,3 +109,26 @@ is supposed to land where a stranger's golf video becomes reachable and nowhere 
 Also note **a coach is a golfer too by default** — coaches film their own swings, and §3.3 expects
 it. The golfer surface is never hidden from a coach account, so no part of this step should model
 roles as mutually exclusive.
+
+### Amended 2026-08-13 (D54) — §5 grew a personalization spec; read the amended sections before executing
+
+The steps above are unchanged, but three of them now have a much more specific spec behind them:
+
+- **Step 5's "goals as editable structured values" means the curated §5.3 set** — eight options,
+  selection capped at 2–3, each re-weighting a named group of checks. Not free text, and not the
+  old open example list.
+- **Step 2's onboarding now includes the §5.4 personalization questions**: handedness (the one
+  required answer), swing style (self-report against the §15.4 taxonomy, stored as a *prior* with
+  a "not sure" option — schema must distinguish self-reported from measured classification),
+  goals, and skill ("Just starting out" / "Beginner" / "Advanced" or a handicap range). §45's
+  "create an account quickly" still binds — everything but handedness is skippable.
+- **Step 3's profile model gains the §5.5 tiered advanced profile** (typical miss split
+  driver/irons, handicap or average score, swing speed *or* 7-iron carry, fitting history, grip
+  size, physical limitations, launch-monitor access, practice access, frequency,
+  altitude/climate, and the Tier-3 fields incl. coaching-style preference). Schema for these
+  lands here; equipment-spec fields belong to §6's equipment model and are linked, not
+  duplicated. The profile *UI* beyond onboarding is `mobile-app-shell` step 02.
+
+The style classification engine itself is **not** this step — it is the `swing-style-engine`
+track. This step only stores what the golfer says and leaves room for what the analyzer will
+measure.

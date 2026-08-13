@@ -32,7 +32,11 @@ Storage keys are **derived** from identity at read time, never stored as an addr
 
 **Decision:** A session is created **manually** by the golfer, with the app *suggesting* one when
 swings cluster in time and place. `swings.session_id` is nullable and mutable with
-`on delete set null` — a swing exists without a session and moves freely between them.
+`on delete set null` — a swing exists without a session and moves freely between them. A session
+carries a **session focus** — proposed by the coach at the explicit start from goals, priorities
+and the previous session (`PROJECT_MAIN.md` §8.2) — which concentrates per-swing analysis
+emphasis and quick feedback for that session, and persists across sessions until improvement is
+sustained.
 **Gotchas:** Deleting a session must never delete the swings in it. That is the single most likely
 destructive mistake in the whole swing log. Automatic grouping by time window guesses wrong in
 both directions and a golfer cannot correct it without knowing the rule — a suggestion is

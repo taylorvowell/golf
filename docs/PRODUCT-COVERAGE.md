@@ -10,6 +10,12 @@ It is a status map, not a plan — sequencing lives in `.claude/ROADMAP.json`.
 product-goal statement and correctly has none; §42–45 are guidance to the roadmap rather than
 requirements. That mapping is verifiable — each track's `specRefs` names the sections it owns.
 
+**Amended 2026-08-13 (D54):** the north star grew a personalization layer — §5.3 rewritten
+(curated goals), §5.4 (onboarding personalization), §5.5 (advanced profile), §8.1–8.3 (session
+focus and the practice loop), §9.5 (countdown + rapid re-record), §15.4 (swing styles and
+style-aware scoring). New owning tracks: `swing-style-engine` and `practice-loop`. Rows below;
+all ⬜.
+
 **Legend** — ✅ built · 🟡 partial (something real exists but not what the target describes) ·
 ⬜ not started
 
@@ -61,6 +67,9 @@ coaching, billing, hosting) is unbuilt.
 | 4.3 | Account lifecycle incl. deletion | ⬜ | |
 | 4.4 | Role onboarding | ⬜ | |
 | 5 | Shared + golfer profile, goals | ⬜ | Handedness exists **per swing**, not on a profile; height is not captured at all despite being named as a pose sanity-scale input. |
+| 5.3 | Curated goal set (8 options, cap 2–3, each re-weighting named checks) | ⬜ | Owned by `platform-foundation` (schema) / `priority-engine` (re-weighting). |
+| 5.4 | Onboarding personalization: handedness, swing style, goals, skill | ⬜ | UI is `mobile-app-shell` step 02; the style self-report seeds §15.4 classification as a prior. |
+| 5.5 | Tiered advanced profile (typical miss, speed/carry, fitting, grip size, limitations, launch-monitor access, coaching-style preference) | ⬜ | Profile-managed, never onboarding. Equipment specs link to §6, not duplicated. |
 
 > The schema does carry a real `user_id` FK on every user-scoped table from its first
 > migration, so auth is a data change rather than a schema rewrite. That is the one piece of
@@ -75,6 +84,7 @@ coaching, billing, hosting) is unbuilt.
 | 7.2 | Swing fields (notes, session, launch data, coach comments, analysis version) | 🟡 | Analysis, scores, findings, overlays, processing status and version exist. Notes, session, launch data and coach comments do not. |
 | 7.3 | Naming/organization: favorite, tags, coach-reviewed status | ⬜ | The list sorts by score/date only. |
 | 8 | Practice sessions | 🟡 | A `sessions` table exists with date/location/notes. Nothing writes it and no UI reads it. |
+| 8.1–8.3 | Session focus + the practice loop (start-a-session, focus card, in-session emphasis, session summary) | ⬜ | Owned by `practice-loop`. No focus concept exists anywhere; sessions today are an empty table. |
 
 ### 9–12. Capture
 
@@ -83,6 +93,7 @@ coaching, billing, hosting) is unbuilt.
 | 9 | In-app recording, golf-shaped flow, review/retake | ⬜ |
 | 9.3 | Hands-free (delay, auto-detect, remote trigger) | ⬜ |
 | 9.4 | Long recordings (walk in, place ball, practice swings) | ⬜ |
+| 9.5 | Countdown delay (0/5/10/15 s) + rapid re-record loop with quick feedback | ⬜ |
 | 10 | Upload existing video, single and dual angle | ⬜ |
 | 10.3 | Video validation with corrective guidance | 🟡 | The pipeline fails loudly on catastrophically low pose confidence and degrades gracefully on low club coverage, but there is no pre-analysis validation and no user-facing guidance. |
 | 11 | Automatic swing detection inside a longer recording | 🟡 **deferred (D2)** | Event detection finds the 8 events **within a clip already known to contain one swing**. It does not segment a swing out of a long recording, does not reject non-swing motion, and cannot offer a choice between multiple swings. A materially different problem, accepted as future state — capture ships a manual trim/select fallback instead. |
@@ -103,6 +114,7 @@ coaching, billing, hosting) is unbuilt.
 | 15.1 | Relevant drills, historical context | ⬜ | No drill library, no history. |
 | 15.2 | Internal scoring criteria, evolvable without changing the Swing record | ✅ | Versioned `scoring_config/*.json`, `scoring_model_version` on every report, Stage 8 a pure function re-runnable over old artifacts. |
 | 15.3 | Confidence, uncertainty, "cannot be evaluated from this angle" | ✅ | Confidence on every keypoint/detection; `deferred` checks abstain rather than guess; view-gated checks skip; face angle refuses to fabricate degrees. This is the project's strongest existing discipline. |
+| 15.4 | Swing-style classification (STY-01…04) and style-gated scoring ([REL]/[TGT]/[SWP]/[U]) | ⬜ | Owned by `swing-style-engine`. Nothing classifies styles; `scoring_config` has no style tags; classification Step 1 needs face-on markers no fixture provides yet. |
 
 ### 16–18. Coaching intelligence
 

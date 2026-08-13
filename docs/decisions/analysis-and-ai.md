@@ -40,6 +40,23 @@ enhancement, never a hard dependency for a swing reaching a ready state.
 guesswork, and constrains `ai-coach`'s prompt construction from the start.
 **See:** ARCHIVE D14.
 
+### Scoring is style-aware; seven universal checks never gate
+
+**Decision:** Every scoring row is either universal `[U]` or style-dependent, gated by the
+golfer's swing style (STY-01 Rotator / STY-02 Lifter / STY-03 Slider-Bomber / STY-04 Stacker)
+with `[REL]`/`[TGT]`/`[SWP]` modifiers per `PROJECT_MAIN.md` §15.4. **A trait the golfer's style
+legitimizes is never presented as a fault.** The seven universal rows — face-to-path, strike,
+kinematic sequence order, low point, shaft lean, balance, no-flip — never gate and stay
+highest-weighted for every style. Classification is descriptive-first from measured markers;
+body-type logic is tie-breaker only; output is primary style + confidence + secondary, and
+hybrids widen tolerances rather than force a label. The onboarding self-report is a prior, and
+a measured disagreement is surfaced, never silently overridden.
+**Gotchas:** Style tags are versioned scoring-config data, never code. The style label is
+constant across the bag — the club column gates within it, and a driver/iron disagreement
+surfaces as an insight, not two labels. Classification Step 1 needs face-on markers that **no
+current fixture provides**.
+**See:** ARCHIVE D54; `PROJECT_MAIN.md` §15.4.
+
 ### Never fabricate a face-angle number from video
 
 **Decision:** Video yields checkpoint **classifications** (square/open/closed) only. Degrees

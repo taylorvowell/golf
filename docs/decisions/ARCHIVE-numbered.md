@@ -2885,3 +2885,84 @@ another costume — a number that scores well is not evidence the thing works.
 The worker host. 2.32x on a 2016 card says a GPU is worth having and that Railway's lack of one is a
 real cost — it does not say what to buy. That decision is Taylor's (money), and it now has evidence
 attached instead of a guess.
+
+---
+
+## D54 — Personalization is a first-class system: four swing styles, curated goals, and the practice loop
+
+**Date:** 2026-08-13
+**Track:** roadmap (north-star amendment + two new tracks)
+
+Taylor's direction (2026-08-13): onboarding asks a handful of questions — swing style, goals,
+skill — and the answers drive which pro is compared against, which metrics are emphasized, the
+priority of improvements, the areas of focus, and the AI coach. An advanced profile (never part
+of onboarding) adds the high-ROI diagnostic fields. And the app's primary usage posture is a
+phone on a stand at a simulator: sessions with a coach-proposed focus, and a capture loop where
+the next swing is never more than one tap away. Specs adopted into `PROJECT_MAIN.md` §5.3–5.5,
+§8.1–8.3, §9.5, §15.4, with threading amendments in §16, §17, §19, §20.
+
+### The style model, and why this one
+
+A **descriptive 4-style model** on a two-axis spine — plane/arm-elevation × pivot/pressure,
+with release/lead-wrist as the confirming signal: STY-01 Rotator, STY-02 Lifter, STY-03
+Slider-Bomber, STY-04 Stacker. Chosen because the four are non-overlapping, camera-detectable,
+and each carries an explicit *scored-differently* list, which is the whole point: **a
+style-legitimate trait is never scored as a fault** (a bowed lead wrist under STY-03, a flat
+plane under STY-01, lateral drive under STY-03, forward-stacked pressure under STY-04).
+
+Gating is expressed as row modifiers — `[REL]` relax, `[TGT]` tighten, `[SWP]` swap ideal,
+`[U]` universal — kept in the versioned scoring config, never in code. **Seven universal rows
+never gate** (face-to-path, strike, sequence order, low point, shaft lean, balance, no-flip);
+they are the credibility backbone and stay highest-weighted for every style.
+
+Classification is **descriptive-first from measured markers** (the §15.4.4 tree: pressure/center
+gate → wrist+lateral gate → plane split → tie-breakers). Body-type logic (wingspan vs height,
+grip, mobility) is deliberately demoted to tie-breaker/context — prescribing a style from a body
+is the part of BioSwing-type systems with the weakest evidence. Output is primary + confidence +
+secondary; top-two within ~15% → hybrid, widen tolerances; >25% low-confidence hybrids in
+validation → add a formal fifth bucket rather than mislabel. The onboarding self-report is a
+**prior**, and a measured disagreement is surfaced, never silently overridden — the same
+confidence-honesty position the analyzer already takes everywhere else.
+
+### Goals: eight kept, two cut, one refused
+
+The curated set is eight (add distance / find fairways / fix my big miss / strike it flush /
+tee shots I can trust / sharper irons / rebuild my mechanics / smooth my tempo), selection
+capped at 2–3 so the choice carries signal. Cut: **"shape it on command"** (~5% selection,
+inferable from handicap) and **"swing pain-free"** (a *constraint*, not a goal — captured
+precisely as §5.5 Tier-1 physical limitations, where it can gate drills). Refused: **"lower my
+scores"** — everyone would check it, zero discriminating signal, and it is mostly a short-game
+outcome the product does not cover. The known tension (distance vs fairways pull the rubric in
+opposite directions) is surfaced to the golfer rather than averaged away.
+
+### Roadmap consequences
+
+Two new tracks, both launch-blocking:
+
+- **`swing-style-engine`** (coaching, before `priority-engine`, which now depends on it).
+  Ordering rationale: style gating changes *which findings exist* — prioritizing a fault the
+  golfer's style legitimizes is exactly the mis-coaching the feature exists to prevent. It
+  depends on `analysis-ground-truth` because every classification marker is subject to the
+  standing trap (print raw values across fixtures before trusting a threshold), and because
+  the tree's Step 1 needs face-on markers **no current fixture provides** — all ten are DTL
+  right-handed.
+- **`practice-loop`** (improvement, after `history-and-trends`; added to `launch-readiness`
+  deps). Owns the session-loop UX: focus card, quick feedback, one-tap-next, session summary.
+  Split from `in-app-capture` deliberately — capture mechanics (countdown, controls,
+  review/retake) are capture-track work and §9.5 sits in both tracks' specRefs, but the loop
+  around capture needs priority output and history, which capture must not wait on. `ai-coach`
+  is a **non-blocking** dependency: §8.2 requires focus and quick feedback to degrade to
+  deterministic priority output, per "AI is an enhancement, never a hard dependency."
+
+Existing-track deltas: `mobile-app-shell` specRefs gain §5 (onboarding questions + profile UI
+land in its step 02); `priority-engine` gains the §5.3 goal re-weighting; `ai-coach` gains
+§15.4/§5.5/§8.2 context; `comparison-and-reference` gains style-matched default pro selection
+(pros tagged with the STY taxonomy via `admin-surface`).
+
+### Relationship to D29
+
+D29's session rules stand: explicit creation is primary, the app *suggests* grouping when
+swings cluster, a swing exists without a session and moves freely, deleting a session never
+deletes swings. What D54 adds is that a session **carries a focus** proposed at the explicit
+start — which is an argument *for* D29's explicit-start design, since the focus needs a moment
+to be proposed at. The register entry gains one line; nothing is reversed.
