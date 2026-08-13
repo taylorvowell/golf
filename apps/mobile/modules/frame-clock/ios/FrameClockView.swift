@@ -48,15 +48,17 @@ class FrameClockView: ExpoView {
   /// The frame actually on screen: the newest whose scheduled display time has already passed.
   private func onScreenFrame() -> Int {
     let now = CACurrentMediaTime()
-    var current = -1
+    var current: (frame: Int, displayAt: CFTimeInterval)? = nil
     var idx = 0
     while idx < scheduled.count, scheduled[idx].displayAt <= now {
-      current = scheduled[idx].frame
+      current = scheduled[idx]
       idx += 1
     }
     if idx > 0 { scheduled.removeFirst(idx) }
-    if current >= 0 { scheduled.insert((frame: current, displayAt: now), at: 0) }
-    return current
+    // Re-inserted UNCHANGED: stamping the entry with the poll time would let a stats poll shrink
+    // every late overlay commit scored after it — the same instrument bias fixed on Android.
+    if let current { scheduled.insert(current, at: 0) }
+    return current?.frame ?? -1
   }
 
   required init(appContext: AppContext? = nil) {

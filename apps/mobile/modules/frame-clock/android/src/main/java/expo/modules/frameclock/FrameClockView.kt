@@ -123,13 +123,18 @@ class FrameClockView(context: Context, appContext: AppContext) : ExpoView(contex
   private fun onScreenFrame(): Int {
     val now = System.nanoTime()
     synchronized(scheduleLock) {
-      var current = -1
+      var current: Pair<Int, Long>? = null
       while (scheduled.isNotEmpty() && scheduled.first().second <= now) {
-        current = scheduled.removeFirst().first
+        current = scheduled.removeFirst()
       }
-      // Put the answer back so repeated calls between frames stay consistent.
-      if (current >= 0) scheduled.addFirst(current to now)
-      return current
+      // Put the answer back UNCHANGED so repeated calls between frames stay consistent. The pair
+      // must keep the frame's own scheduled display time: re-inserting it stamped with the poll
+      // time is a measurement bias — `markOverlayCommitted` looks this entry up and scores
+      // lateness against its timestamp, so a poll (the sync panel reads stats every 250ms during
+      // exactly the sessions being measured) would quietly shrink every late commit that follows
+      // it. That is the v1/v2 family of instrument bias documented below, in a third form.
+      if (current != null) scheduled.addFirst(current)
+      return current?.first ?: -1
     }
   }
 
@@ -299,13 +304,21 @@ class FrameClockView(context: Context, appContext: AppContext) : ExpoView(contex
     }
 
     val next = uri to sourceHeaders
-    if (appliedSource == next) return
+    val current = appliedSource
+    if (current == next) return
     appliedSource = next
 
     // Set on the factory rather than per-item: `DefaultHttpDataSource` reads its default request
     // properties when each data source is created, and the player creates one per load — including
     // the ones a seek triggers, which is most of them in this app.
     httpFactory.setDefaultRequestProperties(sourceHeaders)
+
+    // Headers-only change on the same uri: the factory update above is the whole job. JS refreshes
+    // the headers prop on every token rotation, and every data source a FUTURE seek creates reads
+    // the factory — re-preparing here would restart playback mid-watch to swap a credential the
+    // picture never sees.
+    if (current != null && current.first == uri) return
+
     exo.setMediaItem(MediaItem.fromUri(Uri.parse(uri)))
     exo.prepare()
   }
@@ -441,6 +454,11 @@ class FrameClockView(context: Context, appContext: AppContext) : ExpoView(contex
   )
 
   fun release() {
+    // Stop the listener queueing first, then drop what it already queued: with emitFrames on, the
+    // playback thread posts a lambda per presented frame to `main`, and posts still queued when
+    // the view is destroyed would run afterwards — dispatching an event against a dead view.
+    emitFrames = false
+    main.removeCallbacksAndMessages(null)
     player?.release()
     player = null
   }

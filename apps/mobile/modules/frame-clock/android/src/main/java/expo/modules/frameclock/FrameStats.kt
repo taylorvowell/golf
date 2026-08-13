@@ -12,15 +12,30 @@ import kotlin.math.roundToInt
  * numbers that decide whether the framework choice holds, and both need the distribution.
  */
 class FrameStats(private val capacity: Int = 20_000) {
+  /**
+   * Guarded by `synchronized(samples)` — the same lock idiom `FrameClockView` uses for its
+   * `scheduled` and `pendingCommits`. This class has THREE writers at 60Hz: the ExoPlayer playback
+   * thread (metadata listener), the module's async-function dispatcher (`markOverlayCommitted`),
+   * and the main thread (`leadTimeMs`), with the dev panel reading concurrently. An unsynchronized
+   * ArrayList under that traffic can corrupt its backing array mid-`add` — a native crash in the
+   * middle of playback — and the lock at ≤60 acquisitions a second costs nothing measurable.
+   */
   private val samples = ArrayList<Double>(1024)
 
   fun add(value: Double) {
-    if (samples.size < capacity) samples.add(value)
+    synchronized(samples) {
+      if (samples.size < capacity) samples.add(value)
+    }
   }
 
-  fun reset() = samples.clear()
+  fun reset() {
+    synchronized(samples) { samples.clear() }
+  }
 
-  val count: Int get() = samples.size
+  val count: Int get() = synchronized(samples) { samples.size }
+
+  /** A consistent copy to compute from, so the sort never iterates a list mid-mutation. */
+  private fun snapshot(): List<Double> = synchronized(samples) { ArrayList(samples) }
 
   /**
    * Nearest-rank percentile on the sorted samples.
@@ -29,31 +44,36 @@ class FrameStats(private val capacity: Int = 20_000) {
    * count or a millisecond reading, and an interpolated "1.5 frames of drift" is not a thing that
    * happened. Every number this returns is a value that was actually observed.
    */
-  fun percentile(p: Double): Double {
-    if (samples.isEmpty()) return 0.0
-    val sorted = samples.sorted()
+  fun percentile(p: Double): Double = percentileOf(snapshot(), p)
+
+  fun max(): Double = snapshot().maxOrNull() ?: 0.0
+
+  fun mean(): Double = snapshot().let { if (it.isEmpty()) 0.0 else it.sum() / it.size }
+
+  /** Share of samples that are exactly zero — the only outcome that counts as "locked". */
+  fun exactShare(): Double = snapshot().let {
+    if (it.isEmpty()) 0.0 else it.count { s -> s == 0.0 }.toDouble() / it.size
+  }
+
+  /** One snapshot for the whole report, so count/p50/p95 describe the same instant. */
+  fun toMap(): Map<String, Any> {
+    val snap = snapshot()
+    return mapOf(
+      "count" to snap.size,
+      "mean" to (if (snap.isEmpty()) 0.0 else snap.sum() / snap.size),
+      "p50" to percentileOf(snap, 50.0),
+      "p95" to percentileOf(snap, 95.0),
+      "max" to (snap.maxOrNull() ?: 0.0),
+      "exactShare" to (if (snap.isEmpty()) 0.0 else snap.count { it == 0.0 }.toDouble() / snap.size)
+    )
+  }
+
+  private fun percentileOf(snap: List<Double>, p: Double): Double {
+    if (snap.isEmpty()) return 0.0
+    val sorted = snap.sorted()
     val rank = Math.ceil(p / 100.0 * sorted.size).toInt().coerceIn(1, sorted.size)
     return sorted[rank - 1]
   }
-
-  fun max(): Double = samples.maxOrNull() ?: 0.0
-
-  fun mean(): Double = if (samples.isEmpty()) 0.0 else samples.sum() / samples.size
-
-  /** Share of samples that are exactly zero — the only outcome that counts as "locked". */
-  fun exactShare(): Double {
-    if (samples.isEmpty()) return 0.0
-    return samples.count { it == 0.0 }.toDouble() / samples.size
-  }
-
-  fun toMap(): Map<String, Any> = mapOf(
-    "count" to count,
-    "mean" to mean(),
-    "p50" to percentile(50.0),
-    "p95" to percentile(95.0),
-    "max" to max(),
-    "exactShare" to exactShare()
-  )
 }
 
 /**
