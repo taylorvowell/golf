@@ -11,8 +11,8 @@
 | 3 | frame-clock native fixes | complete | 2026-08-12 | 2026-08-12 | compileDebugKotlin green; iOS twin patched unverified (no Mac); device drift re-run pending |
 | 4 | Shell, startup & native config | complete | 2026-08-12 | 2026-08-12 | prebuild --clean landed everything; R8 release APK builds (77MB universal); device runtime verify pending |
 | 5 | Contract & parity | complete | 2026-08-12 | 2026-08-12 | MIN_CONF single home; 5-pair tripwire (red/green-verified); model.ts unified web+mobile on mobile semantics; checkoverlay all 10 |
-| 6 | Polish & a11y | pending | | | |
-| 7 | Measured experiments | pending | | | may close with zero code changes |
+| 6 | Polish & a11y | complete | 2026-08-12 | 2026-08-12 | M18/M20 found already-fixed by the concurrent rebuild — verified, no change |
+| 7 | Measured experiments | pending-device | 2026-08-12 | | ALL static work done; blocked solely on the S25+ (see checklist below) |
 
 ## Baselines (Phase 0 fills these)
 
@@ -21,6 +21,23 @@
 - overlayDrift p50/p95/max, trace OFF: _pending_
 - Trace view count on worst fixture: measured historically at 461 (pro_3 impact) — re-read live
 - Playback fps / stutters: 59.9 fps, 0 stutters (2026-08-12, pre-plan)
+
+## Phase 7 device checklist (runs the moment the S25+ connects — Claude's to execute)
+
+1. `cd apps/mobile && npx expo run:android` — rebuild+install the dev client (native changed in
+   Phases 3–4; a JS reload is not enough). `local.properties` is already written; if gradle is
+   invoked bare, `unset ANDROID_SDK_ROOT` first (ENVIRONMENT.md fault).
+2. Open a swing → Metrics panel → **Overlay drift** with trace ON and OFF; run **Run 250 seeks**
+   to completion. Compare against: 99.2% lock @ ~77 views (D36), seeks 100% exact (D40).
+   Numbers go into `docs/CURRENT-STATE.md` §11b (closes its open item) and mark the HANDOFF row.
+3. Behaviour spot-checks: home-mid-playback → return (paused, truthful, resumes); airplane-mode
+   a load (resolves 'unreachable' ≤12s); deep link `adb shell am start -a android.intent.action.VIEW -d "swingsage://test"`;
+   cold start (no white flash); TalkBack on the scrub bar (volume-adjust steps frames);
+   3-button nav (Delete-account footer clear); release/debugOptimized build: sign-in + playback
+   under R8; DeckSheet exit animation under the React Compiler.
+4. Decisions to record from the numbers: keep/revert `experiments.reactCompiler`; whether H3
+   part 2 (external frame store) and M2 (transform positioning) are needed at all — if drift
+   holds, close both as "measured — not needed" and re-affirm D23 in the register.
 
 ## Event log
 
