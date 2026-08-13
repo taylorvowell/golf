@@ -737,6 +737,17 @@ adb -s emulator-5554 shell input tap X Y                   # drive it
 **ALWAYS pass `-s emulator-5554`.** With the phone also attached, a bare `adb shell input` is a
 coin flip that can land on Taylor's phone.
 
+**It does not need to be the foreground window, or visible at all.** `adb` injects into Android's
+input system and `screencap` reads Android's framebuffer, so neither touches the host window
+manager. Verified with the emulator window **minimized**: the tap landed and the screenshot came
+back complete. Taylor can work in any other application while Claude drives it — it never steals
+focus and never takes over the desktop. (`-no-window` runs it fully headless if the window is ever
+in the way.)
+
+Do **not** filter host windows by a loose title match when scripting the desktop: `*Emulator*`
+also matches a VS Code tab that happens to have the word in its title, which is how a minimize
+once hit the editor as well.
+
 **Sign-in is the one thing it cannot self-serve.** The app signs in with Google natively, and a
 fresh AVD has no Google account, so the flow stops at Google's "Checking info…" screen. Adding an
 account is a one-time, ~60-second job that then **persists in the AVD** across reboots and

@@ -607,6 +607,15 @@ Stated as fact, with no implied ordering or plan. See
   P-codes both artifacts carry, so five-fold differences in clip length and differing frame rates
   both work (D52); an unalignable pair says so rather than drifting. Whether two decoders are
   affordable is **unmeasured**. No capture, no upload, and no iOS build has ever been compiled.
+- **KNOWN DEFECT — every swing-log thumbnail is a contact SHEET, not a frame.** `GET
+  /api/v1/swings/:id/thumb` serves the analyzer's `contact.jpg`, and the route describes it as
+  *"the contact-frame still"*. It is not: `contact.jpg` is a **24-up contact sheet** (1920×2272,
+  six columns of labelled frames across the whole clip), so the swing log renders a 24-frame grid
+  crushed into a 58×46 tile — visual noise where a recognisable swing image belongs. The filename
+  reads as "contact" in the *contact-sheet* sense, and the route read it in the *ball-contact*
+  sense. Fixing it needs a single-frame artifact (impact, P7, is the obvious choice) or a
+  server-side crop; picking which is a product call. Found 2026-08-13 by looking at the running
+  app on the emulator — nothing in the code or the tests says anything is wrong.
 - **No capture of any kind.** No in-app recording, no camera code, no multi-device sync.
 - **No upload flow.** Analysis is started by hand (`burnin.py`) or via the web app's re-analyze
   button on an already-indexed swing. There is no queue beyond the DB-backed reanalyze job.
