@@ -9,6 +9,7 @@ import { syncSwingScore } from "@/db/scores";
 import { mediaAddress, type ResolvedView } from "@/db/views";
 import { getAnalysis } from "@/lib/swings";
 import { publishFromWorkingDir, workingDirFor } from "@/lib/media/publish";
+import { markViewFailed, markViewReady } from "@/lib/jobs/complete";
 
 /**
  * Re-analysis jobs, persisted in Postgres — replacing the
@@ -36,6 +37,8 @@ export interface Job {
   log: string[];
   startedAt: number;
   finishedAt: number | null;
+  /** Which path runs it: a child process here (`spawn`) or the hosted worker (`queue`). */
+  runner: "spawn" | "queue";
 }
 
 function toJob(row: typeof jobsTable.$inferSelect): Job {
@@ -49,7 +52,18 @@ function toJob(row: typeof jobsTable.$inferSelect): Job {
     log: row.log,
     startedAt: row.startedAt.getTime(),
     finishedAt: row.finishedAt ? row.finishedAt.getTime() : null,
+    runner: row.runner,
   };
+}
+
+/**
+ * Which job driver is in play. **Queue is opt-in, never inferred** — same rule as
+ * `mediaDriverName()`, for the same reason: this environment can hold QStash configuration
+ * while its analysis still runs locally, and inference would silently route every re-analysis
+ * at a worker that may not be running.
+ */
+export function jobsDriverName(): "spawn" | "queue" {
+  return process.env.JOBS_DRIVER === "queue" ? "queue" : "spawn";
 }
 
 /** In-process mirror of whatever job this process is actively running, keyed by view id. */
@@ -122,6 +136,10 @@ async function persist(actorId: string, job: Job) {
  */
 async function reconcile(actorId: string, job: Job, view: ResolvedView): Promise<Job> {
   if (job.status !== "running" && job.status !== "queued") return job;
+  // A queue job's working directory is on the worker's machine — the lock and artifact this
+  // probes do not exist here, and "no lock" must not read as "the analyzer died". Remote
+  // orphan detection (heartbeat/timeout) is the retry/DLQ step's job.
+  if (job.runner !== "spawn") return job;
   const dir = workingDirFor(view.mediaKey);
   try {
     await fs.access(path.join(dir, ".analysis.lock"));
@@ -187,6 +205,12 @@ export async function startReanalysis(
     return existing;
   }
 
+  if (jobsDriverName() === "queue") {
+    // Dynamic import so the spawn path never loads the QStash client or its configuration.
+    const { enqueueReanalysis } = await import("@/lib/jobs/dispatch");
+    return enqueueReanalysis(tx, actorId, view);
+  }
+
   // Every input comes from the swing's own stored artifact, never from the request body —
   // this route spawns a process, so the only path it will ever pass to it is one the
   // analyzer itself wrote.
@@ -210,6 +234,7 @@ export async function startReanalysis(
     log: [],
     startedAt: Date.now(),
     finishedAt: null,
+    runner: "spawn",
   };
   live.set(view.viewId, job);
 
@@ -284,47 +309,30 @@ export async function startReanalysis(
        *
        * The analyzer has just rewritten its working directory in place; nothing the player is
        * currently reading has changed yet, because the player addresses `r<n>` and this writes
-       * `r<n+1>`. Only the row update below makes the new revision current, so a golfer mid-scrub
-       * finishes their session on the artifacts they started it with rather than having the video
-       * swapped underneath them — step 09's "does not orphan or overwrite artifacts another
-       * session is reading", made true by an ordering rather than by a lock.
+       * `r<n+1>`. Only the `markViewReady` update makes the new revision current, so a golfer
+       * mid-scrub finishes their session on the artifacts they started it with rather than
+       * having the video swapped underneath them — step 09's "does not orphan or overwrite
+       * artifacts another session is reading", made true by an ordering rather than by a lock.
        *
-       * If publishing fails the row is left alone: `r<n>` is still complete and still current, so
-       * a failed publish costs the re-analysis, not the swing.
+       * If publishing fails the row is left alone: `r<n>` is still complete and still current,
+       * so a failed publish costs the re-analysis, not the swing.
        */
       const revision = view.revision + 1;
-      const address = { ...mediaAddress(view), revision };
       let publishError: string | null = null;
       try {
-        await publishFromWorkingDir(address, workingDirFor(view.mediaKey));
+        await publishFromWorkingDir({ ...mediaAddress(view), revision }, workingDirFor(view.mediaKey));
       } catch (err) {
         publishError = err instanceof Error ? err.message : String(err);
       }
 
       if (publishError) {
-        await withUser(actorId, (t) => t.update(viewsTable).set({
-          status: "failed",
-          failureReason: `analysis succeeded but publishing failed: ${publishError}`,
-        }).where(eq(viewsTable.id, view.viewId))).catch(() => {});
+        await markViewFailed(actorId, view.viewId,
+          `analysis succeeded but publishing failed: ${publishError}`);
       } else {
-        // Read back through the store rather than off disk: it is the published copy the player
-        // will get, so anything wrong with the publish shows up here rather than at playback.
-        const fresh = await getAnalysis(address).catch(() => null);
-        await withUser(actorId, (t) => t.update(viewsTable).set({
-          status: "ready",
-          analyzedAt: new Date(),
-          artifactRevision: revision,
-          fps: fresh?.video.fps,
-          frameCount: fresh?.video.frame_count,
-          width: fresh?.video.width,
-          height: fresh?.video.height,
-        }).where(eq(viewsTable.id, view.viewId))).catch(() => {});
-        await withUser(actorId, (t) => syncSwingScore(t, { ...view, revision })).catch(() => {});
+        await markViewReady(actorId, view, revision);
       }
     } else {
-      await withUser(actorId, (t) => t.update(viewsTable)
-        .set({ status: "failed", failureReason: message })
-        .where(eq(viewsTable.id, view.viewId))).catch(() => {});
+      await markViewFailed(actorId, view.viewId, message);
     }
   };
 

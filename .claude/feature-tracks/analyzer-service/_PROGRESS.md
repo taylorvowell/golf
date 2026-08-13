@@ -4,6 +4,35 @@ Append-only. One entry per completed step: timestamp, what changed, anything wor
 
 ---
 
+## 04 - The Queue-Driven Worker Loop
+**Completed:** 2026-08-13 21:12 UTC
+**Phase:** Platform Foundation
+**Summary:** The spawn+stdout-regex path now has a queue-driven successor, built and proven
+end to end on this machine with zero cloud spend: `lib/jobs/dispatch.ts` (behind
+`JOBS_DRIVER=queue`, opt-in like `MEDIA_DRIVER`) publishes a schema-2 job spec to the QStash
+local dev server, which delivers to `service/server.py` (signature-verified, one job at a
+time); the worker downloads the source over HTTP, runs `pipeline.run()` with throttled event
+forwarding, PUTs artifacts back, and posts a terminal event the web app VERIFIES
+(`analysis.json` present at the target revision) before flipping the view. E2E harness
+(`pnpm --filter web queue:e2e`) passed on pro_2: job done, view ready at revision 2. Gates:
+analyzer 165/2s/1x (+24 new tests), web tsc+lint+vitest 179, schema 100 (additive
+`Job.runner`, locked), container rebuilt with the qstash pin — in-container 127/13s/1x.
+**Notes:** The worker holds no DB or storage credential — URLs plus an HMAC-signed per-job
+token ({jobId, viewId, actorId, targetRevision, exp}); `/api/internal/jobs/*` verifies it and
+writes as the enqueuing user, so no elevation lands on a request path (D26) and the web app
+stays the sole owner of media addressing. Failure taxonomy is the retry contract: a
+`PipelineError` acks 200 (a refusal is an answer — never retried), infra failures 5xx into
+QStash's schedule, and 429 covers single-flight. `WORKER_CLUB_DETECTOR` must be explicit
+(path or `none`) — the standing club-detector trap enforced at enqueue; the spawn path's
+silent omission of `--club-detector` on reanalysis remains an open pre-existing defect worth
+a later fix. `jobs` gained `runner`/`target_revision` (migration 0010); `reconcile()` is
+spawn-only now. Queue-path source comes from the store via `swing_views.raw_media_key` (the
+harness provisions it for fixtures; `swing-ingest` will own it properly). Step 05 declared
+(lazy): fair queuing, retry/DLQ, remote-orphan detection, capacity model; deploy still waits
+on the OPEN worker-host row.
+
+---
+
 ## 03 - Reproducible Environment and Worker Skeleton
 **Completed:** 2026-08-13 19:20 UTC
 **Phase:** Platform Foundation

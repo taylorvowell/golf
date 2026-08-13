@@ -229,6 +229,19 @@ export const jobs = pgTable("jobs", {
   startedAt: timestamp("started_at", { withTimezone: true }).notNull().defaultNow(),
   finishedAt: timestamp("finished_at", { withTimezone: true }),
   error: text("error"),
+  /**
+   * Which execution path runs this job. `spawn` = the analyzer as a child process of the web
+   * server (the original path); `queue` = QStash-delivered to the hosted worker, which reports
+   * back over HTTP. `reconcile()`'s disk probing is meaningful only for `spawn` rows — a queue
+   * job's working directory is on another machine.
+   */
+  runner: text("runner", { enum: ["spawn", "queue"] }).notNull().default("spawn"),
+  /**
+   * The revision a queue job's artifacts are addressed to, fixed at enqueue time
+   * (`view.artifactRevision + 1`). Carried on the row (and in the job token) so uploads land at
+   * one immutable address no matter what the view row does while the job runs.
+   */
+  targetRevision: integer("target_revision"),
 });
 
 /**

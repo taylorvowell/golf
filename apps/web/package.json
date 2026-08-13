@@ -19,6 +19,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "media:provision": "node --env-file-if-exists=.env --import tsx src/db/provisionStorage.ts",
+    "queue:e2e": "node --env-file-if-exists=.env --import tsx src/db/queueE2E.ts",
     "verify:account": "node --env-file-if-exists=.env --import tsx src/db/verifyAccount.ts",
     "verify:media": "node --env-file-if-exists=.env --import tsx src/db/verifyMedia.ts"
   },
@@ -26,6 +27,7 @@
     "@supabase/ssr": "^0.12.4",
     "@supabase/supabase-js": "^2.112.2",
     "@swingsage/schema": "workspace:*",
+    "@upstash/qstash": "^2.11.3",
     "drizzle-orm": "^0.45.2",
     "next": "16.3.0",
     "postgres": "^3.4.9",

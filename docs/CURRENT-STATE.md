@@ -211,8 +211,13 @@ from CSS, not a JS config), and the shared card/panel shapes as named components
 **API routes — all under `/api/v1/`, nothing unversioned (D41).** `GET /api/v1/swings`, and per
 swing: `analysis`, `silhouette`, `isolation`, `club-only`, `markers`, `stages`, `reanalyze` (POST
 start / GET poll), `thumb`, `video`. Plus `GET /api/v1/client`, the one unauthenticated route:
-version negotiation, so a build too old to sign in can still learn that it is too old. A test
-enumerates the route files and fails on any that is unversioned or unguarded. `proxy.ts` answers
+version negotiation, so a build too old to sign in can still learn that it is too old. The one
+deliberately unversioned prefix is `/api/internal/jobs/*` — the worker-facing surface (source
+download, artifact upload, job events), machine-to-machine and authenticated by a signed
+per-job token rather than a session; it is not a client API and makes no store-app
+compatibility promise. A test enumerates the route files and fails on any that is unversioned
+(outside that prefix) or unguarded — internal routes are held to their own rule: every one
+must call `requireJobAccess`. `proxy.ts` answers
 **426** with an `UpgradeRequired` body to any client below `SWINGSAGE_MIN_CLIENT_VERSION`, and
 fails open for a caller that sends no version header. Media goes through `lib/media`, addressed by
 identity (D33); no route reads the filesystem for it.
@@ -486,7 +491,8 @@ that shapes the design), opencv-python 5.0.0.93 (+ contrib, same version — med
 it), numpy 2.3.5, scipy 1.18.0, torch 2.13.0+cu126 (pose and detector; plain `pip install
 torch` silently gives a CPU build — assert `torch.cuda.is_available()`),
 onnxruntime-gpu 1.22.0 (must match torch's CUDA major), ultralytics 8.4.115, rtmlib 0.0.16
-(RTMW weights self-download to `~/.cache/rtmlib`). System: ffmpeg 8.1.2/9.0 (use
+(RTMW weights self-download to `~/.cache/rtmlib`), qstash 3.4.0 (delivery signature
+verification only). System: ffmpeg 8.1.2/9.0 (use
 `-fps_mode cfr`; `-vsync` is removed in 9), Node 22 / pnpm 10–11, Postgres 16 (Docker),
 Drizzle ^0.45 / drizzle-kit ^0.31.
 
@@ -626,7 +632,11 @@ Stated as fact, with no implied ordering or plan. See
   app on the emulator — nothing in the code or the tests says anything is wrong.
 - **No capture of any kind.** No in-app recording, no camera code, no multi-device sync.
 - **No upload flow.** Analysis is started by hand (`burnin.py`) or via the web app's re-analyze
-  button on an already-indexed swing. There is no queue beyond the DB-backed reanalyze job.
+  button on an already-indexed swing. Two job drivers exist behind `JOBS_DRIVER` (spawn is the
+  default): the analyzer as a child process of the web server, or QStash dispatch to the worker
+  HTTP server (`services/analyzer/service/server.py`) — the queue loop is proven locally against
+  the QStash dev server (`pnpm --filter web queue:e2e`) but deploys nowhere yet; the worker host
+  is an open handoff row.
 - **No AI anywhere.** No provider abstraction, no Claude integration, no AI-generated
   narrative, no AI coach chat — the coach text is deterministic Stage 8 output.
 - **Auth is one provider deep.** Google native sign-in works on Android and the server accepts

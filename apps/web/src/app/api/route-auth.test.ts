@@ -22,6 +22,17 @@ const API_DIR = join(process.cwd(), "src", "app", "api");
 const GUARDS = ["requireViewAccess", "requireUserIdOrNull", "requireUserId"];
 
 /**
+ * The worker-facing surface: `/api/internal/jobs/*`, machine-to-machine, authenticated by the
+ * signed per-job token (`requireJobAccess`), not by a user session. Deliberately OUTSIDE the
+ * version namespace because it is not a client API — no store-shipped build ever calls it, so
+ * the D41 "cannot take an unversioned path back" problem does not apply, and versioning it
+ * would imply a compatibility promise to native clients that does not exist. Held to its own
+ * mechanical rule below: every internal route must call `requireJobAccess`.
+ */
+const INTERNAL_PREFIX = "internal/jobs/";
+const INTERNAL_GUARD = "requireJobAccess";
+
+/**
  * Routes that are deliberately unauthenticated, each with the reason it has to be.
  *
  * An allowlist rather than a convention, because "this one is meant to be open" is exactly what
@@ -58,14 +69,30 @@ describe("API route authentication", () => {
     expect(files.length).toBeGreaterThan(0);
   });
 
-  it("serves nothing outside an explicit API version", () => {
+  it("serves nothing outside an explicit API version, except the internal worker surface", () => {
     // An unversioned path is a promise nobody meant to make. Once a build in a store is calling
-    // it there is no way to take it back — see docs/decisions/ARCHIVE-numbered.md D41.
-    const unversioned = files.filter((f) => !/^v\d+\//.test(routeId(f))).map(routeId);
+    // it there is no way to take it back — see docs/decisions/ARCHIVE-numbered.md D41. The
+    // `internal/jobs/` prefix is the one exception: worker-facing, never client-facing.
+    const unversioned = files
+      .map(routeId)
+      .filter((r) => !/^v\d+\//.test(r))
+      .filter((r) => !r.startsWith(INTERNAL_PREFIX));
     expect(
       unversioned,
       "Every route must live under /api/v1/ (or a later version). A native client cannot be " +
-        "force-updated off an unversioned path.",
+        "force-updated off an unversioned path. Worker routes go under /api/internal/jobs/.",
+    ).toEqual([]);
+  });
+
+  it("authenticates every internal worker route with the job token", () => {
+    const open = files
+      .filter((f) => routeId(f).startsWith(INTERNAL_PREFIX))
+      .filter((f) => !readFileSync(f, "utf8").includes(INTERNAL_GUARD))
+      .map((f) => f.replace(process.cwd(), "."));
+    expect(
+      open,
+      "Internal worker routes have no user session; authority is the signed per-job token and " +
+        "nothing else. Every one of them must call requireJobAccess.",
     ).toEqual([]);
   });
 
@@ -78,6 +105,8 @@ describe("API route authentication", () => {
   it("resolves identity in every route", () => {
     const open = files
       .filter((f) => !(routeId(f) in PUBLIC_ROUTES))
+      // The internal surface resolves identity from the job token; held to that above.
+      .filter((f) => !routeId(f).startsWith(INTERNAL_PREFIX))
       .filter((f) => {
         const text = readFileSync(f, "utf8");
         return !GUARDS.some((g) => text.includes(g));
@@ -97,6 +126,8 @@ describe("API route authentication", () => {
     // `requireViewAccess`, which checks ownership AND resolves which view is being asked for.
     const weak = files
       .filter((f) => f.includes(`[id]`))
+      // Internal `[id]` is a JOB id whose scope the token itself carries, checked above.
+      .filter((f) => !routeId(f).startsWith(INTERNAL_PREFIX))
       .filter((f) => !readFileSync(f, "utf8").includes("requireViewAccess"))
       .map((f) => f.replace(process.cwd(), "."));
 

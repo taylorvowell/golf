@@ -183,6 +183,36 @@ docker run --rm -i -v ./services/analyzer/models:/app/models \
     swingsage-analyzer:dev < job-spec.json                      # run one job (service/worker.py)
 ```
 
+### The queue loop — QStash + worker, locally
+
+The queue path (analyzer-service step 04) runs entirely on this machine with **no Upstash
+account**: web app → QStash local dev server → worker HTTP server → artifacts + job state back
+through `/api/internal/jobs/*`. Three processes, then the proof:
+
+```bash
+# 1. QStash local dev server (:8080; fixed test credentials, printed at startup)
+npx @upstash/qstash-cli dev
+
+# 2. The worker (from services/analyzer/; venv). Signing keys are the dev server's fixed pair;
+#    WORKER_PUBLIC_URL must EXACTLY match WORKER_URL in apps/web/.env — signature verification
+#    is bound to the published URL.
+QSTASH_CURRENT_SIGNING_KEY=sig_7kYjw48mhY7kAjqNGcy6cr29RJ6r \
+QSTASH_NEXT_SIGNING_KEY=sig_5ZB6DVzB1wjE8S6rZ7eenA8Pdnhs \
+WORKER_PUBLIC_URL=http://localhost:8787/jobs \
+.venv/Scripts/python.exe -m service.server
+
+# 3. The web app (repo root: pnpm dev) with the queue env block in apps/web/.env
+#    (QSTASH_URL/QSTASH_TOKEN/WORKER_URL/APP_INTERNAL_BASE_URL/WORKER_CALLBACK_SECRET/
+#    WORKER_CLUB_DETECTOR — see .env.example for what each means)
+
+# The end-to-end proof: enqueue a real re-analysis through QStash, poll to terminal
+pnpm --filter web queue:e2e
+```
+
+`JOBS_DRIVER` stays **unset** for normal development — the spawn path is the default, and the
+queue is opt-in (`JOBS_DRIVER=queue`) exactly like `MEDIA_DRIVER`. The worker holds no DB or
+storage credential; everything it reads and writes goes over HTTP with a signed per-job token.
+
 ---
 
 ## 5. Tests

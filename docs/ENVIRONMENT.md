@@ -63,6 +63,8 @@ connected, the only way forward is someone reading two numbers off the screen.
 | 3000 | `pnpm dev` — Next, bound `0.0.0.0` so the phone can reach it |
 | 5433 | local Postgres (`golf-postgres-1`), needs Docker Desktop |
 | 8081 | Metro |
+| 8080 | QStash local dev server (`npx @upstash/qstash-cli dev`) — fixed test credentials, no Upstash account; the token and both signing keys are in `apps/web/.env.example`'s queue block and RUNBOOK §4 |
+| 8787 | analyzer worker HTTP server (`python -m service.server` from `services/analyzer`) — QStash delivers to `/jobs`, health at `/healthz` |
 
 `localhost` on a phone means the phone. Anything the device fetches must use this PC's LAN address
 (`10.0.1.x`, from the probe). `192.168.x` means you are on the wrong network or reading the wrong
@@ -164,4 +166,10 @@ The product's own deletion path is unaffected — `DELETE /api/v1/account` remov
 - **`adb shell input keyevent 4` (Back) exits the app** and lands on whatever the owner was using.
   Relaunch with `monkey -p com.swingsage.spike -c android.intent.category.LAUNCHER 1` instead.
 - **The expo-dev-client bubble is pinned top-right** and swallows taps under it. Controls placed
-  there are unreachable in exactly the builds used to test them.
+  there are unreachable in exactly the builds used to test them. (The after-swing opener toggle
+  lives top-right by design — on dev builds tap its left edge, ~x 870 on the emulator.)
+- **`next dev` compiles each API route on its first hit, and `/api/v1/swings/:id/analysis` can
+  take >12 s the first time** — past the mobile client's request timeout, so the first swing
+  opened after a web-server restart shows "the analysis could not be loaded" while everything
+  else works. Reopening the swing succeeds (the route is compiled). Development-only; a
+  production build has no on-demand compile.

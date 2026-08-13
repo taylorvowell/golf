@@ -60,6 +60,21 @@ while the web client shipped in the same commit; every one of those changes woul
 outage on a store build.
 **See:** ARCHIVE D41.
 
+### Deleting a swing is owner-only, media first, one cascading row delete
+
+**Decision:** `DELETE /api/v1/swings/:id` removes one swing end to end: every object under
+`swingPrefix(userId, swingId)` in **both** buckets first, then one `delete` from `public.swings`
+whose FK cascades take views, jobs, scores, markers and stages. The response is the contract's
+`SwingDeletion` (`swingId`, `mediaObjects`), never a 204 — a partial deletion must be
+distinguishable from a complete one. The mobile client (`deleteSwing` in `useSwings`) updates its
+cached list only from the confirmed response and notifies every mounted log, because the log stays
+mounted under the stack while the player deletes.
+**Gotchas:** **Owner only, never a coach** — read access is owner-or-coach everywhere else, and
+this route deliberately does not reuse `requireViewAccess`; RLS's owner-only `swings_write` backs
+it up. 404 covers "no such swing" and "not yours" alike. Media before rows is `deleteAccount`'s
+order for `deleteAccount`'s reason: a failed sweep loses nothing and retries, the other order
+orphans unenumerable bytes. Confirmation lives in the client; a flag on the wire would be theatre.
+
 ### The Next.js app is the coach and admin surface, not the golfer surface
 
 **Decision:** The existing web app becomes the coach workspace and admin area. The golfer surface
@@ -68,12 +83,23 @@ is the mobile app.
 
 ### Job dispatch is Upstash QStash; job state lives in Postgres; the worker host is OPEN
 
-**Decision:** Upstash QStash dispatches analysis jobs and job state stays in Postgres. **The
-worker host is an open decision** — Railway has no GPU, and pose inference currently runs on CPU
-while only the club detector uses GPU. The first `analyzer-service` step is a CPU-vs-CUDA
-measurement, and that measurement chooses the host.
-**Status:** OPEN. Decide before the `analyzer-service` track starts.
-**See:** ARCHIVE D18, which reopens the Railway half of D9.
+**Decision:** Upstash QStash dispatches analysis jobs and job state stays in Postgres — the
+queue carries dispatch, never truth. The loop is **built and proven locally** against the QStash
+dev server (`pnpm --filter web queue:e2e`): dispatcher (`lib/jobs/dispatch.ts`) → QStash →
+worker HTTP server (`service/server.py`) → `pipeline.run()` → artifacts and events back through
+`/api/internal/jobs/*`. The queue path sits behind `JOBS_DRIVER=queue`, opt-in and never
+inferred, with the spawn path still the local default. **The worker HOST (and production QStash
+credentials) remain the open half** — step 01 measured pose 2.32x faster on CUDA, which prices
+Railway's missing GPU; the choice is spend and sits with Taylor in `../HANDOFF.md`.
+**Gotchas:** The worker sees only URLs and a signed per-job token — no DB or storage
+credential; the web app stays the single owner of media addressing, and internal-route writes
+run under the enqueuing user's identity (no elevation on a request path, D26). A
+`PipelineError` is an answer: the worker acks it 200 so QStash never retries a deterministic
+refusal; only infrastructure failures 5xx into the retry schedule. `WORKER_CLUB_DETECTOR` must
+be set explicitly (path or `none`) — the club detector is never defaulted, per the standing
+trap. Per-user fair queuing (flow-control keys), retry/DLQ policy and remote-orphan detection
+are later steps of `analyzer-service`.
+**See:** ARCHIVE D9, D18.
 
 ### Three environments, each with its own Supabase project
 

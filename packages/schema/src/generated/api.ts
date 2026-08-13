@@ -251,6 +251,10 @@ export interface Job {
   log: string[];
   startedAt: number;
   finishedAt: number | null;
+  /**
+   * Which path runs the job: a child process of the web server (spawn) or the QStash-dispatched hosted worker (queue). Optional and informational — clients render progress identically either way.
+   */
+  runner?: "spawn" | "queue";
 }
 export interface JobIdle {
   status: "idle";
@@ -279,4 +283,20 @@ export interface AccountDeletion {
    * False only where Supabase is unconfigured (the local development split, D7). The row data is gone either way; a client must not claim a full deletion when this is false.
    */
   authIdentityDeleted: boolean;
+}
+/**
+ * What DELETE /api/v1/swings/:id removed. Reported rather than answered with 204 for the same reason accountDeletion is: media objects and database rows are two systems with no transaction spanning them, so a partial deletion must be distinguishable from a complete one.
+ *
+ * This interface was referenced by `Api`'s JSON-Schema
+ * via the `definition` "swingDeletion".
+ */
+export interface SwingDeletion {
+  /**
+   * The swing that was deleted. Always one the caller owns — the route answers 404 rather than touch another account's swing.
+   */
+  swingId: string;
+  /**
+   * Objects removed across the source and artifact buckets for this swing.
+   */
+  mediaObjects: number;
 }

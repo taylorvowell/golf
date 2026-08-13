@@ -1376,6 +1376,13 @@
   "api#/definitions/job/properties/progressPct": {
     "type": "number"
   },
+  "api#/definitions/job/properties/runner": {
+    "type": "string",
+    "enum": [
+      "\"queue\"",
+      "\"spawn\""
+    ]
+  },
   "api#/definitions/job/properties/stage": {
     "type": "string"
   },
@@ -1491,6 +1498,19 @@
     "type": "integer|null"
   },
   "api#/definitions/stageSetRequest/properties/stage": {
+    "type": "string"
+  },
+  "api#/definitions/swingDeletion": {
+    "type": "object",
+    "required": [
+      "mediaObjects",
+      "swingId"
+    ]
+  },
+  "api#/definitions/swingDeletion/properties/mediaObjects": {
+    "type": "integer"
+  },
+  "api#/definitions/swingDeletion/properties/swingId": {
     "type": "string"
   },
   "api#/definitions/swingListResponse": {

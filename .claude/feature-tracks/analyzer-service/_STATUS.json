@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "featureName": "analyzer-service",
-  "currentStep": "04",
+  "currentStep": "05",
   "phase": "Platform Foundation",
-  "lastUpdated": "2026-08-13T19:20:00Z",
+  "lastUpdated": "2026-08-13T21:12:52Z",
   "steps": {
     "01": {
       "status": "complete",
@@ -21,8 +21,13 @@
       "note": "The environment is reproducible and the worker has a skeleton. requirements.txt exact-pins the measured configuration (torch 2.13.0+cu126, onnxruntime-gpu 1.22.0, mediapipe 1.0.0, ...; rtmlib installed --no-deps because its metadata hard-requires CPU onnxruntime - the step-01 silent-fallback vector). services/analyzer/Dockerfile builds from the REPO ROOT context (8.4GB, python:3.13-slim + ffmpeg) so the image ships packages/schema/schemas with SWINGSAGE_SCHEMA_DIR pointing at them - producer-side validation stays ACTIVE in the container. service/worker.py: versioned job-spec JSON -> AnalysisRequest -> pipeline.run(), one JSON object per line; strict validation (unknown fields refuse, club detector never defaulted). Two latent bugs fixed en route: contract.py computed parents[3] at IMPORT time (crashed any monorepo-less install before the documented SWINGSAGE_SCHEMA_DIR override could apply) and test_contract.py had the same walk. Gates: local 141/2s/1x; docker build clean; IN-CONTAINER suite 103/13s/1x exit 0 - the from-scratch reproducibility proof. Club-head best.pt remains a local-only asset with no fetch path (open, later step)."
     },
     "04": {
+      "status": "complete",
+      "completedAt": "2026-08-13T21:12:52Z",
+      "note": "The queue loop is BUILT AND PROVEN locally, host-agnostically: dispatch (lib/jobs/dispatch.ts, behind JOBS_DRIVER=queue - opt-in, spawn stays default) -> QStash local dev server -> worker HTTP server (service/server.py, signature-verified, single-flight) -> source download -> pipeline.run with throttled event forwarding -> artifact PUTs -> verified done callback -> Postgres job state and view flip. E2E harness (pnpm --filter web queue:e2e) PASSED on pro_2: job done, view ready at revision 2, fps 60. The worker holds no DB/storage credential - only URLs plus an HMAC-signed per-job token whose claims carry {jobId, viewId, actorId, targetRevision, exp}; internal routes (/api/internal/jobs/*) verify it and write as the enqueuing user (no elevation on a request path, D26). Failure taxonomy is load-bearing: PipelineError acks 200 (refusals are answers, never retried); infra failures 5xx into QStash's retry schedule. done is verified, not believed (isPublished at targetRevision before the row flips). WORKER_CLUB_DETECTOR must be explicit (path or 'none') - the standing club-detector trap, now enforced at enqueue. Gates: analyzer 165/2s/1x (+24 new); web tsc+lint clean, vitest 179; schema additive (Job.runner) locked, 100 passed; container rebuilt with qstash 3.4.0 pin, in-container 127/13s/1x. Deploy + production QStash credentials + fair queuing/retry/DLQ are later steps; worker host stays the OPEN handoff row."
+    },
+    "05": {
       "status": "not-started",
-      "note": "Declared, file not yet authored (lazy). Natural scope per the track goal: the worker loop - QStash delivery -> job spec -> pipeline.run -> publish artifacts via lib/media -> job state in Postgres, replacing the spawn+stdout-regex path. The deploy half waits on the OPEN worker-host handoff row (Taylor, spend); the loop itself is buildable host-agnostically."
+      "note": "Declared, file not yet authored (lazy). Natural scope per the track goal: per-user fair queuing (QStash flow-control keys at enqueue), retry/dead-letter policy (failure callbacks + DLQ), remote-orphan detection for queue jobs (heartbeat/timeout - reconcile() is spawn-only today), backpressure, and the capacity/cost model feeding the analysis-latency SLO. The deploy half still waits on the OPEN worker-host handoff row (Taylor, spend)."
     }
   },
   "blockers": [],

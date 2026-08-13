@@ -42,3 +42,5 @@ jsonschema==4.26.0
 # rtmlib's only real runtime needs beyond the above:
 tqdm==4.70.0
 # rtmlib itself: install with --no-deps (see header). NOT listed here on purpose.
+# QStash delivery signature verification (service/server.py). Nothing else from Upstash.
+qstash==3.4.0
