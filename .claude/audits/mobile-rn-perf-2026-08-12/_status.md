@@ -39,6 +39,21 @@
    part 2 (external frame store) and M2 (transform positioning) are needed at all — if drift
    holds, close both as "measured — not needed" and re-affirm D23 in the register.
 
+## Phase 7 partial results (2026-08-12 evening device session, cut short by user)
+
+- New dev client (all 8 commits) **installed and ran on the S25+**: played 7wood-1 with skeleton/
+  trace/orient overlays, new transport, panels — the rebuilt player works end-to-end on device.
+- **Native seeks: 2/2 · 100.0% exact · p95 0 · max 0. Container fps 60.00 vs 60 declared.**
+- **M13 timeout verified live**: with the API unreachable the log resolved to "Cannot reach
+  SwingSage" + Try again inside the timeout, instead of an indefinite spinner.
+- Overlay drift: the only reading (47.1% locked · p95 143) was **polluted** — taken across
+  sheet-opens, app-switches to a remote-desktop app, and stats accumulated since launch; treat as
+  NOT a measurement. The clean-run protocol (reset → 12s untouched playback → read, trace on/off)
+  was interrupted before completion and remains open, as do the 250-seek re-run and the React
+  Compiler keep/revert decision.
+- Root cause of "swings won't load": **ProtonVPN's firewall blocks phone→PC LAN** (see
+  ENVIRONMENT.md). Workaround (adb reverse + localhost env) applied for the session and reverted.
+
 ## Event log
 
 - 2026-08-12 — Review executed (13-agent workflow: 6 finders, 6 adversarial verifiers, 1 critic; 1 finding refuted). Docs written. CLAUDE.md seek-rule platform qualifier fixed in the review session itself (scope-adjacent observation #7).
