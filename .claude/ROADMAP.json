@@ -104,8 +104,8 @@
     },
     {
       "id": "analyzer-service",
-      "spine": false,
-      "lifecycle": "planned",
+      "spine": true,
+      "lifecycle": "active",
       "phase": "foundation",
       "goal": "Promote the analyzer from a hand-invoked CLI to a hosted, queue-driven worker reading and writing object storage. FIRST STEP is a measurement, not a deploy: pose inference currently runs on CPU and only the club detector uses GPU, so measure CPU-vs-CUDA pose on this pipeline and let that choose the host (D18 reopened Railway, which has no GPU). Then the capacity and cost model, per-user fair queuing so one workload cannot degrade everyone else's (§38), backpressure, retry/dead-letter handling, and a validated analysis-latency SLO.",
       "statusFile": ".claude/feature-tracks/analyzer-service/_STATUS.json",
@@ -192,7 +192,7 @@
     },
     {
       "id": "mobile-app-shell",
-      "spine": true,
+      "spine": false,
       "lifecycle": "active",
       "phase": "golfer-core",
       "goal": "Mobile client scaffold for iPhone and Android: navigation, auth flows, onboarding with role selection, profile and goals UI, the shared design system, and §41's real-golf-conditions usability bar (bright sunlight, one-handed, large capture controls) as stated acceptance criteria rather than an aspiration.",
