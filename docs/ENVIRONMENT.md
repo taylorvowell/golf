@@ -20,10 +20,13 @@ machine-level faults that have already cost time.
 
 | | |
 |---|---|
-| Device | **Galaxy S25+**, `SM-S936U1`, Android 16, Snapdragon 8 Elite. Flagship — read capture results asymmetrically (a failure is decisive, a pass does not clear a mid-range device). |
+| Device | **Galaxy S25+**, `SM-S936U1`, Android 16, Snapdragon 8 Elite. Flagship — read capture results asymmetrically (a failure is decisive, a pass does not clear a mid-range device). **Taylor's daily-driver: never driven without his say-so** (root `CLAUDE.md`). |
+| Desktop emulator | AVD **`swingsage`** → `emulator-5554`. medium_phone 1080×2400 @420dpi, Android 36 `google_apis_playstore` **x86_64**, 4 GB RAM, `hw.gpu.mode=host`. **Claude drives this one freely.** For layout and behaviour only — every *number* off it is meaningless (software-rendered x86_64). RUNBOOK §13. |
+| Emulator sign-in | **The one thing it cannot self-serve.** A fresh AVD has no Google account, so native Google sign-in stops at "Checking info…" and everything behind the auth gate is unreachable. Adding one is one-time and persists in the AVD. |
 | No iPhone | iOS is unbuildable locally: no Mac, no device (D5, D12). |
-| adb serial | `R3CY10EZ19E` |
+| adb serial | `R3CY10EZ19E` (the phone). **Always `adb -s <target>`** — with both attached, a bare `adb shell input` is a coin flip between the emulator and Taylor's phone. |
 | App package | `com.swingsage.spike` |
+| APK is universal | `gradle.properties` builds all four ABIs (`armeabi-v7a,arm64-v8a,x86,x86_64`), so the **same** `app-debug.apk` installs on the phone and the emulator — no separate build. |
 | Last known address | `10.0.1.123:39593` (2026-08-12; was .125 the day before — the IP moves too, just rarely). **The port changes on every reboot** — the IP usually does not. |
 
 **Connecting.** Pairing survives reboots, so this is normally one command:

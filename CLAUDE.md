@@ -287,16 +287,25 @@ looked healthy and were wrong. Build the debug view when the work starts, not af
   hardware that does not exist. Those are not approval gates.
 - **Keep autonomy reversible.** Contract and schema changes stay append-only and logged, so a
   wrong call is a revert rather than a migration.
-- **Verify on the Android phone whenever a change is visible — but NEVER drive the phone without
-  Taylor saying so in the current conversation.** The S25+ is his daily-driver, not a test rig:
-  `adb shell input`, taps, force-stop/relaunch and screenshot loops all need an explicit go-ahead
-  each time, even when the device is connected and input is landing. Read-only queries (`adb
-  devices`, `pidof`, `dumpsys`) are always fine. Run every automated half first (`tsc`, jest, the
-  Metro bundle, `scripts/checkoverlay.ts`), then **state the ask and stop** — a `HANDOFF` row with
-  the exact taps, and one line in the reply naming what is unverified as a result. Close the step
-  on its automated oracles with the device pass as a **named shortfall**; never imply an on-glass
-  check that did not happen. See [`docs/RUNBOOK.md`](docs/RUNBOOK.md) §3 (web over LAN) and §6
-  (the native dev build).
+- **Two Androids, two different rules. Know which one you are touching.**
+  - **The desktop emulator (`swingsage` AVD, `emulator-5554`) is YOURS — drive it freely and
+    without asking.** Boot it, install, tap, type, screenshot, wipe and recreate it as needed. It
+    is a disposable VM on this machine, so there is no one to interrupt and nothing to break that
+    a re-create does not fix. **Use it as the default way to see a change** rather than reporting
+    a UI as unverified. Procedure: [`docs/RUNBOOK.md`](docs/RUNBOOK.md) §13.
+  - **The S25+ is Taylor's daily-driver phone — NEVER drive it without him saying so in the
+    current conversation.** `adb shell input`, taps, force-stop/relaunch and screenshot loops all
+    need an explicit go-ahead each time, even when the device is connected and input is landing.
+    Read-only queries (`adb devices`, `pidof`, `dumpsys`) are always fine.
+  - **`adb` commands must always name their target** (`adb -s emulator-5554 …`) — with both
+    attached, a bare `adb shell input` is a coin flip that can land on his phone.
+  - **The emulator does not replace the phone for anything measured.** It is software-rendered
+    video on x86_64 with no real display pipeline: frame-lock, seek exactness, decoder cost, fps
+    and capture rate are **meaningless there** and must never be quoted as a result. Layout,
+    navigation, wording, state handling, error paths and "does the tap do the right thing" are
+    exactly what it is for. When only a measurement is left, that is the `HANDOFF` row — and close
+    the step on its automated oracles with the device pass as a **named shortfall**.
+  See also [`docs/RUNBOOK.md`](docs/RUNBOOK.md) §3 (web over LAN) and §6 (the native dev build).
 - **"What can I look at right now?" is a question about the RUNNING SYSTEM, not the repository.**
   There are two SwingSage surfaces on the phone — the web player over LAN and the installed native
   dev build — and source code knows about neither's state. Ask the device (`adb devices -l`,

@@ -697,3 +697,63 @@ of the Metrics panel** and is development-only — it is absent from a release b
 4. Tap **Run 250 seeks** with the trace ON. Seek exactness must still be `250/250 · 100.0%`.
 5. Compare against `services/analyzer/out/<stem>/checkoverlay_<stem>_f<frame>.png` at the same
    frame — that is Gate 3 proper.
+
+## 13. The desktop Android emulator — a phone-shaped window beside the editor
+
+The SwingSage app running on this machine, in a resizable window, with no phone involved. **Claude
+drives this one freely and without asking** (root `CLAUDE.md`); the S25+ still needs Taylor's
+say-so every time.
+
+**What it is for:** layout, navigation, wording, state handling, error paths, and "does the tap do
+the right thing". **What it is NOT for:** any number. It is software-rendered video on x86_64 with
+no real display pipeline, so frame-lock, seek exactness, decoder cost, fps and capture rate are
+meaningless there and must never be quoted as a result. Those stay the phone's job.
+
+The AVD is called `swingsage` (medium_phone, 1080×2400 @ 420dpi, Android 36 google_apis_playstore
+x86_64, 4 GB RAM, host GPU). It already exists — these are the commands to use and to rebuild it.
+
+```bash
+SDK="$HOME/AppData/Local/Android/Sdk"
+
+# start it (background). ~60s to boot the first time.
+"$SDK/emulator/emulator.exe" -avd swingsage -no-snapshot-load -gpu host -no-boot-anim &
+
+# wait for boot
+adb -s emulator-5554 shell getprop sys.boot_completed      # 1 = ready
+
+# the dev build already contains x86_64 (gradle.properties builds all four ABIs), so the SAME apk
+# that goes on the phone installs here — no separate build.
+adb -s emulator-5554 install -r apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
+
+# let the app reach Metro and the API on this machine
+adb -s emulator-5554 reverse tcp:8081 tcp:8081
+adb -s emulator-5554 reverse tcp:3000 tcp:3000
+
+adb -s emulator-5554 shell monkey -p com.swingsage.spike -c android.intent.category.LAUNCHER 1
+adb -s emulator-5554 exec-out screencap -p > shot.png      # look at it
+adb -s emulator-5554 shell input tap X Y                   # drive it
+```
+
+**ALWAYS pass `-s emulator-5554`.** With the phone also attached, a bare `adb shell input` is a
+coin flip that can land on Taylor's phone.
+
+**Sign-in is the one thing it cannot self-serve.** The app signs in with Google natively, and a
+fresh AVD has no Google account, so the flow stops at Google's "Checking info…" screen. Adding an
+account is a one-time, ~60-second job that then **persists in the AVD** across reboots and
+reinstalls: Settings → Passwords & accounts → Add account → Google. Until that is done the
+emulator can only show the sign-in screen, and everything behind the gate — swing log, player,
+overlays, Analysis, Compare — is unreachable on it.
+
+To rebuild the AVD from scratch:
+
+```bash
+SDK="$HOME/AppData/Local/Android/Sdk"; export ANDROID_HOME="$SDK"; export ANDROID_SDK_ROOT="$SDK"
+echo no | "$SDK/cmdline-tools/latest/bin/avdmanager.bat" create avd -n swingsage \
+  -k "system-images;android-36;google_apis_playstore;x86_64" -d medium_phone
+# then set in ~/.android/avd/swingsage.avd/config.ini:
+#   hw.gpu.enabled=yes  hw.gpu.mode=host  hw.ramSize=4096  vm.heapSize=512
+#   hw.lcd.depth=32  hw.keyboard=yes  disk.dataPartition.size=6G
+```
+
+`hw.gpu.enabled` defaults to **no**, which software-renders everything and makes a video player
+unusable — setting it is not optional.
