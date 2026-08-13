@@ -105,6 +105,17 @@ along.
 
 ## UI, design system, accessibility
 
+- **Function first, skin later — and never confuse that with putting everything on screen.**
+  Visual polish is deferred (root `CLAUDE.md`); `mobile-app-shell` step 03 owns it. What is *not*
+  deferred is restraint. Taylor's standing rule: *"a modern and sleak interface without clutter of
+  information that is not important (such as timestamps, or framerates, or labels that don't
+  matter) … not just dump every variable we have on the screen."*
+  Before a field ships, three tests: **would a golfer act on it** (if not, it is diagnostics —
+  `__DEV__` panel, not product), **does it repeat something already on screen**, and **is it here
+  only because we have the value**. Frame rates, drift, seek counts and raw frame indices are
+  instruments and live in the frame-sync panel alone. Stylize like the existing surfaces rather
+  than inventing a look, so the later skinning pass has one system to change.
+
 - Deck (`src/design/deck/`) is the player's control-surface system, layered on `theme.ts` tokens.
   **No hand-mixed rgba beside a token that nearly matches** — use the token or name a new one.
   Overlay data colours are web-parity constants and stay literal.

@@ -378,6 +378,31 @@ is almost never one of those; run it. Long jobs go in the background rather than
   The Platform Foundation phase deliberately delivers nothing a user can see: API versioning,
   the generated shared schema and the entitlement seam all get permanently more expensive after
   the first store release, so they are built first and built properly.
+- **Function first, skin later — but every screen you build still follows the rule below.**
+  Taylor's standing priority (2026-08-13): **pure features and functionality now; the look of the
+  app comes later, and he will skin it himself.** So do not spend a build on visual polish, do not
+  stop to perfect spacing or colour, and do not treat a plain screen as unfinished. The dedicated
+  styling pass is `mobile-app-shell` step 03 (design system + §41 usability) — deliberately
+  deferred, not forgotten.
+
+  That is a licence to defer *polish*. It is **not** a licence to dump state on a screen. UI gets
+  built constantly as features land, and when it does, this is binding — Taylor's words:
+
+  > When designing a UI, make sure to stylize like existing app and focus on creating a seamless
+  > app experience. The goal is a modern and sleak interface without clutter of information that is
+  > not important (such as timestamps, or framerates, or labels that don't matter). I want to focus
+  > on what truly matters and not just dump every variable we have on the screen.
+
+  Three tests before a field goes on screen. **Would a golfer act on it?** If not it is
+  diagnostics — put it behind a `__DEV__` panel, not in the product. **Does it repeat something
+  already visible?** Cut it. **Is it there because we happen to have the value?** That is the exact
+  failure this rule names: having a number is not a reason to render it. Match the existing
+  surfaces (`src/design/deck/` on mobile, `components/ui/kiosk.tsx` on web) rather than inventing a
+  look, so the skinning pass has one system to change and not five.
+
+  Frame rates, drift figures, seek counters and raw frame indices are the standing example. They
+  are **instruments**: they belong in the dev-only frame-sync panel and never on a golfer's screen.
+
 - **Protect the differentiators.** Multi-phone synchronized capture; an analysis engine that
   abstains rather than fabricates; AI coach and human coach in one product. These are named in
   the roadmap's `launch` block precisely because they are what schedule pressure attacks first.

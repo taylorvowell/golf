@@ -213,7 +213,7 @@
           "blocking": false
         }
       ],
-      "sequencingNote": "Step 01 (navigation + the swing log) is complete; steps 02 (onboarding, role, profile) and 03 (design system, §41 usability) remain open and launch-blocking. The spine moved on to mobile-player 2026-08-12 (D49) because neither gates watching a swing, and the player is the largest unproven risk in the product. THE SPINE CAME BACK HERE 2026-08-13 when mobile-player completed all four steps: this is the remaining launch-blocking work in the golfer-core phase, and Deck (the player's control surface) is explicitly waiting on step 03 to absorb it rather than collide with it."
+      "sequencingNote": "Step 01 (navigation + the swing log) is complete; steps 02 (onboarding, role, profile) and 03 (design system, §41 usability) remain open and launch-blocking. The spine moved on to mobile-player 2026-08-12 (D49) because neither gates watching a swing, and the player is the largest unproven risk in the product. Step 03 is now EXPLICITLY DEFERRED at Taylor's direction (2026-08-13): 'the look of the app can come later, for now I want to focus on pure features and functionality, then I can come and skin it'. It stays launch-blocking - deferred, not cut - and it is where Deck gets absorbed into a real design system. The spine came back here 2026-08-13 when mobile-player completed all four steps: this is the remaining launch-blocking work in the golfer-core phase, and Deck (the player's control surface) is explicitly waiting on step 03 to absorb it rather than collide with it."
     },
     {
       "id": "mobile-player",
