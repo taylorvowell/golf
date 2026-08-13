@@ -49,9 +49,12 @@ on disk; the Next.js app replaced them.
 
 ## 3. The analyzer pipeline
 
-Entry point: `python scripts/burnin.py <video>` from `services/analyzer/` (flags:
-`--view dtl|face_on`, `--handedness right|left`, `--club-detector`, `--club-type`,
-`--scoring-config`, `--no-stage3/--no-club/--no-scoring/--no-silhouette`, etc.).
+Entry point: `swingsage.pipeline.run(AnalysisRequest)` — the whole composition, the
+`analysis.json` doc assembly and the output lock live there. `python scripts/burnin.py <video>`
+from `services/analyzer/` is the thin CLI over it (flags: `--view dtl|face_on`,
+`--handedness right|left`, `--club-detector`, `--club-type`, `--scoring-config`,
+`--no-stage3/--no-club/--no-scoring/--no-silhouette`, etc.). The printed stage lines are a
+compatibility surface — `apps/web/src/lib/jobs.ts` parses them for progress.
 
 Stages, in execution order, all in `services/analyzer/swingsage/`:
 

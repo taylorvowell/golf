@@ -94,6 +94,20 @@ reasons a check did not score stay apart — *skipped for this swing* is about t
 is the config refusing to score a metric it does not trust yet, and merging them reports our gap
 as the golfer's.
 
+### The pipeline has one programmatic entry point
+
+**Decision:** The full analysis composition — every stage, the `analysis.json` doc assembly, the
+output lock, schema versioning — is `swingsage.pipeline.run(AnalysisRequest, on_event=None)`.
+`scripts/burnin.py` is a thin CLI over it; the hosted worker imports it directly instead of
+spawning a child process. Failures the pipeline refuses on raise `PipelineError` with a
+user-readable reason.
+**Gotchas:** **stdout is a protocol** until the worker exists end to end: `apps/web/src/lib/jobs.ts`
+regex-parses the printed stage lines for its progress bar, so the `print()` calls inside
+`pipeline.run()` may not change shape. The structured `on_event` callback is additive, never a
+replacement for those lines. `AnalysisRequest` defaults and the CLI flags are kept identical by
+`tests/test_pipeline.py` — add a flag by adding the field first. The club detector still has **no
+default weights** in either surface.
+
 ### Pose runs on CUDA when it is genuinely available
 
 **Decision:** `pose_device()` probes for a usable CUDA provider and returns `cuda` or `cpu`;
