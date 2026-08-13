@@ -21,9 +21,15 @@ import os
 from functools import lru_cache
 from pathlib import Path
 
-# The repo root, from services/analyzer/swingsage/contract.py.
-_REPO_ROOT = Path(__file__).resolve().parents[3]
-_DEFAULT_SCHEMA_DIR = _REPO_ROOT / "packages" / "schema" / "schemas"
+# The repo root, from services/analyzer/swingsage/contract.py. Deployments that ship the
+# analyzer without the monorepo around it (the worker container) are too shallow for this
+# walk — there, SWINGSAGE_SCHEMA_DIR is mandatory and the walk must not crash the import.
+try:
+    _DEFAULT_SCHEMA_DIR = (
+        Path(__file__).resolve().parents[3] / "packages" / "schema" / "schemas"
+    )
+except IndexError:
+    _DEFAULT_SCHEMA_DIR = None
 
 
 class ContractError(ValueError):
@@ -31,7 +37,14 @@ class ContractError(ValueError):
 
 
 def schema_dir() -> Path:
-    return Path(os.environ.get("SWINGSAGE_SCHEMA_DIR") or _DEFAULT_SCHEMA_DIR)
+    override = os.environ.get("SWINGSAGE_SCHEMA_DIR")
+    if override:
+        return Path(override)
+    if _DEFAULT_SCHEMA_DIR is None:
+        raise ContractError(
+            "schemas not found: no monorepo above this install — set SWINGSAGE_SCHEMA_DIR"
+        )
+    return _DEFAULT_SCHEMA_DIR
 
 
 @lru_cache(maxsize=None)

@@ -1,0 +1,44 @@
+# Runtime dependencies — exact pins, mirroring the MEASURED configuration.
+#
+# These are the versions step 01's CPU-vs-CUDA measurement (2.32x, D53) and the D53
+# determinism baseline were taken on. Upgrading any of them is a decision, not an accident:
+# re-run the fixture fidelity comparison (scripts/compare_analysis.py) before trusting new
+# numbers.
+#
+# Install is TWO commands, in order (rtmlib must not bring its own deps — it hard-requires
+# the CPU-only `onnxruntime` distribution, which would sit next to onnxruntime-gpu and
+# recreate the silent CUDA-fallback incident from step 01, plus a duplicate opencv):
+#
+#   pip install -r requirements.txt
+#   pip install --no-deps rtmlib==0.0.16
+#
+# GPU notes (docs/decisions/analysis-and-ai.md "Pose runs on CUDA when it is genuinely
+# available"):
+#   - torch cu126 wheels come from the extra index below; a plain `pip install torch`
+#     silently gives a CPU build. The cu126 wheels also run fine on CPU-only machines.
+#   - onnxruntime-gpu's major must match the CUDA major torch ships: 1.22 for CUDA 12
+#     (1.28 wants CUDA 13 and advertises a provider it cannot create).
+#   - There is no system CUDA toolkit anywhere: onnxruntime-gpu links against the CUDA 12 +
+#     cuDNN 9 libraries torch ships in site-packages/torch/lib (pose_rtm._enable_cuda_dlls).
+#
+# ffmpeg is a required SYSTEM dependency (>= 5.1 for -fps_mode), not a pip package.
+# Model weights are separate assets — see docs/RUNBOOK.md "Rebuilding the analyzer
+# environment".
+
+--extra-index-url https://download.pytorch.org/whl/cu126
+
+numpy==2.3.5
+opencv-python==5.0.0.93
+# mediapipe hard-requires the contrib distribution; pin it to the SAME version as
+# opencv-python so the two cv2 installs cannot skew.
+opencv-contrib-python==5.0.0.93
+scipy==1.18.0
+mediapipe==1.0.0
+torch==2.13.0+cu126
+torchvision==0.28.0+cu126
+ultralytics==8.4.115
+onnxruntime-gpu==1.22.0
+jsonschema==4.26.0
+# rtmlib's only real runtime needs beyond the above:
+tqdm==4.70.0
+# rtmlib itself: install with --no-deps (see header). NOT listed here on purpose.

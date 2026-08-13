@@ -3,7 +3,8 @@ services/analyzer/.venv/
 __pycache__/
 *.pyc
 
-# Model weights, downloaded on demand — see docs/STATUS.md for the URLs.
+# Model weights, downloaded on demand — see docs/RUNBOOK.md "Rebuilding the analyzer
+# environment" for what each asset is and how it is obtained.
 # Ultralytics also drops base checkpoints in the working dir, hence the bare patterns.
 *.task
 *.onnx

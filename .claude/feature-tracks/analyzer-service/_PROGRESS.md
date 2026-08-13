@@ -4,6 +4,30 @@ Append-only. One entry per completed step: timestamp, what changed, anything wor
 
 ---
 
+## 03 - Reproducible Environment and Worker Skeleton
+**Completed:** 2026-08-13 19:20 UTC
+**Phase:** Platform Foundation
+**Summary:** The analyzer environment is now reproducible from nothing: `requirements.txt`
+exact-pins the measured configuration (the versions D53 and the 2.32x number were taken on),
+with rtmlib installed `--no-deps` because its metadata hard-requires the CPU-only
+`onnxruntime` — the exact silent-CUDA-fallback vector from step 01. `services/analyzer/
+Dockerfile` (repo-root context, python:3.13-slim + ffmpeg, 8.4GB) ships the shared contract
+schemas with `SWINGSAGE_SCHEMA_DIR` set, and `service/worker.py` is the container entrypoint:
+versioned job-spec JSON → `AnalysisRequest` → `pipeline.run()`, one JSON object per line,
+strict validation (unknown fields refuse; club detector never defaulted). Gates: local suite
+141 passed / 2 skipped / 1 xfailed (12 new worker tests); image builds clean; **in-container
+suite green (103 passed / 13 skipped / 1 xfailed)** — the from-scratch reproducibility proof.
+**Notes:** Fixed two latent monorepo-coupling bugs the container exposed: `contract.py`
+computed `parents[3]` at import time (crashing any monorepo-less install before its own
+documented `SWINGSAGE_SCHEMA_DIR` override could apply), and `test_contract.py` had the same
+walk. The stale `opencv_python_headless 4.10` in the local venv was left untouched (removing
+it risks the shared `cv2` files); the pinned rebuild excludes it. `runs/clubhead/weights/
+best.pt` remains a local-only asset with no reproducible fetch path — shipping it to a
+deployed worker is an open later-step decision. Step 04 declared (lazy): the worker loop;
+its deploy half waits on the OPEN worker-host handoff row.
+
+---
+
 ## 02 - One Entry Point for the Pipeline
 **Completed:** 2026-08-13 17:42 UTC
 **Phase:** Platform Foundation

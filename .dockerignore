@@ -1,0 +1,19 @@
+# Build context for services/analyzer/Dockerfile (built with the REPO ROOT as context so the
+# image can carry packages/schema/schemas — the same files the TypeScript types are generated
+# from, never a copy). Allowlist style: exclude everything, re-include only what the image
+# needs, then strip the heavy machine-local pieces back out.
+*
+!services/analyzer
+services/analyzer/.venv
+services/analyzer/out
+services/analyzer/out-baseline
+services/analyzer/runs
+services/analyzer/models
+services/analyzer/datasets
+!packages/schema/schemas
+**/__pycache__
+**/.pytest_cache
+**/*.pt
+**/*.onnx
+**/*.task
+**/*.mp4

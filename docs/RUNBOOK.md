@@ -142,6 +142,47 @@ a stale score.
 Coverage percentages have overstated club quality three separate times. Run `checkclub.py` and
 look at the frame before believing any club number.
 
+### Rebuilding the analyzer environment
+
+Runtime deps are pinned in `services/analyzer/requirements.txt` (exact versions — they are the
+configuration the CUDA measurement and determinism baseline were taken on). Install is **two
+commands, in order** — rtmlib must not bring its own deps or it installs the CPU-only
+`onnxruntime` next to `onnxruntime-gpu`, recreating the silent-CUDA-fallback incident:
+
+```bash
+# from services/analyzer/
+python -m venv .venv
+.venv/Scripts/python.exe -m pip install -r requirements.txt
+.venv/Scripts/python.exe -m pip install --no-deps rtmlib==0.0.16
+.venv/Scripts/python.exe -m pip install -r requirements-dev.txt   # pytest
+```
+
+Notes that have already cost time: a plain `pip install torch` silently gives a CPU build (the
+cu126 index is pinned inside `requirements.txt`); `onnxruntime-gpu` must match torch's CUDA
+major (1.22 for CUDA 12 — 1.28 wants CUDA 13 and advertises a provider it cannot create);
+there is no system CUDA toolkit — onnxruntime links against the libraries torch ships.
+`ffmpeg` (>= 5.1) is a required system dependency.
+
+**Model assets** (all gitignored; ~630 MB total; none are pip packages):
+
+| Asset | Path | How obtained |
+|---|---|---|
+| MediaPipe pose bundle | `models/pose_landmarker_heavy.task` (30 MB) | manual download from the MediaPipe models page |
+| RTMPose / RTMW onnx | `~/.cache/rtmlib/` (~410 MB) | rtmlib self-downloads on first use (URLs hardcoded in `swingsage/pose_rtm.py`) |
+| Club-head detector | `runs/clubhead/weights/best.pt` (19 MB) | **local-only** — trained via `scripts/fetch_club_dataset.py` + `scripts/train_club.py`; no public fetch path |
+| Ultralytics base checkpoints | `yolo11s.pt` etc. in the working dir | auto-dropped by ultralytics on first use |
+
+**Container** (the future worker's image — code + pinned deps only, assets mounted):
+
+```bash
+# from the REPO ROOT (context must carry packages/schema/schemas — see /.dockerignore)
+docker build -f services/analyzer/Dockerfile -t swingsage-analyzer:dev .
+docker run --rm swingsage-analyzer:dev python -m pytest tests   # reproducibility proof
+docker run --rm -i -v ./services/analyzer/models:/app/models \
+    -v ./services/analyzer/runs:/app/runs \
+    swingsage-analyzer:dev < job-spec.json                      # run one job (service/worker.py)
+```
+
 ---
 
 ## 5. Tests
@@ -711,6 +752,10 @@ meaningless there and must never be quoted as a result. Those stay the phone's j
 
 The AVD is called `swingsage` (medium_phone, 1080×2400 @ 420dpi, Android 36 google_apis_playstore
 x86_64, 4 GB RAM, host GPU). It already exists — these are the commands to use and to rebuild it.
+
+**Shortcut: `/emulator`** (or `bash .claude/skills/emulator/scripts/launch.sh`) does the whole
+boot→reverse→install→launch sequence below idempotently, and also deploys to the S25+ when it is
+already adb-connected. The commands below are what it runs, kept for debugging one step at a time.
 
 ```bash
 SDK="$HOME/AppData/Local/Android/Sdk"

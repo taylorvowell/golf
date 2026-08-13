@@ -476,19 +476,24 @@ wrong frame (sync). Debugging both at once is miserable, so each is proven separ
 
 ## 11. Toolchain
 
-Two dev machines; versions differ and both work — **nothing is pinned to these numbers**:
-ffmpeg 8.1.2/9.0 (use `-fps_mode cfr`; `-vsync` is deprecated), Python 3.13/3.14 (venv at
-`services/analyzer/.venv`), mediapipe 1.0.0 (Tasks API only — legacy `mp.solutions.pose` is
-gone, and the Tasks API has a monotonic-timestamp constraint that shapes the design),
-opencv-python 5.0.0, numpy 2.5.1, torch 2.13.0+cu126 (detector only; plain `pip install torch`
-silently gives a CPU build — assert `torch.cuda.is_available()`), ultralytics 8.4.115,
-rtmlib + onnxruntime (RTMW weights self-download to `~/.cache/rtmlib`), Node 22 / pnpm 10–11,
-Postgres 16 (Docker), Drizzle ^0.45 / drizzle-kit ^0.31.
+Analyzer runtime deps are **pinned in `services/analyzer/requirements.txt`** (exact versions —
+the configuration the CUDA measurement and determinism baseline were taken on; install is the
+two-command sequence in its header, rtmlib always `--no-deps`), and
+`services/analyzer/Dockerfile` rebuilds the environment from those pins and runs the suite
+green. The pinned set on the primary machine: Python 3.13, mediapipe 1.0.0 (Tasks API only —
+legacy `mp.solutions.pose` is gone, and the Tasks API has a monotonic-timestamp constraint
+that shapes the design), opencv-python 5.0.0.93 (+ contrib, same version — mediapipe requires
+it), numpy 2.3.5, scipy 1.18.0, torch 2.13.0+cu126 (pose and detector; plain `pip install
+torch` silently gives a CPU build — assert `torch.cuda.is_available()`),
+onnxruntime-gpu 1.22.0 (must match torch's CUDA major), ultralytics 8.4.115, rtmlib 0.0.16
+(RTMW weights self-download to `~/.cache/rtmlib`). System: ffmpeg 8.1.2/9.0 (use
+`-fps_mode cfr`; `-vsync` is removed in 9), Node 22 / pnpm 10–11, Postgres 16 (Docker),
+Drizzle ^0.45 / drizzle-kit ^0.31.
 
 Pose model bundle: `services/analyzer/models/pose_landmarker_heavy.task` (30.6 MB, gitignored —
-re-download from the MediaPipe models URL if missing). One machine has a GTX 1080 (8 GB, CUDA
-12.6); Pascal requires `amp=False` for training, and the 40-epoch detector run is ~2h10m there
-against ~25 h on CPU.
+re-download from the MediaPipe models URL if missing; asset table in RUNBOOK §4). One machine
+has a GTX 1080 (8 GB, CUDA 12.6); Pascal requires `amp=False` for training, and the 40-epoch
+detector run is ~2h10m there against ~25 h on CPU.
 
 Run: `docker compose up -d` → `pnpm i` → `pnpm dev` (127.0.0.1:3000) for the app;
 `.venv\Scripts\python.exe scripts/burnin.py <clip> --club-detector runs/clubhead/weights/best.pt`

@@ -108,6 +108,25 @@ replacement for those lines. `AnalysisRequest` defaults and the CLI flags are ke
 `tests/test_pipeline.py` — add a flag by adding the field first. The club detector still has **no
 default weights** in either surface.
 
+### The analyzer environment is pinned to the measured configuration
+
+**Decision:** Runtime deps are exact-pinned in `services/analyzer/requirements.txt` — the
+versions the CUDA measurement (D53) and the determinism baseline were taken on. Install is two
+commands in order: `pip install -r requirements.txt`, then `pip install --no-deps
+rtmlib==0.0.16`. `services/analyzer/Dockerfile` builds the worker image from those pins (code +
+deps only; model assets mount as volumes at their repo-relative paths) and the in-container
+test suite is the reproducibility oracle. `service/worker.py` is the container entrypoint: a
+versioned job-spec JSON → `AnalysisRequest` → `pipeline.run()`, emitting one JSON object per
+line — strict validation, unknown fields refuse, club detector never defaulted.
+**Gotchas:** rtmlib's metadata hard-requires the CPU-only `onnxruntime` distribution and
+`opencv-contrib-python` — installing it *with* deps puts a CPU onnxruntime next to
+`onnxruntime-gpu`, recreating the silent-CUDA-fallback incident. The cu126 torch wheels run on
+CPU-only hosts too; one faithful image, host-agnostic — a slimmer CPU-only variant is deferred
+until the worker-host handoff closes. The club-head weights (`best.pt`) remain a **local-only
+asset** with no reproducible fetch path; shipping them to a deployed worker is an open
+later-step decision. Upgrading any pin means re-running the fixture fidelity comparison
+(`scripts/compare_analysis.py`) before trusting new output.
+
 ### Pose runs on CUDA when it is genuinely available
 
 **Decision:** `pose_device()` probes for a usable CUDA provider and returns `cuda` or `cpu`;

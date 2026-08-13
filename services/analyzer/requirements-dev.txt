@@ -1,13 +1,12 @@
-# Test-only dependencies. The runtime deps (mediapipe, opencv-python, numpy, torch,
-# ultralytics, rtmlib, onnxruntime) are not pinned anywhere yet — see the toolchain table in
-# CLAUDE.md, and note that the two dev machines run different versions of several of them
-# deliberately. Reproducing a venv from scratch is still a manual job.
+# Test-only dependencies. Runtime deps are pinned in requirements.txt (exact versions,
+# two-command install — read its header before touching the environment). The toolchain
+# table lives in docs/CURRENT-STATE.md §11.
 #
 #   .venv\Scripts\python.exe -m pip install -r requirements-dev.txt
-pytest>=9.0
+pytest==9.1.1
 
-# Contract validation (swingsage/contract.py). Not strictly runtime — the module degrades to a
-# no-op when it is absent so a missing dev dependency can never stop a swing being analysed —
-# but with it absent the producing side stops enforcing the shared schema, which is the whole
-# point of packages/schema. Install it anywhere artifacts are written for real.
-jsonschema>=4.23
+# Contract validation (swingsage/contract.py). Pinned in requirements.txt for runtime; kept
+# here too so a tests-only environment still enforces the shared schema — the module degrades
+# to a no-op when jsonschema is absent, which silently stops schema enforcement on the
+# producing side.
+jsonschema==4.26.0

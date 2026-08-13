@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "featureName": "analyzer-service",
-  "currentStep": "03",
+  "currentStep": "04",
   "phase": "Platform Foundation",
-  "lastUpdated": "2026-08-13T17:42:06Z",
+  "lastUpdated": "2026-08-13T19:20:00Z",
   "steps": {
     "01": {
       "status": "complete",
@@ -16,7 +16,13 @@
       "note": "The full pipeline composition moved out of burnin.py main() into swingsage/pipeline.py: run(AnalysisRequest, on_event) with typed PipelineEvent progress and PipelineResult; burnin.py is now a thin CLI over it. Fidelity proven the strong way: pre- and post-refactor CPU runs of fixtures/pro_2.mp4 produced BYTE-IDENTICAL analysis.json AND coach_report.json at tol 0.0 (scripts/compare_analysis.py), and all 11 stage lines jobs.ts regex-parses still appear (stdout is a protocol until the worker consumes on_event in-process). Suite: 129 passed, 2 skipped, 1 xfailed - 6 new tests pin CLI-flag<->AnalysisRequest default equivalence and OutputLock behavior (now PipelineError, catchable by a worker)."
     },
     "03": {
-      "status": "not-started"
+      "status": "complete",
+      "completedAt": "2026-08-13T19:20:00Z",
+      "note": "The environment is reproducible and the worker has a skeleton. requirements.txt exact-pins the measured configuration (torch 2.13.0+cu126, onnxruntime-gpu 1.22.0, mediapipe 1.0.0, ...; rtmlib installed --no-deps because its metadata hard-requires CPU onnxruntime - the step-01 silent-fallback vector). services/analyzer/Dockerfile builds from the REPO ROOT context (8.4GB, python:3.13-slim + ffmpeg) so the image ships packages/schema/schemas with SWINGSAGE_SCHEMA_DIR pointing at them - producer-side validation stays ACTIVE in the container. service/worker.py: versioned job-spec JSON -> AnalysisRequest -> pipeline.run(), one JSON object per line; strict validation (unknown fields refuse, club detector never defaulted). Two latent bugs fixed en route: contract.py computed parents[3] at IMPORT time (crashed any monorepo-less install before the documented SWINGSAGE_SCHEMA_DIR override could apply) and test_contract.py had the same walk. Gates: local 141/2s/1x; docker build clean; IN-CONTAINER suite 103/13s/1x exit 0 - the from-scratch reproducibility proof. Club-head best.pt remains a local-only asset with no fetch path (open, later step)."
+    },
+    "04": {
+      "status": "not-started",
+      "note": "Declared, file not yet authored (lazy). Natural scope per the track goal: the worker loop - QStash delivery -> job spec -> pipeline.run -> publish artifacts via lib/media -> job state in Postgres, replacing the spawn+stdout-regex path. The deploy half waits on the OPEN worker-host handoff row (Taylor, spend); the loop itself is buildable host-agnostically."
     }
   },
   "blockers": [],

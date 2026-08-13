@@ -32,7 +32,9 @@ pytestmark = pytest.mark.skipif(not contract.available(),
                                 reason="jsonschema not installed in this venv")
 
 ANALYZER_ROOT = Path(__file__).resolve().parents[1]
-REPO_ROOT = Path(__file__).resolve().parents[3]
+# None when the analyzer ships without the monorepo around it (the worker container) — there
+# SWINGSAGE_SCHEMA_DIR points at the schemas the image carries.
+REPO_ROOT = ANALYZER_ROOT.parents[1] if len(ANALYZER_ROOT.parents) >= 2 else None
 OUT = ANALYZER_ROOT / "out"
 
 
@@ -68,8 +70,19 @@ def _broken(doc: dict, mutate) -> dict:
 
 
 def test_schemas_are_the_shared_ones_not_a_copy():
-    """`packages/schema/schemas/` or nothing. A second copy is how a contract silently forks."""
-    assert contract.schema_dir() == REPO_ROOT / "packages" / "schema" / "schemas"
+    """`packages/schema/schemas/` or nothing. A second copy is how a contract silently forks.
+
+    In the worker container there is no monorepo — SWINGSAGE_SCHEMA_DIR must point at the
+    schemas the image ships (copied from the same shared files at build time).
+    """
+    import os
+
+    override = os.environ.get("SWINGSAGE_SCHEMA_DIR")
+    if override:
+        assert contract.schema_dir() == Path(override)
+    else:
+        assert REPO_ROOT is not None, "no monorepo and no SWINGSAGE_SCHEMA_DIR set"
+        assert contract.schema_dir() == REPO_ROOT / "packages" / "schema" / "schemas"
     for name in ("analysis", "coach-report", "silhouette"):
         assert (contract.schema_dir() / f"{name}.schema.json").exists()
 
