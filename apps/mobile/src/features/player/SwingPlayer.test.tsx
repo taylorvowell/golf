@@ -1,4 +1,4 @@
-import { StyleSheet, Text, type ViewStyle } from "react-native";
+import { Alert, StyleSheet, Text, type ViewStyle } from "react-native";
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 
 import { SwingPlayer } from "./SwingPlayer";
@@ -44,6 +44,19 @@ beforeEach(() => {
   // they must hold on a swing with no overlay at all.
   mockRequest.mockRejectedValue(new ApiClientError(404, "http_error", "not found"));
 });
+
+/**
+ * Resolve the ARTIFACT and nothing else — the report and corrections stay honest 404s, exactly
+ * a swing analysed without scoring. A blanket `mockResolvedValue` would also answer `/report`,
+ * handing the summary an Analysis cast as a CoachReport — a shape no server produces.
+ */
+function analysisResolves(analysis: ReturnType<typeof makeAnalysis>) {
+  mockRequest.mockImplementation((path: string) =>
+    path.includes("/analysis")
+      ? Promise.resolve(analysis)
+      : Promise.reject(new ApiClientError(404, "http_error", "not found")),
+  );
+}
 
 it("gives the video surface a source carrying the session", async () => {
   const { getByTestId } = await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} />);
@@ -109,13 +122,14 @@ it("plays a swing whose analysis is missing, and says so instead of failing", as
 
 it("separates a missing artifact from a connection failure", async () => {
   // Only one of the two is fixed by trying again, and a golfer told the wrong one acts on it.
+  // `getAll`: the notice over the picture AND the summary on the page both say it, on purpose.
   mockRequest.mockRejectedValue(new ApiClientError(500, "http_error", "boom"));
-  const { getByText } = await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} />);
-  await waitFor(() => expect(getByText(/connection problem/i)).toBeTruthy());
+  const { getAllByText } = await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} />);
+  await waitFor(() => expect(getAllByText(/connection problem/i).length).toBeGreaterThan(0));
 });
 
 it("draws the overlay once the artifact arrives", async () => {
-  mockRequest.mockResolvedValue(makeAnalysis());
+  analysisResolves(makeAnalysis());
   const api = await render(<SwingPlayer swingId="abc" frameCount={40} fps={60} />);
   // The overlay draws into a measured box, so the viewport has to have been laid out — it renders
   // nothing at all at zero size rather than drawing a skeleton at the origin.
@@ -128,7 +142,7 @@ it("draws the overlay once the artifact arrives", async () => {
 it("bounds the transport by the playback window, not by the file", async () => {
   // `playback_window` is the span the ANALYZER says is worth playing — address − 1s to finish + 1s.
   // A bar that spanned the whole file would spend its travel outside the swing.
-  mockRequest.mockResolvedValue(makeAnalysis({ frameCount: 40, playbackWindow: [4, 30] }));
+  analysisResolves(makeAnalysis({ frameCount: 40, playbackWindow: [4, 30] }));
   const api = await render(<SwingPlayer swingId="abc" frameCount={40} fps={60} />);
   await act(async () => viewport(api));
   await waitFor(() => expect(api.getByTestId("swing-overlay")).toBeTruthy());
@@ -153,7 +167,7 @@ function ready(el: { props: { onReady?: (e: unknown) => void } }) {
 }
 
 it("starts the swing playing on load, without being asked", async () => {
-  mockRequest.mockResolvedValue(makeAnalysis({ frameCount: 40 }));
+  analysisResolves(makeAnalysis({ frameCount: 40 }));
   const api = await render(<SwingPlayer swingId="abc" frameCount={40} fps={60} />);
   const { getByTestId } = api;
   await act(async () => viewport(api));
@@ -194,7 +208,7 @@ it("says where in the swing you are by NAME, not with a picture", async () => {
   // The readout is the whole answer to "where am I", and it costs one line of text. A strip of
   // thumbnails cost an artifact, a request, a decode and forty points of screen to say the same
   // thing less precisely, which is why it is gone.
-  mockRequest.mockResolvedValue(makeAnalysis({ frameCount: 40, playbackWindow: [4, 30] }));
+  analysisResolves(makeAnalysis({ frameCount: 40, playbackWindow: [4, 30] }));
   const api = await render(<SwingPlayer swingId="abc" frameCount={40} fps={60} />);
   await act(async () => viewport(api));
   await waitFor(() => expect(api.getByTestId("swing-overlay")).toBeTruthy());
@@ -210,15 +224,11 @@ it("says where in the swing you are by NAME, not with a picture", async () => {
   expect(api.getByText("10")).toBeTruthy();
 });
 
-it("shows a score chip only when the swing has actually been scored", async () => {
-  // `overallScore` is nullable in the contract. A chip reading `—` under the word SCORE invites
-  // "you scored nothing", where the truth is "this has not been scored".
-  const unscored = await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} />);
-  expect(unscored.queryByTestId("score-chip")).toBeNull();
-
+it("puts no score chip over the picture, scored or not", async () => {
+  // Removed outright (Taylor, 2026-08-13): the score lives in the summary and the scorecard,
+  // and a chip over the video repeated both.
   const scored = await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} score={82} />);
-  expect(scored.getByTestId("score-chip")).toBeTruthy();
-  expect(scored.getByText("82")).toBeTruthy();
+  expect(scored.queryByTestId("score-chip")).toBeNull();
 });
 
 /**
@@ -231,7 +241,7 @@ it("shows a score chip only when the swing has actually been scored", async () =
  */
 
 it("keeps the overlay switches in a panel until they are asked for", async () => {
-  mockRequest.mockResolvedValue(makeAnalysis({ frameCount: 40 }));
+  analysisResolves(makeAnalysis({ frameCount: 40 }));
   const api = await render(<SwingPlayer swingId="abc" frameCount={40} fps={60} />);
   const { getByTestId, queryByTestId } = api;
   await act(async () => viewport(api));
@@ -242,19 +252,14 @@ it("keeps the overlay switches in a panel until they are asked for", async () =>
   await waitFor(() => expect(getByTestId("overlay-controls")).toBeTruthy());
 });
 
-it("takes the controls off the picture on a tap, and puts them back on the next one", async () => {
-  // The console covers the bottom third of the frame — on a down-the-line swing that is the ball,
-  // the feet and most of the finish. A toggle rather than a timed auto-hide: a transport that went
-  // away on its own while a golfer was studying one frame is a control vanishing for no reason.
-  const { getByTestId } = await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} />);
-  const tap = getByTestId("stage-tap");
-  expect(tap.props.accessibilityLabel).toBe("Hide controls");
-
-  await act(async () => void fireEvent.press(tap));
-  expect(getByTestId("console-dock").props.pointerEvents ?? "auto").toBe("none");
-  expect(getByTestId("stage-tap").props.accessibilityLabel).toBe("Show controls");
-
-  await act(async () => void fireEvent.press(getByTestId("stage-tap")));
+it("never hides the controls — there is no tap-to-hide and no hover", async () => {
+  // Reversed from the original toggle deliberately (Taylor, 2026-08-13): this is a phone, and a
+  // control that can vanish is a control a golfer has to know how to summon. The transport is
+  // always on the picture and always receives touches.
+  const { getByTestId, queryByTestId } = await render(
+    <SwingPlayer swingId="abc" frameCount={240} fps={60} />,
+  );
+  expect(queryByTestId("stage-tap")).toBeNull();
   expect(getByTestId("console-dock").props.pointerEvents ?? "auto").not.toBe("none");
 });
 
@@ -310,7 +315,7 @@ it("takes the picture's box from the swing list, before anything is fetched", as
 });
 
 it("does not resize the box when the artifact arrives", async () => {
-  mockRequest.mockResolvedValue(makeAnalysis({ frameCount: 40 }));
+  analysisResolves(makeAnalysis({ frameCount: 40 }));
   const api = await render(
     <SwingPlayer swingId="abc" frameCount={40} fps={60} aspectRatio={1080 / 1920} />,
   );
@@ -359,4 +364,83 @@ it("holds a placeholder over the box until a frame has reached the glass", async
   // Frame ZERO. The placeholder has to go on "a frame arrived", never on the frame number — 0 is
   // the frame every clip starts on.
   await waitFor(() => expect(getByTestId("stage-placeholder").props.style).toBeTruthy());
+});
+
+/**
+ * Session mode — the same player in its just-recorded shape. What is pinned: the summary and
+ * the dock exist, the picture does not autoplay underneath an open summary, and delete is a
+ * two-step in which only the confirmation deletes.
+ */
+describe("session mode", () => {
+  it("shows the summary and the dock over the mounted picture", async () => {
+    const { getByTestId } = await render(
+      <SwingPlayer swingId="abc" frameCount={240} fps={60} mode="session" />,
+    );
+    await waitFor(() => {
+      expect(getByTestId("summary-sheet")).toBeTruthy();
+      expect(getByTestId("after-swing-dock")).toBeTruthy();
+      // The main surface stays mounted — it is the thing a swipe down reveals.
+      expect(getByTestId("swing-video")).toBeTruthy();
+    });
+  });
+
+  it("becomes a normal page after the first dismissal — the slide-up never comes back", async () => {
+    const { getByTestId, findByTestId, queryByTestId, findByLabelText } = await render(
+      <SwingPlayer swingId="abc" frameCount={240} fps={60} mode="session" />,
+    );
+    await waitFor(() => expect(getByTestId("summary-sheet")).toBeTruthy());
+
+    // Dismiss the arrival sheet through its accessible collapse control.
+    await act(async () => void fireEvent.press(getByTestId("summary-sheet-collapse")));
+
+    // Browse: the summary is now IN the scroll below the video, the sheet is gone, and the dock
+    // has folded to its tab (whose label now speaks about the menu, not the summary).
+    expect(await findByTestId("after-swing-summary")).toBeTruthy();
+    await waitFor(() => expect(queryByTestId("summary-sheet")).toBeNull());
+    expect(await findByLabelText("Show menu")).toBeTruthy();
+    expect(queryByTestId("after-swing-dock-record")).toBeNull();
+  });
+
+  it("deletes only through the confirmation", async () => {
+    const onDelete = jest.fn();
+    const alertSpy = jest.spyOn(Alert, "alert").mockImplementation(() => undefined);
+    const { getByTestId } = await render(
+      <SwingPlayer swingId="abc" frameCount={240} fps={60} mode="session" onDelete={onDelete} />,
+    );
+
+    await act(async () => void fireEvent.press(getByTestId("after-swing-dock-delete")));
+    // The press asked; nothing may have happened yet.
+    expect(onDelete).not.toHaveBeenCalled();
+    expect(alertSpy).toHaveBeenCalled();
+
+    const buttons = alertSpy.mock.calls[0][2] as Array<{
+      style?: string;
+      onPress?: () => void;
+    }>;
+    const destructive = buttons.find((b) => b.style === "destructive");
+    expect(destructive).toBeTruthy();
+    await act(async () => destructive?.onPress?.());
+    expect(onDelete).toHaveBeenCalledTimes(1);
+
+    alertSpy.mockRestore();
+  });
+});
+
+/**
+ * Review mode — the default, what the log opens. The same page as session's browse phase: an old
+ * swing's scorecard is the same product as a new swing's. What is pinned is the split itself —
+ * the card is on the page, and none of the just-recorded chrome comes with it.
+ */
+describe("review mode", () => {
+  it("puts the scorecard summary on the page, below the video", async () => {
+    const { findByTestId } = await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} />);
+    expect(await findByTestId("after-swing-summary")).toBeTruthy();
+  });
+
+  it("carries none of the session chrome — no arrival sheet, no dock, no opener toggle", async () => {
+    const { queryByTestId } = await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} />);
+    expect(queryByTestId("summary-sheet")).toBeNull();
+    expect(queryByTestId("after-swing-dock")).toBeNull();
+    expect(queryByTestId("opener-toggle")).toBeNull();
+  });
 });

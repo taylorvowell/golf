@@ -345,15 +345,31 @@ folder rather than colliding with it — Deck layers on `theme.ts`'s tokens inst
 Built on RN 0.86's `boxShadow` (multi-shadow, `inset`) and `experimental_backgroundImage`
 gradients; an earlier React Native would have needed nine-patch images for the same effect.
 
+### Surfaces are flat — no borders, anywhere
+
+**Decision (Taylor, 2026-08-14):** No visible borders in any mobile styling — no card outlines, no
+chip edges, no hairline dividers, no accent rings around a selected control. Surfaces separate by
+**fill and shadow only**: a card is a filled rounded rectangle on the background, a selected state
+is a background tint plus text colour, a divider is spacing. The deck's edge tokens
+(`glass.hairline`, `hairlineStrong`, `keyEdge`) and `COLORS.amberEdge` were deleted so a border
+cannot quietly return through a token. The only `border*` styles that remain are ones that **draw a
+shape** — the `View`-drawn glyphs, overlay keypoint rings, gauge dots, the scrub thumb's ring, and
+the tab bar's record button's bg-coloured mask ring — none of which read as an outline.
+**Gotchas:** A control whose only visual was its border needs a fill when the border goes
+(StatusMessage's retry pill, the overlay angle chips, the frame-sync sweep button) — deleting the
+border alone leaves an invisible control.
+
 ### The picture is the page; everything else floats over it or comes up from the bottom
 
-**Decision:** `SwingDetail` sets `headerShown: false` and the swing screen does not scroll. The
-picture is centred in the whole viewport at the analysed frame's aspect, with the back control, the
-swing's name and the score chip laid over the top and the timeline and dock over the bottom. The
-swing's numbers, the overlay switches and the development instrument live in **panels that come up
-from the bottom edge** (`DeckSheet`), never below the picture — there is no below. **Tapping the
-picture takes the chrome away and tapping again brings it back.** Playback starts on load, looping,
-at 1×.
+**Decision:** `SwingDetail` sets `headerShown: false` and the ordinary swing screen does not
+scroll. The picture sits at the analysed frame's aspect with its **top edge flush with the top of
+the screen** — never centred with a bar of ground above it — with the back control and the swing's
+name laid over the top (no score chip: the score lives in the summary and the scorecard) and the
+timeline and dock over the bottom. The swing's numbers, the overlay switches and the development
+instrument live in **panels that come up from the bottom edge** (`DeckSheet`), never below the
+picture. **The chrome never hides** — no tap-to-hide, no auto-hide, no hover states: this is a
+phone, and a control that can vanish is a control a golfer has to know how to summon. Playback
+starts on load, looping, at 1×.
 **Gotchas:** Park-then-play is **one effect, not three**. The artifact arrives after the video does
 and narrows the transport to `playback_window`, so a play issued on `ready` alone is cut off a
 moment later by the seek that follows it. The effect waits for `analysisState` to leave `loading`,
@@ -361,13 +377,13 @@ which also covers the swing that has no artifact — it settles on `not-analysed
 starts. The stage's box is fitted **in JS, not by Yoga's `aspectRatio`**: Yoga honours the aspect
 only while one axis is free, and a clip taller than the screen pins both — silently producing a box
 that is not the artifact's shape, which is the one thing the normalized overlay cannot survive.
-The tap-to-hide is a toggle rather than a timed auto-hide, because a transport that vanished on its
-own while a golfer was studying one frame is a control disappearing for no reason they caused.
+The stage placeholder is the swing's own `/thumb` (disk-cached by the log's cards, so usually
+up in the first layout pass) with a quiet spinner at the top — the video replaces its own poster
+in place, and nobody watches a black box.
 **Scope:** Looping defaults ON because a swing is about a second and a half; a player that stops
 dead at the finish makes a golfer press play for every look at the same two frames. Speeds are 1×,
 ½×, ¼×, ⅒× and are applied natively (`setPlaybackSpeed`) — a JS timer would drop frames and show a
-quarter of the swing while calling it slow motion. The console covers roughly the bottom third of
-the frame, which is why the tap toggle is not optional polish.
+quarter of the swing while calling it slow motion.
 
 ### `DeckSheet` — one panel primitive, built on `Modal`
 
@@ -390,9 +406,8 @@ snaps to whichever detent the throw was *aimed* at — the position is projected
 velocity first — or a fast flick that has travelled 20pt springs back and the sheet feels stuck.
 **Scope:** Gesture handling is `PanResponder` from React Native itself —
 `react-native-gesture-handler` is excluded from autolinking (D47) and this is one axis with one
-decision at the end of it. Glass is two translucent fills plus a lit hairline, **not `expo-blur`**:
-real backdrop blur is a native module, and every design change would then cost a fresh dev-client
-install on the device.
+decision at the end of it. Glass is translucent fills, **not `expo-blur`**: real backdrop blur is a
+native module, and every design change would then cost a fresh dev-client install on the device.
 
 ### Where you are is a NAME and a hairline bar, not a strip of thumbnails
 
@@ -463,6 +478,141 @@ on. Removing the loop button removed the only place its behaviour was observable
 stop-at-end when off.
 **Scope:** Speed is still applied natively (`setPlaybackSpeed`) — a JS timer would drop frames and
 show a tenth of the swing while calling it slow motion.
+
+### Every swing is the scorecard page; a just-recorded one adds the session chrome
+
+**Decision:** `SwingPlayer` takes `mode: "review" | "session"` (review is the default; the
+`SwingDetail` route's `afterSwing?: boolean` param maps to session). **Both modes are the same
+page** — video flush at the top with its transport, the `AfterSwingSummary` scorecard in the
+scroll below it — because an old swing's card and a new swing's card are the same product, and
+the report is fetched from mount in both. **Review** (an old swing from the log) is just that
+page: autoplays, no dock, no arrival, no opener toggle — and therefore currently no delete
+affordance; delete lives in the session dock only. **Session** is the just-recorded moment and
+layers the chrome on top, in **two phases**. **Arrival:** the `AfterSwingSummary` slides up over
+the paused picture in an in-tree `SummarySheet` (not a `DeckSheet`: a `Modal` would swallow the
+dock), leaving about an inch of video above it, with a quiet bobbing "Swipe down for replay" hint
+fixed at its foot. **Browse:** the first dismissal — drag, chevron, play, a scorecard row — ends
+arrival for good and the screen rests as the review page plus the dock. The slide-up motion
+belongs to "your swing just finished" and never repeats. The full-viewport no-scroll player
+layout is gone — there is no third shape. If review-mode swings later need their own card
+sections or actions, that is a `mode` prop on `AfterSwingSummary` / a second footer in the dock's
+slot — a local change, not a new screen.
+The `AfterSwingDock` (delete · star · a big primary record circle · play far right) is pinned
+under everything; in browse it **folds to a bare tab** while the video is the subject and comes
+back when the golfer scrolls down into the stats (hysteresis, or taps the tab). While the arrival
+summary covers the picture, the overlay/compare chips are hidden — they act on a video you can
+barely see. Every reveal starts playback except a scorecard row, which lands *paused on the frame
+it names*. The capture flow will navigate here with `afterSwing: true`; until then the swing log
+carries a quiet "Preview the after-swing screen" header row.
+Which face the screen opens with is the golfer's setting: the **opener toggle** (video ▸ / stats
+▥) top-right in the chrome, stats-first by default, device-persisted (`useSummaryPreference`,
+the same account-sync seam as the star). Flipping to video-first while the arrival sheet is up
+shrinks it immediately — the setting looks like what it does — and video-first entry **plays
+without waiting for the analysis artifact**: only a parked start needs the window, and holding
+the replay hostage to a megabytes fetch is the wrong trade (the loop clamps into the window when
+it lands).
+**Gotchas:** The sheet's drag surface is its **header and the hint row**, never the scroll body —
+a JS `PanResponder` cannot reliably take a vertical pull from a native `ScrollView` on Android
+(measured: a capture-phase responder over the content never fired), and
+`react-native-gesture-handler` stays excluded (D47).
+**Scope:** Delete confirms in the client (`Alert`, destructive, names what is lost) and the screen
+above does the deleting and the leaving. The record cap says plainly that capture has not shipped
+yet. The **star is device-local** (`useStarred`, one AsyncStorage key) — the contract has no
+`starred` field yet, and that hook is the single seam to rewire when the additive field lands (D41).
+
+### The summary wears the designed skin, and the meters are SVG
+
+**Decision:** `AfterSwingSummary` is the mobile rendering of **`.claude/SAMPLE-afterswing.html`**
+— the one screen with a finished visual design, followed closely on purpose: headline, the
+violet→cyan arc gauge with the marker at the score, band chip, "last 5 swings" delta, tempo (in
+the slot the mock's ArcShift™ held — tempo is real, ArcShift is not), coach takeaway, trend
+polyline, two-tone finding boxes, and an indicator rail of score rings. Every number on it is a
+measured field; a section with no data is not rendered. The meters are **`design/gauges`** —
+`ArcGauge` and `RingGauge`, drawn with **`react-native-svg`** and animated (band draw-in, marker
+sweep, count-up on one clock; ring fill by stroke-dashoffset).
+**Gotchas:** `react-native-svg` is the app's first SVG runtime and `design/gauges` is **the one
+place allowed to import it**. D23 stands untouched: the overlay stays on plain `View`s (that was
+a measurement), and the transport glyphs stay drawn. The gauge animations are JS-driven
+(`useNativeDriver: false` — SVG props are not native-animatable) and run once on cold surfaces,
+never on the 60 Hz path. Sample geometry (viewBox 360×220, r 140, strokes 34/22) and gradient
+stops are kept verbatim so the skinning pass has one source of truth.
+**Scope:** Gauges are a design-system module because score meters outlive the player — session
+summaries and goals want the same faces. The ring's `null` progress draws the track alone: the
+abstaining shape, distinct from zero.
+
+### The swing log is an accordion of sessions, and the row is number · time · score
+
+**Decision:** The log groups swings into practice **sessions** (`sessionize`) rendered as
+accordion cards (`SessionCard`), newest session expanded. The row leads with the swing's number
+in the session, its time, and its score — the thumbnails are near-identical frames of the same
+person on the same mat, so they carry no per-row information; one still on the session header
+says where you were. The session's best score is acid in the header and on its row, so "which
+one was the good one" is answered with the card open or closed.
+**Gotchas:** A session is **inferred from time** — swings ≤ 2 h apart — because the contract
+carries no session id yet and no capture flow mints session rows. When it does, the contract
+grows `sessionId` (additive, D41) and `sessions.ts` switches to it; the screens never see the
+difference. `createdAt` is normalized (seconds vs ms differ silently by 50 years) in one place.
+An unscored swing reads "not scored" and is absent from `best`, never a zero.
+
+### Home leads with the next session's focus, and the focus is aggregated, not copied
+
+**Decision:** The home tab is built for "what should I do next time out?", written over the
+golfer's own footage rather than laid out as a dashboard (Taylor, 2026-08-13: "it's too
+boring"). The **hero** is a full-bleed photo of the newest swing whose report ranked the focus
+priority (its thumbnail under layered scrims — no gradient dependency), with a by-name greeting
+("Hey Taylor — next time out"), the recurring priority, its newest cue, the provenance line, the
+drill as a chip, and one promise of a button: **"See it on your swing"**, which opens the player
+on that exemplar swing **parked at the priority's checkpoint** (`SwingDetail`'s `checkpoint`
+param → `SwingPlayer.initialCheckpoint`: skips the arrival slide-up, waits for the artifact,
+seeks the P-code's frame via `checkpointTarget`, paused). The remaining recurring priorities are
+a horizontal **rail** of cards with the same door each. Between hero and rail sits the
+**you-vs-pro strip**: the exemplar swing and the newest bundled reference swing frozen side by
+side at the tip's checkpoint (both stills from `/frame?checkpoint=`, resolved through each
+artifact's own checkpoint table — compare by position, never by frame or time), with the cue
+overlaid; it renders only when a ready reference swing exists and the tip carries a checkpoint,
+and removes itself if either still fails — half a comparison is not a comparison. The **last
+session** is a header (date,
+counts, best/avg, delta chip vs the previous session's average) over a horizontal **slider of
+swing cards** — thumbnail, number, score, band; the best carries the acid edge; each opens its
+swing. The aggregation (`homeModel.aggregateFocus`) ranks by **recurrence first, mean leverage
+second** — a fault flagged on four of six swings outranks a one-off with a bigger leverage
+number — and tracks the exemplar swing + checkpoint per priority. Reports are fetched by
+`useSessionReports` (newest ≤ 8 scored swings, `{swingId, report}` pairs) into a module cache
+keyed by swing id, cleared on sign-out like the list cache. When the newest session is still
+inside the session gap, the same layout reads as *today* ("focus right now"). The cross-session
+trend lives on Progress, not Home.
+**Gotchas:** Every section abstains rather than fakes: no scored reports → no focus card, no
+scores → no numbers (never a zero), an unreachable report is excluded from the aggregation and
+left uncached so a later mount retries — while a list-level network failure still renders as
+"cannot reach", never as an empty home. "Based on goals" waits for the personalization system
+(roadmap D54); until goals exist the recommendation is measured recurrence only. When focus
+goals ship (§16.3, D55, track `goal-progression`), active goal cards replace this card as the
+primary home surface and recurrence stays as the no-goals fallback.
+
+### The shell is a tab bar with Record raised in the middle; the profile slides in from the avatar
+
+**Decision:** The app's persistent navigation is a bottom tab bar (`@react-navigation/bottom-tabs`
+with the custom `design/TabBar`): Home and the swing log left, Progress and Coach right, and
+**Record** as a raised acid circle in the centre. Record is a **door, not a tab** — it opens the
+capture surface (`RecordScreen`, a full-screen modal that holds the filming checklist until the
+capture release fills it in) without changing which tab is current. Everything that must own the
+whole screen — the player, capture, the profile pages — lives on the root stack ABOVE the tab
+navigator and covers the bar by construction; the swing screen keeps its own navigation because
+of where it sits, never because a flag hid a bar. Every tab draws the shared `design/TopBar`
+(screen name left, the golfer's avatar right — Google photo when the session metadata carries
+one, else the address's initial). The avatar opens **Profile** (`slide_from_right`): identity,
+Find a coach (→ Coach tab), Swing stats (→ Progress tab), Goals, Settings, Log out. Settings owns
+the real preferences — the after-swing "lead with the scorecard" toggle (`useSummaryPreference`)
+and **Delete account**, which moved off the log's footer to its planned home. Progress is the
+long view (all-time best, typical tempo as a median over ≥3 swings, counts, session-average
+trend); Coach and Goals are honest placeholders with real doors, not dead buttons. `AccountBar`
+is deleted; sign-out lives in Profile.
+**Gotchas:** Tab glyphs are drawn `View`s in `design/deck/Glyphs.tsx` — no icon font, no SVG
+outside `design/gauges`. From a root-stack screen a tab is reached as
+`navigate("Tabs", { screen })`; a bare `navigate("Progress")` searches upward and fails at
+runtime while typechecking fine — the profile tests pin the nested form. The `Navigation` type
+is a composite of both param lists for exactly this reason. The dev-client bubble owns the
+top-right corner in development builds, so the avatar steps 56 px left under `__DEV__` only.
 
 ## Data and networking
 

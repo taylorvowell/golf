@@ -57,6 +57,24 @@ surfaces as an insight, not two labels. Classification Step 1 needs face-on mark
 current fixture provides**.
 **See:** ARCHIVE D54; `PROJECT_MAIN.md` §15.4.
 
+### Focus-goal progress is windowed evidence; abstention never moves it
+
+**Decision:** A focus goal (`PROJECT_MAIN.md` §16.3) is bound to measured scoring-config
+checks — never a free-text theme — and its progress is **consistency over a rolling window of
+evidencing swings** ("clean in X of the last Y swings that could judge it"), never a raw
+consecutive streak. A swing whose bound checks abstain (low confidence, wrong view, not
+scoreable) is *no evidence* and moves progress in neither direction. At most **3** goals are
+active per golfer. Progress lives in the **database**, computed deterministically from stored
+analyses under a **versioned `goal_config`**; an achieved goal stores the version it was
+achieved under. Achievement lands on the exact swing that completes the window, is celebrated
+once, then the goal enters quiet maintenance — a sustained regression re-proposes it with its
+history, never silently.
+**Gotchas:** Never derive progress state from `analysis.json` fields cached client-side — the
+artifact is rewritten wholesale on re-analysis and carries no product state. Consumers
+re-apply the same truncated `MIN_CONF` gate as everywhere else. A goal whose checks need a
+camera view the golfer does not film must say so at assignment time, not sit at 0%.
+**See:** ARCHIVE D55; `PROJECT_MAIN.md` §16.3.
+
 ### Never fabricate a face-angle number from video
 
 **Decision:** Video yields checkpoint **classifications** (square/open/closed) only. Degrees

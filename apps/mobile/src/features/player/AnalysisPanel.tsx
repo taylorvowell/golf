@@ -395,8 +395,6 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 16,
     backgroundColor: "rgba(184,255,74,0.07)",
-    borderWidth: 1,
-    borderColor: "rgba(184,255,74,0.22)",
   },
   primaryTag: {
     color: DECK.accent,
@@ -407,7 +405,7 @@ const styles = StyleSheet.create({
   },
   primaryTitle: { color: COLORS.text, fontSize: 15, fontWeight: "600", lineHeight: 21 },
   moment: { color: DECK.label.caption, fontSize: 11, fontVariant: ["tabular-nums"] },
-  drill: { gap: 3, paddingTop: 8, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.08)" },
+  drill: { gap: 3, paddingTop: 8 },
   drillTitle: { color: COLORS.text, fontSize: 12.5, fontWeight: "700" },
   drillCopy: { color: COLORS.muted, fontSize: 12.5, lineHeight: 18 },
   drillDose: { color: DECK.accent, fontSize: 11, fontWeight: "600" },
@@ -453,8 +451,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     borderRadius: DECK.radius.tile,
     backgroundColor: DECK.glass.key,
-    borderWidth: 1,
-    borderColor: DECK.glass.keyEdge,
   },
   cpP: { color: DECK.label.caption, fontSize: 9, fontWeight: "800", letterSpacing: 0.8 },
   cpScore: {
@@ -486,8 +482,6 @@ const styles = StyleSheet.create({
     gap: 11,
     paddingTop: 9,
     paddingLeft: 11,
-    borderLeftWidth: 1,
-    borderLeftColor: DECK.glass.hairline,
   },
   check: { gap: 2 },
   checkHead: {

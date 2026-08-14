@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { SwingListResponse, SwingSummary } from "@swingsage/schema/contract";
+import type { SwingDeletion, SwingListResponse, SwingSummary } from "@swingsage/schema/contract";
 
 import { ApiClientError } from "../../platform/api";
 import { api } from "../../platform/client";
@@ -48,6 +48,31 @@ let lastGood: SwingSummary[] | null = null;
 /** The auth-boundary hook and the tests' reset seam — never a per-screen convenience. */
 export function clearSwingsCache(): void {
   lastGood = null;
+}
+
+/**
+ * Mounted hooks, so a cache write made OUTSIDE the fetch path (deletion, below) reaches screens
+ * that are already drawn. Without this, deleting a swing from the player and going back lands on
+ * a log still showing it — the log screen stays mounted under the stack and never refetches.
+ */
+const cacheListeners = new Set<() => void>();
+function notifyCacheChanged(): void {
+  for (const listener of cacheListeners) listener();
+}
+
+/**
+ * Delete one swing — the server removes the rows and the media, then the cached list drops it.
+ *
+ * The cache is updated from the confirmed response, never optimistically: a delete that failed
+ * on the wire but vanished from the log would read as done, and the swing's reappearance on the
+ * next refresh as a bug. Throws on failure so the caller can say so.
+ */
+export async function deleteSwing(id: string): Promise<void> {
+  await api.request<SwingDeletion>(`swings/${encodeURIComponent(id)}`, { method: "DELETE" });
+  if (lastGood) {
+    lastGood = lastGood.filter((s) => s.id !== id);
+    notifyCacheChanged();
+  }
 }
 
 // Registered once at module scope — the same pattern supabase.ts uses for its AppState hook.
@@ -105,9 +130,16 @@ export function useSwings(): SwingsHook {
 
   useEffect(() => {
     liveRef.current = true;
+    // Deletion edits the module cache directly; every mounted log re-reads it here. Only an `ok`
+    // write — a null cache means "nothing confirmed", which is not the same claim as "no swings".
+    const onCacheChanged = () => {
+      if (liveRef.current && lastGood) setState({ kind: "ok", swings: lastGood });
+    };
+    cacheListeners.add(onCacheChanged);
     void load(false);
     return () => {
       liveRef.current = false;
+      cacheListeners.delete(onCacheChanged);
       abortRef.current?.abort();
     };
   }, [load]);

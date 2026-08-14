@@ -181,7 +181,6 @@ function Chip({
       style={({ pressed }) => [
         styles.chip,
         on && styles.chipOn,
-        on && colour ? { borderColor: colour } : null,
         pressed && styles.chipPressed,
       ]}
     >
@@ -209,10 +208,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     backgroundColor: DECK.glass.key,
-    borderWidth: 1,
-    borderColor: DECK.glass.keyEdge,
   },
-  tileOn: { borderColor: DECK.accent, backgroundColor: "rgba(184,255,74,0.07)" },
+  tileOn: { backgroundColor: "rgba(184,255,74,0.07)" },
   tilePressed: { opacity: 0.6 },
   // A window onto the swing, not a paint chip: the darker inner square is what makes the
   // miniature read as a picture of the video rather than as an icon.
@@ -254,10 +251,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 12,
     borderRadius: 17,
-    borderWidth: 1,
-    borderColor: COLORS.border,
+    backgroundColor: DECK.glass.key,
   },
-  chipOn: { borderColor: DECK.accent, backgroundColor: "rgba(255,255,255,0.04)" },
+  chipOn: { backgroundColor: "rgba(184,255,74,0.1)" },
   chipPressed: { opacity: 0.6 },
   chipText: { color: COLORS.muted, fontSize: 12, fontWeight: "600" },
   chipTextOn: { color: DECK.accent },

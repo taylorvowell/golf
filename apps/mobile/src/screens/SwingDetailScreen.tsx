@@ -1,7 +1,8 @@
+import { useCallback } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 import { SwingPlayer } from "../features/player/SwingPlayer";
-import { useSwing } from "../features/swings/useSwings";
+import { deleteSwing, useSwing } from "../features/swings/useSwings";
 import { useAppNavigation } from "../navigation";
 import { COLORS } from "../theme";
 
@@ -20,11 +21,27 @@ import { COLORS } from "../theme";
 
 export interface SwingDetailScreenProps {
   id: string;
+  /** The just-recorded shape of the screen — summary up, record/star/delete/play dock stuck to
+   *  the bottom. Same player, same data, same page; false (an old swing from the log) is the
+   *  player's `review` mode: the video with the scorecard summary one scroll below, no dock. */
+  afterSwing?: boolean;
+  /** Park the picture at this checkpoint on open (Home's "see it on your swing"). */
+  checkpoint?: string | null;
 }
 
-export function SwingDetailScreen({ id }: SwingDetailScreenProps) {
+export function SwingDetailScreen({ id, afterSwing = false, checkpoint = null }: SwingDetailScreenProps) {
   const { state, swing } = useSwing(id);
   const navigation = useAppNavigation();
+
+  /**
+   * The player confirms; this deletes and leaves. Leaving happens only after the request
+   * succeeded — the cache no longer holds the swing, so staying would render "Swing not found"
+   * over a deletion that worked. A failure throws back into the player's alert instead.
+   */
+  const onDelete = useCallback(async () => {
+    await deleteSwing(id);
+    if (navigation.canGoBack()) navigation.goBack();
+  }, [id, navigation]);
 
   if (state.kind === "loading") {
     return (
@@ -62,6 +79,20 @@ export function SwingDetailScreen({ id }: SwingDetailScreenProps) {
     swing.views.find((v) => v.width && v.height);
   const aspectRatio = sized?.width && sized?.height ? sized.width / sized.height : null;
 
+  /**
+   * The recent scores for the summary's trend — this swing and the scored swings before it,
+   * oldest first. From the list already on the device; if the log holds fewer than two scored
+   * swings the player simply gets no trend, which is the honest shape of a new account.
+   */
+  const history =
+    state.kind === "ok"
+      ? state.swings
+          .filter((s) => typeof s.overallScore === "number" && s.createdAt <= swing.createdAt)
+          .sort((a, b) => a.createdAt - b.createdAt)
+          .map((s) => s.overallScore as number)
+          .slice(-5)
+      : undefined;
+
   return (
     // No `view` — the route serves the primary angle, which is the one a single-view player wants.
     // Passing `primaryViewId` here is what made every swing answer 400: that is a uuid and the
@@ -76,6 +107,11 @@ export function SwingDetailScreen({ id }: SwingDetailScreenProps) {
       tempoRatio={swing.tempoRatio}
       aspectRatio={aspectRatio}
       onBack={navigation.canGoBack() ? navigation.goBack : undefined}
+      mode={afterSwing ? "session" : "review"}
+      initialCheckpoint={checkpoint}
+      band={swing.band}
+      history={history}
+      onDelete={onDelete}
     >
       <View testID="swing-detail" style={styles.panel}>
         {/* The chip over the picture carries the number; the band is the part that qualifies it,
@@ -127,8 +163,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 11,
     gap: 16,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(255,255,255,0.08)",
   },
   rowLabel: { color: COLORS.muted, fontSize: 13 },
   rowValue: { color: COLORS.text, fontSize: 14, fontWeight: "600", flexShrink: 1, textAlign: "right" },

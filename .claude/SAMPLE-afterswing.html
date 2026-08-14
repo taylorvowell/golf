@@ -1,0 +1,284 @@
+<section id="viewOverview" class="view-panel hero-panel kiosk-panel rounded-[32px] p-5 sm:p-6 lg:p-7">
+    <div class="relative">
+        <div class="flex items-start justify-between gap-4">
+            <h2 id="summaryTitle"
+                class="hero-title gradient-text max-w-4xl text-4xl font-semibold leading-[1.02] tracking-[-.045em] sm:text-5xl xl:text-[3.55rem]">
+                Strong swing. Your transition is the clearest opportunity.</h2>
+            <span id="loopStatus"
+                class="hidden shrink-0 rounded-full border border-violet/25 bg-violet/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[.18em] text-violet">Looping
+                transition</span>
+        </div>
+
+    </div>
+
+    <div class="mt-4 grid gap-6 lg:grid-cols-[330px_1fr] lg:items-center">
+        <div class="relative pr-0 lg:border-r lg:border-line lg:pr-7">
+            <div class="flex justify-end"><span id="scoreRangeLabel"
+                    class="rounded-full border border-acid/20 bg-acid/10 px-2.5 py-1 text-[9px] font-bold uppercase tracking-[.18em] text-acid">Pure</span>
+            </div>
+            <div
+                class="absolute right-1 top-12 z-10 rounded-2xl border border-violet/25 bg-[#111324]/90 px-3 py-2 text-right shadow-[0_10px_30px_rgba(104,81,255,.18)] backdrop-blur lg:right-8">
+                <span class="block text-2xl font-bold leading-none text-acid">+8</span>
+                <span class="mt-1 block text-[8px] font-bold uppercase tracking-[.15em] text-neutral-500">Last 5
+                    swings</span>
+            </div>
+            <svg id="mainGauge" viewBox="0 0 360 220" class="score-glow mx-auto -mb-4 mt-1 w-full max-w-[330px]">
+                <defs>
+                    <linearGradient id="gaugeGradient" x1="0" y1="0" x2="1" y2="0">
+                        <stop offset="0" stop-color="#6d59ff"></stop>
+                        <stop offset=".38" stop-color="#8b7bff"></stop>
+                        <stop offset=".72" stop-color="#49a8ff"></stop>
+                        <stop offset="1" stop-color="#6fe5ff"></stop>
+                    </linearGradient>
+                </defs>
+                <path d="M40 180 A140 140 0 0 1 320 180" fill="none" stroke="rgba(255,255,255,.075)" stroke-width="34"
+                    stroke-linecap="round"></path>
+                <path d="M40 180 A140 140 0 0 1 320 180" fill="none" stroke="url(#gaugeGradient)" stroke-width="22"
+                    stroke-linecap="round"></path>
+                <circle id="gaugeMarkerGlow" cx="298.2" cy="105.0" r="16" fill="rgba(94,208,255,.18)"></circle>
+                <circle id="gaugeMarker" cx="298.2" cy="105.0" r="8" fill="#080a0d" stroke="#5ed0ff" stroke-width="5">
+                </circle>
+                <text id="gaugeValue" x="180" y="154" fill="#f7f8f5" font-size="72" font-weight="750"
+                    text-anchor="middle" letter-spacing="-5">82</text><text x="180" y="180" fill="#7e8691"
+                    font-size="11" font-weight="700" text-anchor="middle" letter-spacing="2.4">OUT OF 100</text>
+                <text x="38" y="211" fill="#6f6fa1" font-size="10">Starting</text><text x="180" y="211" fill="#8e90c7"
+                    font-size="10" text-anchor="middle">Centered</text><text x="322" y="211" fill="#6fe5ff"
+                    font-size="10" text-anchor="end">Pure</text>
+            </svg>
+        </div>
+
+        <div class="min-w-0 divide-y divide-line">
+            <div class="grid grid-cols-[auto_1fr] items-center gap-4 pb-5">
+                <div class="px-1 text-center"><span id="arcShiftValue"
+                        class="block text-4xl font-bold text-violet">−12</span><span
+                        class="text-[8px] font-bold uppercase tracking-[.18em] text-violet/70">ArcShift™</span></div>
+                <div>
+                    <p id="arcShiftLabel" class="text-lg font-semibold">Slightly early-loaded</p>
+                    <p class="mt-1 text-[10px] leading-4 text-neutral-500">Signed motion tendency from −50 to +50. Zero
+                        is centered on ideal.</p>
+                </div>
+            </div>
+            <div id="summaryTip" class="flex items-start gap-4 pt-5"><span
+                    class="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-acid/10 text-xl text-acid">✦</span>
+                <div>
+                    <p class="text-[9px] font-semibold uppercase tracking-[.18em] text-neutral-500">Coach takeaway</p>
+                    <p class="mt-1 text-base font-medium leading-6">Begin the downswing with the pelvis while retaining
+                        wrist angle for two more frames.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="mt-3">
+        <svg viewBox="0 0 680 48" class="h-8 w-full opacity-90" preserveAspectRatio="none"
+            aria-label="Ideal Score improved from 74 to 82 across five swings">
+            <path d="M4 39 C78 37 126 31 178 32 S292 27 360 25 S474 29 534 16 S620 10 676 6" fill="none"
+                stroke="#9b6cff" stroke-width="3" stroke-linecap="round"></path>
+            <g fill="#080a0d" stroke="#9b6cff" stroke-width="3">
+                <circle cx="4" cy="39" r="3.5"></circle>
+                <circle cx="178" cy="32" r="3.5"></circle>
+                <circle cx="360" cy="25" r="3.5"></circle>
+                <circle cx="534" cy="16" r="3.5"></circle>
+                <circle cx="676" cy="6" r="5"></circle>
+            </g>
+        </svg>
+    </div>
+
+    <div id="topFindings" class="mt-5 grid gap-3 lg:grid-cols-3">
+        <div class="finding-box negative">
+            <span class="finding-icon">↘</span>
+            <div class="min-w-0">
+                <p class="text-lg font-semibold leading-tight">Too steep of an attack</p>
+                <p class="mt-1 text-[11px] font-semibold uppercase tracking-[.16em] text-white/55">Downswing</p>
+            </div>
+        </div>
+        <div class="finding-box negative">
+            <span class="finding-icon">⌒</span>
+            <div class="min-w-0">
+                <p class="text-lg font-semibold leading-tight">Too bent over</p>
+                <p class="mt-1 text-[11px] font-semibold uppercase tracking-[.16em] text-white/55">Posture</p>
+            </div>
+        </div>
+        <div class="finding-box negative">
+            <span class="finding-icon">↑</span>
+            <div class="min-w-0">
+                <p class="text-lg font-semibold leading-tight">Head lifts too early</p>
+                <p class="mt-1 text-[11px] font-semibold uppercase tracking-[.16em] text-white/55">Impact</p>
+            </div>
+        </div>
+        <div class="finding-box positive">
+            <span class="finding-icon">◎</span>
+            <div class="min-w-0">
+                <p class="text-lg font-semibold leading-tight">Perfect club angle</p>
+                <p class="mt-1 text-[11px] font-semibold uppercase tracking-[.16em] text-white/55">Impact</p>
+            </div>
+        </div>
+        <div class="finding-box positive">
+            <span class="finding-icon">◜</span>
+            <div class="min-w-0">
+                <p class="text-lg font-semibold leading-tight">Perfect arm angle</p>
+                <p class="mt-1 text-[11px] font-semibold uppercase tracking-[.16em] text-white/55">Backswing</p>
+            </div>
+        </div>
+        <div class="finding-box positive">
+            <span class="finding-icon">✓</span>
+            <div class="min-w-0">
+                <p class="text-lg font-semibold leading-tight">Strong finish balance</p>
+                <p class="mt-1 text-[11px] font-semibold uppercase tracking-[.16em] text-white/55">Finish</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="indicator-rail-wrap mt-5">
+        <div id="indicatorGrid" class="indicator-viewport">
+            <button aria-pressed="true"
+                class="indicator-card overall-metric active rounded-[22px] border border-white/[.075] bg-white/[.035] p-3 text-left transition"
+                onclick="focusIndicator(0)">
+                <span class="active-caret"></span>
+                <span class="indicator-delta bg-acid/10 text-acid">+8</span>
+                <div class="flex h-full flex-col items-center justify-start gap-2 pt-2">
+                    <span class="indicator-score-ring" style="--ring-value:82%;--ring-color:#5ed0ff">
+                        <span class="indicator-icon-large"><svg class="h-9 w-9" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2">
+                                <path d="M4 17a8 8 0 0 1 16 0"></path>
+                                <path d="m12 13 4-4"></path>
+                                <circle cx="12" cy="17" r="1"></circle>
+                                <path d="M6 20h12"></path>
+                            </svg></span>
+                        <span class="relative z-10 text-center"><b
+                                class="block text-[2rem] leading-none tracking-[-.05em]">82</b></span>
+                    </span>
+                    <b class="px-1 text-center text-base leading-[1.1]">Overall Swing</b>
+                </div>
+            </button>
+            <button aria-pressed="false"
+                class="indicator-card   rounded-[22px] border border-white/[.075] bg-white/[.035] p-3 text-left transition"
+                onclick="focusIndicator(1)">
+                <span class="active-caret"></span>
+                <span class="indicator-delta bg-acid/10 text-acid">+2</span>
+                <div class="flex h-full flex-col items-center justify-start gap-2 pt-2">
+                    <span class="indicator-score-ring" style="--ring-value:88%;--ring-color:#5ed0ff">
+                        <span class="indicator-icon-large"><svg class="h-9 w-9" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2">
+                                <path d="M4 18h16M7 18V9m10 9V9M7 9l5-4 5 4"></path>
+                            </svg></span>
+                        <span class="relative z-10 text-center"><b
+                                class="block text-[2rem] leading-none tracking-[-.05em]">88</b></span>
+                    </span>
+                    <b class="px-1 text-center text-base leading-[1.1]">Setup</b>
+                </div>
+            </button>
+            <button aria-pressed="false"
+                class="indicator-card   rounded-[22px] border border-white/[.075] bg-white/[.035] p-3 text-left transition"
+                onclick="focusIndicator(2)">
+                <span class="active-caret"></span>
+                <span class="indicator-delta bg-acid/10 text-acid">+5</span>
+                <div class="flex h-full flex-col items-center justify-start gap-2 pt-2">
+                    <span class="indicator-score-ring" style="--ring-value:91%;--ring-color:#5ed0ff">
+                        <span class="indicator-icon-large"><svg class="h-9 w-9" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2">
+                                <path d="M4 17c4-8 9-11 16-10"></path>
+                                <path d="m16 4 4 3-3 4"></path>
+                            </svg></span>
+                        <span class="relative z-10 text-center"><b
+                                class="block text-[2rem] leading-none tracking-[-.05em]">91</b></span>
+                    </span>
+                    <b class="px-1 text-center text-base leading-[1.1]">Takeaway</b>
+                </div>
+            </button>
+            <button aria-pressed="false"
+                class="indicator-card   rounded-[22px] border border-white/[.075] bg-white/[.035] p-3 text-left transition"
+                onclick="focusIndicator(3)">
+                <span class="active-caret"></span>
+                <span class="indicator-delta bg-red-400/10 text-red-300">−3</span>
+                <div class="flex h-full flex-col items-center justify-start gap-2 pt-2">
+                    <span class="indicator-score-ring" style="--ring-value:74%;--ring-color:#6e92ff">
+                        <span class="indicator-icon-large"><svg class="h-9 w-9" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2">
+                                <path d="M5 17 12 5l7 12"></path>
+                                <path d="M8 13h8"></path>
+                            </svg></span>
+                        <span class="relative z-10 text-center"><b
+                                class="block text-[2rem] leading-none tracking-[-.05em]">74</b></span>
+                    </span>
+                    <b class="px-1 text-center text-base leading-[1.1]">Top</b>
+                </div>
+            </button>
+            <button aria-pressed="false"
+                class="indicator-card   rounded-[22px] border border-white/[.075] bg-white/[.035] p-3 text-left transition"
+                onclick="focusIndicator(4)">
+                <span class="active-caret"></span>
+                <span class="indicator-delta bg-red-400/10 text-red-300">−8</span>
+                <div class="flex h-full flex-col items-center justify-start gap-2 pt-2">
+                    <span class="indicator-score-ring" style="--ring-value:68%;--ring-color:#8b7bff">
+                        <span class="indicator-icon-large"><svg class="h-9 w-9" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2">
+                                <circle cx="7" cy="12" r="3"></circle>
+                                <circle cx="17" cy="7" r="3"></circle>
+                                <circle cx="17" cy="17" r="3"></circle>
+                                <path d="m10 11 4-2m-4 4 4 2"></path>
+                            </svg></span>
+                        <span class="relative z-10 text-center"><b
+                                class="block text-[2rem] leading-none tracking-[-.05em]">68</b></span>
+                    </span>
+                    <b class="px-1 text-center text-base leading-[1.1]">Sequence</b>
+                </div>
+            </button>
+            <button aria-pressed="false"
+                class="indicator-card   rounded-[22px] border border-white/[.075] bg-white/[.035] p-3 text-left transition"
+                onclick="focusIndicator(5)">
+                <span class="active-caret"></span>
+                <span class="indicator-delta bg-red-400/10 text-red-300">−5</span>
+                <div class="flex h-full flex-col items-center justify-start gap-2 pt-2">
+                    <span class="indicator-score-ring" style="--ring-value:72%;--ring-color:#6e92ff">
+                        <span class="indicator-icon-large"><svg class="h-9 w-9" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2">
+                                <path d="M5 5c5 2 9 6 12 14"></path>
+                                <path d="m14 16 3 3 2-4"></path>
+                            </svg></span>
+                        <span class="relative z-10 text-center"><b
+                                class="block text-[2rem] leading-none tracking-[-.05em]">72</b></span>
+                    </span>
+                    <b class="px-1 text-center text-base leading-[1.1]">Delivery</b>
+                </div>
+            </button>
+            <button aria-pressed="false"
+                class="indicator-card   rounded-[22px] border border-white/[.075] bg-white/[.035] p-3 text-left transition"
+                onclick="focusIndicator(6)">
+                <span class="active-caret"></span>
+                <span class="indicator-delta bg-acid/10 text-acid">+4</span>
+                <div class="flex h-full flex-col items-center justify-start gap-2 pt-2">
+                    <span class="indicator-score-ring" style="--ring-value:86%;--ring-color:#5ed0ff">
+                        <span class="indicator-icon-large"><svg class="h-9 w-9" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path d="M12 2v5m0 10v5M2 12h5m10 0h5"></path>
+                            </svg></span>
+                        <span class="relative z-10 text-center"><b
+                                class="block text-[2rem] leading-none tracking-[-.05em]">86</b></span>
+                    </span>
+                    <b class="px-1 text-center text-base leading-[1.1]">Impact</b>
+                </div>
+            </button>
+            <button aria-pressed="false"
+                class="indicator-card   rounded-[22px] border border-white/[.075] bg-white/[.035] p-3 text-left transition"
+                onclick="focusIndicator(7)">
+                <span class="active-caret"></span>
+                <span class="indicator-delta bg-acid/10 text-acid">+7</span>
+                <div class="flex h-full flex-col items-center justify-start gap-2 pt-2">
+                    <span class="indicator-score-ring" style="--ring-value:91%;--ring-color:#5ed0ff">
+                        <span class="indicator-icon-large"><svg class="h-9 w-9" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2">
+                                <path d="M5 18h14M8 18c0-6 2-10 4-13 2 3 4 7 4 13"></path>
+                                <path d="M9 9h6"></path>
+                            </svg></span>
+                        <span class="relative z-10 text-center"><b
+                                class="block text-[2rem] leading-none tracking-[-.05em]">91</b></span>
+                    </span>
+                    <b class="px-1 text-center text-base leading-[1.1]">Finish</b>
+                </div>
+            </button>
+        </div>
+    </div>
+
+</section>

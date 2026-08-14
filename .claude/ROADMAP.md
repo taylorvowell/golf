@@ -13,7 +13,7 @@ Platform Foundation → Core Golfer Experience → Capture & Multi-Device → Co
 | Track | Phase | Goal | Progress | Current | Lifecycle | Blocked on |
 |-------|-------|------|----------|---------|-----------|------------|
 | platform-foundation | Platform Foundation | Close PROJECT_MAIN §44's open architecture questions, then build identity, t… | 6/10 (60%, 1 in-prog) | 04 | active | — |
-| **analyzer-service** (spine) | Platform Foundation | Promote the analyzer from a hand-invoked CLI to a hosted, queue-driven worke… | 1/2 (50%, 1 in-prog) | 02 | active | — |
+| **analyzer-service** (spine) | Platform Foundation | Promote the analyzer from a hand-invoked CLI to a hosted, queue-driven worke… | 4/5 (80%) | 05 | active | — |
 | media-pipeline | Platform Foundation | Get 270-330MB phone video off a device on cellular, reliably: on-device trim… | 0/0 (—) | — | planned | — |
 | observability-and-slos | Platform Foundation | Define and instrument the targets that make 'production ready' falsifiable: … | 0/0 (—) | — | planned | — |
 | notifications | Platform Foundation | Push and email notification infrastructure with user-manageable preferences.… | 0/0 (—) | — | planned | — |
@@ -29,9 +29,10 @@ Platform Foundation → Core Golfer Experience → Capture & Multi-Device → Co
 | admin-surface | Coaching Intelligence | The administrative area §31 describes, as one surface rather than scattered … | 0/0 (—) | — | planned | — |
 | drill-library | Coaching Intelligence | A managed, preconfigured drill library with finding-to-drill mappings — expl… | 0/0 (—) | — | planned | — |
 | ai-coach | Coaching Intelligence | A swing-aware AI Coach grounded in the golfer's own analysis, profile, goals… | 0/0 (—) | — | planned | — |
-| history-and-trends | Improvement Tracking | Practice sessions, equipment inventory, goal tracking, trends over time, and… | 0/0 (—) | — | planned | — |
+| history-and-trends | Improvement Tracking | Practice sessions, equipment inventory, trends over time, and the search/fil… | 0/0 (—) | — | planned | — |
 | comparison-and-reference | Improvement Tracking | Comparison that surfaces the differences rather than showing two videos, sel… | 0/0 (—) | — | planned | — |
 | launch-data | Improvement Tracking | Manually entered launch-monitor and simulator metrics attached to a swing (§… | 0/0 (—) | — | planned | — |
+| goal-progression | Improvement Tracking | The assigned, measured correction loop (§16.3, D55): the AI or human coach a… | 0/5 (0%) | 01 | planned | — |
 | practice-loop | Improvement Tracking | The simulator/range session experience (§8.1–8.3, §9.5) — the product's prim… | 0/0 (—) | — | planned | — |
 | coach-relationships | Coach Platform | The coach directory, the golfer-initiated request/approve relationship with … | 0/0 (—) | — | planned | — |
 | coach-collaboration | Coach Platform | Frame-anchored annotations and comments clearly distinguishable from AI find… | 0/0 (—) | — | planned | — |
@@ -50,5 +51,5 @@ Platform Foundation → Core Golfer Experience → Capture & Multi-Device → Co
 
 ## Recommended next
 
-Spine: **analyzer-service 02** (`/build`). Then the other unblocked active/planned tracks per phase order. Externally-blocked
+Spine: **analyzer-service 05** (`/build`). Then the other unblocked active/planned tracks per phase order. Externally-blocked
 tracks wait on their `unblockTrigger`.

@@ -441,7 +441,8 @@
         ".claude/ai-instructions/PROJECT_MAIN.md#34-privacy-permissions-and-data-control",
         ".claude/ai-instructions/PROJECT_MAIN.md#154-swing-styles-and-style-aware-scoring",
         ".claude/ai-instructions/PROJECT_MAIN.md#55-advanced-golfer-profile",
-        ".claude/ai-instructions/PROJECT_MAIN.md#82-session-focus"
+        ".claude/ai-instructions/PROJECT_MAIN.md#82-session-focus",
+        ".claude/ai-instructions/PROJECT_MAIN.md#163-focus-goals-and-progression"
       ],
       "owns": [
         "services/ai",
@@ -461,7 +462,7 @@
       "spine": false,
       "lifecycle": "planned",
       "phase": "improvement",
-      "goal": "Practice sessions, equipment inventory, goal tracking, trends over time, and the search/filter/organization that keeps a growing log usable.",
+      "goal": "Practice sessions, equipment inventory, trends over time, and the search/filter/organization that keeps a growing log usable. (Goal tracking is its own system now — the goal-progression track, D55.)",
       "statusFile": ".claude/feature-tracks/history-and-trends/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#8-practice-sessions",
@@ -521,6 +522,50 @@
       ]
     },
     {
+      "id": "goal-progression",
+      "spine": false,
+      "lifecycle": "planned",
+      "phase": "improvement",
+      "goal": "The assigned, measured correction loop (§16.3, D55): the AI or human coach assigns up to 3 focus goals from the golfer's top faults — each bound to measured scoring-config checks, never a free-text theme. Progress is windowed evidence across analyzed swings ('clean in X of the last Y swings that could judge it', parameters in a versioned goal_config), abstained swings never move it, and the meter shows on the after-swing screen and home. Achievement lands on the exact swing that completes the window, is celebrated once, then the goal enters quiet maintenance — a sustained regression re-opens it with its history, never silently. This is the spine §8.2's session focus points at, a §28 plan issues into, and §5.3 aspirations bias the selection of.",
+      "statusFile": ".claude/feature-tracks/goal-progression/_STATUS.json",
+      "specRefs": [
+        ".claude/ai-instructions/PROJECT_MAIN.md#163-focus-goals-and-progression",
+        ".claude/ai-instructions/PROJECT_MAIN.md#16-priority-coaching-system",
+        ".claude/ai-instructions/PROJECT_MAIN.md#53-goal-customization",
+        ".claude/ai-instructions/PROJECT_MAIN.md#82-session-focus",
+        ".claude/ai-instructions/PROJECT_MAIN.md#28-coach-created-improvement-plans"
+      ],
+      "owns": [
+        "apps/web/src/lib/goals",
+        "apps/mobile/src/features/goals"
+      ],
+      "dependsOn": [
+        {
+          "track": "priority-engine"
+        },
+        {
+          "track": "history-and-trends"
+        },
+        {
+          "track": "coach-collaboration",
+          "blocking": false
+        },
+        {
+          "track": "ai-coach",
+          "blocking": false
+        },
+        {
+          "track": "drill-library",
+          "blocking": false
+        },
+        {
+          "track": "notifications",
+          "blocking": false
+        }
+      ],
+      "sequencingNote": "Depends hard on priority-engine because proposals must come from real, style-gated priority output — assigning a fault the golfer's style legitimizes is the mis-coaching D54 exists to prevent — and transitively on analysis-ground-truth: a progress claim over an unvalidated check is unfalsifiable, and 'you fixed it' is the one message the product must never be wrong about. history-and-trends is hard because the evidence history and trend surfaces are its infrastructure. Everything else is a seam: AI-proposed and self-promoted goals with deterministic text work before coach-collaboration (human assignment), ai-coach (narrative), drill-library (linked drills) or notifications (push delivery) land. Goal tracking was carved OUT of history-and-trends' goal by D55, the same way D54 carved practice-loop out of in-app-capture."
+    },
+    {
       "id": "practice-loop",
       "spine": false,
       "lifecycle": "planned",
@@ -551,9 +596,13 @@
         {
           "track": "ai-coach",
           "blocking": false
+        },
+        {
+          "track": "goal-progression",
+          "blocking": false
         }
       ],
-      "sequencingNote": "The capture mechanics — countdown, capture-screen controls, review/retake — are in-app-capture's (§9.5 sits in both tracks' specRefs); this track builds the session loop AROUND capture: the focus card, quick feedback, one-tap-next, and the session summary. ai-coach is non-blocking because §8.2 requires focus and feedback to degrade to deterministic priority output — AI narrative is an enhancement, never a hard dependency. The quick-feedback promise also leans on the analysis-latency SLO: 'record another right away' only feels right if analysis keeps up, so the analyzer-service capacity numbers bound what this screen can honestly promise."
+      "sequencingNote": "The capture mechanics — countdown, capture-screen controls, review/retake — are in-app-capture's (§9.5 sits in both tracks' specRefs); this track builds the session loop AROUND capture: the focus card, quick feedback, one-tap-next, and the session summary. ai-coach is non-blocking because §8.2 requires focus and feedback to degrade to deterministic priority output — AI narrative is an enhancement, never a hard dependency. The quick-feedback promise also leans on the analysis-latency SLO: 'record another right away' only feels right if analysis keeps up, so the analyzer-service capacity numbers bound what this screen can honestly promise. goal-progression is non-blocking the same way ai-coach is: once it exists, the focus card names the active focus goal and quick feedback leads with the goal readout (§16.3.4), but the session loop works from priority output alone before it."
     },
     {
       "id": "billing-iap",
@@ -662,7 +711,8 @@
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#26-coach-comments-and-annotations",
         ".claude/ai-instructions/PROJECT_MAIN.md#27-two-way-messaging",
-        ".claude/ai-instructions/PROJECT_MAIN.md#28-coach-created-improvement-plans"
+        ".claude/ai-instructions/PROJECT_MAIN.md#28-coach-created-improvement-plans",
+        ".claude/ai-instructions/PROJECT_MAIN.md#163-focus-goals-and-progression"
       ],
       "owns": [
         "apps/mobile/src/features/coaching",
@@ -739,6 +789,9 @@
         },
         {
           "track": "practice-loop"
+        },
+        {
+          "track": "goal-progression"
         }
       ]
     },

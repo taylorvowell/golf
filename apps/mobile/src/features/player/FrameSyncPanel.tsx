@@ -253,8 +253,6 @@ function Line({ label, value, bad }: { label: string; value: string; bad: boolea
 const styles = StyleSheet.create({
   panel: {
     backgroundColor: COLORS.panel,
-    borderColor: COLORS.border,
-    borderWidth: 1,
     borderRadius: 12,
     padding: 12,
     gap: 8,
@@ -294,8 +292,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 10,
-    borderWidth: 1,
-    borderColor: COLORS.violet,
+    backgroundColor: "rgba(139,123,255,0.14)",
   },
   sweepBusy: { opacity: 0.55 },
   sweepLabel: { color: COLORS.violet, fontSize: 13, fontWeight: "700" },

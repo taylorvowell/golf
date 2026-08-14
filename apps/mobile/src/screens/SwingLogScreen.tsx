@@ -1,24 +1,36 @@
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { AccountBar } from "../features/auth/AccountBar";
+import { useMemo } from "react";
+
+import { StatusMessage } from "../design/StatusMessage";
+import { TopBar } from "../design/TopBar";
 import { useAppNavigation } from "../navigation";
-import { SwingCard } from "../features/swings/SwingCard";
+import { SessionCard } from "../features/swings/SessionCard";
+import { sessionize } from "../features/swings/sessions";
 import { useSwings } from "../features/swings/useSwings";
 import { COLORS } from "../theme";
 
 /**
- * §21's swing log — the golfer's home.
+ * §21's swing log — the golfer's home, grouped by practice **session**.
  *
- * This replaces the placeholder that showed a *count*. The one property carried over from it
- * unchanged is the refusal to guess: a request that never reached the server renders as "cannot
- * reach SwingSage", never as an empty log. That invariant has a test and it survives every rewrite
- * of this screen, because the failure it prevents — telling someone their swings are gone when
- * they are not — is the only one on this screen that costs trust rather than a tap.
+ * Accordion sessions rather than a flat list of cards (Taylor, 2026-08-13): the thumbnails are
+ * near-identical frames of the same person on the same mat, so the flat list made every swing
+ * look the same. The row now leads with the number in the session, the score and the time —
+ * "which one was the good one" answered at a glance. The newest session opens expanded.
+ *
+ * The one property that survives every rewrite of this screen: a request that never reached the
+ * server renders as "cannot reach SwingSage", **never** as an empty log. That invariant has a
+ * test, because the failure it prevents — telling someone their swings are gone when they are
+ * not — is the only one here that costs trust rather than a tap.
  */
 export function SwingLogScreen() {
   const navigation = useAppNavigation();
   const { state, refreshing, refresh } = useSwings();
+  const sessions = useMemo(
+    () => (state.kind === "ok" ? sessionize(state.swings) : []),
+    [state],
+  );
   // Edge-to-edge is on and the nav bar is transparent, so the list draws under it. The bottom
   // inset keeps the last card — and the Delete-account footer, the one irreversible control on
   // this screen — tappable above the system bar on 3-button navigation (~48dp).
@@ -26,7 +38,7 @@ export function SwingLogScreen() {
 
   return (
     <View style={styles.root}>
-      <AccountBar />
+      <TopBar title="Your swings" />
       {state.kind === "loading" ? (
         <View style={styles.centre} testID="swing-log-loading">
           <ActivityIndicator color={COLORS.muted} />
@@ -34,27 +46,29 @@ export function SwingLogScreen() {
       ) : null}
 
       {state.kind === "signed-out" ? (
-        <Message
+        <StatusMessage
           title="Your session has expired"
           detail="Sign out and sign back in to continue."
           onRetry={refresh}
+          retryTestID="swing-log-retry"
         />
       ) : null}
 
       {state.kind === "unreachable" ? (
-        <Message
+        <StatusMessage
           title="Cannot reach SwingSage"
           detail="Your swings are safe — this device just could not connect. Check your network."
           onRetry={refresh}
+          retryTestID="swing-log-retry"
         />
       ) : null}
 
       {state.kind === "ok" ? (
         <FlatList
-          data={state.swings}
+          data={sessions}
           keyExtractor={(s) => s.id}
           contentContainerStyle={
-            state.swings.length
+            sessions.length
               ? [styles.list, { paddingBottom: 32 + insets.bottom }]
               : [styles.list, styles.listEmpty, { paddingBottom: 32 + insets.bottom }]
           }
@@ -70,9 +84,30 @@ export function SwingLogScreen() {
               colors={[COLORS.acid]}
             />
           }
-          renderItem={({ item }) => (
-            <SwingCard swing={item} onPress={() => navigation.navigate("SwingDetail", { id: item.id })} />
+          renderItem={({ item, index }) => (
+            <SessionCard
+              session={item}
+              defaultExpanded={index === 0}
+              onOpenSwing={(id) => navigation.navigate("SwingDetail", { id })}
+            />
           )}
+          ListHeaderComponent={
+            // A way into the after-swing screen while nothing records yet: the capture flow will
+            // navigate there itself, and this row leaves with it. Quiet on purpose — it is a door
+            // for testing the interface, not a feature of the log.
+            state.swings.length ? (
+              <Pressable
+                testID="open-after-swing"
+                accessibilityRole="button"
+                onPress={() =>
+                  navigation.navigate("SwingDetail", { id: state.swings[0].id, afterSwing: true })
+                }
+                style={({ pressed }) => [styles.afterSwingLink, pressed && styles.pressed]}
+              >
+                <Text style={styles.afterSwingLinkText}>Preview the after-swing screen</Text>
+              </Pressable>
+            ) : null
+          }
           ListEmptyComponent={
             <View style={styles.centre}>
               <Text style={styles.title}>No swings yet</Text>
@@ -82,46 +117,8 @@ export function SwingLogScreen() {
               </Text>
             </View>
           }
-          ListFooterComponent={
-            // §4.3 has to be reachable and `mobile-app-shell` step 02 owns the settings screen
-            // this belongs on. Below the list, quiet, and past everything else on purpose: it is
-            // the only irreversible action in the app.
-            <Pressable
-              onPress={() => navigation.navigate("DeleteAccount")}
-              accessibilityRole="button"
-              testID="open-delete-account"
-              style={({ pressed }) => [styles.footer, pressed && styles.pressed]}
-            >
-              <Text style={styles.footerText}>Delete account</Text>
-            </Pressable>
-          }
         />
       ) : null}
-    </View>
-  );
-}
-
-function Message({
-  title,
-  detail,
-  onRetry,
-}: {
-  title: string;
-  detail: string;
-  onRetry: () => void;
-}) {
-  return (
-    <View style={styles.centre}>
-      <Text style={styles.title}>{title}</Text>
-      <Text style={styles.detail}>{detail}</Text>
-      <Pressable
-        onPress={onRetry}
-        accessibilityRole="button"
-        testID="swing-log-retry"
-        style={({ pressed }) => [styles.retry, pressed && styles.pressed]}
-      >
-        <Text style={styles.retryText}>Try again</Text>
-      </Pressable>
     </View>
   );
 }
@@ -139,16 +136,13 @@ const styles = StyleSheet.create({
     textAlign: "center",
     maxWidth: 300,
   },
-  retry: {
-    marginTop: 6,
-    borderColor: COLORS.border,
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-  },
   pressed: { opacity: 0.6 },
-  retryText: { color: COLORS.text, fontSize: 13, fontWeight: "700" },
-  footer: { alignItems: "center", paddingVertical: 20 },
-  footerText: { color: COLORS.dim, fontSize: 13, fontWeight: "600" },
+  afterSwingLink: {
+    alignItems: "center",
+    paddingVertical: 10,
+    backgroundColor: COLORS.panel,
+    borderRadius: 12,
+    marginBottom: 2,
+  },
+  afterSwingLinkText: { color: COLORS.muted, fontSize: 13, fontWeight: "600" },
 });

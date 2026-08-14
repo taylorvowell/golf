@@ -77,6 +77,16 @@ export function userPrefix(userId: string): string {
   return `u/${segment("userId", userId)}`;
 }
 
+/**
+ * Everything one swing's media lives under, in either bucket — every view, every revision, and
+ * the uploaded sources. The unit swing deletion removes, exported for the same reason
+ * `userPrefix` is: a prefix assembled by hand skips `segment()`, and on the local driver an
+ * unvalidated id in a recursive delete is joined to a filesystem root.
+ */
+export function swingPrefix(userId: string, swingId: string): string {
+  return `${userPrefix(userId)}/s/${segment("swingId", swingId)}`;
+}
+
 /** One analysis run's output. Immutable once written — a re-run writes the next revision. */
 export function revisionPrefix(a: ViewAddress): string {
   if (!Number.isInteger(a.revision) || a.revision < 1) {
@@ -88,6 +98,18 @@ export function revisionPrefix(a: ViewAddress): string {
 /** A derived artifact, in `ARTIFACT_BUCKET`. */
 export function artifactKey(a: ViewAddress, name: ArtifactName): string {
   return `${revisionPrefix(a)}/${name}`;
+}
+
+/**
+ * A single extracted frame of `normalized.mp4`, in `ARTIFACT_BUCKET` — written on demand by the
+ * `/frame` route and immutable thereafter (the revision prefix makes a re-analysis mint new
+ * keys). Under the revision prefix so the deletion cascade and `movePrefix` sweep them with
+ * everything else. When the analyzer later pre-renders checkpoint stills at publish time, they
+ * land on exactly these keys and the route becomes a pure cache hit.
+ */
+export function stillKey(a: ViewAddress, frame: number): string {
+  if (!Number.isInteger(frame) || frame < 0) throw new Error(`invalid still frame: ${frame}`);
+  return `${revisionPrefix(a)}/stills/f${frame}.jpg`;
 }
 
 /**

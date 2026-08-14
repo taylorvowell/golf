@@ -70,9 +70,9 @@ export const DECK = {
    * Translucent surfaces that sit **over the picture** rather than on the slab.
    *
    * No `backdrop-filter`, and no `expo-blur`: real blur is a native module, which costs a fresh
-   * dev-client install on the device every time this design moves. Two stacked translucent fills
-   * plus a lit hairline read as glass at this size, and the difference is only visible against
-   * fine detail — which the picture behind these controls, being sky and grass, does not have.
+   * dev-client install on the device every time this design moves. Translucent fills alone read
+   * as glass at this size — surfaces are flat by decree (no borders, no drawn edges; depth comes
+   * from fill and shadow only), so there are no edge/hairline tokens here and none may be added.
    */
   glass: {
     /** A floating control over the video — the back cap, the overlays chip. */
@@ -83,14 +83,8 @@ export const DECK = {
     sheet: "rgba(10,14,11,0.97)",
     /** A recessed group inside glass — the speed segment's well. */
     well: "rgba(0,0,0,0.25)",
-    /** The lit top edge every glass surface carries. */
-    hairline: "rgba(255,255,255,0.10)",
-    /** The hairline, heavier — for the one control per screen that must be findable without
-     *  reading (the player's back cap). Not a hover/active state; a deliberate second weight. */
-    hairlineStrong: "rgba(255,255,255,0.15)",
     /** A flat, unlit control on glass — the frame stepper's keys. */
     key: "rgba(255,255,255,0.045)",
-    keyEdge: "rgba(255,255,255,0.09)",
   },
 
   /** Faces, lit from above: the top of a raised cap is lighter than its bottom. */
@@ -105,13 +99,6 @@ export const DECK = {
     primaryBottom: "#9fe135",
     primarySunkTop: "#7fb524",
     primarySunkBottom: "#b6f04c",
-  },
-
-  /** The slab a set of caps is mounted on. Marginally above the page, never floating. */
-  slab: {
-    background: "#0d1117",
-    hairline: "rgba(255,255,255,0.07)",
-    edge: "rgba(0,0,0,0.55)",
   },
 
   /**

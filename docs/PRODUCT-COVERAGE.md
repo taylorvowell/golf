@@ -122,6 +122,7 @@ coaching, billing, hosting) is unbuilt.
 |---|---|---|---|
 | 16.1 | Priority informed by severity, confidence, dependencies, order of operations, goals, recurrence | 🟡 | Priority today is "weakest checks, weighted". There is no dependency model, no order-of-operations ("fix setup before P6"), no goal input, no cross-swing recurrence. |
 | 16.2 | Focus limits | ✅ | The narrative already emits a small fixed number of priorities. |
+| 16.3 | Focus goals and progression — assigned (AI/coach/self), bound to measured checks, max 3, windowed-evidence progress on after-swing + home, celebrated once, maintained after | ⬜ | Added 2026-08-13 (D55). Brand-new system; nothing exists. Owning track: `goal-progression`. |
 | 17 | AI Coach — swing-aware conversation, personalized context, scoped to swing/session/history/plan | ⬜ | Nothing. No provider abstraction, no prompts, no conversation storage. |
 | 18 | Preconfigured drill library, findings→drills mapping, admin-managed | ⬜ | Each check carries a one-line `fix` string. That is not a drill library. |
 

@@ -19,9 +19,12 @@ export {
   BarsGlyph,
   ChevronGlyph,
   CompareGlyph,
+  HouseGlyph,
   LayersGlyph,
   PauseGlyph,
+  PersonGlyph,
   PlayGlyph,
+  RowsGlyph,
   SparkGlyph,
 } from "./Glyphs";
 export { DECK, type DeckDepth } from "./tokens";

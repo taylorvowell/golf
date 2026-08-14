@@ -64,8 +64,6 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.bg, justifyContent: "center", padding: 20 },
   card: {
     backgroundColor: COLORS.panel,
-    borderColor: COLORS.border,
-    borderWidth: 1,
     borderRadius: 20,
     padding: 20,
     gap: 10,

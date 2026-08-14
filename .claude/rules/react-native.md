@@ -119,14 +119,24 @@ along.
 - Deck (`src/design/deck/`) is the player's control-surface system, layered on `theme.ts` tokens.
   **No hand-mixed rgba beside a token that nearly matches** — use the token or name a new one.
   Overlay data colours are web-parity constants and stay literal.
+- **No borders, anywhere** (Taylor, 2026-08-14). Surfaces are flat: separation is fill and shadow,
+  selection is background tint + text colour, a divider is spacing. `border*` styles are legal only
+  when they *draw a shape* (View-drawn glyphs, overlay markers, gauge dots, the scrub thumb's ring).
+  The edge tokens were deleted — do not reintroduce them. A control whose only visual was its
+  border gets a fill, never the border back.
 - **Every interactive control is accessible**: role, label, state; drag-only surfaces get
   `adjustable` + `accessibilityValue` + increment/decrement actions (scrub), or explicit
   screen-reader buttons (DeckSheet's pattern). 48 pt touch targets via hitSlop where the drawn
   control is smaller.
 - **Edge-to-edge means every screen consumes insets** (`useSafeAreaInsets`); window metrics come
   from `useWindowDimensions()`, never a render-time `Dimensions.get`.
-- **Screens do not scroll under the player; panels come up from the bottom** (`DeckSheet`,
-  closed = unmounted). The picture is the page.
+- **The ordinary player does not scroll; panels come up from the bottom** (`DeckSheet`,
+  closed = unmounted). The after-swing browse layout is the one sanctioned scroll under the
+  player: video flush at the top, summary in the flow below (see `mobile-client.md`).
+- **Controls never hide.** No tap-to-hide, no auto-hide, no hover states — a phone has no hover,
+  and a control that can vanish must be summoned. (Taylor, 2026-08-13.)
+- **SVG lives in `design/gauges` and nowhere else.** `react-native-svg` is shipped for the score
+  meters; the overlay stays on plain `View`s (D23 was a measurement) and glyphs stay drawn.
 - **Nothing dev-only leaks into release**: `__DEV__`-gate instruments *and their layout
   accommodations* (padding reserved for the dev-client bubble counts).
 

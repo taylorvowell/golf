@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "featureName": "goal-progression",
+  "currentStep": "01",
+  "phase": "Improvement Tracking",
+  "lastUpdated": "2026-08-13T00:00:00Z",
+  "steps": {
+    "01": { "status": "not-started" },
+    "02": { "status": "not-started" },
+    "03": { "status": "not-started" },
+    "04": { "status": "not-started" },
+    "05": { "status": "not-started" }
+  },
+  "blockers": [],
+  "skipped": []
+}

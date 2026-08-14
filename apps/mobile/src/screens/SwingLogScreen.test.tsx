@@ -25,7 +25,7 @@ jest.mock("../platform/client", () => ({
   },
 }));
 jest.mock("../navigation", () => ({ useAppNavigation: () => ({ navigate: mockNavigate, goBack: jest.fn() }) }));
-jest.mock("../features/auth/AccountBar", () => ({ AccountBar: () => null }));
+jest.mock("../design/TopBar", () => ({ TopBar: () => null }));
 
 import { SwingLogScreen } from "./SwingLogScreen";
 import { clearSwingsCache, useSwings } from "../features/swings/useSwings";
@@ -67,6 +67,17 @@ describe("SwingLogScreen", () => {
     const { getByText } = await render(<SwingLogScreen />);
     await waitFor(() => expect(getByText("Driver — 12 Aug")).toBeTruthy());
     expect(getByText("72")).toBeTruthy();
+  });
+
+  it("opens the after-swing preview on the newest swing", async () => {
+    // The temporary door into the after-swing screen — it leaves when the capture flow starts
+    // navigating there itself. Pinned so it cannot silently open the ordinary player instead.
+    mockRequest.mockResolvedValue({ swings: [swing()] });
+    const { getByTestId } = await render(<SwingLogScreen />);
+    await waitFor(() => expect(getByTestId("open-after-swing")).toBeTruthy());
+
+    fireEvent.press(getByTestId("open-after-swing"));
+    expect(mockNavigate).toHaveBeenCalledWith("SwingDetail", { id: "s-1", afterSwing: true });
   });
 
   it("never renders a network failure as an empty swing log", async () => {

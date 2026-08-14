@@ -127,8 +127,6 @@ const styles = StyleSheet.create({
   lead: { color: COLORS.muted, fontSize: 14, lineHeight: 20 },
   panel: {
     backgroundColor: COLORS.panel,
-    borderColor: COLORS.border,
-    borderWidth: 1,
     borderRadius: 14,
     padding: 16,
     gap: 8,
@@ -139,8 +137,6 @@ const styles = StyleSheet.create({
   rowText: { color: COLORS.muted, fontSize: 14, lineHeight: 20, flexShrink: 1 },
   label: { color: COLORS.text, fontSize: 13, fontWeight: "600" },
   input: {
-    borderColor: COLORS.border,
-    borderWidth: 1,
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,

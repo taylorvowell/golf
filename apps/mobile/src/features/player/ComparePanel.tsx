@@ -142,7 +142,8 @@ function Tab2({
 }
 
 function SwingRow({ swing, onPress }: { swing: SwingSummary; onPress: () => void }) {
-  const thumb = useAuthenticatedImage(`swings/${swing.id}/thumb`);
+  // `?poster=1` = one frame, not the 6×4 contact sheet — a grid at card size reads as noise.
+  const thumb = useAuthenticatedImage(`swings/${swing.id}/thumb?poster=1`);
   const scored = typeof swing.overallScore === "number";
 
   return (
@@ -332,8 +333,6 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 14,
     backgroundColor: DECK.glass.key,
-    borderWidth: 1,
-    borderColor: DECK.glass.keyEdge,
     minHeight: 64,
   },
   rowPressed: { opacity: 0.6 },
@@ -361,8 +360,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingVertical: 9,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(255,255,255,0.08)",
   },
   compareValue: {
     flex: 1,
@@ -382,8 +379,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: DECK.glass.key,
-    borderWidth: 1,
-    borderColor: DECK.glass.keyEdge,
   },
   changeText: { color: COLORS.text, fontSize: 13, fontWeight: "600" },
 });

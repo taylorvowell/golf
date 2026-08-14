@@ -385,8 +385,6 @@ const styles = StyleSheet.create({
   dock: {
     height: DOCK_HEIGHT,
     borderRadius: DECK.radius.dock,
-    borderWidth: 1,
-    borderColor: DECK.glass.hairline,
     backgroundColor: DECK.glass.dock,
     boxShadow: DECK.shadow.float,
   },

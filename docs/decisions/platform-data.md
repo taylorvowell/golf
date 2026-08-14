@@ -43,6 +43,26 @@ both directions and a golfer cannot correct it without knowing the rule — a su
 correctable, an inference is not.
 **See:** ARCHIVE D29.
 
+### Frame stills are extracted on demand and cached as revision-addressed artifacts
+
+**Decision:** `GET /api/v1/swings/:id/frame?f=<n>` (or `?checkpoint=<P-code>`, resolved through
+the artifact's own `checkpoints` table) serves one exact frame of `normalized.mp4` as a JPEG.
+The still is extracted with ffmpeg (`-ss frame/fps` — exact because the clip is CFR) and written
+to `stills/f<n>.jpg` under the **revision prefix** (`stillKey()` in `lib/media/keys.ts`), so it
+is immutable, swept by the deletion cascade and `movePrefix`, and extracted at most once. The
+`?poster=1` variant of `/thumb` crops cell (0,0) of the 6×4 contact sheet server-side (sharp) —
+grid geometry is the analyzer's business, never the client's. First consumers: the mobile home
+screen's photography (hero, sliders), its you-vs-pro strip (two swings frozen at the same
+coaching position), and the player's stage placeholder (`/frame?f=0` — pixel-for-pixel the
+decoder's first paint, so the poster-to-video handoff is seamless; the tiled contact sheet it
+replaced is now served only where a whole-swing scan is wanted).
+**Gotchas:** Extraction failing (no ffmpeg on the host, no `normalized.mp4`) is a **404, not a
+500** — to a client it is the same permanent "no such image" as a pre-route swing, and UI built
+on it must remove itself rather than show half a comparison. The long-term shape is the analyzer
+pre-rendering checkpoint stills at publish time onto these same keys, which turns the route into
+a pure cache hit — the web host then needs no ffmpeg at all (relevant when the worker host
+decision lands).
+
 ### The API is versioned in the path and the contract is generated from one schema
 
 **Decision:** Four rules, each enforced by something that fails rather than by convention:

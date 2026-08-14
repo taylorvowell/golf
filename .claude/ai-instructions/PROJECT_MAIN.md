@@ -550,6 +550,11 @@ drill to try:
 - AI narrative is an enhancement here, never a hard dependency: with AI unavailable, the
   focus card and summary render from the deterministic priority output.
 
+> **AMENDED 2026-08-13 (D55).** The session focus is drawn from the golfer's **active focus
+> goals (§16.3)** — "persists across sessions until improvement is sustained" is measured by
+> the goal's evidence window, not judged by feel. Before any focus goal exists, the focus
+> falls back to the top priority finding, as before.
+
 ## 8.3 The practice loop
 
 The expected sequence for a golfer at a simulator or range:
@@ -1137,6 +1142,101 @@ The AI Coach should avoid overwhelming golfers with too many simultaneous correc
 
 The product should emphasize a manageable number of high-priority focus areas.
 
+## 16.3 Focus goals and progression
+
+> **ADDED 2026-08-13 (D55).** §5.3 goals are the golfer's *aspirations*; a focus goal is a
+> specific, measured *correction* the coaching layer assigns and tracks to completion. This
+> subsection defines the system that makes §16.2's "manageable number of focus areas" and
+> §8.2's "persists until improvement is sustained" real rather than prose: assigned, measured
+> across swings, celebrated once when the fix sticks.
+
+### 16.3.1 What a focus goal is
+
+A focus goal is one specific correction the golfer is actively working on — "set up with
+steadier posture", "stop swaying off the ball" — with four parts, all stated in plain language:
+
+- **What was detected**, and on which swings.
+- **Why it matters** — what it does to ball striking (§2.4 explainability applies in full).
+- **What "fixed" looks like** — the measured target, described as behavior, not a number dump.
+- **How progress is measured** — which upcoming swings count and what the golfer will see.
+
+Every focus goal is bound to one or more **measured checks in the versioned scoring config** —
+never to a vibe or a free-text theme. Advice that cannot be measured can still live in a coach
+plan (§28) or a conversation (§17); it cannot be a focus goal, because a focus goal makes a
+progress claim and progress claims must be falsifiable.
+
+**At most 3 focus goals are active at once.** Assigning a fourth requires retiring or swapping
+one. The cap is a product rule, not a soft default — attention is the scarce resource, and the
+whole point of the priority model is that working on few things works.
+
+### 16.3.2 Assignment
+
+Three sources, one system:
+
+- **The AI coach proposes** the next focus goal from the priority model (§16.1): the finding
+  that is severe, confident, recurrent across recent swings, style-legitimate (§15.4), and
+  aligned with the golfer's §5.3 goals. Proposal-first — one tap accepts, nothing is
+  force-assigned, consistent with §8.2's suggestion posture.
+- **A human coach assigns** a goal directly or by issuing a plan focus area (§28) as one. A
+  coach-assigned goal occupies one of the 3 slots, is visibly attributed to the coach
+  (§26.3 applies), and reports progress back to the coach automatically. The golfer can
+  decline or end it — the golfer controls the relationship — but it never silently disappears.
+- **The golfer promotes any finding** into a focus goal from the analysis screen.
+
+When a slot opens — a goal achieved or retired — the next proposal is ready.
+
+### 16.3.3 Progress is windowed evidence, never a streak
+
+Every analyzed swing evaluates each active goal's bound checks and yields exactly one verdict:
+
+- **Clean** — the checks passed with sufficient confidence.
+- **Still there** — the fault showed, with sufficient confidence.
+- **No evidence** — the checks abstained (low confidence, wrong camera view, not scoreable).
+  A no-evidence swing **never moves progress in either direction**.
+
+Progress is **consistency over a rolling window of evidencing swings** — "clean in X of the
+last Y swings that could judge it" (defaults live in versioned config, e.g. 8 of 10) — not a
+raw consecutive streak. One bad swing dents progress; it does not reset it to zero. A streak
+that resets punishes exactly the golfer who is 90% of the way to a habit.
+
+- Progress is displayed as a meter plus the plain sentence behind it ("clean in 7 of your
+  last 10 swings").
+- If a goal's checks need a camera view the golfer rarely films, the goal says so **at
+  assignment time** — a goal is never assigned into silent unmeasurability.
+- Progress is recomputed deterministically from stored analyses under the goal's config
+  version, so re-analysis of an old swing updates progress honestly.
+
+### 16.3.4 Where progress appears
+
+- **After-swing analysis:** a compact per-goal readout for that swing — the verdict and the
+  updated meter. This is the tightest feedback loop in the product: swing, glance down, see
+  the fix holding.
+- **Home:** the active goals and their meters are a primary home surface — what the golfer is
+  working on *is* the product's home state.
+- **Goal detail:** the definition, why it matters, linked drills (§18), and the per-swing
+  evidence history.
+- **Session focus (§8.2)** is drawn from the active focus goals, and the quick feedback
+  (§9.5) leads with the goal readout.
+
+### 16.3.5 Completion, celebration, and afterwards
+
+- When the window rule is met, the goal is **achieved at the exact swing that completed it** —
+  the celebration lands on that swing's after-swing screen, not in a later summary. Home
+  reflects it, the golfer is notified (§29), and an assigning coach is notified.
+- Celebration is a real moment, once — not a badge economy. One goal, earned, celebrated,
+  archived into the improvement record (§21).
+- An achieved goal enters **maintenance**: monitoring continues quietly, with no meter on
+  screen. If the fault returns and stays returned, the goal is re-proposed carrying its
+  history ("this has crept back") — never silently, and never disguised as a new goal.
+- After the celebration, the next proposal is ready — the loop continues at the golfer's pace.
+
+### 16.3.6 Honesty rules
+
+The system inherits every confidence rule in this document: no progress from abstained checks,
+no percentage without evidence, "no evidence yet" instead of a fabricated 0% or a flattering
+meter, and never an achievement on fewer evidencing swings than the window requires. "You
+fixed it" is the single message this product must never be wrong about.
+
 ---
 
 # 17. AI Coach
@@ -1591,6 +1691,11 @@ A plan may contain:
 - Coach notes.
 - Completion/progress state.
 
+> **AMENDED 2026-08-13 (D55).** A plan's **priority focus areas** may be issued as focus goals
+> (§16.3): they occupy the golfer's 3 slots, are visibly attributed to the coach, and their
+> measured progress reports back to the coach automatically — the plan's progress state stops
+> being purely manual for anything a check can measure.
+
 ## 28.2 Plan relationship to AI
 
 The AI Coach should be aware of an active human-coach plan.
@@ -1626,6 +1731,10 @@ Potential notification events include:
 - Golfer replied to a message.
 - Golfer completed or progressed through an assigned plan.
 - Swing specifically submitted/requested for review.
+
+> **AMENDED 2026-08-13 (D55) — focus-goal events (§16.3).** Golfer: a coach assigned a focus
+> goal; a focus goal was achieved (the celebration moment); a maintained goal regressed and
+> was re-proposed. Coach: a golfer achieved a goal the coach assigned.
 
 Notification preferences should be user-manageable where appropriate.
 

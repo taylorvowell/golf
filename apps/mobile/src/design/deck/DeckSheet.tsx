@@ -349,8 +349,6 @@ const styles = StyleSheet.create({
     backgroundColor: DECK.glass.sheet,
     borderTopLeftRadius: DECK.radius.slab,
     borderTopRightRadius: DECK.radius.slab,
-    borderTopWidth: 1,
-    borderColor: DECK.glass.hairline,
     paddingHorizontal: 18,
     paddingTop: 10,
     boxShadow: DECK.shadow.slab,
@@ -374,8 +372,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: DECK.glass.key,
-    borderWidth: 1,
-    borderColor: DECK.glass.keyEdge,
   },
   headerCapPressed: { opacity: 0.6 },
   expandChevron: {

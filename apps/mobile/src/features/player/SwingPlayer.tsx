@@ -1,23 +1,34 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
   type LayoutChangeEvent,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from "react-native";
+import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { SwingSummary, SwingViewSummary } from "@swingsage/schema/contract";
 
 import { FrameClockView } from "../../../modules/frame-clock/src";
 import { ErrorBoundary } from "../../platform/ErrorBoundary";
 import { useAuthenticatedImage } from "../../platform/useAuthenticatedImage";
-import { ChevronGlyph, CompareGlyph, DECK, DeckSheet, LayersGlyph } from "../../design/deck";
+import { BarsGlyph, ChevronGlyph, CompareGlyph, DECK, DeckSheet, LayersGlyph, PlayGlyph } from "../../design/deck";
 import { COLORS } from "../../theme";
+import { useStarred } from "../swings/useStarred";
+import { useSummaryPreference } from "../swings/useSummaryPreference";
+import { AfterSwingDock, DOCK_BODY_HEIGHT, DOCK_TAB_HEIGHT } from "./AfterSwingDock";
+import { AfterSwingSummary } from "./AfterSwingSummary";
+import { checkpointTarget } from "./checkpointFrames";
 import { AnalysisPanel } from "./AnalysisPanel";
 import { ComparePanel } from "./ComparePanel";
+import { SummarySheet } from "./SummarySheet";
 import { ReferencePane } from "./ReferencePane";
 import { FrameSyncPanel } from "./FrameSyncPanel";
 import { PlayerConsole } from "./PlayerConsole";
@@ -38,17 +49,19 @@ import { useReport } from "./useReport";
  * The surface is `modules/frame-clock`, not `expo-video` (D50): it owns its own ExoPlayer and is
  * the only thing in this app that can report the frame actually on the glass.
  *
- * ## The picture is the page
+ * ## The picture tops the page
  *
- * The video is centred in the whole viewport at its own aspect, and everything else floats over it
- * — the back control and the swing's name at the top, the timeline and dock at the bottom. A golf
- * swing is filmed portrait on a phone held upright, so the frame is very nearly the shape of the
- * screen; anything given its own strip of layout is taken directly off the golfer.
+ * Every swing is one scrolling page: the video flush at the top at its own aspect — filling the
+ * screen on a portrait clip — with the scorecard summary in the flow below it, one scroll away.
+ * The player's chrome floats over the picture (the back control and the swing's name at the top,
+ * the timeline at the picture's bottom): a golf swing is filmed portrait on a phone held upright,
+ * so the frame is very nearly the shape of the screen, and anything given its own strip of layout
+ * is taken directly off the golfer.
  *
- * That leaves nowhere *below* for the swing's numbers and the overlay switches to live, which is
- * the whole reason `DeckSheet` exists: they come up over the picture and go away again. A panel is
- * also the honest place for them — they are things you consult between looks at the swing, not
- * things you read while it plays.
+ * The overlay switches, the swing's facts and the full scorecard still live in `DeckSheet` panels
+ * over the picture — they are things you consult between looks at the swing, not things you read
+ * while it plays. `mode` decides the rest of the shape: `review` is just this page; `session`
+ * (the just-recorded moment) adds the arrival sheet, the opener toggle and the dock.
  *
  * Playback **starts on load**, looping, once the artifact has settled and the playhead has been
  * parked at the start of the swing window. The order matters and is the reason those three things
@@ -97,6 +110,32 @@ export interface SwingPlayerProps {
    * rather than falling back, deliberately. Omitted plays the primary view. Dual-view is step 04.
    */
   view?: SwingViewSummary["view"] | null;
+  /**
+   * Which shape of this screen the moment calls for. Both are the same page — the video flush at
+   * the top, the scorecard summary in the scroll below it — because an old swing's card and a new
+   * swing's card are the same product. **`review`** (the default, what the log opens) is just that
+   * page: it autoplays, and the summary is one scroll away. **`session`** is the just-recorded
+   * moment and layers the session chrome on top: the arrival sheet (summary up over the paused
+   * picture), the stats/video opener toggle, and the dock (record / star / delete / play).
+   */
+  mode?: "review" | "session";
+  /**
+   * Open browse mode parked at this checkpoint's frame, paused — Home's "see it on your swing".
+   * Skips the arrival slide-up (the golfer asked for a moment, not a ceremony) and waits for the
+   * artifact, because the frame number lives in it. An unknown checkpoint parks at the start.
+   */
+  initialCheckpoint?: string | null;
+  /** The list's band word ("Pure", "Solid"…), for the summary while the report is in flight. */
+  band?: string | null;
+  /** Recent overall scores, oldest → newest with THIS swing last — the summary's trend. From
+   *  the log's cache, so it costs nothing; absent simply hides the trend and the delta. */
+  history?: number[];
+  /**
+   * Delete this swing, for the dock's control. The confirmation lives here in the player; the
+   * doing — the request, the cache, the navigation away — belongs to the screen above, which is
+   * the only party that can leave. Absent hides nothing: the dock only exists in `session` mode.
+   */
+  onDelete?: () => Promise<void> | void;
 }
 
 /** Which panel is up. One at a time — two stacked sheets have no way back to the picture. */
@@ -114,9 +153,24 @@ export function SwingPlayer({
   onBack,
   children,
   view,
+  mode = "review",
+  initialCheckpoint = null,
+  band,
+  history,
+  onDelete,
 }: SwingPlayerProps) {
+  /** The session chrome — arrival, opener toggle, dock — exists only for a just-recorded swing. */
+  const session = mode === "session";
   const insets = useSafeAreaInsets();
   const source = useMediaSource(swingId, view);
+  /**
+   * The first frame as a still, for the moment before the decoder has one. `/frame?f=0` is the
+   * EXACT frame the decoder paints first, at full resolution — the placeholder and the video are
+   * the same picture in the same box, so the handoff is invisible. (This was `/thumb` once,
+   * which is the 6×4 contact SHEET: a full-screen stage drew it as tiling.) Server-cached as an
+   * artifact after the first request, disk-cached here after the first view.
+   */
+  const poster = useAuthenticatedImage(`swings/${swingId}/frame?f=0`);
   const { state: analysisState } = useAnalysis(swingId, view);
   const analysis = analysisState.kind === "ok" ? analysisState.analysis : null;
   const corrections = useCorrections(swingId, view);
@@ -133,6 +187,60 @@ export function SwingPlayer({
   const player = useFramePlayer(bounds);
   const [viewport, setViewport] = useState({ w: 0, h: 0 });
   const [panel, setPanel] = useState<Panel>(null);
+  /**
+   * The after-swing screen has two phases, and the slide-up happens exactly once.
+   *
+   * **Arrival** is the moment after a recording: the summary panel is UP over the paused
+   * picture, with a strip of video above it saying where you are. The first dismissal — drag,
+   * chevron, play, a scorecard row — ends arrival for good. From then on (**browse**) the screen
+   * is a normal page: the video flush at the top, the summary in the flow below it, one scroll.
+   * The panel never slides back up; that motion belongs to "your swing just finished" and would
+   * read as a modal anywhere else (Taylor, 2026-08-13).
+   */
+  /**
+   * How the screen opens is the golfer's setting (the video/stats toggle in the chrome):
+   * stats-first runs the arrival slide-up, video-first goes straight to browse. The preference
+   * loads async, so an after-swing screen starts **undecided** — nothing plays and no sheet
+   * mounts until the stored answer arrives (milliseconds), because acting on a guess flashes
+   * the wrong opening.
+   */
+  const summaryPref = useSummaryPreference();
+  // A checkpoint deep link goes straight to browse: the moment asked for is on the video, and
+  // an arrival sheet over it would hide exactly what the tap promised.
+  const [entry, setEntry] = useState<"undecided" | "arrival" | "video">(
+    session && !initialCheckpoint ? "undecided" : "video",
+  );
+  const arrival = entry === "arrival";
+  const arrivalRef = useRef(arrival);
+  useEffect(() => {
+    arrivalRef.current = arrival;
+  }, [arrival]);
+  /** The arrival sheet's position — only meaningful while `arrival` holds. */
+  const [summaryOpen, setSummaryOpen] = useState(false);
+
+  /**
+   * The dock folds to its tab while the video is the subject, and comes back when the golfer
+   * scrolls down into the stats (or taps the tab). Starts expanded: during arrival the summary
+   * is the subject and the dock is its action row.
+   */
+  const [dockCollapsed, setDockCollapsed] = useState(session && !!initialCheckpoint);
+  const dockCollapsedRef = useRef(false);
+  useEffect(() => {
+    dockCollapsedRef.current = dockCollapsed;
+  }, [dockCollapsed]);
+  const browseScrollRef = useRef<ScrollView | null>(null);
+
+  /** The one-time entry decision, once the stored preference lands. */
+  useEffect(() => {
+    if (entry !== "undecided" || summaryPref.statsFirst === null) return;
+    if (summaryPref.statsFirst) {
+      setEntry("arrival");
+      setSummaryOpen(true);
+    } else {
+      setEntry("video");
+      setDockCollapsed(true);
+    }
+  }, [entry, summaryPref.statsFirst]);
   const [toggles, setToggles] = useState<Toggles>(DEFAULT_TOGGLES);
   const [angles, setAngles] = useState<string[]>([]);
   const traceCost = useRef(0);
@@ -187,9 +295,14 @@ export function SwingPlayer({
    * the layout.
    */
   const stageWidth = reference ? Math.floor((viewport.w - COMPARE_GAP) / 2) : viewport.w;
+  // In session mode the dock's tab always owns the bottom edge, so the picture is fitted
+  // above it — otherwise the transport ends up underneath the tab at the top of the scroll.
+  const stageMaxH = session
+    ? Math.max(0, viewport.h - DOCK_TAB_HEIGHT - insets.bottom)
+    : viewport.h;
   const stage = useMemo(
-    () => fitBox(aspect, stageWidth, viewport.h),
-    [aspect, stageWidth, viewport.h],
+    () => fitBox(aspect, stageWidth, stageMaxH),
+    [aspect, stageWidth, stageMaxH],
   );
 
   const bands = useMemo(
@@ -205,14 +318,67 @@ export function SwingPlayer({
    * covers the swing with no artifact too — it settles on `not-analysed` and this still runs.
    */
   const started = useRef(false);
-  const { seekTo, play } = player.actions;
+  const { seekTo, play, pause } = player.actions;
   useEffect(() => {
     if (started.current || !ready || !seekable || error) return;
-    if (analysisState.kind === "loading") return;
+    // The entry decision is part of "settled": until the stored preference lands, this screen
+    // does not know whether it opens under a sheet (parked) or as the video (playing).
+    if (entry === "undecided") return;
+    /**
+     * Only a PARKED start waits for the artifact: parking is a seek to the window start, and
+     * the window needs the analysis. A playing start plays NOW — holding the replay hostage to
+     * a megabytes fetch (12s on a dev server compiling the route) is the wrong trade, and the
+     * loop clamps into the window on its own once the artifact lands.
+     */
+    // A checkpoint start is a parked start too, and its frame number lives in the artifact.
+    if ((arrivalRef.current || initialCheckpoint) && analysisState.kind === "loading") return;
     started.current = true;
-    seekTo(bounds.first);
-    play();
-  }, [analysisState.kind, bounds.first, error, play, ready, seekable, seekTo]);
+    const deepTarget =
+      initialCheckpoint && analysis ? checkpointTarget(analysis, initialCheckpoint) : null;
+    seekTo(deepTarget ? deepTarget.frame : bounds.first);
+    // During arrival — and on a checkpoint deep link, which asked for a moment, not a replay —
+    // the picture parks instead of playing; play is one tap away.
+    if (!arrivalRef.current && !deepTarget) play();
+  }, [analysis, analysisState.kind, bounds.first, entry, error, initialCheckpoint, play, ready, seekable, seekTo]);
+
+  /**
+   * Arrival ends here, and only here — once. Every dismissal funnels through this so the phase
+   * flip, the dock folding to its tab, and (usually) playback starting stay one event. The
+   * `andPlay: false` path is the scorecard row: the golfer asked for a frame, not the movie.
+   */
+  const dismissArrival = useCallback(
+    (andPlay: boolean) => {
+      setSummaryOpen(false);
+      setEntry("video");
+      setDockCollapsed(true);
+      // The golfer has started the screen by hand; the parked-start effect above must not fire
+      // later (when a slow artifact settles) and yank the picture back to the window start.
+      started.current = true;
+      if (andPlay) play();
+    },
+    [play],
+  );
+
+  /**
+   * The video/stats opener toggle. Flipping to video-first while the arrival sheet is up shrinks
+   * it right away — the setting should look like what it does — and the stats stay one scroll
+   * away in browse. Flipping to stats-first only changes what the NEXT swing opens with: sliding
+   * a sheet over a video the golfer is watching would be the setting interrupting them.
+   */
+  const setStatsFirst = summaryPref.set;
+  const onToggleStatsFirst = useCallback(() => {
+    const next = !(summaryPref.statsFirst ?? true);
+    setStatsFirst(next);
+    if (!next && arrivalRef.current) dismissArrival(true);
+  }, [summaryPref.statsFirst, setStatsFirst, dismissArrival]);
+
+  /** The arrival sheet reports every dismissal gesture through this. Re-opening is not offered. */
+  const onSummaryOpenChange = useCallback(
+    (open: boolean) => {
+      if (!open) dismissArrival(true);
+    },
+    [dismissArrival],
+  );
 
   const onViewportLayout = useCallback((e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
@@ -223,38 +389,9 @@ export function SwingPlayer({
   const openMetrics = useCallback(() => setPanel("metrics"), []);
   const openAnalysis = useCallback(() => setPanel("analysis"), []);
 
-  /**
-   * The scorecard is fetched only once someone asks for it.
-   *
-   * It stays requested after the panel closes — `enabled` latches — so re-opening is instant.
-   * Re-fetching on every open would spend a request to redisplay numbers that cannot have changed
-   * without a re-analysis, and a re-analysis mints a new revision anyway.
-   */
-  const [wantsReport, setWantsReport] = useState(false);
-  useEffect(() => {
-    if (panel === "analysis") setWantsReport(true);
-  }, [panel]);
-  const report = useReport(swingId, view, wantsReport);
-
-  /**
-   * Tapping the picture takes the controls away, and taps again to bring them back.
-   *
-   * The console covers the bottom third of the frame, which on a down-the-line swing is the ball,
-   * the feet and most of the finish — so the design needs a way to see what it is standing on.
-   * This is the video-player idiom every phone already teaches, and it is a toggle rather than a
-   * timed auto-hide on purpose: a transport that vanished on its own while a golfer was studying
-   * one frame would be a control disappearing for no reason they caused.
-   */
-  const [bare, setBare] = useState(false);
-  const chromeFade = useRef(new Animated.Value(1)).current;
-  useEffect(() => {
-    Animated.timing(chromeFade, {
-      toValue: bare ? 0 : 1,
-      duration: 180,
-      useNativeDriver: true,
-    }).start();
-  }, [bare, chromeFade]);
-  const toggleBare = useCallback(() => setBare((b) => !b), []);
+  // The summary on the page IS the scorecard, and every mode has the page — so the report is
+  // wanted from the start. `useReport` fetches once and holds; the Analysis panel reuses it.
+  const report = useReport(swingId, view, true);
 
   const onToggle = useCallback(
     (key: ToggleKey, value: boolean) => setToggles((t) => ({ ...t, [key]: value })),
@@ -338,9 +475,152 @@ export function SwingPlayer({
     [swingId, fps, frameCount, bands, score, tempoRatio, reference],
   );
 
-  return (
-    <View style={styles.screen} onLayout={onViewportLayout} testID="swing-player">
-      <View style={styles.stageWrap} pointerEvents="box-none">
+  // ---- After-swing mode ------------------------------------------------------------------
+
+  const { starred, toggle: toggleStar } = useStarred(swingId);
+
+  /** The dock's play and the preview's tap. During arrival it also ends arrival; in browse it
+   *  brings the picture back on screen first — play with the video off screen is a sound. */
+  const playFromDock = useCallback(() => {
+    if (arrivalRef.current) {
+      dismissArrival(true);
+      return;
+    }
+    browseScrollRef.current?.scrollTo({ y: 0, animated: true });
+    play();
+  }, [dismissArrival, play]);
+
+  /** The dock's tab. During arrival it dismisses the summary; in browse it folds the menu. */
+  const onDockHandle = useCallback(() => {
+    if (arrivalRef.current) dismissArrival(true);
+    else setDockCollapsed((c) => !c);
+  }, [dismissArrival]);
+
+  /**
+   * A scorecard row: land on the frame it names, paused, with the picture on screen. In arrival
+   * that ends arrival *without* playing — the golfer asked for a moment, and playback would
+   * immediately leave it. In browse it scrolls back up to the video for the same reason.
+   */
+  const seekFromSummary = useCallback(
+    (frame: number) => {
+      if (arrivalRef.current) {
+        dismissArrival(false);
+      } else {
+        pause();
+        browseScrollRef.current?.scrollTo({ y: 0, animated: true });
+      }
+      seekTo(frame);
+    },
+    [dismissArrival, pause, seekTo],
+  );
+
+  /**
+   * Scrolling down into the stats shows the menu; scrolling back to the video folds it to its
+   * tab. Hysteresis so the flip cannot chatter at one boundary, refs so scroll events that
+   * change nothing schedule no render.
+   */
+  const onBrowseScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const y = e.nativeEvent.contentOffset.y;
+    if (y > 240 && dockCollapsedRef.current) setDockCollapsed(false);
+    else if (y < 140 && !dockCollapsedRef.current) setDockCollapsed(true);
+  }, []);
+
+  /**
+   * The confirmation is the client's whole share of delete safety (the server's is ownership),
+   * so it names what is lost. The failure alert distinguishes "did not happen" from "half
+   * happened": the server deletes media before rows and both are retryable, so "still in your
+   * log — try again" is true in every failure it can answer with.
+   */
+  const confirmDelete = useCallback(() => {
+    Alert.alert(
+      "Delete this swing?",
+      "The video and its analysis will be removed from your log. This cannot be undone.",
+      [
+        { text: "Keep it", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: () => {
+            void Promise.resolve(onDelete?.()).catch(() => {
+              Alert.alert(
+                "Could not delete",
+                "The swing is still in your log. Check your connection and try again.",
+              );
+            });
+          },
+        },
+      ],
+    );
+  }, [onDelete]);
+
+  /** Honest, not wired: there is no capture screen yet (the capture release owns it). A record
+   *  control that silently did nothing would read as broken; saying so reads as coming. */
+  const recordNext = useCallback(() => {
+    Alert.alert("Recording is not here yet", "Recording a new swing arrives with the capture release.");
+  }, []);
+
+  /**
+   * Stable elements, exactly like the sheets above: this component renders per presented frame,
+   * and the summary panel with a whole scorecard in it must not re-execute at frame rate while
+   * the picture plays beneath a closed sheet.
+   */
+  const summaryContent = useMemo(
+    () => (
+      <AfterSwingSummary
+        state={report}
+        analysis={analysis}
+        score={typeof score === "number" ? score : null}
+        band={band}
+        tempoRatio={tempoRatio ?? null}
+        history={history}
+        onSeekToFrame={seekFromSummary}
+      />
+    ),
+    [report, analysis, score, band, tempoRatio, history, seekFromSummary],
+  );
+
+  const summarySheet = useMemo(
+    () =>
+      arrival ? (
+        <SummarySheet
+          testID="summary-sheet"
+          open={summaryOpen}
+          onOpenChange={onSummaryOpenChange}
+          topOffset={insets.top + SUMMARY_TOP_STRIP}
+          bottomOffset={DOCK_BODY_HEIGHT + insets.bottom}
+        >
+          {summaryContent}
+        </SummarySheet>
+      ) : null,
+    [arrival, summaryOpen, onSummaryOpenChange, insets.top, insets.bottom, summaryContent],
+  );
+
+  const afterSwingDock = useMemo(
+    () =>
+      session ? (
+        <AfterSwingDock
+          testID="after-swing-dock"
+          starred={starred}
+          onToggleStar={toggleStar}
+          onDelete={confirmDelete}
+          onRecord={recordNext}
+          onPlay={playFromDock}
+          collapsed={!arrival && dockCollapsed}
+          onHandle={onDockHandle}
+          handleLabel={arrival ? "Hide summary" : dockCollapsed ? "Show menu" : "Hide menu"}
+          bottomInset={insets.bottom}
+        />
+      ) : null,
+    [session, starred, toggleStar, confirmDelete, recordNext, playFromDock, arrival, dockCollapsed, onDockHandle, insets.bottom],
+  );
+
+  /**
+   * The picture with everything drawn on and around it — the first thing in the scroll, its own
+   * height, video flush with the top of the screen in both modes.
+   */
+  const videoBlock = (
+    <View style={styles.videoBlock} pointerEvents="box-none">
+      <View style={styles.stageRow} pointerEvents="box-none">
         <View style={[styles.stage, { width: stage.w, height: stage.h }]} testID="swing-stage">
           {/**
            * Mounted only once the authorized source resolves, but the BOX is already the right
@@ -365,15 +645,9 @@ export function SwingPlayer({
             />
           ) : null}
 
-          {/* Under everything that draws and over the video, so a tap anywhere on the picture
-              reaches it — the overlay layers above are all `pointerEvents="none"`. */}
-          <Pressable
-            testID="stage-tap"
-            accessibilityRole="button"
-            accessibilityLabel={bare ? "Show controls" : "Hide controls"}
-            onPress={toggleBare}
-            style={styles.fill}
-          />
+          {/* No tap-to-hide and no auto-hide: this is a phone, there is no hover, and a control
+              that can vanish is a control a golfer has to know how to summon. The controls are
+              always on the picture (Taylor's standing instruction, 2026-08-13). */}
 
           {/**
            * Held until a frame has actually reached the glass, then faded out over the picture.
@@ -383,7 +657,7 @@ export function SwingPlayer({
            * anything to see. Faded rather than switched: a hard cut between a black box and the
            * first frame reads as a flash, which is the one thing worse than a moment of black.
            */}
-          <StagePlaceholder visible={!painted && !error} />
+          <StagePlaceholder visible={!painted && !error} poster={poster} />
 
           {analysis ? (
             /**
@@ -449,13 +723,11 @@ export function SwingPlayer({
         ) : null}
       </View>
 
-      {/* Chrome over the picture. A scrim behind it, not a solid bar: the top of a down-the-line
-          frame is sky or trees and a white glyph on it is unreadable about half the time, which is
-          not a risk worth taking to save one gradient. */}
-      <Animated.View
-        style={[styles.chrome, { paddingTop: insets.top + 8, opacity: chromeFade }]}
-        pointerEvents={bare ? "none" : "box-none"}
-      >
+      {/* Chrome over the picture, always visible — no fade, no hide state; this is a phone and a
+          control that can vanish must be summoned. A scrim behind it, not a solid bar: the top of
+          a down-the-line frame is sky or trees and a white glyph on it is unreadable about half
+          the time, which is not a risk worth taking to save one gradient. */}
+      <View style={[styles.chrome, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
         <View style={styles.chromeRow} pointerEvents="box-none">
           {/* The slot is held even with nothing in it, so the title is centred on the screen
               rather than on whatever is left over beside it. */}
@@ -487,18 +759,51 @@ export function SwingPlayer({
             ) : null}
           </View>
 
+          {/* No score chip here — the score lives in the summary and the scorecard, and a chip
+              over the picture repeated both (removed on Taylor's instruction, 2026-08-13). The
+              slot instead carries the opener toggle: which face a finished swing leads with. */}
           <View style={[styles.chromeSlot, styles.chromeSlotRight]}>
-            {typeof score === "number" ? (
-              <View style={styles.scoreChip} testID="score-chip">
-                <Text style={styles.scoreValue}>{Math.round(score)}</Text>
-                <Text style={styles.chipCaption}>Score</Text>
-              </View>
+            {session ? (
+              <Pressable
+                testID="opener-toggle"
+                accessibilityRole="switch"
+                accessibilityState={{ checked: summaryPref.statsFirst ?? true }}
+                accessibilityLabel={
+                  (summaryPref.statsFirst ?? true)
+                    ? "Opens with stats. Switch to open with the video"
+                    : "Opens with the video. Switch to open with stats"
+                }
+                hitSlop={8}
+                onPress={onToggleStatsFirst}
+                style={styles.openerToggle}
+              >
+                <View
+                  style={[
+                    styles.openerSeg,
+                    !(summaryPref.statsFirst ?? true) && styles.openerSegOn,
+                  ]}
+                >
+                  <PlayGlyph
+                    size={10}
+                    color={!(summaryPref.statsFirst ?? true) ? DECK.accent : COLORS.muted}
+                  />
+                </View>
+                <View
+                  style={[styles.openerSeg, (summaryPref.statsFirst ?? true) && styles.openerSegOn]}
+                >
+                  <BarsGlyph
+                    size={13}
+                    color={(summaryPref.statsFirst ?? true) ? DECK.accent : COLORS.muted}
+                  />
+                </View>
+              </Pressable>
             ) : null}
           </View>
         </View>
 
-        {/* In the chrome's flow rather than floating over it. Absolutely positioned, these sat on
-            top of the notice below whenever a swing had one to show. */}
+        {/* In the chrome's flow rather than floating over it. Hidden while the arrival summary
+            covers the picture: overlay and compare act on a video you can barely see there. */}
+        {arrival ? null : (
         <View style={styles.rail} pointerEvents="box-none">
           <Pressable
             testID="overlays-open"
@@ -526,6 +831,7 @@ export function SwingPlayer({
             <CompareGlyph size={19} color={reference ? DECK.accent : COLORS.text} />
           </Pressable>
         </View>
+        )}
 
         {/* What this swing is currently being held up against. On the picture rather than only
             inside the panel, because a comparison you have forgotten you set is one that quietly
@@ -561,13 +867,11 @@ export function SwingPlayer({
             <Text style={styles.noticeText}>{notice}</Text>
           </View>
         ) : null}
-      </Animated.View>
+      </View>
 
-      <Animated.View
-        testID="console-dock"
-        style={[styles.console, { opacity: chromeFade }]}
-        pointerEvents={bare ? "none" : "box-none"}
-      >
+      {/* The transport, always visible, pinned to the bottom of the PICTURE — in browse it
+          scrolls with the video it controls rather than floating over the stats. */}
+      <View testID="console-dock" style={styles.console} pointerEvents="box-none">
         <PlayerConsole
           state={player.state}
           actions={player.actions}
@@ -577,9 +881,37 @@ export function SwingPlayer({
           bands={bands}
           onMetrics={openMetrics}
           onAnalysis={openAnalysis}
-          bottomInset={insets.bottom}
+          // In session mode the dock sits below the picture, so the transport needs no safe-area
+          // clearance of its own; in review the picture's bottom edge can BE the screen's.
+          bottomInset={session ? 6 : insets.bottom}
         />
-      </Animated.View>
+      </View>
+    </View>
+  );
+
+  return (
+    <View style={styles.screen} onLayout={onViewportLayout} testID="swing-player">
+      <ScrollView
+        ref={browseScrollRef}
+        testID="swing-scroll"
+        // Locked during arrival: the page under the sheet must not move while the sheet is
+        // the thing being dragged.
+        scrollEnabled={!arrival}
+        // The scroll only has a dock to fold in session mode; review pays nothing per event.
+        onScroll={session ? onBrowseScroll : undefined}
+        scrollEventThrottle={48}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{
+          paddingBottom: (session ? DOCK_TAB_HEIGHT : 0) + insets.bottom + 28,
+        }}
+      >
+        {videoBlock}
+        {/* The stats are simply the rest of the page — below the video, in the flow, reached
+            by an ordinary scroll. Mounted only once arrival ends so the arrival sheet is the
+            single live copy of the summary until then (arrival exists only in session mode;
+            review renders this from the first frame). */}
+        {!arrival ? <View style={styles.browsePad}>{summaryContent}</View> : null}
+      </ScrollView>
 
       <DeckSheet
         testID="overlays-sheet"
@@ -642,9 +974,17 @@ export function SwingPlayer({
         {compareContent}
       </DeckSheet>
 
+      {/* Ordered after everything the summary must cover, and the dock after the summary — the
+          dock is the one surface that survives every state of this screen. */}
+      {summarySheet}
+      {afterSwingDock}
     </View>
   );
 }
+
+/** Video left showing above the arrival summary — about an inch (160dp ≈ 1" on Android), so the
+ *  clip is recognisably THERE and the panel is recognisably slideable down onto it. */
+const SUMMARY_TOP_STRIP = 130;
 
 /**
  * The largest box of the given shape that fits inside `w × h`.
@@ -674,13 +1014,20 @@ function noticeFor(seekable: boolean, analysis: string): string | null {
 }
 
 /**
- * What fills the picture's box before there is a picture.
- *
- * It exists because the box is correct from the first layout pass — so the only thing missing
- * during load is the image, and the honest thing to show is that it is coming. Nothing here may
- * change the stage's size; it is an absolute fill inside a box whose height was already decided.
+ * What fills the picture's box before there is a picture: the swing's own first frame, from
+ * `/frame?f=0` — pixel-for-pixel what the decoder will paint, in the same aspect-fitted box, so
+ * the video replaces its own poster in place with no visible seam. The spinner sits quietly at
+ * the top: over a real photograph a centred spinner reads as "broken", while an edge one reads
+ * as "finishing". Nothing here may change the stage's size; it is an absolute fill inside a box
+ * whose height was already decided.
  */
-function StagePlaceholder({ visible }: { visible: boolean }) {
+function StagePlaceholder({
+  visible,
+  poster,
+}: {
+  visible: boolean;
+  poster: { uri: string; headers: Record<string, string> } | null;
+}) {
   const fade = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -697,7 +1044,18 @@ function StagePlaceholder({ visible }: { visible: boolean }) {
       pointerEvents="none"
       style={[styles.placeholder, { opacity: fade }]}
     >
-      <ActivityIndicator color={COLORS.muted} />
+      {poster ? (
+        <Image
+          source={poster}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          cachePolicy="disk"
+          transition={0}
+        />
+      ) : null}
+      <View style={styles.placeholderSpinner}>
+        <ActivityIndicator color={COLORS.muted} size="small" />
+      </View>
     </Animated.View>
   );
 }
@@ -725,13 +1083,16 @@ const COMPARE_GAP = 4;
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: DECK.ground },
-  stageWrap: {
-    flex: 1,
+  videoBlock: {},
+  stageRow: {
     flexDirection: "row",
-    alignItems: "center",
+    // Top of the picture flush with the top of the screen — never centred with a bar of ground
+    // above it (Taylor, 2026-08-13). The chrome draws over the picture, not above it.
+    alignItems: "flex-start",
     justifyContent: "center",
     gap: COMPARE_GAP,
   },
+  browsePad: { paddingHorizontal: 18, paddingTop: 22 },
   stage: { backgroundColor: "#000", overflow: "hidden" },
   fill: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0 },
   centre: { alignItems: "center", justifyContent: "center", gap: 8, padding: 20 },
@@ -747,6 +1108,8 @@ const styles = StyleSheet.create({
     // background changing colour underneath it.
     backgroundColor: "#000",
   },
+  // High enough to clear nothing and say "loading", low enough to sit under the title.
+  placeholderSpinner: { position: "absolute", top: 118, left: 0, right: 0, alignItems: "center" },
 
   chrome: {
     position: "absolute",
@@ -760,7 +1123,22 @@ const styles = StyleSheet.create({
   },
   chromeRow: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
   chromeSlot: { width: 52, alignItems: "flex-start" },
-  chromeSlotRight: { alignItems: "flex-end" },
+  chromeSlotRight: { width: undefined, minWidth: 52, alignItems: "flex-end" },
+  openerToggle: {
+    flexDirection: "row",
+    height: 40,
+    borderRadius: DECK.radius.chip,
+    backgroundColor: DECK.glass.soft,
+    padding: 3,
+    gap: 2,
+  },
+  openerSeg: {
+    width: 36,
+    borderRadius: DECK.radius.chip - 3,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  openerSegOn: { backgroundColor: "rgba(184,255,74,0.14)" },
   titleBlock: { flex: 1, alignItems: "center", justifyContent: "center", minHeight: 48, gap: 2 },
   title: {
     color: COLORS.text,
@@ -786,8 +1164,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: DECK.glass.soft,
-    borderWidth: 1,
-    borderColor: DECK.glass.hairlineStrong,
   },
   glassChip: {
     minWidth: 44,
@@ -797,10 +1173,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: DECK.glass.soft,
-    borderWidth: 1,
-    borderColor: DECK.glass.hairline,
   },
-  glassChipOn: { borderColor: DECK.accent, backgroundColor: "rgba(184,255,74,0.14)" },
+  glassChipOn: { backgroundColor: "rgba(184,255,74,0.14)" },
   pressedGlass: { opacity: 0.6 },
 
   referenceRow: { flexDirection: "row", justifyContent: "flex-end", marginTop: 8, marginRight: 4 },
@@ -812,9 +1186,7 @@ const styles = StyleSheet.create({
     height: 32,
     paddingHorizontal: 12,
     borderRadius: 16,
-    backgroundColor: DECK.glass.soft,
-    borderWidth: 1,
-    borderColor: DECK.accent,
+    backgroundColor: "rgba(184,255,74,0.14)",
   },
   referenceText: { color: DECK.accent, fontSize: 12, fontWeight: "700", flexShrink: 1 },
   referenceClose: { width: 12, height: 12, alignItems: "center", justifyContent: "center" },
@@ -833,7 +1205,7 @@ const styles = StyleSheet.create({
     transform: [{ rotate: "-45deg" }],
   },
 
-  devBlock: { gap: 10, paddingTop: 16, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.08)" },
+  devBlock: { gap: 10, paddingTop: 16 },
   devTitle: {
     color: COLORS.dim,
     fontSize: 9,
@@ -851,34 +1223,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     borderRadius: 14,
     backgroundColor: DECK.glass.key,
-    borderWidth: 1,
-    borderColor: DECK.glass.keyEdge,
   },
-  speedRowOn: { borderColor: DECK.accent, backgroundColor: "rgba(184,255,74,0.09)" },
+  speedRowOn: { backgroundColor: "rgba(184,255,74,0.09)" },
   speedRowValue: { color: COLORS.text, fontSize: 19, fontWeight: "700", minWidth: 40 },
   speedRowValueOn: { color: DECK.accent },
   speedRowHint: { color: COLORS.muted, fontSize: 12.5, flexShrink: 1 },
-  scoreChip: {
-    minWidth: 52,
-    height: 48,
-    paddingHorizontal: 8,
-    borderRadius: DECK.radius.chip,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 3,
-    backgroundColor: DECK.glass.soft,
-    borderWidth: 1,
-    borderColor: DECK.glass.hairline,
-  },
-  scoreValue: { color: COLORS.text, fontSize: 16, fontWeight: "600", lineHeight: 17 },
-  chipCaption: {
-    color: DECK.label.caption,
-    fontSize: 7,
-    fontWeight: "700",
-    letterSpacing: 1.5,
-    textTransform: "uppercase",
-  },
-
   notice: {
     marginTop: 10,
     marginHorizontal: 4,
@@ -887,8 +1236,6 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     // DECK.ground at 72% — a scrim that mutes the picture behind one line of text.
     backgroundColor: "rgba(5,7,6,0.72)",
-    borderWidth: 1,
-    borderColor: COLORS.amberEdge,
   },
   noticeText: { color: COLORS.amber, fontSize: 12, lineHeight: 17 },
 

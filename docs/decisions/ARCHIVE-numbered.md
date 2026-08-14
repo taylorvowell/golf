@@ -2966,3 +2966,69 @@ swings cluster, a swing exists without a session and moves freely, deleting a se
 deletes swings. What D54 adds is that a session **carries a focus** proposed at the explicit
 start — which is an argument *for* D29's explicit-start design, since the focus needs a moment
 to be proposed at. The register entry gains one line; nothing is reversed.
+
+---
+
+## D55 — Focus goals: the assigned, measured correction loop (max 3, windowed evidence, celebrated once)
+
+**Date:** 2026-08-13
+**Track:** roadmap (north-star amendment §16.3 + one new track)
+
+Taylor's direction (2026-08-13): the coach — AI or human — assigns goals from the top things
+the golfer needs to fix ("fix the stance"), each goal shows progress as the corrected behavior
+repeats across swings, at most 3 are active at once, progress appears on the after-swing
+analysis and the homepage, and hitting the goal is celebrated — then the next one starts.
+Adopted into `PROJECT_MAIN.md` as **§16.3**, with threading amendments in §8.2, §28.1 and §29.
+
+### Why a fourth goal-like concept, and why it is the spine of the other three
+
+The product already had three goal-shaped ideas, and none of them tracked a correction to
+completion: §5.3 goals are golfer-picked *aspirations* that re-weight scoring; §8.2's session
+focus is one theme for one session, whose "persists until improvement is sustained" had
+nothing that measured *sustained*; §28 plans are coach prose with a manual completion state.
+The focus goal is the missing spine — the single tracked object that a session focus points
+at, a plan issues into, an aspiration biases the selection of, and the after-swing screen
+reports against. Without it, both §8.2's persistence clause and §16.2's "manageable number of
+focus areas" were unmeasurable prose.
+
+### The design calls, and why
+
+- **Bound to measured scoring-config checks, or it is not a focus goal.** A focus goal makes
+  a progress claim, and progress claims must be falsifiable. Unmeasurable advice stays a plan
+  or a conversation — a valid place, not a demotion.
+- **Windowed evidence ("clean in X of the last Y evidencing swings"), never a raw streak.**
+  Consecutive-swings-in-a-row resets to zero on one bad swing, punishing exactly the golfer
+  who is 90% of the way to a habit — and consistency-over-a-window is what "habit" actually
+  means. Window parameters live in versioned config, never code, per the thresholds rule.
+- **Abstention never moves progress.** The analyzer's abstain-don't-fabricate position
+  extends into progression: a low-confidence or wrong-view swing is *no evidence*, not a pass
+  and not a fail. A goal whose checks need a view the golfer rarely films says so at
+  assignment time instead of sitting at a silent 0%.
+- **Max 3 is a hard product rule**, the same reasoning as §5.3's 2–3 selection cap: the value
+  of a priority model is destroyed by unlimited priorities.
+- **Progress lives in the database, computed from stored analyses.** `analysis.json` is
+  rewritten wholesale by every re-analysis and never carries product state — the same rule as
+  hand corrections (D21 lineage). Evaluation is a deterministic pure function of stored
+  artifacts + `goal_config`, so a re-analysis honestly moves progress rather than corrupting it.
+- **`goal_config` is versioned like `scoring_config`**, and an achieved goal stores the
+  version it was achieved under, so history stays reproducible when the rules tighten.
+- **Celebrated once, then maintenance.** No badge economy, no streak-freeze mechanics. After
+  achievement, monitoring continues quietly; a sustained regression re-proposes the goal
+  *with its history* — never silently, and never disguised as new.
+- **"You fixed it" is the one message the product must never be wrong about** — which is why
+  the track depends (transitively, via priority-engine) on `analysis-ground-truth`: a progress
+  claim over an unvalidated check is unfalsifiable, the exact standing trap.
+
+### Roadmap consequences
+
+New track **`goal-progression`** (improvement phase, launch-blocking, added to
+`launch-readiness` deps). Hard deps: `priority-engine` — proposals must come from real,
+style-gated priority output, since assigning a fault the golfer's style legitimizes is the
+mis-coaching D54 exists to prevent — and `history-and-trends` (evidence history and trend
+surfaces). Non-blocking seams: `coach-collaboration` (human assignment), `ai-coach`
+(narrative), `drill-library` (linked drills), `notifications` (delivery) — AI-proposed and
+self-promoted goals with deterministic text work before any of them land.
+
+Existing-track deltas: `history-and-trends` drops "goal tracking" from its goal (it moved
+here); `practice-loop` gains a non-blocking dep (the focus card names the active goal once
+this exists); `ai-coach` and `coach-collaboration` gain the §16.3 specRef.

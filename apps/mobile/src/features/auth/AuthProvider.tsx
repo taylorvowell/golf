@@ -23,6 +23,12 @@ export interface AuthState {
   session: Session | null;
   userId: string | null;
   email: string | null;
+  /** The provider's profile photo (Google sets `avatar_url`/`picture`), or null — the avatar
+   *  component falls back to an initial, never a broken image. */
+  avatarUrl: string | null;
+  /** The golfer's given name from the provider metadata, or null — copy that greets by name
+   *  falls back to a nameless greeting, never to the email's local part. */
+  firstName: string | null;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 }
@@ -60,17 +66,26 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, []);
 
-  const value = useMemo<AuthState>(
-    () => ({
+  const value = useMemo<AuthState>(() => {
+    const meta = session?.user.user_metadata as Record<string, unknown> | undefined;
+    const avatar = meta?.avatar_url ?? meta?.picture;
+    // Google supplies `name`/`full_name`; a given_name field wins when a provider sends one.
+    const fullName = meta?.given_name ?? meta?.name ?? meta?.full_name;
+    const firstName =
+      typeof fullName === "string" && fullName.trim().length > 0
+        ? fullName.trim().split(/\s+/)[0]
+        : null;
+    return {
       status: !ready ? "loading" : session ? "signed-in" : "signed-out",
       session,
       userId: session?.user.id ?? null,
       email: session?.user.email ?? null,
+      avatarUrl: typeof avatar === "string" && avatar.length > 0 ? avatar : null,
+      firstName,
       signInWithGoogle,
       signOut,
-    }),
-    [ready, session],
-  );
+    };
+  }, [ready, session]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
