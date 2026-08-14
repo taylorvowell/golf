@@ -22,8 +22,8 @@ import { COLORS } from "../theme";
 export interface SwingDetailScreenProps {
   id: string;
   /** The just-recorded shape of the screen — summary up, record/star/delete/play dock stuck to
-   *  the bottom. Same player, same data, same page; false (an old swing from the log) is the
-   *  player's `review` mode: the video with the scorecard summary one scroll below, no dock. */
+   *  the bottom. Same player, same data; false (an old swing from the log) is the player's
+   *  `review` mode: the same card slides up at half screen over the video, with no dock. */
   afterSwing?: boolean;
   /** Park the picture at this checkpoint on open (Home's "see it on your swing"). */
   checkpoint?: string | null;

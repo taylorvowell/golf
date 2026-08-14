@@ -153,10 +153,11 @@ it("bounds the transport by the playback window, not by the file", async () => {
 /**
  * The console and its layout.
  *
- * These assert behaviour a golfer would notice on a range mat, not markup: that the swing starts
- * without being asked, that the controls can be taken off the picture they are covering, and that
- * pause is the play button pushed IN rather than a different control. The last one is the reason
- * `DeckButton` separates a latched state from a finger-down state at all.
+ * These assert behaviour a golfer would notice on a range mat, not markup: that the swing waits
+ * parked under the arrival card and plays the moment the card is dismissed, that the controls
+ * can be taken off the picture they are covering, and that pause is the play button pushed IN
+ * rather than a different control. The last one is the reason `DeckButton` separates a latched
+ * state from a finger-down state at all.
  */
 
 /** Drive the native `onReady`, which is what tells the player the clip exists. */
@@ -166,7 +167,7 @@ function ready(el: { props: { onReady?: (e: unknown) => void } }) {
   });
 }
 
-it("starts the swing playing on load, without being asked", async () => {
+it("parks under the card, then plays the moment the card slides away", async () => {
   analysisResolves(makeAnalysis({ frameCount: 40 }));
   const api = await render(<SwingPlayer swingId="abc" frameCount={40} fps={60} />);
   const { getByTestId } = api;
@@ -174,6 +175,11 @@ it("starts the swing playing on load, without being asked", async () => {
   await waitFor(() => expect(getByTestId("swing-overlay")).toBeTruthy());
 
   await act(async () => ready(getByTestId("swing-video")));
+
+  // Under the card: the picture waits rather than playing to no one.
+  expect(getByTestId("play-toggle").props.accessibilityState.selected).toBe(false);
+
+  await act(async () => void fireEvent.press(getByTestId("summary-cover-handle")));
 
   // Pause IS play, depressed — so "is it playing" and "is the cap in" are the same assertion.
   await waitFor(() =>
@@ -243,12 +249,15 @@ it("puts no score chip over the picture, scored or not", async () => {
 it("keeps the overlay switches in a panel until they are asked for", async () => {
   analysisResolves(makeAnalysis({ frameCount: 40 }));
   const api = await render(<SwingPlayer swingId="abc" frameCount={40} fps={60} />);
-  const { getByTestId, queryByTestId } = api;
+  const { getByTestId, queryByTestId, findByTestId } = api;
   await act(async () => viewport(api));
   await waitFor(() => expect(getByTestId("swing-overlay")).toBeTruthy());
+  // The chips act on a video the card is covering, so they only exist once it is down.
+  expect(queryByTestId("overlays-open")).toBeNull();
+  await act(async () => void fireEvent.press(getByTestId("summary-cover-handle")));
   expect(queryByTestId("overlay-controls")).toBeNull();
 
-  await act(async () => void fireEvent.press(getByTestId("overlays-open")));
+  await act(async () => void fireEvent.press(await findByTestId("overlays-open")));
   await waitFor(() => expect(getByTestId("overlay-controls")).toBeTruthy());
 });
 
@@ -345,8 +354,10 @@ it("holds the aspect by shrinking the width when the clip is taller than the scr
   );
   await act(async () => viewport(api, 400, 800));
   const box = stageBox(api);
-  expect(box.h).toBe(800);
-  expect(box.w).toBeCloseTo(320);
+  // The stage fits above the card's closed peek, so the height is bounded by that, not 800.
+  expect(box.h).toBeLessThan(800);
+  expect(box.h).toBeGreaterThan(600);
+  expect(box.w / box.h).toBeCloseTo(0.4);
 });
 
 it("holds a placeholder over the box until a frame has reached the glass", async () => {
@@ -367,36 +378,36 @@ it("holds a placeholder over the box until a frame has reached the glass", async
 });
 
 /**
- * Session mode — the same player in its just-recorded shape. What is pinned: the summary and
- * the dock exist, the picture does not autoplay underneath an open summary, and delete is a
- * two-step in which only the confirmation deletes.
+ * Session mode — the same player in its just-recorded shape. What is pinned: the card and the
+ * dock exist, the picture does not autoplay underneath the open card, and delete is a two-step
+ * in which only the confirmation deletes.
  */
 describe("session mode", () => {
-  it("shows the summary and the dock over the mounted picture", async () => {
+  it("shows the card and the dock over the mounted picture", async () => {
     const { getByTestId } = await render(
       <SwingPlayer swingId="abc" frameCount={240} fps={60} mode="session" />,
     );
     await waitFor(() => {
-      expect(getByTestId("summary-sheet")).toBeTruthy();
+      expect(getByTestId("summary-cover")).toBeTruthy();
       expect(getByTestId("after-swing-dock")).toBeTruthy();
-      // The main surface stays mounted — it is the thing a swipe down reveals.
+      // The main surface stays mounted — it is the thing a slide down reveals.
       expect(getByTestId("swing-video")).toBeTruthy();
     });
   });
 
-  it("becomes a normal page after the first dismissal — the slide-up never comes back", async () => {
-    const { getByTestId, findByTestId, queryByTestId, findByLabelText } = await render(
+  it("folds the dock to its tab when the card slides away — and the card stays reachable", async () => {
+    const { getByTestId, queryByTestId, findByLabelText } = await render(
       <SwingPlayer swingId="abc" frameCount={240} fps={60} mode="session" />,
     );
-    await waitFor(() => expect(getByTestId("summary-sheet")).toBeTruthy());
+    await waitFor(() => expect(getByTestId("summary-cover")).toBeTruthy());
 
-    // Dismiss the arrival sheet through its accessible collapse control.
-    await act(async () => void fireEvent.press(getByTestId("summary-sheet-collapse")));
+    // Slide the card away through its accessible grip.
+    await act(async () => void fireEvent.press(getByTestId("summary-cover-handle")));
 
-    // Browse: the summary is now IN the scroll below the video, the sheet is gone, and the dock
-    // has folded to its tab (whose label now speaks about the menu, not the summary).
-    expect(await findByTestId("after-swing-summary")).toBeTruthy();
-    await waitFor(() => expect(queryByTestId("summary-sheet")).toBeNull());
+    // The card is parked at its peek, never unmounted — the same grip brings it back — and the
+    // dock has folded to its tab (whose label now speaks about the menu, not the summary).
+    expect(getByTestId("summary-cover")).toBeTruthy();
+    expect(await findByLabelText("Show summary")).toBeTruthy();
     expect(await findByLabelText("Show menu")).toBeTruthy();
     expect(queryByTestId("after-swing-dock-record")).toBeNull();
   });
@@ -427,19 +438,31 @@ describe("session mode", () => {
 });
 
 /**
- * Review mode — the default, what the log opens. The same page as session's browse phase: an old
- * swing's scorecard is the same product as a new swing's. What is pinned is the split itself —
- * the card is on the page, and none of the just-recorded chrome comes with it.
+ * Review mode — the default, what the log opens. The same card over the same fixed video —
+ * an old swing's scorecard is the same product as a new swing's. What is pinned is the split
+ * itself: the card behaves the same, and none of the just-recorded chrome comes with it.
  */
 describe("review mode", () => {
-  it("puts the scorecard summary on the page, below the video", async () => {
-    const { findByTestId } = await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} />);
-    expect(await findByTestId("after-swing-summary")).toBeTruthy();
+  it("opens with the summary card up over the picture — no preference to wait for", async () => {
+    const { getByTestId } = await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} />);
+    await waitFor(() => {
+      expect(getByTestId("summary-cover")).toBeTruthy();
+      expect(getByTestId("after-swing-summary")).toBeTruthy();
+      expect(getByTestId("swing-video")).toBeTruthy();
+    });
   });
 
-  it("carries none of the session chrome — no arrival sheet, no dock, no opener toggle", async () => {
-    const { queryByTestId } = await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} />);
-    expect(queryByTestId("summary-sheet")).toBeNull();
+  it("carries no dock and no opener toggle, card up or down", async () => {
+    const { getByTestId, queryByTestId } = await render(
+      <SwingPlayer swingId="abc" frameCount={240} fps={60} />,
+    );
+    await waitFor(() => expect(getByTestId("summary-cover")).toBeTruthy());
+    expect(queryByTestId("after-swing-dock")).toBeNull();
+    expect(queryByTestId("opener-toggle")).toBeNull();
+
+    // Card down: the video is the subject, the card waits at its peek, still no session chrome.
+    await act(async () => void fireEvent.press(getByTestId("summary-cover-handle")));
+    expect(getByTestId("after-swing-summary")).toBeTruthy();
     expect(queryByTestId("after-swing-dock")).toBeNull();
     expect(queryByTestId("opener-toggle")).toBeNull();
   });
