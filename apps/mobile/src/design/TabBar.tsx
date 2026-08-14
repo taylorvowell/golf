@@ -1,9 +1,9 @@
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BarsGlyph, HouseGlyph, PersonGlyph, RowsGlyph } from "./deck";
-import { COLORS } from "../theme";
+import { themedStyles, useTheme } from "../theme";
 
 /**
  * The app's persistent bottom bar: Home and the log on the left, Progress and Coach on the
@@ -42,11 +42,13 @@ function TabIcon({ route, color }: { route: string; color: string }) {
 
 export function TabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const t = useTheme();
+  const styles = useStyles();
 
   const tab = (index: number) => {
     const route = state.routes[index];
     const focused = state.index === index;
-    const color = focused ? COLORS.acid : COLORS.muted;
+    const color = focused ? t.accent : t.muted;
     const onPress = () => {
       // The standard tabPress contract: screens may preventDefault (none do today), and
       // re-pressing the current tab is a no-op rather than a re-push.
@@ -93,11 +95,11 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
 
 const RECORD_SIZE = 62;
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   bar: {
     flexDirection: "row",
     alignItems: "stretch",
-    backgroundColor: COLORS.bg,
+    backgroundColor: t.bg,
     paddingTop: 10,
     paddingHorizontal: 6,
   },
@@ -113,24 +115,24 @@ const styles = StyleSheet.create({
     marginTop: -(RECORD_SIZE / 2) + 4,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: COLORS.acid,
+    backgroundColor: t.accent,
     // A bg-coloured ring so the overhanging circle reads as floating over the content behind it.
     borderWidth: 5,
-    borderColor: COLORS.bg,
+    borderColor: t.bg,
     elevation: 6,
   },
-  recordPressed: { backgroundColor: "#b8f052" },
+  recordPressed: { backgroundColor: t.accentPressed },
   recordDot: {
     width: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: COLORS.onAcid,
+    backgroundColor: t.onAccent,
   },
   recordLabel: {
-    color: COLORS.muted,
+    color: t.muted,
     fontSize: 10,
     fontWeight: "700",
     letterSpacing: 0.2,
     marginTop: -2,
   },
-});
+}));

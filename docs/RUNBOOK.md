@@ -804,6 +804,12 @@ adb -s emulator-5554 install -r apps/mobile/android/app/build/outputs/apk/debug/
 adb -s emulator-5554 reverse tcp:8081 tcp:8081
 adb -s emulator-5554 reverse tcp:3000 tcp:3000
 
+# If the dev client sits on "Loading from 172.31.112.1:8081…" forever: that saved server is the
+# WSL adapter's IP, which the emulator CANNOT reach (verified — 100% packet loss). With the
+# reverse above in place, relaunch it at localhost instead:
+adb -s emulator-5554 shell am start -a android.intent.action.VIEW \
+  -d "swingsage://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A8081"
+
 adb -s emulator-5554 shell monkey -p com.swingsage.spike -c android.intent.category.LAUNCHER 1
 adb -s emulator-5554 exec-out screencap -p > shot.png      # look at it
 adb -s emulator-5554 shell input tap X Y                   # drive it

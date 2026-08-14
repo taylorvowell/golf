@@ -1,8 +1,8 @@
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 import { Image } from "expo-image";
 
 import { useAuth } from "../auth/AuthProvider";
-import { COLORS } from "../../theme";
+import { themedStyles, useTheme } from "../../theme";
 
 /**
  * The signed-in golfer's face, or their initial.
@@ -14,13 +14,15 @@ import { COLORS } from "../../theme";
  */
 export function Avatar({ size }: { size: number }) {
   const { email, avatarUrl } = useAuth();
+  const t = useTheme();
+  const styles = useStyles();
   const radius = size / 2;
 
   if (avatarUrl) {
     return (
       <Image
         source={{ uri: avatarUrl }}
-        style={{ width: size, height: size, borderRadius: radius, backgroundColor: COLORS.panel }}
+        style={{ width: size, height: size, borderRadius: radius, backgroundColor: t.panel }}
         contentFit="cover"
         cachePolicy="disk"
         accessibilityIgnoresInvertColors
@@ -41,11 +43,11 @@ export function Avatar({ size }: { size: number }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   fallback: {
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(139,123,255,0.18)",
+    backgroundColor: t.violetSoft,
   },
-  initial: { color: COLORS.violet, fontWeight: "800" },
-});
+  initial: { color: t.violet, fontWeight: "800" },
+}));

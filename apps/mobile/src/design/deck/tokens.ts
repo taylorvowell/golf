@@ -24,8 +24,9 @@ import { COLORS } from "../../theme";
  *
  * This is a **control-surface** system: surfaces, caps, and the depths between them. It is not the
  * app's design system — type scale, spacing rhythm, iconography and the §41 contrast bar belong to
- * `mobile-app-shell` step 03, and `theme.ts` says so. Deck layers on `theme.ts`'s tokens rather
- * than restating them, so when that step lands it absorbs this folder instead of colliding with it.
+ * `mobile-app-shell` step 03. Deck layers on `src/theme`'s fixed dark `COLORS` (the player is
+ * pinned dark in both app themes) rather than restating them, so when that step lands it absorbs
+ * this folder instead of colliding with it.
  */
 
 /**

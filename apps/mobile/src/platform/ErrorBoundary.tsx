@@ -1,7 +1,7 @@
 import { Component, type ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 
-import { COLORS } from "../theme";
+import { themedStyles } from "../theme";
 
 /**
  * The degrade path for a render throw — "quality gates degrade, they don't crash", applied to the
@@ -54,43 +54,49 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   render(): ReactNode {
     if (!this.state.failed) return this.props.children;
     if (this.props.fallback) return this.props.fallback(this.retry);
-    return (
-      <View style={styles.root} testID="error-boundary-fallback">
-        <View style={styles.card}>
-          <Text style={styles.title}>Something went wrong</Text>
-          <Text style={styles.body}>
-            SwingSage hit a problem drawing this screen. Your swings are safe.
-          </Text>
-          <Pressable
-            style={styles.button}
-            accessibilityRole="button"
-            testID="error-boundary-retry"
-            onPress={this.retry}
-          >
-            <Text style={styles.buttonText}>Try again</Text>
-          </Pressable>
-        </View>
-      </View>
-    );
+    return <DefaultFallback retry={this.retry} />;
   }
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.bg, justifyContent: "center", padding: 20 },
+/** A function component, because the class body cannot call `useTheme`. */
+function DefaultFallback({ retry }: { retry: () => void }) {
+  const styles = useStyles();
+  return (
+    <View style={styles.root} testID="error-boundary-fallback">
+      <View style={styles.card}>
+        <Text style={styles.title}>Something went wrong</Text>
+        <Text style={styles.body}>
+          SwingSage hit a problem drawing this screen. Your swings are safe.
+        </Text>
+        <Pressable
+          style={styles.button}
+          accessibilityRole="button"
+          testID="error-boundary-retry"
+          onPress={retry}
+        >
+          <Text style={styles.buttonText}>Try again</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+const useStyles = themedStyles((t) => ({
+  root: { flex: 1, backgroundColor: t.bg, justifyContent: "center", padding: 20 },
   card: {
-    backgroundColor: COLORS.panel,
+    backgroundColor: t.panel,
     borderRadius: 20,
     padding: 20,
     gap: 10,
   },
-  title: { color: COLORS.text, fontSize: 22, fontWeight: "700", letterSpacing: -0.4 },
-  body: { color: COLORS.muted, fontSize: 14, lineHeight: 20 },
+  title: { color: t.text, fontSize: 22, fontWeight: "700", letterSpacing: -0.4 },
+  body: { color: t.muted, fontSize: 14, lineHeight: 20 },
   button: {
     marginTop: 6,
-    backgroundColor: COLORS.acid,
+    backgroundColor: t.accent,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: "center",
   },
-  buttonText: { color: COLORS.onAcid, fontSize: 15, fontWeight: "700" },
-});
+  buttonText: { color: t.onAccent, fontSize: 15, fontWeight: "700" },
+}));

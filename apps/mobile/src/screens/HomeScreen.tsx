@@ -29,7 +29,7 @@ import { createdAtMs, sessionize } from "../features/swings/sessions";
 import { useSwings } from "../features/swings/useSwings";
 import { useAuthenticatedImage } from "../platform/useAuthenticatedImage";
 import { useAppNavigation, type Navigation } from "../navigation";
-import { COLORS } from "../theme";
+import { COLORS, themedStyles, useTheme } from "../theme";
 
 /**
  * Home — a coach talking over the golfer's own footage, not a dashboard.
@@ -52,6 +52,8 @@ export function HomeScreen() {
   const insets = useSafeAreaInsets();
   const { firstName } = useAuth();
   const { state, refreshing, refresh } = useSwings();
+  const t = useTheme();
+  const styles = useStyles();
 
   const sessions = useMemo(
     () => (state.kind === "ok" ? sessionize(state.swings) : []),
@@ -86,7 +88,7 @@ export function HomeScreen() {
 
       {state.kind === "loading" ? (
         <View style={styles.centre} testID="home-loading">
-          <ActivityIndicator color={COLORS.muted} />
+          <ActivityIndicator color={t.muted} />
         </View>
       ) : null}
 
@@ -115,8 +117,8 @@ export function HomeScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={refresh}
-              tintColor={COLORS.muted}
-              colors={[COLORS.acid]}
+              tintColor={t.muted}
+              colors={[t.accent]}
             />
           }
         >
@@ -185,6 +187,7 @@ function FocusHero({
     : firstName
       ? `Hey ${firstName} — next time out`
       : "Next time out";
+  const styles = useStyles();
 
   return (
     <View style={styles.heroCard} testID="home-focus">
@@ -193,38 +196,38 @@ function FocusHero({
       ) : null}
       {/* Layered scrims instead of a gradient dependency: a soft wash over the whole photo and a
           heavy bed under the text, which fades in the middle where they overlap. */}
-      <View style={styles.heroWash} />
-      <View style={styles.heroBed} />
+      <View style={overPhoto.heroWash} />
+      <View style={overPhoto.heroBed} />
 
-      <View style={styles.heroBody}>
-        <Text style={styles.heroTag}>{greeting}</Text>
-        <Text style={styles.heroLabel}>{lead.label}</Text>
+      <View style={overPhoto.heroBody}>
+        <Text style={overPhoto.heroTag}>{greeting}</Text>
+        <Text style={overPhoto.heroLabel}>{lead.label}</Text>
         {lead.cue ? (
-          <Text style={styles.heroCue} numberOfLines={3}>
+          <Text style={overPhoto.heroCue} numberOfLines={3}>
             {lead.cue}
           </Text>
         ) : null}
         {lead.reportCount >= 2 && lead.seenIn >= 2 ? (
-          <Text style={styles.heroSeen}>
+          <Text style={overPhoto.heroSeen}>
             Seen in {lead.seenIn} of {lead.reportCount} scored swings
           </Text>
         ) : null}
 
-        <View style={styles.heroActions}>
+        <View style={overPhoto.heroActions}>
           <Pressable
             testID="home-see-it"
             accessibilityRole="button"
             accessibilityLabel="See it on your swing"
             onPress={() => openOnSwing(navigation, lead)}
-            style={({ pressed }) => [styles.heroCta, pressed && styles.heroCtaPressed]}
+            style={({ pressed }) => [overPhoto.heroCta, pressed && overPhoto.heroCtaPressed]}
           >
             <PlayGlyph size={10} color={COLORS.onAcid} />
-            <Text style={styles.heroCtaText}>See it on your swing</Text>
+            <Text style={overPhoto.heroCtaText}>See it on your swing</Text>
           </Pressable>
           {drill ? (
-            <View style={styles.drillChip}>
-              <Text style={styles.drillChipGlyph}>✦</Text>
-              <Text style={styles.drillChipText} numberOfLines={1}>
+            <View style={overPhoto.drillChip}>
+              <Text style={overPhoto.drillChipGlyph}>✦</Text>
+              <Text style={overPhoto.drillChipText} numberOfLines={1}>
                 {drill.title}
                 {drill.dose ? ` · ${drill.dose}` : ""}
               </Text>
@@ -258,6 +261,7 @@ function CompareStrip({
   const you = useAuthenticatedImage(`swings/${lead.exemplarId}/frame?checkpoint=${cp}`);
   const proImg = useAuthenticatedImage(`swings/${proId}/frame?checkpoint=${cp}`);
   const [broken, setBroken] = useState(false);
+  const styles = useStyles();
   if (broken) return null;
 
   const at = lead.checkpointLabel ? ` at ${lead.checkpointLabel.toLowerCase()}` : "";
@@ -269,8 +273,8 @@ function CompareStrip({
       onPress={() => openOnSwing(navigation, lead)}
       style={({ pressed }) => [styles.compare, pressed && styles.pressed]}
     >
-      <View style={styles.compareRow}>
-        <View style={styles.compareHalf}>
+      <View style={overPhoto.compareRow}>
+        <View style={overPhoto.compareHalf}>
           {you ? (
             <Image
               source={you}
@@ -280,12 +284,12 @@ function CompareStrip({
               onError={() => setBroken(true)}
             />
           ) : null}
-          <View style={styles.compareChip}>
-            <Text style={styles.compareChipText}>You</Text>
+          <View style={overPhoto.compareChip}>
+            <Text style={overPhoto.compareChipText}>You</Text>
           </View>
         </View>
-        <View style={styles.compareDivider} />
-        <View style={styles.compareHalf}>
+        <View style={overPhoto.compareDivider} />
+        <View style={overPhoto.compareHalf}>
           {proImg ? (
             <Image
               source={proImg}
@@ -295,8 +299,8 @@ function CompareStrip({
               onError={() => setBroken(true)}
             />
           ) : null}
-          <View style={[styles.compareChip, styles.compareChipPro]}>
-            <Text style={styles.compareChipTextPro}>Pro</Text>
+          <View style={[overPhoto.compareChip, overPhoto.compareChipPro]}>
+            <Text style={overPhoto.compareChipTextPro}>Pro</Text>
           </View>
         </View>
       </View>
@@ -316,6 +320,7 @@ function CompareStrip({
 
 /** The rest of what recurred, as swipeable cards — each with the same on-your-swing door. */
 function FocusRail({ items, navigation }: { items: FocusItem[]; navigation: Navigation }) {
+  const styles = useStyles();
   return (
     <ScrollView
       horizontal
@@ -349,6 +354,7 @@ function FocusRail({ items, navigation }: { items: FocusItem[]; navigation: Navi
 
 /** The last session: its facts in one line, its swings as a slider of pictures. */
 function SessionBlock({ stats, navigation }: { stats: SessionStats; navigation: Navigation }) {
+  const styles = useStyles();
   const { session, live, best, average, deltaVsPrevious, analysing } = stats;
   const count = session.swings.length;
   const meta = [
@@ -415,6 +421,7 @@ function SwingSlide({
 }) {
   const thumb = useAuthenticatedImage(`swings/${swing.id}/thumb?poster=1`);
   const scored = swing.status === "ready" && typeof swing.overallScore === "number";
+  const styles = useStyles();
   return (
     <Pressable
       testID={`home-swing-${swing.id}`}
@@ -428,22 +435,22 @@ function SwingSlide({
       {thumb ? (
         <Image source={thumb} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" />
       ) : null}
-      <View style={styles.slideScrim} />
-      <Text style={styles.slideNumber}>#{number}</Text>
-      <View style={styles.slideFoot}>
+      <View style={overPhoto.slideScrim} />
+      <Text style={overPhoto.slideNumber}>#{number}</Text>
+      <View style={overPhoto.slideFoot}>
         {swing.status !== "ready" ? (
-          <Text style={styles.slidePending}>
+          <Text style={overPhoto.slidePending}>
             {swing.status === "failed" ? "analysis failed" : "analysing…"}
           </Text>
         ) : scored ? (
           <>
-            <Text style={[styles.slideScore, isBest && styles.slideScoreBest]}>
+            <Text style={[overPhoto.slideScore, isBest && overPhoto.slideScoreBest]}>
               {Math.round(swing.overallScore as number)}
             </Text>
-            {swing.band ? <Text style={styles.slideBand}>{swing.band}</Text> : null}
+            {swing.band ? <Text style={overPhoto.slideBand}>{swing.band}</Text> : null}
           </>
         ) : (
-          <Text style={styles.slideUnscored}>not scored</Text>
+          <Text style={overPhoto.slideUnscored}>not scored</Text>
         )}
       </View>
     </Pressable>
@@ -460,13 +467,14 @@ function dateOf(ms: number): string {
 
 const HERO_SCRIM = "rgba(8,10,13,";
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.bg },
+/** The screen's chrome — everything drawn on the theme's own ground. */
+const useStyles = themedStyles((t) => ({
+  root: { flex: 1, backgroundColor: t.bg },
   centre: { flex: 1, alignItems: "center", justifyContent: "center" },
   scroll: { paddingTop: 10, gap: 16 },
   pressed: { opacity: 0.75 },
   tag: {
-    color: COLORS.muted,
+    color: t.muted,
     fontSize: 9,
     fontWeight: "600",
     letterSpacing: 1.6,
@@ -474,9 +482,9 @@ const styles = StyleSheet.create({
   },
 
   hero: { alignItems: "center", gap: 10, paddingVertical: 64, paddingHorizontal: 24 },
-  heroTitle: { color: COLORS.text, fontSize: 17, fontWeight: "600", textAlign: "center" },
+  heroTitle: { color: t.text, fontSize: 17, fontWeight: "600", textAlign: "center" },
   heroDetail: {
-    color: COLORS.muted,
+    color: t.muted,
     fontSize: 14,
     lineHeight: 20,
     textAlign: "center",
@@ -487,10 +495,85 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     minHeight: 400,
     borderRadius: 26,
-    backgroundColor: COLORS.panel,
+    // The photo covers this; until it loads, the panel tone keeps the card in-theme.
+    backgroundColor: t.panel,
     overflow: "hidden",
     justifyContent: "flex-end",
   },
+
+  compare: {
+    marginHorizontal: 16,
+    borderRadius: 22,
+    backgroundColor: t.panel,
+    overflow: "hidden",
+  },
+  compareBar: { paddingHorizontal: 14, paddingVertical: 11, gap: 3 },
+  compareTag: {
+    color: t.muted,
+    fontSize: 9,
+    fontWeight: "600",
+    letterSpacing: 1.6,
+    textTransform: "uppercase",
+  },
+  compareCue: { color: t.text, fontSize: 13, lineHeight: 18, fontWeight: "500" },
+
+  rail: { paddingHorizontal: 16, gap: 10 },
+  tipCard: {
+    width: 236,
+    borderRadius: 20,
+    backgroundColor: t.panel,
+    padding: 16,
+    gap: 5,
+  },
+  tipRank: { color: t.violet, fontSize: 13, fontWeight: "800" },
+  tipTitle: { color: t.text, fontSize: 15, fontWeight: "700", lineHeight: 19 },
+  tipCue: { color: t.muted, fontSize: 12, lineHeight: 16.5 },
+
+  sessionHead: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  sessionHeadBody: { flex: 1, gap: 3 },
+  sessionDate: { color: t.text, fontSize: 20, fontWeight: "800", letterSpacing: -0.5 },
+  sessionMeta: { color: t.muted, fontSize: 12.5 },
+  deltaChip: {
+    alignItems: "flex-end",
+    borderRadius: 16,
+    backgroundColor: t.panel,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  deltaValue: { color: t.accent, fontSize: 20, fontWeight: "700", lineHeight: 21 },
+  deltaDown: { color: t.danger },
+  deltaCaption: {
+    color: t.dim,
+    fontSize: 8,
+    fontWeight: "700",
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+    marginTop: 2,
+  },
+
+  slider: { paddingHorizontal: 16, gap: 10 },
+  slide: {
+    width: 150,
+    height: 200,
+    borderRadius: 20,
+    backgroundColor: t.panel,
+    overflow: "hidden",
+    justifyContent: "flex-end",
+  },
+}));
+
+/**
+ * Everything drawn OVER a photograph. A photo is its own dark surface in both themes — the
+ * same rule that keeps the player dark — so these use the fixed dark palette (`COLORS`) and
+ * the accent's dark exposure, never theme tokens.
+ */
+const overPhoto = StyleSheet.create({
   heroWash: {
     position: "absolute",
     top: 0,
@@ -542,12 +625,6 @@ const styles = StyleSheet.create({
   drillChipGlyph: { color: COLORS.acid, fontSize: 13 },
   drillChipText: { color: "rgba(247,248,245,0.75)", fontSize: 12.5, flexShrink: 1 },
 
-  compare: {
-    marginHorizontal: 16,
-    borderRadius: 22,
-    backgroundColor: COLORS.panel,
-    overflow: "hidden",
-  },
   compareRow: { flexDirection: "row", height: 190 },
   compareHalf: { flex: 1, backgroundColor: COLORS.bg },
   compareDivider: { width: StyleSheet.hairlineWidth, backgroundColor: "rgba(255,255,255,0.2)" },
@@ -577,65 +654,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     textTransform: "uppercase",
   },
-  compareBar: { paddingHorizontal: 14, paddingVertical: 11, gap: 3 },
-  compareTag: {
-    color: COLORS.muted,
-    fontSize: 9,
-    fontWeight: "600",
-    letterSpacing: 1.6,
-    textTransform: "uppercase",
-  },
-  compareCue: { color: COLORS.text, fontSize: 13, lineHeight: 18, fontWeight: "500" },
 
-  rail: { paddingHorizontal: 16, gap: 10 },
-  tipCard: {
-    width: 236,
-    borderRadius: 20,
-    backgroundColor: COLORS.panel,
-    padding: 16,
-    gap: 5,
-  },
-  tipRank: { color: COLORS.violet, fontSize: 13, fontWeight: "800" },
-  tipTitle: { color: COLORS.text, fontSize: 15, fontWeight: "700", lineHeight: 19 },
-  tipCue: { color: COLORS.muted, fontSize: 12, lineHeight: 16.5 },
-
-  sessionHead: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: 12,
-    paddingHorizontal: 16,
-    marginBottom: 12,
-  },
-  sessionHeadBody: { flex: 1, gap: 3 },
-  sessionDate: { color: COLORS.text, fontSize: 20, fontWeight: "800", letterSpacing: -0.5 },
-  sessionMeta: { color: COLORS.muted, fontSize: 12.5 },
-  deltaChip: {
-    alignItems: "flex-end",
-    borderRadius: 16,
-    backgroundColor: "rgba(17,19,36,0.9)",
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  deltaValue: { color: COLORS.acid, fontSize: 20, fontWeight: "700", lineHeight: 21 },
-  deltaDown: { color: "#ff8b6b" },
-  deltaCaption: {
-    color: COLORS.dim,
-    fontSize: 8,
-    fontWeight: "700",
-    letterSpacing: 1.2,
-    textTransform: "uppercase",
-    marginTop: 2,
-  },
-
-  slider: { paddingHorizontal: 16, gap: 10 },
-  slide: {
-    width: 150,
-    height: 200,
-    borderRadius: 20,
-    backgroundColor: COLORS.panel,
-    overflow: "hidden",
-    justifyContent: "flex-end",
-  },
   slideScrim: {
     position: "absolute",
     left: 0,

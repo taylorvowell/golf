@@ -1,7 +1,7 @@
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { COLORS } from "../theme";
+import { themedStyles } from "../theme";
 
 /**
  * Goals — honestly not built yet.
@@ -13,6 +13,7 @@ import { COLORS } from "../theme";
  */
 export function GoalsScreen() {
   const insets = useSafeAreaInsets();
+  const styles = useStyles();
   return (
     <ScrollView
       style={styles.root}
@@ -37,22 +38,22 @@ export function GoalsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.bg },
+const useStyles = themedStyles((t) => ({
+  root: { flex: 1, backgroundColor: t.bg },
   content: { padding: 16, gap: 12 },
   card: {
     borderRadius: 22,
-    backgroundColor: COLORS.panel,
+    backgroundColor: t.panel,
     padding: 18,
     gap: 8,
   },
-  title: { color: COLORS.text, fontSize: 21, fontWeight: "700", letterSpacing: -0.6 },
+  title: { color: t.text, fontSize: 21, fontWeight: "700", letterSpacing: -0.6 },
   tag: {
-    color: COLORS.muted,
+    color: t.muted,
     fontSize: 9,
     fontWeight: "600",
     letterSpacing: 1.6,
     textTransform: "uppercase",
   },
-  copy: { color: COLORS.muted, fontSize: 14, lineHeight: 21 },
-});
+  copy: { color: t.muted, fontSize: 14, lineHeight: 21 },
+}));

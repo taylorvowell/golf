@@ -359,6 +359,31 @@ the tab bar's record button's bg-coloured mask ring — none of which read as an
 (StatusMessage's retry pill, the overlay angle chips, the frame-sync sweep button) — deleting the
 border alone leaves an invisible control.
 
+### Light is the default; dark is a choice; the video surfaces ignore both
+
+**Decision (Taylor, 2026-08-14):** The app is themed, light-first. `src/theme/` is three layers:
+`palette.ts` (raw ramps — Taylor's blue scale #F0F3FA→#395886 plus one brand green; the only file
+where a hex may be born), `themes.ts` (semantic tokens — `bg`/`panel`/`well`/`text`/`muted`/`dim`/
+`accent`/`onAccent`/`accentSoft`/`violet`/`amber`/`danger` — bound once for LIGHT and once for
+DARK, the `Theme` type forcing every token to exist in both), and `ThemeProvider`/`useTheme`/
+`themedStyles` (how components read them — `themedStyles` caches one built sheet per theme, so a
+themed component keeps a static sheet's render cost). Themed code never imports the palette and
+never hand-mixes an rgba beside a token.
+**Resolution:** a persisted `system | light | dark` preference (Settings → Appearance, default
+`system`), where `system` follows `useColorScheme()` and anything unknown resolves **light** —
+dark renders only when chosen or when the phone itself is dark. `userInterfaceStyle` is
+`automatic` in `app.json` (a native flag: builds made before it need a clean prebuild before
+"match my phone" can see a light OS).
+**The accent is one green with two exposures:** deep `#2A7F4F` on light surfaces (white text on
+it), the original acid `#A3E635` on dark ones — same brand, contrast-matched to the ground.
+**What stays dark in both themes:** the player, capture, and the after-swing surfaces (pinned via
+`FixedDarkTheme`), plus anything drawn **over a photograph or video frame** (Home's hero and
+swing slides, compare chips, thumbnail grounds) — footage is its own dark surface, and those
+layers use the fixed `COLORS` palette and the accent's acid exposure deliberately.
+**Gotchas:** shared themed components rendered inside the player (the trend line) get their dark
+tokens from the pin, not from luck — an unpinned video surface would paint light panels over the
+picture the moment the app went light.
+
 ### The picture is the page; everything else floats over it or comes up from the bottom
 
 **Decision:** `SwingDetail` sets `headerShown: false` and the ordinary swing screen does not
@@ -483,18 +508,19 @@ show a tenth of the swing while calling it slow motion.
 
 **Decision:** `SwingPlayer` takes `mode: "review" | "session"` (review is the default; the
 `SwingDetail` route's `afterSwing?: boolean` param maps to session). **Both modes are the same
-page** — video flush at the top with its transport, the `AfterSwingSummary` scorecard in the
-scroll below it — because an old swing's card and a new swing's card are the same product, and
-the report is fetched from mount in both. **Review** (an old swing from the log) is just that
-page: autoplays, no dock, no arrival, no opener toggle — and therefore currently no delete
-affordance; delete lives in the session dock only. **Session** is the just-recorded moment and
-layers the chrome on top, in **two phases**. **Arrival:** the `AfterSwingSummary` slides up over
-the paused picture in an in-tree `SummarySheet` (not a `DeckSheet`: a `Modal` would swallow the
-dock), leaving about an inch of video above it, with a quiet bobbing "Swipe down for replay" hint
-fixed at its foot. **Browse:** the first dismissal — drag, chevron, play, a scorecard row — ends
-arrival for good and the screen rests as the review page plus the dock. The slide-up motion
-belongs to "your swing just finished" and never repeats. The full-viewport no-scroll player
-layout is gone — there is no third shape. If review-mode swings later need their own card
+screen in two phases** — an old swing's card and a new swing's card are the same product, and
+the report is fetched from mount in both. **Arrival:** the `AfterSwingSummary` slides up over
+the parked picture in an in-tree `SummarySheet` (not a `DeckSheet`: a `Modal` would swallow the
+dock). In session it leaves about an inch of video above it (the swing just happened; the card
+is the subject); in review the card's top edge sits at half the viewport, because an old swing
+was opened to be looked at and the video keeps the top half. **Browse:** the first dismissal —
+drag, chevron, play, a scorecard row — ends arrival for good and starts playback; the screen
+becomes an ordinary scroll, video flush at the top with its transport, the card in the flow
+below it. The slide-up never repeats. What separates the modes is the session chrome only: the
+dock (record / star / delete / play), the stats/video opener preference (review always opens
+with the card; there is no preference to consult), and the arrival height. Review therefore has
+**no delete affordance** — delete lives in the session dock only. The full-viewport no-scroll
+player layout is gone — there is no third shape. If review-mode swings later need their own card
 sections or actions, that is a `mode` prop on `AfterSwingSummary` / a second footer in the dock's
 slot — a local change, not a new screen.
 The `AfterSwingDock` (delete · star · a big primary record circle · play far right) is pinned

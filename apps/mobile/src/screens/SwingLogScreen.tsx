@@ -1,4 +1,4 @@
-import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useMemo } from "react";
@@ -9,7 +9,7 @@ import { useAppNavigation } from "../navigation";
 import { SessionCard } from "../features/swings/SessionCard";
 import { sessionize } from "../features/swings/sessions";
 import { useSwings } from "../features/swings/useSwings";
-import { COLORS } from "../theme";
+import { themedStyles, useTheme } from "../theme";
 
 /**
  * §21's swing log — the golfer's home, grouped by practice **session**.
@@ -35,13 +35,15 @@ export function SwingLogScreen() {
   // inset keeps the last card — and the Delete-account footer, the one irreversible control on
   // this screen — tappable above the system bar on 3-button navigation (~48dp).
   const insets = useSafeAreaInsets();
+  const t = useTheme();
+  const styles = useStyles();
 
   return (
     <View style={styles.root}>
       <TopBar title="Your swings" />
       {state.kind === "loading" ? (
         <View style={styles.centre} testID="swing-log-loading">
-          <ActivityIndicator color={COLORS.muted} />
+          <ActivityIndicator color={t.muted} />
         </View>
       ) : null}
 
@@ -80,8 +82,8 @@ export function SwingLogScreen() {
               testID="swing-log-refresh"
               refreshing={refreshing}
               onRefresh={refresh}
-              tintColor={COLORS.muted}
-              colors={[COLORS.acid]}
+              tintColor={t.muted}
+              colors={[t.accent]}
             />
           }
           renderItem={({ item, index }) => (
@@ -123,14 +125,14 @@ export function SwingLogScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.bg },
+const useStyles = themedStyles((t) => ({
+  root: { flex: 1, backgroundColor: t.bg },
   list: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 32, gap: 10 },
   listEmpty: { flexGrow: 1 },
   centre: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10, padding: 24 },
-  title: { color: COLORS.text, fontSize: 17, fontWeight: "600", textAlign: "center" },
+  title: { color: t.text, fontSize: 17, fontWeight: "600", textAlign: "center" },
   detail: {
-    color: COLORS.muted,
+    color: t.muted,
     fontSize: 14,
     lineHeight: 20,
     textAlign: "center",
@@ -140,9 +142,9 @@ const styles = StyleSheet.create({
   afterSwingLink: {
     alignItems: "center",
     paddingVertical: 10,
-    backgroundColor: COLORS.panel,
+    backgroundColor: t.panel,
     borderRadius: 12,
     marginBottom: 2,
   },
-  afterSwingLinkText: { color: COLORS.muted, fontSize: 13, fontWeight: "600" },
-});
+  afterSwingLinkText: { color: t.muted, fontSize: 13, fontWeight: "600" },
+}));

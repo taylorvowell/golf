@@ -4,7 +4,6 @@ import {
   Pressable,
   RefreshControl,
   ScrollView,
-  StyleSheet,
   Text,
   View,
 } from "react-native";
@@ -18,7 +17,7 @@ import { progressStats, sessionAverages } from "../features/progress/progressMod
 import { sessionize } from "../features/swings/sessions";
 import { useSwings } from "../features/swings/useSwings";
 import { useAppNavigation } from "../navigation";
-import { COLORS } from "../theme";
+import { themedStyles, useTheme } from "../theme";
 
 /**
  * Progress — the long view. Home answers "what next"; this answers "is it working": all-time
@@ -30,6 +29,8 @@ export function ProgressScreen() {
   const navigation = useAppNavigation();
   const insets = useSafeAreaInsets();
   const { state, refreshing, refresh } = useSwings();
+  const t = useTheme();
+  const styles = useStyles();
 
   const sessions = useMemo(
     () => (state.kind === "ok" ? sessionize(state.swings) : []),
@@ -47,7 +48,7 @@ export function ProgressScreen() {
 
       {state.kind === "loading" ? (
         <View style={styles.centre}>
-          <ActivityIndicator color={COLORS.muted} />
+          <ActivityIndicator color={t.muted} />
         </View>
       ) : null}
       {state.kind === "signed-out" ? (
@@ -72,8 +73,8 @@ export function ProgressScreen() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={refresh}
-              tintColor={COLORS.muted}
-              colors={[COLORS.acid]}
+              tintColor={t.muted}
+              colors={[t.accent]}
             />
           }
         >
@@ -138,7 +139,7 @@ export function ProgressScreen() {
                       {Math.round(stats.best.score)} · {dateOf(stats.best.at)}
                     </Text>
                   </View>
-                  <ChevronGlyph size={9} color={COLORS.acid} direction="right" weight={1.8} />
+                  <ChevronGlyph size={9} color={t.accent} direction="right" weight={1.8} />
                 </Pressable>
               ) : null}
             </>
@@ -150,6 +151,7 @@ export function ProgressScreen() {
 }
 
 function Tile({ value, label, accent = false }: { value: string; label: string; accent?: boolean }) {
+  const styles = useStyles();
   return (
     <View style={styles.tile}>
       <Text style={[styles.tileValue, accent && styles.tileAccent]}>{value}</Text>
@@ -162,14 +164,14 @@ function dateOf(ms: number): string {
   return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.bg },
+const useStyles = themedStyles((t) => ({
+  root: { flex: 1, backgroundColor: t.bg },
   centre: { flex: 1, alignItems: "center", justifyContent: "center" },
   content: { padding: 16, gap: 12 },
   pressed: { opacity: 0.6 },
-  copy: { color: COLORS.muted, fontSize: 13.5, lineHeight: 19 },
+  copy: { color: t.muted, fontSize: 13.5, lineHeight: 19 },
   tag: {
-    color: COLORS.muted,
+    color: t.muted,
     fontSize: 9,
     fontWeight: "600",
     letterSpacing: 1.6,
@@ -181,21 +183,21 @@ const styles = StyleSheet.create({
     flexBasis: "47%",
     flexGrow: 1,
     borderRadius: 18,
-    backgroundColor: COLORS.panel,
+    backgroundColor: t.panel,
     paddingVertical: 16,
     paddingHorizontal: 16,
     gap: 2,
   },
   tileValue: {
-    color: COLORS.text,
+    color: t.text,
     fontSize: 30,
     fontWeight: "800",
     letterSpacing: -1.2,
     fontVariant: ["tabular-nums"],
   },
-  tileAccent: { color: COLORS.acid },
+  tileAccent: { color: t.accent },
   tileLabel: {
-    color: COLORS.muted,
+    color: t.muted,
     fontSize: 9,
     fontWeight: "600",
     letterSpacing: 1.4,
@@ -204,25 +206,25 @@ const styles = StyleSheet.create({
 
   card: {
     borderRadius: 22,
-    backgroundColor: COLORS.panel,
+    backgroundColor: t.panel,
     padding: 18,
     gap: 10,
   },
-  emptyTitle: { color: COLORS.text, fontSize: 17, fontWeight: "600" },
+  emptyTitle: { color: t.text, fontSize: 17, fontWeight: "600" },
   trend: { marginHorizontal: 4, opacity: 0.9, marginTop: 4 },
   axisRow: { flexDirection: "row", justifyContent: "space-between" },
-  axisLabel: { color: COLORS.dim, fontSize: 10 },
+  axisLabel: { color: t.dim, fontSize: 10 },
 
   bestRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
     borderRadius: 18,
-    backgroundColor: COLORS.panel,
+    backgroundColor: t.panel,
     paddingHorizontal: 16,
     paddingVertical: 14,
   },
   bestBody: { flex: 1, gap: 2 },
-  bestTitle: { color: COLORS.acid, fontSize: 14, fontWeight: "700" },
-  bestMeta: { color: COLORS.muted, fontSize: 12 },
-});
+  bestTitle: { color: t.accent, fontSize: 14, fontWeight: "700" },
+  bestMeta: { color: t.muted, fontSize: 12 },
+}));

@@ -1,12 +1,12 @@
 import { useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ListGroup, ListRow } from "../design/ListRow";
 import { Avatar } from "../features/profile/Avatar";
 import { useAuth } from "../features/auth/AuthProvider";
 import { useAppNavigation } from "../navigation";
-import { COLORS } from "../theme";
+import { themedStyles } from "../theme";
 
 /**
  * The profile surface — slides in from the avatar on any tab.
@@ -19,6 +19,7 @@ export function ProfileScreen() {
   const navigation = useAppNavigation();
   const { email, signOut } = useAuth();
   const insets = useSafeAreaInsets();
+  const styles = useStyles();
   const [signingOut, setSigningOut] = useState(false);
 
   async function onSignOut() {
@@ -90,13 +91,13 @@ export function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.bg },
+const useStyles = themedStyles((t) => ({
+  root: { flex: 1, backgroundColor: t.bg },
   content: { padding: 16, gap: 10 },
   hero: { alignItems: "center", gap: 12, paddingVertical: 22 },
-  email: { color: COLORS.text, fontSize: 15, fontWeight: "600", maxWidth: 280 },
+  email: { color: t.text, fontSize: 15, fontWeight: "600", maxWidth: 280 },
   tag: {
-    color: COLORS.muted,
+    color: t.muted,
     fontSize: 9,
     fontWeight: "600",
     letterSpacing: 1.6,
@@ -104,4 +105,4 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginLeft: 4,
   },
-});
+}));

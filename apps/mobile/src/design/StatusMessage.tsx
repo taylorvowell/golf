@@ -1,6 +1,6 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 
-import { COLORS } from "../theme";
+import { themedStyles } from "../theme";
 
 /**
  * A centred full-area status — the expired-session and cannot-reach states, shared by Home and
@@ -19,6 +19,7 @@ export function StatusMessage({
   onRetry: () => void;
   retryTestID?: string;
 }) {
+  const styles = useStyles();
   return (
     <View style={styles.centre}>
       <Text style={styles.title}>{title}</Text>
@@ -35,11 +36,11 @@ export function StatusMessage({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   centre: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10, padding: 24 },
-  title: { color: COLORS.text, fontSize: 17, fontWeight: "600", textAlign: "center" },
+  title: { color: t.text, fontSize: 17, fontWeight: "600", textAlign: "center" },
   detail: {
-    color: COLORS.muted,
+    color: t.muted,
     fontSize: 14,
     lineHeight: 20,
     textAlign: "center",
@@ -47,11 +48,11 @@ const styles = StyleSheet.create({
   },
   retry: {
     marginTop: 6,
-    backgroundColor: COLORS.panel,
+    backgroundColor: t.panel,
     borderRadius: 999,
     paddingHorizontal: 18,
     paddingVertical: 12,
   },
   pressed: { opacity: 0.6 },
-  retryText: { color: COLORS.text, fontSize: 13, fontWeight: "700" },
-});
+  retryText: { color: t.text, fontSize: 13, fontWeight: "700" },
+}));

@@ -1,6 +1,7 @@
-import { DarkTheme, NavigationContainer } from "@react-navigation/native";
+import { DarkTheme, DefaultTheme, NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { useMemo } from "react";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -20,7 +21,7 @@ import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { SwingDetailRoute } from "./src/screens/SwingDetailRoute";
 import { SwingLogScreen } from "./src/screens/SwingLogScreen";
 import type { RootStackParamList, TabParamList } from "./src/navigation";
-import { COLORS } from "./src/theme";
+import { COLORS, FixedDarkTheme, ThemeProvider, useTheme } from "./src/theme";
 
 /**
  * Entry point and the whole navigation tree.
@@ -47,12 +48,22 @@ import { COLORS } from "./src/theme";
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<TabParamList>();
 
-// The stock dark theme with this product's background, so the split-second before a screen paints
-// is the app's colour rather than React Navigation's near-black.
-const theme = {
-  ...DarkTheme,
-  colors: { ...DarkTheme.colors, background: COLORS.bg, card: COLORS.bg, text: COLORS.text },
-};
+// The video-facing surfaces are dark in both themes (see src/theme). Module-level wrappers,
+// not inline closures: an inline component in `component=` remounts its screen every render.
+function SwingDetailDark(props: Parameters<typeof SwingDetailRoute>[0]) {
+  return (
+    <FixedDarkTheme>
+      <SwingDetailRoute {...props} />
+    </FixedDarkTheme>
+  );
+}
+function RecordDark() {
+  return (
+    <FixedDarkTheme>
+      <RecordScreen />
+    </FixedDarkTheme>
+  );
+}
 
 function Tabs() {
   return (
@@ -70,12 +81,31 @@ function Tabs() {
   );
 }
 
-export default function App() {
+/** Everything below the theme: the navigator needs `useTheme`, so it lives one level down. */
+function Root() {
+  const t = useTheme();
+
+  // The stock theme of the matching mode with this product's colours, so the split-second
+  // before a screen paints is the app's ground rather than React Navigation's defaults.
+  const navTheme = useMemo(() => {
+    const base = t.mode === "dark" ? DarkTheme : DefaultTheme;
+    return {
+      ...base,
+      colors: {
+        ...base.colors,
+        primary: t.accent,
+        background: t.bg,
+        card: t.bg,
+        text: t.text,
+      },
+    };
+  }, [t]);
+
   return (
-    <SafeAreaProvider>
-      {/* Light content, set once. Per-screen status bars are how one screen ends up with
+    <>
+      {/* Follows the theme, set once. Per-screen status bars are how one screen ends up with
           invisible text that nobody notices until it is on a real phone outdoors. */}
-      <StatusBar style="light" />
+      <StatusBar style={t.mode === "dark" ? "light" : "dark"} />
       {/* The boundary is outermost and the gate sits above auth: a render throw must degrade to a
           screen instead of a hard exit ("quality gates degrade, they don't crash"), and a build
           below the server's floor must learn that before — and regardless of — signing in. The
@@ -84,14 +114,14 @@ export default function App() {
         <VersionGate>
           <AuthProvider>
             <AuthGate>
-              <NavigationContainer theme={theme}>
+              <NavigationContainer theme={navTheme}>
                 <Stack.Navigator
                   screenOptions={{
-                    headerStyle: { backgroundColor: COLORS.bg },
-                    headerTintColor: COLORS.text,
+                    headerStyle: { backgroundColor: t.bg },
+                    headerTintColor: t.text,
                     headerTitleStyle: { fontWeight: "700" },
                     headerShadowVisible: false,
-                    contentStyle: { backgroundColor: COLORS.bg },
+                    contentStyle: { backgroundColor: t.bg },
                   }}
                 >
                   <Stack.Screen name="Tabs" component={Tabs} options={{ headerShown: false }} />
@@ -99,14 +129,20 @@ export default function App() {
                       a bar above it would spend the most valuable strip of a tall screen twice. */}
                   <Stack.Screen
                     name="SwingDetail"
-                    component={SwingDetailRoute}
-                    options={{ headerShown: false }}
+                    component={SwingDetailDark}
+                    // Dark ground even in light mode, so the push never flashes light before video.
+                    options={{ headerShown: false, contentStyle: { backgroundColor: COLORS.bg } }}
                   />
                   {/* Capture comes up over everything, like a camera should. */}
                   <Stack.Screen
                     name="Record"
-                    component={RecordScreen}
-                    options={{ headerShown: false, presentation: "fullScreenModal", animation: "slide_from_bottom" }}
+                    component={RecordDark}
+                    options={{
+                      headerShown: false,
+                      presentation: "fullScreenModal",
+                      animation: "slide_from_bottom",
+                      contentStyle: { backgroundColor: COLORS.bg },
+                    }}
                   />
                   <Stack.Screen
                     name="Profile"
@@ -134,6 +170,16 @@ export default function App() {
           </AuthProvider>
         </VersionGate>
       </ErrorBoundary>
+    </>
+  );
+}
+
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <Root />
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }

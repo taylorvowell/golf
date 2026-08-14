@@ -116,9 +116,13 @@ along.
   instruments and live in the frame-sync panel alone. Stylize like the existing surfaces rather
   than inventing a look, so the later skinning pass has one system to change.
 
-- Deck (`src/design/deck/`) is the player's control-surface system, layered on `theme.ts` tokens.
-  **No hand-mixed rgba beside a token that nearly matches** — use the token or name a new one.
-  Overlay data colours are web-parity constants and stay literal.
+- The app is themed (`src/theme/`): palette → semantic tokens → `useTheme()`/`themedStyles()`.
+  Light is the default; dark is the golfer's choice or the phone's. Themed code reads semantic
+  tokens only — never `palette.ts`, never a bare hex. The player/capture/after-swing surfaces are
+  pinned dark (`FixedDarkTheme`), and anything drawn over footage or a photograph uses the fixed
+  dark `COLORS` palette. Deck (`src/design/deck/`) is the player's control-surface system, layered
+  on those fixed dark tokens. **No hand-mixed rgba beside a token that nearly matches** — use the
+  token or name a new one. Overlay data colours are web-parity constants and stay literal.
 - **No borders, anywhere** (Taylor, 2026-08-14). Surfaces are flat: separation is fill and shadow,
   selection is background tint + text colour, a divider is spacing. `border*` styles are legal only
   when they *draw a shape* (View-drawn glyphs, overlay markers, gauge dots, the scrub thumb's ring).

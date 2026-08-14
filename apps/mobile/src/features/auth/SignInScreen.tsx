@@ -1,9 +1,9 @@
 import { GoogleSigninButton } from "@react-native-google-signin/google-signin";
 import { useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Text, View } from "react-native";
 
 import { useAuth } from "./AuthProvider";
-import { COLORS } from "../../theme";
+import { themedStyles, useTheme } from "../../theme";
 import { GoogleSignInCancelled } from "./google";
 
 /**
@@ -24,6 +24,8 @@ export function SignInScreen() {
   const { signInWithGoogle } = useAuth();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const t = useTheme();
+  const styles = useStyles();
 
   async function onGoogle() {
     setBusy(true);
@@ -57,11 +59,11 @@ export function SignInScreen() {
         <GoogleSigninButton
           style={styles.google}
           size={GoogleSigninButton.Size.Wide}
-          color={GoogleSigninButton.Color.Dark}
+          color={t.mode === "dark" ? GoogleSigninButton.Color.Dark : GoogleSigninButton.Color.Light}
           disabled={busy}
           onPress={() => void onGoogle()}
         />
-        {busy ? <ActivityIndicator color={COLORS.violet} /> : null}
+        {busy ? <ActivityIndicator color={t.violet} /> : null}
         {error ? (
           <Text style={styles.error} accessibilityRole="alert">
             {error}
@@ -74,14 +76,14 @@ export function SignInScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.bg, padding: 24, justifyContent: "center", gap: 28 },
+const useStyles = themedStyles((t) => ({
+  root: { flex: 1, backgroundColor: t.bg, padding: 24, justifyContent: "center", gap: 28 },
   header: { gap: 6 },
-  eyebrow: { color: COLORS.acid, fontSize: 10, fontWeight: "700", letterSpacing: 2 },
-  h1: { color: COLORS.text, fontSize: 32, fontWeight: "700", letterSpacing: -0.5 },
-  lede: { color: COLORS.muted, fontSize: 14, lineHeight: 21 },
+  eyebrow: { color: t.accent, fontSize: 10, fontWeight: "700", letterSpacing: 2 },
+  h1: { color: t.text, fontSize: 32, fontWeight: "700", letterSpacing: -0.5 },
+  lede: { color: t.muted, fontSize: 14, lineHeight: 21 },
   actions: { gap: 14, alignItems: "stretch" },
   google: { width: "100%", height: 48 },
-  error: { color: COLORS.red, fontSize: 13, lineHeight: 19 },
-  footer: { color: COLORS.dim, fontSize: 12, lineHeight: 18 },
-});
+  error: { color: t.danger, fontSize: 13, lineHeight: 19 },
+  footer: { color: t.dim, fontSize: 12, lineHeight: 18 },
+}));

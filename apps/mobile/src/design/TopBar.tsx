@@ -1,9 +1,9 @@
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Avatar } from "../features/profile/Avatar";
 import { useAppNavigation } from "../navigation";
-import { COLORS } from "../theme";
+import { themedStyles } from "../theme";
 
 /**
  * The tab screens' shared header: the screen's name on the left, the golfer on the right.
@@ -16,6 +16,7 @@ import { COLORS } from "../theme";
 export function TopBar({ title }: { title: string }) {
   const insets = useSafeAreaInsets();
   const navigation = useAppNavigation();
+  const styles = useStyles();
 
   return (
     <View style={[styles.bar, { paddingTop: insets.top + 10 }]}>
@@ -34,17 +35,17 @@ export function TopBar({ title }: { title: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   bar: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 20,
     paddingBottom: 8,
-    backgroundColor: COLORS.bg,
+    backgroundColor: t.bg,
   },
-  title: { color: COLORS.text, fontSize: 21, fontWeight: "800", letterSpacing: -0.6 },
+  title: { color: t.text, fontSize: 21, fontWeight: "800", letterSpacing: -0.6 },
   // The dev-client bubble pins to the top-right and swallows taps; release keeps the corner.
   avatar: { marginRight: __DEV__ ? 56 : 0 },
   pressed: { opacity: 0.7 },
-});
+}));

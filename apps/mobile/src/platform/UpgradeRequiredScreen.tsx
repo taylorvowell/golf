@@ -1,7 +1,7 @@
-import { Linking, Pressable, StyleSheet, Text, View } from "react-native";
+import { Linking, Pressable, Text, View } from "react-native";
 import type { UpgradeRequired } from "@swingsage/schema/contract";
 
-import { COLORS } from "../theme";
+import { themedStyles } from "../theme";
 
 export interface UpgradeRequiredScreenProps {
   detail: UpgradeRequired;
@@ -25,6 +25,7 @@ export default function UpgradeRequiredScreen({
   onOpenStore,
 }: UpgradeRequiredScreenProps) {
   const open = onOpenStore ?? ((url: string) => void Linking.openURL(url));
+  const styles = useStyles();
 
   return (
     <View style={styles.root} testID="upgrade-required">
@@ -60,24 +61,24 @@ export default function UpgradeRequiredScreen({
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.bg, justifyContent: "center", padding: 20 },
+const useStyles = themedStyles((t) => ({
+  root: { flex: 1, backgroundColor: t.bg, justifyContent: "center", padding: 20 },
   card: {
-    backgroundColor: COLORS.panel,
+    backgroundColor: t.panel,
     borderRadius: 20,
     padding: 20,
     gap: 10,
   },
-  eyebrow: { color: COLORS.amber, fontSize: 10, fontWeight: "700", letterSpacing: 2 },
-  title: { color: COLORS.text, fontSize: 26, fontWeight: "700", letterSpacing: -0.5 },
-  body: { color: COLORS.muted, fontSize: 15, lineHeight: 22 },
-  meta: { color: COLORS.dim, fontSize: 13, lineHeight: 19 },
+  eyebrow: { color: t.amber, fontSize: 10, fontWeight: "700", letterSpacing: 2 },
+  title: { color: t.text, fontSize: 26, fontWeight: "700", letterSpacing: -0.5 },
+  body: { color: t.muted, fontSize: 15, lineHeight: 22 },
+  meta: { color: t.dim, fontSize: 13, lineHeight: 19 },
   button: {
     marginTop: 6,
-    backgroundColor: COLORS.acid,
+    backgroundColor: t.accent,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: "center",
   },
-  buttonText: { color: COLORS.onAcid, fontSize: 15, fontWeight: "700" },
-});
+  buttonText: { color: t.onAccent, fontSize: 15, fontWeight: "700" },
+}));

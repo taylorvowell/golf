@@ -1,7 +1,7 @@
-import { ActivityIndicator, StyleSheet, View, type ViewProps } from "react-native";
+import { ActivityIndicator, View, type ViewProps } from "react-native";
 
 import { useAuth } from "./AuthProvider";
-import { COLORS } from "../../theme";
+import { themedStyles, useTheme } from "../../theme";
 import { SignInScreen } from "./SignInScreen";
 
 export interface AuthGateProps {
@@ -21,11 +21,13 @@ export interface AuthGateProps {
  */
 export function AuthGate({ children }: AuthGateProps) {
   const { status } = useAuth();
+  const t = useTheme();
+  const styles = useStyles();
 
   if (status === "loading") {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color={COLORS.violet} size="large" />
+        <ActivityIndicator color={t.violet} size="large" />
       </View>
     );
   }
@@ -35,6 +37,6 @@ export function AuthGate({ children }: AuthGateProps) {
   return <>{children}</>;
 }
 
-const styles = StyleSheet.create({
-  center: { flex: 1, backgroundColor: COLORS.bg, alignItems: "center", justifyContent: "center" },
-});
+const useStyles = themedStyles((t) => ({
+  center: { flex: 1, backgroundColor: t.bg, alignItems: "center", justifyContent: "center" },
+}));

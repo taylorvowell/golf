@@ -1,11 +1,11 @@
-import { ScrollView, StyleSheet, Switch, Text } from "react-native";
+import { ScrollView, Switch, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ListGroup, ListRow } from "../design/ListRow";
 import { useSummaryPreference } from "../features/swings/useSummaryPreference";
 import { useAppNavigation } from "../navigation";
 import { CLIENT_VERSION } from "../platform/version";
-import { COLORS } from "../theme";
+import { themedStyles, useTheme, useThemePreference, type ThemePreference } from "../theme";
 
 /**
  * Settings — the app's real preferences, and only those. No placeholder toggles for features
@@ -17,12 +17,17 @@ export function SettingsScreen() {
   const navigation = useAppNavigation();
   const insets = useSafeAreaInsets();
   const { statsFirst, set } = useSummaryPreference();
+  const t = useTheme();
+  const styles = useStyles();
 
   return (
     <ScrollView
       style={styles.root}
       contentContainerStyle={[styles.content, { paddingBottom: 32 + insets.bottom }]}
     >
+      <Text style={styles.tag}>Appearance</Text>
+      <AppearancePicker />
+
       <Text style={styles.tag}>After a swing</Text>
       <ListGroup>
         <ListRow
@@ -35,8 +40,8 @@ export function SettingsScreen() {
               // Null means the stored value has not loaded yet — a flip written now would race it.
               disabled={statsFirst === null}
               onValueChange={set}
-              trackColor={{ false: COLORS.border, true: "rgba(163,230,53,0.45)" }}
-              thumbColor={statsFirst ? COLORS.acid : COLORS.muted}
+              trackColor={{ false: t.well, true: t.accentTrack }}
+              thumbColor={statsFirst ? t.accent : t.muted}
             />
           }
         />
@@ -58,11 +63,54 @@ export function SettingsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.bg },
+const APPEARANCE_CHOICES: ReadonlyArray<{
+  value: ThemePreference;
+  title: string;
+  subtitle?: string;
+}> = [
+  { value: "system", title: "Match my phone", subtitle: "Dark when your phone is" },
+  { value: "light", title: "Light" },
+  { value: "dark", title: "Dark" },
+];
+
+/** One choice of three; light is where an untouched phone lands (`system` on a light phone). */
+function AppearancePicker() {
+  const { preference, set } = useThemePreference();
+
+  return (
+    <ListGroup>
+      {APPEARANCE_CHOICES.map((choice) => (
+        <ListRow
+          key={choice.value}
+          testID={`setting-appearance-${choice.value}`}
+          title={choice.title}
+          {...(choice.subtitle ? { subtitle: choice.subtitle } : {})}
+          selected={preference === choice.value}
+          // Until the stored value loads, no row is marked and a tap simply wins the race —
+          // `set` writes the cache before the read resolves, so nothing flips back.
+          onPress={() => set(choice.value)}
+          right={<ChoiceMark selected={preference === choice.value} />}
+        />
+      ))}
+    </ListGroup>
+  );
+}
+
+/** A flat radio: accent disc with a punched centre when chosen, a well when not. */
+function ChoiceMark({ selected }: { selected: boolean }) {
+  const styles = useStyles();
+  return (
+    <View style={[styles.mark, selected && styles.markSelected]}>
+      {selected ? <View style={styles.markDot} /> : null}
+    </View>
+  );
+}
+
+const useStyles = themedStyles((t) => ({
+  root: { flex: 1, backgroundColor: t.bg },
   content: { padding: 16, gap: 10 },
   tag: {
-    color: COLORS.muted,
+    color: t.muted,
     fontSize: 9,
     fontWeight: "600",
     letterSpacing: 1.6,
@@ -70,5 +118,16 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginLeft: 4,
   },
-  version: { color: COLORS.dim, fontSize: 11, textAlign: "center", marginTop: 18 },
-});
+  version: { color: t.dim, fontSize: 11, textAlign: "center", marginTop: 18 },
+
+  mark: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: t.well,
+  },
+  markSelected: { backgroundColor: t.accent },
+  markDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: t.onAccent },
+}));

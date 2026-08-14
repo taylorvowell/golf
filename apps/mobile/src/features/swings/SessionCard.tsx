@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { Image } from "expo-image";
 import type { SwingSummary } from "@swingsage/schema/contract";
 
 import { useAuthenticatedImage } from "../../platform/useAuthenticatedImage";
 import { ChevronGlyph } from "../../design/deck";
-import { COLORS } from "../../theme";
+import { themedStyles, useTheme } from "../../theme";
 import { createdAtMs, type SwingSession } from "./sessions";
 
 /**
@@ -32,6 +32,8 @@ export function SessionCard({ session, defaultExpanded, onOpenSwing }: SessionCa
   const newest = session.swings[session.swings.length - 1];
   // `?poster=1` = one frame, not the 6×4 contact sheet — the sheet reads as noise at 44×56.
   const thumb = useAuthenticatedImage(`swings/${newest.id}/thumb?poster=1`);
+  const t = useTheme();
+  const styles = useStyles();
 
   return (
     <View style={styles.card} testID={`session-${session.id}`}>
@@ -64,7 +66,7 @@ export function SessionCard({ session, defaultExpanded, onOpenSwing }: SessionCa
         ) : null}
         <ChevronGlyph
           size={9}
-          color={COLORS.dim}
+          color={t.dim}
           direction={expanded ? "up" : "down"}
           weight={1.8}
         />
@@ -101,6 +103,7 @@ function SwingRow({
   onPress: () => void;
 }) {
   const scored = typeof swing.overallScore === "number";
+  const styles = useStyles();
   return (
     <Pressable
       testID={`swing-card-${swing.id}`}
@@ -163,10 +166,10 @@ function statusText(status: SwingSummary["status"]): string {
   return status === "failed" ? "analysis failed" : "analysing…";
 }
 
-const styles = StyleSheet.create({
+const useStyles = themedStyles((t) => ({
   card: {
     borderRadius: 18,
-    backgroundColor: COLORS.panel,
+    backgroundColor: t.panel,
     overflow: "hidden",
   },
   pressed: { opacity: 0.7 },
@@ -176,13 +179,14 @@ const styles = StyleSheet.create({
     gap: 12,
     padding: 12,
   },
+  // Black behind the footage in both themes — a video frame is its own dark surface.
   thumb: { width: 44, height: 56, borderRadius: 10, backgroundColor: "#000" },
-  thumbEmpty: { backgroundColor: COLORS.border },
+  thumbEmpty: { backgroundColor: t.well },
   headBody: { flex: 1, gap: 2 },
-  headTitle: { color: COLORS.text, fontSize: 15, fontWeight: "700", letterSpacing: -0.2 },
-  headMeta: { color: COLORS.muted, fontSize: 12 },
+  headTitle: { color: t.text, fontSize: 15, fontWeight: "700", letterSpacing: -0.2 },
+  headMeta: { color: t.muted, fontSize: 12 },
   bestWrap: { alignItems: "flex-end", marginRight: 2 },
-  bestValue: { color: COLORS.acid, fontSize: 13, fontWeight: "800" },
+  bestValue: { color: t.accent, fontSize: 13, fontWeight: "800" },
 
   row: {
     flexDirection: "row",
@@ -192,7 +196,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
   },
   number: {
-    color: COLORS.text,
+    color: t.text,
     fontSize: 19,
     fontWeight: "800",
     letterSpacing: -0.5,
@@ -200,18 +204,18 @@ const styles = StyleSheet.create({
     fontVariant: ["tabular-nums"],
   },
   rowBody: { flex: 1, gap: 1 },
-  time: { color: COLORS.text, fontSize: 13.5, fontWeight: "600", fontVariant: ["tabular-nums"] },
-  label: { color: COLORS.dim, fontSize: 11 },
+  time: { color: t.text, fontSize: 13.5, fontWeight: "600", fontVariant: ["tabular-nums"] },
+  label: { color: t.dim, fontSize: 11 },
   scoreWrap: { alignItems: "flex-end", minWidth: 52 },
   score: {
-    color: COLORS.text,
+    color: t.text,
     fontSize: 21,
     fontWeight: "800",
     letterSpacing: -0.6,
     fontVariant: ["tabular-nums"],
   },
-  scoreBest: { color: COLORS.acid },
-  band: { color: COLORS.muted, fontSize: 10, textTransform: "capitalize" },
-  unscored: { color: COLORS.dim, fontSize: 11, textAlign: "right" },
-  pending: { color: COLORS.amber, fontSize: 11, textAlign: "right" },
-});
+  scoreBest: { color: t.accent },
+  band: { color: t.muted, fontSize: 10, textTransform: "capitalize" },
+  unscored: { color: t.dim, fontSize: 11, textAlign: "right" },
+  pending: { color: t.amber, fontSize: 11, textAlign: "right" },
+}));

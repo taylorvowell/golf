@@ -1,6 +1,6 @@
 import { View, type StyleProp, type ViewStyle } from "react-native";
 
-import { COLORS } from "../../theme";
+import { useTheme } from "../../theme";
 
 /**
  * A short score history as a polyline — dots at the points, thin rotated bars between them, the
@@ -24,10 +24,13 @@ export interface TrendLineProps {
 export function TrendLine({
   history,
   height = 44,
-  color = COLORS.violet,
+  color,
   style,
   accessibilityLabel,
 }: TrendLineProps) {
+  const t = useTheme();
+  // Hooks above this early return — `history` can change length between renders.
+  const stroke = color ?? t.violet;
   if (history.length < 2) return null;
   const lo = Math.min(...history);
   const hi = Math.max(...history);
@@ -61,7 +64,7 @@ export function TrendLine({
               top: midY - 1.5,
               height: 3,
               borderRadius: 1.5,
-              backgroundColor: color,
+              backgroundColor: stroke,
               transform: [{ rotate: `${(angle * 180) / Math.PI}deg` }],
             }}
           />
@@ -81,9 +84,11 @@ export function TrendLine({
               width: r * 2,
               height: r * 2,
               borderRadius: r,
-              backgroundColor: COLORS.bg,
+              // The panel colour, because the dots sit on a card and punch a hole through
+              // the line (a shape-drawing border — exempt from the no-borders rule).
+              backgroundColor: t.panel,
               borderWidth: 2.5,
-              borderColor: color,
+              borderColor: stroke,
             }}
           />
         );
