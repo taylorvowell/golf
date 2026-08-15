@@ -685,11 +685,20 @@ export function SwingPlayer({
           />
         ) : null}
       </View>
+    </View>
+  );
 
-      {/* Chrome over the picture, always visible — no fade, no hide state; this is a phone and a
-          control that can vanish must be summoned. A scrim behind it, not a solid bar: the top of
-          a down-the-line frame is sky or trees and a white glyph on it is unreadable about half
-          the time, which is not a risk worth taking to save one gradient. */}
+  /**
+   * The floating controls, LAYERED ABOVE the summary cover. The cover's scroll surface takes
+   * every touch it is given — that is what makes "drag anywhere" work — so anything tappable
+   * must sit on top of it. A tap lands on these; a drag anywhere else moves the card.
+   *
+   * Chrome over the picture, always visible — no fade, no hide state; this is a phone and a
+   * control that can vanish must be summoned. A scrim behind it, not a solid bar: the top of
+   * a down-the-line frame is sky or trees and a white glyph on it is unreadable about half
+   * the time, which is not a risk worth taking to save one gradient.
+   */
+  const chromeBlock = (
       <View style={[styles.chrome, { paddingTop: insets.top + 8 }]} pointerEvents="box-none">
         <View style={styles.chromeRow} pointerEvents="box-none">
           {/* The slot is held even with nothing in it, so the title is centred on the screen
@@ -831,10 +840,20 @@ export function SwingPlayer({
           </View>
         ) : null}
       </View>
+  );
 
-      {/* The transport, always visible, pinned to the bottom of the PICTURE — the picture never
-          moves, so neither does this. The card slides over it when up. */}
-      <View testID="console-dock" style={styles.console} pointerEvents="box-none">
+  /** The transport, above the cover, pinned above the card's closed peek. Rendered only while
+   *  the card is down: its surface is covered when the card is up, and drawing controls on top
+   *  of the scorecard would be the console and the card fighting for the same glass. */
+  const consoleBlock = (
+      <View
+        testID="console-dock"
+        style={[
+          styles.console,
+          { bottom: COVER_PEEK + (session ? DOCK_TAB_HEIGHT : 0) + insets.bottom },
+        ]}
+        pointerEvents="box-none"
+      >
         <PlayerConsole
           state={player.state}
           actions={player.actions}
@@ -847,12 +866,15 @@ export function SwingPlayer({
           bottomInset={6}
         />
       </View>
-    </View>
   );
 
   return (
     <View style={styles.screen} onLayout={onViewportLayout} testID="swing-player">
       {videoBlock}
+      {/* The card over the picture; every floating control sits above it in turn. */}
+      {summaryCover}
+      {chromeBlock}
+      {coverOpen === true ? null : consoleBlock}
 
       <DeckSheet
         testID="overlays-sheet"
@@ -915,9 +937,7 @@ export function SwingPlayer({
         {compareContent}
       </DeckSheet>
 
-      {/* Ordered after everything the card must cover, and the dock after the card — the dock
-          is the one surface that survives every state of this screen. */}
-      {summaryCover}
+      {/* The dock last — it is the one surface that survives every state of this screen. */}
       {afterSwingDock}
     </View>
   );

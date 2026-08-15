@@ -104,7 +104,7 @@
     },
     {
       "id": "analyzer-service",
-      "spine": true,
+      "spine": false,
       "lifecycle": "active",
       "phase": "foundation",
       "goal": "Promote the analyzer from a hand-invoked CLI to a hosted, queue-driven worker reading and writing object storage. FIRST STEP is a measurement, not a deploy: pose inference currently runs on CPU and only the club detector uses GPU, so measure CPU-vs-CUDA pose on this pipeline and let that choose the host (D18 reopened Railway, which has no GPU). Then the capacity and cost model, per-user fair queuing so one workload cannot degrade everyone else's (§38), backpressure, retry/dead-letter handling, and a validated analysis-latency SLO.",
@@ -123,7 +123,35 @@
           "track": "platform-foundation"
         }
       ],
-      "blockedBy": "docs/decisions/ARCHIVE-numbered.md D18 — worker host undecided"
+      "blockedBy": "docs/decisions/ARCHIVE-numbered.md D18 — worker host undecided",
+      "sequencingNote": "Spine moved to design-system 2026-08-14: this track is blocked on the worker-host HANDOFF decision, and Taylor directed the full UI overhaul as the immediate work. Spine returns here (or onward) when design-system completes or the host decision lands first."
+    },
+    {
+      "id": "design-system",
+      "spine": true,
+      "lifecycle": "active",
+      "phase": "golfer-core",
+      "goal": "The Ideal Swing design system: rebuild the app's theme and pages to match .claude/ideal-swing-design-system.html EXACTLY — the Swing Log pixel-perfect, the Swing Report's sheet-over-video scroll behaviour (video-open state, hiding pill nav, sliding player controls) matched precisely, the Progress page built on the same system with placeholder data plumbed for later tracks. Deliverable is a reusable React Native component system (tokens, type, buttons, tags, score marks, cards, wave nav, session pill nav, the SheetOverBackdrop scaffold) so every future page is assembled, not designed. Supersedes mobile-app-shell step 03 (the deferred styling pass) — Deck absorption happens here for the surfaces this track rebuilds.",
+      "statusFile": ".claude/feature-tracks/design-system/_STATUS.json",
+      "specRefs": [
+        ".claude/ideal-swing-design-system.html",
+        ".claude/ai-instructions/PROJECT_MAIN.md#2-core-product-principles",
+        ".claude/ai-instructions/PROJECT_MAIN.md#41-accessibility-and-general-usability"
+      ],
+      "owns": [
+        "apps/mobile/src/design",
+        "apps/mobile/src/theme"
+      ],
+      "dependsOn": [
+        {
+          "track": "mobile-player"
+        },
+        {
+          "track": "mobile-app-shell",
+          "blocking": false
+        }
+      ],
+      "sequencingNote": "Created 2026-08-14 at Taylor's direction ('MAJOR theme and UI overhaul... this is what we will use to create and manage ALL pages'). Made the spine because analyzer-service is blocked on the worker-host decision. Named deviations from pixel-exactness are declared in the track's _PROGRESS.md (font licensing, backdrop blur, conic-gradient primitive). The brand question is settled: the real SwingSage logo (apps/mobile/assets/brand/swingsage-logo.svg) replaces every 'Ideal Swing' string and the mockup's placeholder brandmark."
     },
     {
       "id": "media-pipeline",
@@ -195,7 +223,7 @@
       "spine": false,
       "lifecycle": "active",
       "phase": "golfer-core",
-      "goal": "Mobile client scaffold for iPhone and Android: navigation, auth flows, onboarding with role selection, profile and goals UI, the shared design system, and §41's real-golf-conditions usability bar (bright sunlight, one-handed, large capture controls) as stated acceptance criteria rather than an aspiration.",
+      "goal": "Mobile client scaffold for iPhone and Android: navigation, auth flows, onboarding with role selection, profile and goals UI, the shared design system, and §41's real-golf-conditions usability bar (bright sunlight, one-handed, large capture controls) as stated acceptance criteria rather than an aspiration. Navigation owns the COACH SURFACE (D58): the single persona home gathering active focuses + meters, proposals, the Focus page, train-this-focus entry, chat, and summaries — the IA seam the guidance features render into.",
       "statusFile": ".claude/feature-tracks/mobile-app-shell/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#2-core-product-principles",
@@ -462,7 +490,7 @@
       "spine": false,
       "lifecycle": "planned",
       "phase": "improvement",
-      "goal": "Practice sessions, equipment inventory, trends over time, and the search/filter/organization that keeps a growing log usable. (Goal tracking is its own system now — the goal-progression track, D55.)",
+      "goal": "Practice sessions, equipment inventory, trends over time, and the search/filter/organization that keeps a growing log usable. (Goal tracking is its own system now — the goal-progression track, D55.) Owns the swing log's FOCUS-SESSION rendering (D56): a focus training session is one session entity tied to one focus area, rendered as a labeled coaching-session card ('Focus: steadier posture · 9 swings · trend'), visually distinct from normal sessions because its swings are quarantined from durable metrics; every swing carries its session's focus, and the log gains a filter-by-focus-area facet (§36). The session→focus link is one nullable column on the session model.",
       "statusFile": ".claude/feature-tracks/history-and-trends/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#8-practice-sessions",
@@ -483,7 +511,7 @@
       "spine": false,
       "lifecycle": "planned",
       "phase": "improvement",
-      "goal": "Comparison that surfaces the differences rather than showing two videos, selection logic (previous, same club, best, favourite), and the golfer-facing professional reference library fed by the admin surface — replacing today's hardcoded two-entry list. The DEFAULT professional reference is matched to the golfer: same swing style (§15.4), handedness, and club where available — pros are tagged with the STY taxonomy in the admin surface.",
+      "goal": "Comparison that surfaces the differences rather than showing two videos, selection logic (previous, same club, best, favourite), and the golfer-facing professional reference library fed by the admin surface — replacing today's hardcoded two-entry list. The DEFAULT professional reference is matched to the golfer: same swing style (§15.4), handedness, and club where available — pros are tagged with the STY taxonomy in the admin surface. Comparison also accepts an optional FOCUS-AREA SCOPE (§19.4 amended, D56): both videos open at the area's declared phase range, only its overlays draw, and the headline is the one or two measured deltas defining the area — phase range and overlay set come from goal_config.",
       "statusFile": ".claude/feature-tracks/comparison-and-reference/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#19-swing-comparison",
@@ -526,7 +554,7 @@
       "spine": false,
       "lifecycle": "planned",
       "phase": "improvement",
-      "goal": "The assigned, measured correction loop (§16.3, D55): the AI or human coach assigns up to 3 focus goals from the golfer's top faults — each bound to measured scoring-config checks, never a free-text theme. Progress is windowed evidence across analyzed swings ('clean in X of the last Y swings that could judge it', parameters in a versioned goal_config), abstained swings never move it, and the meter shows on the after-swing screen and home. Achievement lands on the exact swing that completes the window, is celebrated once, then the goal enters quiet maintenance — a sustained regression re-opens it with its history, never silently. This is the spine §8.2's session focus points at, a §28 plan issues into, and §5.3 aspirations bias the selection of.",
+      "goal": "The assigned, measured correction loop (§16.3, D55): the AI or human coach assigns up to 3 focus goals from the golfer's top faults — each bound to measured scoring-config checks, never a free-text theme. Progress is windowed evidence across analyzed swings ('clean in X of the last Y swings that could judge it', parameters in a versioned goal_config), abstained swings never move it, and the meter shows on the after-swing screen and home. Achievement lands on the exact swing that completes the window — normal swings only, focus-session practice never counts (D56) — is celebrated once, then the goal enters quiet maintenance. Also owns the FOCUS PAGE (§16.3.7, D56): the browsable area catalog (a focus area IS a goal template viewed through measured performance), per-area averages and windowed trend arrows over normal evidencing swings, the area detail page, the 'Train this focus' entry, and the goal_config template fields it needs (phase_range, overlay_set, area_group, feel_cue). Design reference: DESIGN-focus-mode.md in this track's directory.",
       "statusFile": ".claude/feature-tracks/goal-progression/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#163-focus-goals-and-progression",
@@ -570,7 +598,7 @@
       "spine": false,
       "lifecycle": "planned",
       "phase": "improvement",
-      "goal": "The simulator/range session experience (§8.1–8.3, §9.5) — the product's primary usage loop. Start a session and get a proposed session focus with a tip or drill (suggestions, zero required taps), then a rapid capture loop built for a phone on a stand: big record button, configurable countdown (none/5/10/15s, default 5s, changeable on the capture screen), post-swing quick feedback ('top tips', 'things I noticed') that accounts for goals, the session focus, and the earlier swings in this session — with the next recording never more than one tap away. Ends with a session summary of what improved and what still needs work; a focus persists across sessions until improvement is sustained. The focus card and quick feedback render from deterministic priority output when AI is unavailable.",
+      "goal": "The simulator/range session experience (§8.1–8.5, §9.5) — the product's primary usage loop. Start a session and get a proposed session focus with a tip or drill (suggestions, zero required taps), then a rapid capture loop built for a phone on a stand: big record button, configurable countdown, post-swing quick feedback accounting for goals, the session focus, and earlier swings — next recording never more than one tap away. Ends with a session summary; a focus persists across sessions until improvement is sustained. Also owns FOCUS TRAINING SESSIONS (§8.4, D56): the setup→record→check coaching arc, the persistent focus pill + one-tap exit, focus-first after-swing presentation with replay opening on the area's phase range, the practice quarantine (focus-session swings never touch durable metrics), the 'take one real swing' closer, the rep-count nudge, session-to-session continuity — and SPOKEN FEEDBACK (§8.5, D57): the pre-generated Gemini voice bank speaking each verdict, device-TTS fallback, speak-only. Deterministic everywhere; AI narrative is an enhancement.",
       "statusFile": ".claude/feature-tracks/practice-loop/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#8-practice-sessions",

@@ -570,6 +570,59 @@ The expected sequence for a golfer at a simulator or range:
 The assumed posture is a phone on a stand with the golfer several steps away: big targets,
 glanceable content, minimal interaction (§41).
 
+## 8.4 Focus training sessions
+
+> **ADDED 2026-08-14 (D56).** A focus training session is the *pull* counterpart to §8.2's
+> proposed session focus: the golfer chooses one focus area (§16.3.7) and trains it
+> deliberately.
+
+Entering **"Train this focus"** from a focus area's detail page starts a session bound to
+that one area (activating it as a focus goal if it is not one already — occupying one of the
+3 slots, with the §16.3.2 swap prompt when all are full). The session has a coach's shape:
+
+- **Setup:** what to work on — the goal's "what fixed looks like" copy, one external-cue
+  *feel* line, and a linked drill (§18) where one exists. Deterministic content; AI narrative
+  is an enhancement only.
+- **Record:** the normal rapid capture loop (§8.3, §9.5), unchanged.
+- **Check:** the after-swing screen leads with the focus verdict and within-session
+  progression; the full analysis remains computed and reachable below it. Presentation only —
+  scoring never changes. Replay opens on the focus area's declared phase range with its
+  overlays active.
+- **Spoken feedback:** the focus verdict is spoken aloud after each swing (§8.5), so the
+  loop works with the phone on a stand and eyes on the ball.
+
+**Being in the mode is unmistakable, and leaving it is one tap.** A persistent focus pill on
+every in-session screen names the focus; tapping it opens the focus detail page and returns;
+"End focus session" lives on the pill's sheet and closes with the session summary (did it
+move?). Ending the session never retires the goal and never discards a swing.
+
+**A focus training session is coaching, not evidence (D56).** The golfer is deliberately
+changing their swing — half swings, drill reps, exaggerated moves — so swings recorded in a
+focus session are **quarantined from every durable metric**: overall score averages, focus-
+area averages and trends (§16.3.7), the §16.3.3 achievement window, personal-best/favorite
+selection, and comparison defaults. They feed only the in-session loop, the session's own
+record, and the area's training history. At session end the golfer is offered one **"take one
+real swing" closer** — recorded as a normal swing by stated intent, counting toward
+everything. In the swing log, a focus session renders as a coaching-session entry labeled by
+its focus, filterable by area (§36); a gentle, dismissible rep-count nudge appears after a
+configured number of drill reps. The next session on the same area opens with the previous
+session's one-line summary.
+
+## 8.5 Spoken swing feedback
+
+> **ADDED 2026-08-14 (D57).** The phone is on a stand meters away; the golfer should not
+> have to walk to it to learn what the last swing did.
+
+After each analyzed swing in a focus session, the app speaks one short line: the focus
+verdict ("Steadier that time"), a streak or milestone moment, or — honestly — "couldn't judge
+that one" when the checks abstained. Lines are drawn from a **pre-generated voice bank**:
+authored copy rendered once through a premium TTS voice, bundled as assets, composed as
+verdict phrasing × moment × focus area with no-repeat rotation so it stays fresh. Every line
+obeys the confidence rules; abstention is spoken as abstention. Device TTS is the offline and
+missing-asset fallback; a settings line discloses that the coach voice is AI-generated. No
+speech recognition and no conversational voice — the coach speaks, it does not listen (a
+future capability, deliberately deferred).
+
 ---
 
 # 9. In-App Swing Recording
@@ -1206,6 +1259,12 @@ that resets punishes exactly the golfer who is 90% of the way to a habit.
 - Progress is recomputed deterministically from stored analyses under the goal's config
   version, so re-analysis of an old swing updates progress honestly.
 
+> **AMENDED 2026-08-14 (D56).** The window counts **normal swings only**. Swings recorded
+> inside a focus training session (§8.4) are practice — half swings and drill reps can
+> trivially pass checks a full swing fails — and never enter the achievement window or any
+> durable metric. "You fixed it" is proven on real swings; the one exception is the
+> golfer-stated "take one real swing" closer, which is a normal swing by declared intent.
+
 ### 16.3.4 Where progress appears
 
 - **After-swing analysis:** a compact per-goal readout for that swing — the verdict and the
@@ -1237,11 +1296,53 @@ no percentage without evidence, "no evidence yet" instead of a fabricated 0% or 
 meter, and never an achievement on fewer evidencing swings than the window requires. "You
 fixed it" is the single message this product must never be wrong about.
 
+### 16.3.7 Browsing focus areas — the Focus page
+
+> **ADDED 2026-08-14 (D56).** §16.3.2's assignment is *push* — the coach proposes. The Focus
+> page is *pull*: the golfer browses every area the engine can speak to and chooses what to
+> train.
+
+A **focus area is a goal template from `goal_config`, viewed through the golfer's measured
+performance** — the same object, the catalog view. The Focus page lists the areas, grouped by
+swing phase (setup through follow-through), ranked within each group by the §16.1 priority
+model. Per area:
+
+- Plain-language name, the average score of its bound checks over the recent evidencing
+  window, and a trend indicator — the last N evidencing swings against the N before them,
+  rendered as an arrow plus the plain sentence ("trending steadier over your last 8
+  measurable swings"), never two raw averages side by side. N and the minimum evidencing
+  count live in `goal_config`; below the minimum the area says "not enough swings to judge
+  yet", never a fabricated number.
+- A state chip when relevant: active focus, achieved-maintaining, crept back.
+- Camera-view honesty: an area whose checks need footage the golfer does not film shows
+  "needs face-on video", not a score.
+
+The **area detail page** holds the definition ("what was detected / why it matters / what
+fixed looks like"), the evidence history, the training-session history, a side-by-side with
+the style-matched professional reference **scoped to this area** — both videos opened at the
+area's declared phase range, drawing only the overlays that speak to it (§19) — and the
+**"Train this focus"** entry into §8.4. Area averages and trends are computed from **normal
+swings only** (§8.4's quarantine); focus-session training effort is visible as history, never
+as measurement.
+
 ---
 
 # 17. AI Coach
 
 Golfers should have access to an AI Coach that can discuss their swing.
+
+> **AMENDED 2026-08-14 (D58).** The Coach is the product's single guidance **persona over
+> deterministic systems — it never owns state.** One Coach surface gathers the active focus
+> goals and meters, the next proposal, the Focus page (§16.3.7), "Train this focus" (§8.4),
+> chat, and session/weekly summaries; the same persona appears contextually after each swing,
+> and the spoken feedback voice (§8.5) is this coach's voice. Underneath: deterministic
+> engines (priority, goal evidence, area stats, drills, template copy) own every fact and
+> work with AI unavailable; narrative AI rewrites those facts into coach prose with template
+> fallback; chat converses over the same read-model. AI writes the coach's words, never its
+> facts — the only path from AI output to durable state is the golfer's tap. A versioned
+> coach persona spec (name, tone, what it never says) is shared by template copy and AI
+> prompts. Guidance always renders its source (`ai | coach | self`, §26.3); the AI coach
+> never presents as human. "Coach is 100% AI" is launch sequencing, not a descope of §23–29.
 
 ## 17.1 Swing-aware conversations
 
@@ -1372,6 +1473,12 @@ Comparison should support useful review capabilities such as:
 ## 19.4 Comparison context
 
 When comparing swings, the product should make important differences clear rather than requiring the golfer to interpret two videos without guidance.
+
+> **AMENDED 2026-08-14 (D56).** Comparison accepts an optional **focus-area scope**: opened
+> from a focus area (§16.3.7), both videos start at the area's declared phase range, only the
+> overlays relevant to that area are drawn, and the headline is the one or two measured
+> deltas that define it — not the full scorecard. The phase range and overlay set per area
+> are `goal_config` fields, versioned like everything else.
 
 ---
 

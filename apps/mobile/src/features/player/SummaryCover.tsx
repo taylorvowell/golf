@@ -25,12 +25,13 @@ import { ChevronGlyph, DECK } from "../../design/deck";
  * `openTop`. Past `openTop` the same gesture simply reads on through the card, one continuous
  * scroll, no inner scroll view and no hand-off.
  *
- * ## Touches fall through where there is no card
+ * ## The whole glass is the drag
  *
- * Wrapper, scroll view and content container are all `box-none`, and the spacer is `none`, so a
- * tap above the card lands on the transport and the chrome behind this component. Only the card
- * itself takes touches. That is also why the drag surface is "anywhere on the card" and not
- * "anywhere on the glass": the picture's own gestures — scrub, the timeline — live up there.
+ * The scroll view takes touches everywhere — over the card AND over the picture — so the slide
+ * works wherever the finger lands. (`box-none` was tried and is a measured failure: an Android
+ * ScrollView whose own view is not a touch target never starts a pan, even from its children.)
+ * The screen's tappable controls — the chrome, the transport, the dock — are layered ABOVE this
+ * cover instead, so a tap on a control is a tap and a drag anywhere else is the card.
  *
  * ## Closed is a peek, never gone
  *
@@ -132,16 +133,22 @@ export function SummaryCover({
   }, [open, onOpenChange]);
 
   /**
-   * The release rule. Inside the travel zone the card is between detents and may not rest there:
-   * the drag's direction decides — down parks it (the video is the ask), up opens it — with
-   * position deciding only a truly directionless release. At or past `openTop` the golfer is
-   * reading; nothing snaps. Runs again at the end of the settle animation, where the early
-   * return on the detents makes it a no-op rather than a loop.
+   * The rest rule, run whenever motion ends. Inside the travel zone the card is between detents
+   * and may not rest there: the drag's direction decides — down parks it (the video is the
+   * ask), up opens it — with position deciding only a truly directionless stop. At or past
+   * `openTop` the golfer is reading; nothing moves. On or beyond a detent, only the BOOKKEEPING
+   * runs — a fling that clamps at an edge never passed through a snap, and a detent the screen
+   * was not told about leaves the console and the card disagreeing about who owns the glass.
    */
   const snap = useCallback(
     (y: number) => {
       const s = spanRef.current;
-      if (s <= 0 || y <= 0 || y >= s) return;
+      if (s <= 0) return;
+      if (y <= 0 || y >= s) {
+        const shouldOpen = y >= s;
+        if (shouldOpen !== openRef.current) onOpenChange(shouldOpen);
+        return;
+      }
       const dy = lastDyRef.current;
       const target = Math.abs(dy) > 1 ? (dy > 0 ? s : 0) : y > s / 2 ? s : 0;
       settle(target);
@@ -158,7 +165,22 @@ export function SummaryCover({
     lastYRef.current = y;
   }, []);
 
-  const onRelease = useCallback(
+  /**
+   * A release WITH velocity is not the end of the motion — the native fling follows, and a snap
+   * issued now would fight it, each animation overriding the other until the card rests wherever
+   * the fight stopped. So a flung release defers to `onMomentumScrollEnd`; only a dead-stop
+   * release snaps here.
+   */
+  const onEndDrag = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const vy = e.nativeEvent.velocity?.y ?? 0;
+      if (Math.abs(vy) > 0.05) return;
+      snap(e.nativeEvent.contentOffset.y);
+    },
+    [snap],
+  );
+
+  const onMomentumEnd = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => snap(e.nativeEvent.contentOffset.y),
     [snap],
   );
@@ -173,8 +195,6 @@ export function SummaryCover({
       <ScrollView
         ref={scrollRef}
         style={styles.cover}
-        pointerEvents="box-none"
-        contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         overScrollMode="never"
         bounces={false}
@@ -182,13 +202,13 @@ export function SummaryCover({
         scrollEventThrottle={16}
         onScroll={onScroll}
         onScrollBeginDrag={onScrollBeginDrag}
-        onScrollEndDrag={onRelease}
-        onMomentumScrollEnd={onRelease}
+        onScrollEndDrag={onEndDrag}
+        onMomentumScrollEnd={onMomentumEnd}
         onContentSizeChange={onContentSizeChange}
         testID={testID ? `${testID}-scroll` : undefined}
       >
-        {/* The window onto the video. `none`, so the transport and chrome behind stay live. */}
-        <View pointerEvents="none" style={{ height: spacer }} />
+        {/* The window onto the video — empty height; the picture shows through it. */}
+        <View style={{ height: spacer }} />
 
         <View
           // Hidden until measured: one frame of card drawn at the wrong detent reads as a flash.
@@ -227,10 +247,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-  },
-  content: {
-    // Touches on the spacer region must reach the video behind, not die on the content box.
-    pointerEvents: "box-none",
   },
   card: {
     // Solid: the card carries a page of reading, and the swing moving through translucency

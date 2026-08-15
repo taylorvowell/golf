@@ -156,3 +156,60 @@ importing torch is load-bearing. `onnxruntime-gpu` must match the CUDA major ver
 CUDA 12; 1.28 wants CUDA 13). CPU and CUDA agree to **0.94 px** but are **not bit-identical**, so a
 golden snapshot is only valid against the device that produced it.
 **See:** ARCHIVE D53.
+
+### A focus area is a goal template viewed through measured performance
+
+**Decision:** The Focus page (`PROJECT_MAIN.md` §16.3.7) is the *pull* counterpart to the
+AI's *push* proposals — a catalog of `goal_config` templates grouped by swing phase, ranked
+by the priority model, each showing an average over recent evidencing swings and a windowed
+trend arrow (last N evidencing swings vs the N before; N and the minimum evidencing count in
+`goal_config`). "Train this focus" activates the template as a focus goal and enters a focus
+training session (§8.4). Templates carry `phase_range`, `overlay_set`, `area_group`, and
+`feel_cue`; comparison accepts an optional focus-area scope built on those fields.
+**Gotchas:** Never render two raw small-sample averages as a trend — abstention can make
+"last 4 swings" a 1-swing average. Below the minimum evidencing count, say "not enough swings
+to judge yet". View-gated areas say "needs face-on video", never a score.
+**See:** ARCHIVE D56; `PROJECT_MAIN.md` §16.3.7, §8.4.
+
+### Focus-session swings are practice, quarantined from every durable metric
+
+**Decision:** Swings recorded inside a focus training session enter no overall average, no
+area stat or trend, no achievement window, no best-swing selection, and no comparison
+default. They feed the in-session verdict loop, the session's own record, and the area's
+training history only. The §16.3.3 achievement window counts **normal swings only**; the one
+exception is the end-of-session "take one real swing" closer — a normal swing by
+golfer-stated intent, never inferred by heuristic.
+**Gotchas:** The log label records *intent*, the evidence model records *measurement* — a
+casual (non-focus) session still evidences every active goal. Do not build a "was that a
+real swing?" classifier; stated intent is the only admissible signal.
+**See:** ARCHIVE D56; `PROJECT_MAIN.md` §8.4.
+
+### Spoken feedback is a pre-generated Gemini voice bank; the coach speaks, never listens
+
+**Decision:** Focus-mode verdicts are spoken from a **bundled asset bank**: authored lines
+(verdict phrasings × moments × per-area feel cues) batch-rendered once with **Gemini 3.1
+Flash TTS**, selected with no-repeat rotation. A versioned `voice_config` pins voice + model
+version; a manifest (line → text hash → asset) drives regeneration, and any model change
+regenerates the whole bank. The app never calls a TTS vendor at runtime; device TTS is the
+offline fallback; settings disclose the AI voice. ElevenLabs is the named fallback vendor
+behind a script flag. No STT, no conversational voice — deferred to the icebox, and any
+future conversational tier belongs to the AI-coach provider seam and its cost ceilings.
+**Gotchas:** Spoken lines obey the same honesty rules as the screen — abstention is spoken
+as abstention, and no line may claim a streak or achievement the evidence model has not
+produced. Gemini output carries a SynthID watermark (inaudible; fine).
+**See:** ARCHIVE D57; `PROJECT_MAIN.md` §8.5; `.claude/architecture/voice-tts-vendor-2026-08-14.md`.
+
+### The Coach is a persona over deterministic systems, never a system that owns state
+
+**Decision:** All guidance reaches the golfer through one Coach persona — the Coach surface
+(active focuses, proposals, the Focus page, chat, summaries) plus contextual appearances
+(after-swing verdicts, the spoken D57 voice). Underneath: L0 deterministic engines own every
+fact and all state; L1 narrative AI rewrites L0 facts into coach prose (template fallback);
+L2 is §17 chat over the same read-model. Information flows L0 → L1/L2 only. AI writes the
+coach's words, never its facts; the only AI-output→state path is a golfer's tap. A versioned
+coach persona spec is shared by template copy and AI prompts.
+**Gotchas:** An L1/L2 line naming a streak, score, or achievement the evidence model has not
+produced is a correctness bug, same class as a fabricated face angle. The persona renders
+each guidance object's source (`ai | coach | self`) so human-coach guidance stays visibly
+distinct when it arrives (§26.3); the AI coach never presents as human.
+**See:** ARCHIVE D58; `PROJECT_MAIN.md` §17; `.claude/architecture/coach-and-focus-2026-08-14.md`.

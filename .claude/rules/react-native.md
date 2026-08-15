@@ -137,10 +137,16 @@ along.
 - **The ordinary player does not scroll; panels come up from the bottom** (`DeckSheet`,
   closed = unmounted). The after-swing browse layout is the one sanctioned scroll under the
   player: video flush at the top, summary in the flow below (see `mobile-client.md`).
-- **Controls never hide.** No tap-to-hide, no auto-hide, no hover states — a phone has no hover,
-  and a control that can vanish must be summoned. (Taylor, 2026-08-13.)
-- **SVG lives in `design/gauges` and nowhere else.** `react-native-svg` is shipped for the score
-  meters; the overlay stays on plain `View`s (D23 was a measurement) and glyphs stay drawn.
+- **Controls never hide — except as a deterministic function of scroll position.** No tap-to-hide,
+  no timers, no hover states — a phone has no hover, and a control that can vanish must be
+  summoned. (Taylor, 2026-08-13.) Amended 2026-08-14 by the Ideal Swing design system: chrome
+  (nav bars, the report's player controls) may slide away/in when the scroll state says so — the
+  mockup's video-open behaviour — because scroll position is under the golfer's finger and fully
+  reversible by the same gesture. Nothing else may hide anything.
+- **SVG lives in `design/gauges` and `design/system`, nowhere else.** `react-native-svg` draws the
+  score meters, the system's rings/orbs/stick-thumbs, and `lucide-react-native` icons inside
+  design-system components; the overlay stays on plain `View`s (D23 was a measurement) and
+  legacy deck glyphs stay drawn until their surfaces are rebuilt.
 - **Nothing dev-only leaks into release**: `__DEV__`-gate instruments *and their layout
   accommodations* (padding reserved for the dev-client bubble counts).
 

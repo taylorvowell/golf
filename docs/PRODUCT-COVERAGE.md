@@ -85,6 +85,7 @@ coaching, billing, hosting) is unbuilt.
 | 7.3 | Naming/organization: favorite, tags, coach-reviewed status | ⬜ | The list sorts by score/date only. |
 | 8 | Practice sessions | 🟡 | A `sessions` table exists with date/location/notes. Nothing writes it and no UI reads it. |
 | 8.1–8.3 | Session focus + the practice loop (start-a-session, focus card, in-session emphasis, session summary) | ⬜ | Owned by `practice-loop`. No focus concept exists anywhere; sessions today are an empty table. |
+| 8.4–8.5 | Focus training sessions (train-this-focus arc, practice quarantine, prove-it closer, focus pill/exit) + spoken feedback (pre-generated voice bank, device-TTS fallback) | ⬜ | Added 2026-08-14 (D56, D57). Nothing exists. Owning track: `practice-loop`; design in `goal-progression/DESIGN-focus-mode.md`. |
 
 ### 9–12. Capture
 
@@ -123,6 +124,7 @@ coaching, billing, hosting) is unbuilt.
 | 16.1 | Priority informed by severity, confidence, dependencies, order of operations, goals, recurrence | 🟡 | Priority today is "weakest checks, weighted". There is no dependency model, no order-of-operations ("fix setup before P6"), no goal input, no cross-swing recurrence. |
 | 16.2 | Focus limits | ✅ | The narrative already emits a small fixed number of priorities. |
 | 16.3 | Focus goals and progression — assigned (AI/coach/self), bound to measured checks, max 3, windowed-evidence progress on after-swing + home, celebrated once, maintained after | ⬜ | Added 2026-08-13 (D55). Brand-new system; nothing exists. Owning track: `goal-progression`. |
+| 16.3.7 | The Focus page — browsable area catalog (area = goal template viewed through measured performance), per-area averages + windowed trend arrows, area detail with focus-scoped pro comparison, train-this-focus entry | ⬜ | Added 2026-08-14 (D56). Nothing exists. Owning track: `goal-progression` (comparison scope: `comparison-and-reference`; log rendering: `history-and-trends`). |
 | 17 | AI Coach — swing-aware conversation, personalized context, scoped to swing/session/history/plan | ⬜ | Nothing. No provider abstraction, no prompts, no conversation storage. |
 | 18 | Preconfigured drill library, findings→drills mapping, admin-managed | ⬜ | Each check carries a one-line `fix` string. That is not a drill library. |
 

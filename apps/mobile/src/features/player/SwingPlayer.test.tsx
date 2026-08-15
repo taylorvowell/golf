@@ -92,10 +92,22 @@ it("passes the analysed frame rate through, never a default", async () => {
   await waitFor(() => expect(getByTestId("swing-video").props.fps).toBe(30));
 });
 
-it("disables the transport, and says why, when the swing cannot be stepped", async () => {
-  const { getByTestId, getByText } = await render(
-    <SwingPlayer swingId="abc" frameCount={0} fps={0} />,
+/**
+ * The transport lives ABOVE the summary card and only while the card is down — its surface is
+ * covered when the card is up, exactly like the overlay chips. Tests that poke the console
+ * slide the card away first, the same move a golfer makes.
+ */
+async function cardDown(api: { getByTestId: (id: string) => unknown }) {
+  await act(
+    async () =>
+      void fireEvent.press(api.getByTestId("summary-cover-handle") as Parameters<typeof fireEvent.press>[0]),
   );
+}
+
+it("disables the transport, and says why, when the swing cannot be stepped", async () => {
+  const api = await render(<SwingPlayer swingId="abc" frameCount={0} fps={0} />);
+  const { getByTestId, getByText } = api;
+  await cardDown(api);
 
   await waitFor(() => expect(getByTestId("play-toggle").props.accessibilityState.disabled).toBe(true));
   expect(getByTestId("speed-0-1").props.accessibilityState.disabled).toBe(true);
@@ -105,18 +117,19 @@ it("disables the transport, and says why, when the swing cannot be stepped", asy
 it("shows the frame-sync panel in development — the step's own oracle", async () => {
   // Inside the Metrics panel now, and development only: the picture fills the screen, and the
   // instrument must not. It measures against a video that keeps playing behind the panel.
-  const { getByTestId } = await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} />);
-  await act(async () => void fireEvent.press(getByTestId("metrics-open")));
-  await waitFor(() => expect(getByTestId("frame-sync-panel")).toBeTruthy());
+  const api = await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} />);
+  await cardDown(api);
+  await act(async () => void fireEvent.press(api.getByTestId("metrics-open")));
+  await waitFor(() => expect(api.getByTestId("frame-sync-panel")).toBeTruthy());
 });
 
 it("plays a swing whose analysis is missing, and says so instead of failing", async () => {
-  const { getByTestId, getByText } = await render(
-    <SwingPlayer swingId="abc" frameCount={240} fps={60} />,
-  );
+  const api = await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} />);
+  const { getByTestId, getByText } = api;
   await waitFor(() => expect(getByText(/has not been analysed/i)).toBeTruthy());
   // The video is still there. A 404 on the artifact says nothing about the video.
   expect(getByTestId("swing-video")).toBeTruthy();
+  await cardDown(api);
   expect(getByTestId("play-toggle").props.accessibilityState.disabled).toBe(false);
 });
 
@@ -146,6 +159,7 @@ it("bounds the transport by the playback window, not by the file", async () => {
   const api = await render(<SwingPlayer swingId="abc" frameCount={40} fps={60} />);
   await act(async () => viewport(api));
   await waitFor(() => expect(api.getByTestId("swing-overlay")).toBeTruthy());
+  await cardDown(api);
   await act(async () => void fireEvent.press(api.getByTestId("metrics-open")));
   await waitFor(() => expect(api.getByText("4–30")).toBeTruthy());
 });
@@ -170,16 +184,17 @@ function ready(el: { props: { onReady?: (e: unknown) => void } }) {
 it("parks under the card, then plays the moment the card slides away", async () => {
   analysisResolves(makeAnalysis({ frameCount: 40 }));
   const api = await render(<SwingPlayer swingId="abc" frameCount={40} fps={60} />);
-  const { getByTestId } = api;
+  const { getByTestId, queryByTestId } = api;
   await act(async () => viewport(api));
   await waitFor(() => expect(getByTestId("swing-overlay")).toBeTruthy());
 
   await act(async () => ready(getByTestId("swing-video")));
 
-  // Under the card: the picture waits rather than playing to no one.
-  expect(getByTestId("play-toggle").props.accessibilityState.selected).toBe(false);
+  // Under the card: the picture waits rather than playing to no one, and the transport — whose
+  // surface the card covers — is not on the glass at all.
+  expect(queryByTestId("play-toggle")).toBeNull();
 
-  await act(async () => void fireEvent.press(getByTestId("summary-cover-handle")));
+  await cardDown(api);
 
   // Pause IS play, depressed — so "is it playing" and "is the cap in" are the same assertion.
   await waitFor(() =>
@@ -192,7 +207,9 @@ it("changes speed natively rather than by dropping frames", async () => {
   // `setPlaybackSpeed` retimes the decoder, so a 60fps clip at 0.1 is a true 6 frames a second
   // with every frame still presented — where dropping frames in JS would show a tenth of the
   // swing and call it slow motion.
-  const { getByTestId } = await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} />);
+  const api = await render(<SwingPlayer swingId="abc" frameCount={240} fps={60} />);
+  const { getByTestId } = api;
+  await cardDown(api);
   await act(async () => void fireEvent.press(getByTestId("speed-0-1")));
   await waitFor(() =>
     expect(getByTestId("speed-0-1").props.accessibilityState.selected).toBe(true),
@@ -218,6 +235,7 @@ it("says where in the swing you are by NAME, not with a picture", async () => {
   const api = await render(<SwingPlayer swingId="abc" frameCount={40} fps={60} />);
   await act(async () => viewport(api));
   await waitFor(() => expect(api.getByTestId("swing-overlay")).toBeTruthy());
+  await cardDown(api);
 
   // Frame 10 of this fixture is inside the backswing (address 2 -> clamped to the window at 4,
   // top at 12). The readout names the phase and the frame, and nothing else.
@@ -261,25 +279,29 @@ it("keeps the overlay switches in a panel until they are asked for", async () =>
   await waitFor(() => expect(getByTestId("overlay-controls")).toBeTruthy());
 });
 
-it("never hides the controls — there is no tap-to-hide and no hover", async () => {
+it("never hides the controls while the video is the subject — no tap-to-hide, no hover", async () => {
   // Reversed from the original toggle deliberately (Taylor, 2026-08-13): this is a phone, and a
-  // control that can vanish is a control a golfer has to know how to summon. The transport is
-  // always on the picture and always receives touches.
-  const { getByTestId, queryByTestId } = await render(
+  // control that can vanish is a control a golfer has to know how to summon. With the card down
+  // the transport is always on the picture and always receives touches; the card covering it is
+  // the one sanctioned way it leaves.
+  const api = await render(
     <SwingPlayer swingId="abc" frameCount={240} fps={60} />,
   );
-  expect(queryByTestId("stage-tap")).toBeNull();
-  expect(getByTestId("console-dock").props.pointerEvents ?? "auto").not.toBe("none");
+  await cardDown(api);
+  expect(api.queryByTestId("stage-tap")).toBeNull();
+  expect(api.getByTestId("console-dock").props.pointerEvents ?? "auto").not.toBe("none");
 });
 
 it("opens the swing's facts from the dock", async () => {
-  const { getByTestId, getByText, queryByText } = await render(
+  const api = await render(
     <SwingPlayer swingId="abc" frameCount={240} fps={60}>
       <Text>Pose coverage 98%</Text>
     </SwingPlayer>,
   );
+  const { getByTestId, getByText, queryByText } = api;
   expect(queryByText("Pose coverage 98%")).toBeNull();
 
+  await cardDown(api);
   await act(async () => void fireEvent.press(getByTestId("metrics-open")));
   await waitFor(() => expect(getByText("Pose coverage 98%")).toBeTruthy());
 });

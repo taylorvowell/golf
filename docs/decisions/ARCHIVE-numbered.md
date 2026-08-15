@@ -3032,3 +3032,99 @@ self-promoted goals with deterministic text work before any of them land.
 Existing-track deltas: `history-and-trends` drops "goal tracking" from its goal (it moved
 here); `practice-loop` gains a non-blocking dep (the focus card names the active goal once
 this exists); `ai-coach` and `coach-collaboration` gain the §16.3 specRef.
+
+## D56 — Focus areas, focus training sessions, and the isolation rule: practice is coaching, not evidence
+
+**Date:** 2026-08-14 · **Status:** ACTIVE · **Spec:** PROJECT_MAIN §8.4, §8.5, §16.3.7, §16.3.3 (amended), §19.4 (amended)
+
+Taylor asked for an "area of focus" experience: browse the areas worth improving, see stats,
+train one deliberately with tips and a pro comparison, and track improvement per area. The
+core unification that kept this from becoming a second, competing focus system: **a focus
+area IS a goal template from `goal_config`, viewed through measured performance.** The Focus
+page is the pull counterpart to D55's push proposals; "Train this focus" = activate the goal
+(one of the 3 slots) + enter a focus training session.
+
+The decisive product call, from Taylor directly: **a focus training session is isolated from
+all durable metrics.** A golfer drilling a change hits half swings and exaggerated reps; a
+morning of drills must not crater averages, trends, or best-swing selection. Extended one
+step beyond his words, with his acceptance implied by finalization: the **§16.3.3 achievement
+window also counts only normal swings** — a window fillable by drill reps could claim "you
+fixed it" off practice motion, the one message the product must never be wrong about. The
+trade-off (a genuinely good full swing mid-session also doesn't count) is priced in and
+resolved by the **"take one real swing" closer** — golfer-stated intent, never inferred,
+because the analyzer cannot reliably tell drill rep from real swing and a guessing heuristic
+is exactly the fabricated-confidence failure this product refuses.
+
+Rejected: fixed 4-vs-4 swing trend comparisons (abstention can make "last 4" a 1-swing
+average presented as signal; replaced by windowed evidencing-swing comparison rendered as an
+arrow + sentence); a standalone focus-training roadmap track (every piece is owned by an
+existing track's domain — goal-progression gets the catalog/stats/train-entry, practice-loop
+gets the session mode, comparison-and-reference gets the focus scope, history-and-trends gets
+the log integration); heuristic "was that a real swing?" detection (see above).
+
+Also settled here: per-area aggregates are a derived read model over stored per-swing check
+scores in Postgres (normal swings only, evidencing-count honesty); each goal template gains
+`phase_range`, `overlay_set`, `area_group`, and `feel_cue` fields in `goal_config`; the
+compute-side note that the analyzer can scout the swing window with cheap signals (audio
+impact transient, motion energy, strided low-res pose) and run expensive stages only there —
+scouts may decide WHERE to look, never emit a measurement — lands with analyzer-service, not
+here.
+
+## D57 — Spoken swing feedback is a pre-generated voice bank; Gemini 3.1 Flash TTS renders it; the coach speaks but does not listen
+
+**Date:** 2026-08-14 · **Status:** ACTIVE · **Spec:** PROJECT_MAIN §8.5 · **Analysis:** .claude/architecture/voice-tts-vendor-2026-08-14.md
+
+The golfer's phone is on a stand meters away; the focus-mode loop only works eyes-on-ball if
+the verdict is spoken. Taylor's bar: it must feel fresh, "like a real coach", not canned.
+The design that delivers freshness while staying free at the margin: a **variety bank** —
+authored copy (verdict phrasings × moment lines × per-area feel cues) batch-rendered once
+through a premium TTS voice, bundled as assets, composed with no-repeat rotation. Hundreds of
+effective utterances, ~$1 of one-time generation, zero latency, zero per-session cost, every
+line honesty-checked at authoring time. The app never calls a voice vendor at runtime.
+
+**Vendor: Gemini 3.1 Flash TTS** ($20/M audio tokens ≈ $0.03/min of audio; output owned by
+customer; API data not trained on), picked over ElevenLabs after Taylor's own listening rated
+it and because its per-line natural-language style direction fits the moment lines uniquely.
+Its preview status (timbre not durably pinnable) is neutralized by policy: `voice_config`
+pins voice + model version, a manifest maps line → text hash → asset, and any model change
+regenerates the **whole** bank (~$1) so mixed voices never ship. ElevenLabs (quality ceiling,
+stable voice IDs, perpetual license on paid plans, ~$5/bank) is the named fallback behind a
+script flag; OpenAI TTS lost on drift-without-style-upside; Google classic/Polly on voice
+quality; device TTS survives as the offline/missing-asset fallback, never the product voice.
+
+**Two-way voice (STT, realtime conversation) is deliberately deferred to the icebox** —
+Taylor's call. Far-field audio from a phone on a stand outdoors is the least reliable piece
+of the design, and conversational voice belongs to the ai-coach track's provider abstraction
+and cost ceilings when it comes. A one-line settings disclosure that the coach voice is
+AI-generated satisfies every candidate vendor's terms at once.
+
+## D58 — The Coach is a persona over deterministic systems; focus surfaces live under it, focus state never does
+
+**Date:** 2026-08-14 · **Status:** ACTIVE · **Spec:** PROJECT_MAIN §17 (amended) · **Analysis:** .claude/architecture/coach-and-focus-2026-08-14.md
+
+Taylor asked whether focuses should "live in coach." The answer that survived scrutiny is
+split: **yes in the product, no in the system.** The golfer experiences one Coach persona
+everywhere — the Coach surface gathers active focuses + meters, the next proposal, the Focus
+page (§16.3.7), "Train this focus", chat (§17), and session/weekly summaries, and the same
+persona appears contextually after each swing; the D57 voice bank is literally this coach's
+voice. But the persona owns no state. Three layers: L0 deterministic engines (priority model,
+goal evaluator + evidence, area stats, drill mappings, template copy, voice bank) own all
+facts and are always available; L1 narrative AI rewrites L0 facts into coach prose with
+template fallback; L2 conversational AI is §17 chat over the same read-model. Information
+flows L0 → L1/L2 only; the sole path from AI output to durable state is a golfer's tap.
+
+Why the state must not move into the AI coach: degradation (AI down would take goals,
+meters, and verdicts with it — violating AI-never-hard-dependency), falsifiability ("you
+fixed it" must trace to evidence windows, never model output), cost (L0 is free per
+session), and the human-coach seam (§16.3.2's three assignment sources mean a human coach
+later is a second author of the same objects, not a migration — and §26.3 attribution means
+the persona layer renders source, so AI and human guidance stay visibly distinct).
+
+"Coach is 100% AI for now" is a sequencing assumption, not a descope — the roadmap already
+runs AI-only first (ai-coach phase 4, coach-platform phase 6) and human+AI coach remains a
+named launch differentiator. Rejected: focus state owned by ai-coach (breaks the three
+properties above); fully separate Focus surfaces (forfeits persona coherence); a new "coach"
+track (ai-coach, goal-progression, practice-loop, and mobile-app-shell already own every
+piece). New artifact when the surfaces build: an authored, versioned **coach persona spec**
+(name, tone, vocabulary, what it never says) shared by deterministic template copy and the
+L1/L2 prompts, so the coach sounds identical whether AI wrote the sentence or not.

@@ -324,6 +324,32 @@ answered 244/396 frames against 90%+ on the other nine — never a reason to cha
 Provenance for the pick is `burnin.py`'s `TRACE_MODES` and `club.py`'s `smooth_trace`, whose
 `measured()` gate is what makes a trace refuse to draw through undetected frames in the first place.
 
+### The Ideal Swing design system is the app's one visual language
+
+**Decision (Taylor, 2026-08-14):** The app's theme and every page match the reference mockups in
+`.claude/ideal-swing-design-system.html` **exactly** — that file is law for tokens, geometry, type,
+components, and the scroll behaviours (the sheet sliding over the layer beneath it, the report's
+video-open state, the pill nav hiding at the top). The build lives in the `design-system` track;
+the reusable component layer is `src/design/system/` over rewritten `src/theme/` tokens, so future
+pages are assembled from existing pieces, never designed ad hoc. This supersedes mobile-app-shell
+step 03 (the deferred styling pass).
+**Named deviations from pixel-exactness** (each deliberate, none silent): display type is **Barlow
+Semi Condensed** + **Inter** body, bundled via expo-font — Bahnschrift is Windows-licensed and
+cannot ship; glass surfaces are near-opaque theme fills, not backdrop blur (`expo-blur` stays out
+until a fill provably fails); conic-gradient score rings render as SVG arcs; and every
+"Ideal Swing" string in the mockups renders as **SwingSage** — settled by the real logo Taylor
+supplied 2026-08-14 (wordmark reads *Swingsage*; master lockup at
+`apps/mobile/assets/brand/swingsage-logo.svg`, white-on-dark with the aqua swoosh mark). The
+mockup's placeholder `.brandmark` square is replaced by the logo's ball-and-swoosh mark wherever
+a brand lock appears; the full-colour lockup is for dark/hero surfaces, and light surfaces tint
+the wordmark navy via the `BrandLogo` component's colour prop.
+**Consequences:** `lucide-react-native` (pure JS over the shipped `react-native-svg`) is the icon
+source for system components, superseding drawn-View glyphs there; SVG's allowed scope widens to
+`design/gauges` **and** `design/system`; `expo-linear-gradient` renders the hero/performance
+gradients. Chrome (nav bars, player controls) may hide **only as a deterministic function of
+scroll position** — the mockup's behaviour — never tap-to-hide and never on a timer; that amends
+the earlier absolute no-hiding rule.
+
 ### Deck — the control-surface system, and why controls have depth
 
 **Decision:** Player controls are built from **Deck** (`src/design/deck/`): caps that sit at one of
@@ -340,8 +366,9 @@ that is not colour. `DeckButton` separates a *latched* state (`depressed`, the c
 *finger-down* state (its own) — conflating them would pop the pause cap back out the instant the
 finger lifted, which is exactly when a golfer looks at it.
 **Scope:** This is a control-surface system, **not the app's design system**. Type scale, spacing
-rhythm, iconography and the §41 contrast bar are `mobile-app-shell` step 03, which absorbs this
-folder rather than colliding with it — Deck layers on `theme.ts`'s tokens instead of restating them.
+rhythm, iconography and the §41 contrast bar belong to the `design-system` track (which superseded
+`mobile-app-shell` step 03); it absorbs this folder surface-by-surface as it rebuilds the screens
+Deck serves — Deck layers on the theme tokens instead of restating them until then.
 Built on RN 0.86's `boxShadow` (multi-shadow, `inset`) and `experimental_backgroundImage`
 gradients; an earlier React Native would have needed nine-patch images for the same effect.
 
@@ -504,43 +531,50 @@ stop-at-end when off.
 **Scope:** Speed is still applied natively (`setPlaybackSpeed`) — a JS timer would drop frames and
 show a tenth of the swing while calling it slow motion.
 
-### Every swing is the scorecard page; a just-recorded one adds the session chrome
+### Every swing is a card over a fixed video; a just-recorded one adds the session chrome
 
 **Decision:** `SwingPlayer` takes `mode: "review" | "session"` (review is the default; the
-`SwingDetail` route's `afterSwing?: boolean` param maps to session). **Both modes are the same
-screen in two phases** — an old swing's card and a new swing's card are the same product, and
-the report is fetched from mount in both. **Arrival:** the `AfterSwingSummary` slides up over
-the parked picture in an in-tree `SummarySheet` (not a `DeckSheet`: a `Modal` would swallow the
-dock). In session it leaves about an inch of video above it (the swing just happened; the card
-is the subject); in review the card's top edge sits at half the viewport, because an old swing
-was opened to be looked at and the video keeps the top half. **Browse:** the first dismissal —
-drag, chevron, play, a scorecard row — ends arrival for good and starts playback; the screen
-becomes an ordinary scroll, video flush at the top with its transport, the card in the flow
-below it. The slide-up never repeats. What separates the modes is the session chrome only: the
-dock (record / star / delete / play), the stats/video opener preference (review always opens
-with the card; there is no preference to consult), and the arrival height. Review therefore has
-**no delete affordance** — delete lives in the session dock only. The full-viewport no-scroll
-player layout is gone — there is no third shape. If review-mode swings later need their own card
-sections or actions, that is a `mode` prop on `AfterSwingSummary` / a second footer in the dock's
-slot — a local change, not a new screen.
-The `AfterSwingDock` (delete · star · a big primary record circle · play far right) is pinned
-under everything; in browse it **folds to a bare tab** while the video is the subject and comes
-back when the golfer scrolls down into the stats (hysteresis, or taps the tab). While the arrival
-summary covers the picture, the overlay/compare chips are hidden — they act on a video you can
-barely see. Every reveal starts playback except a scorecard row, which lands *paused on the frame
-it names*. The capture flow will navigate here with `afterSwing: true`; until then the swing log
-carries a quiet "Preview the after-swing screen" header row.
-Which face the screen opens with is the golfer's setting: the **opener toggle** (video ▸ / stats
-▥) top-right in the chrome, stats-first by default, device-persisted (`useSummaryPreference`,
-the same account-sync seam as the star). Flipping to video-first while the arrival sheet is up
-shrinks it immediately — the setting looks like what it does — and video-first entry **plays
-without waiting for the analysis artifact**: only a parked start needs the window, and holding
-the replay hostage to a megabytes fetch is the wrong trade (the loop clamps into the window when
-it lands).
-**Gotchas:** The sheet's drag surface is its **header and the hint row**, never the scroll body —
-a JS `PanResponder` cannot reliably take a vertical pull from a native `ScrollView` on Android
-(measured: a capture-phase responder over the content never fired), and
-`react-native-gesture-handler` stays excluded (D47).
+`SwingDetail` route's `afterSwing?: boolean` param maps to session). The screen is a **fixed
+video that never moves with the scorecard card riding over it** (`SummaryCover`): the card is
+always on screen at one of two detents — up over the picture, or parked at a ~46pt bottom peek
+with the whole video exposed — and is draggable from anywhere on itself or the glass. The card
+is a full-screen `ScrollView` whose content is a transparent spacer plus the card, so the drag
+IS a native scroll; release inside the travel zone snaps by drag direction (down parks, up
+opens), and past the open detent the same gesture reads on through the card — one continuous
+scroll, no inner scroll view. Open heights: session rides high, leaving about an inch of video
+(the swing just happened; the card is the subject); review opens at **half the viewport** (an
+old swing was opened to be looked at). Sliding the card down starts playback; pulling it up
+interrupts nothing; a scorecard row slides it down *without* playing and lands paused on the
+frame it names. The report is fetched from mount in both modes.
+Because the cover's scroll surface takes every touch, **all tappable controls are layered above
+it**: the chrome (back, title, opener toggle), the transport console — pinned above the card's
+peek and rendered only while the card is down (its surface is covered when the card is up, like
+the overlay/compare chips, which hide the same way) — and the session dock. The dock mirrors
+the card: expanded while the card is up, folded to its tab while the video is the subject.
+What separates the modes is the session chrome only: the dock (record / star / delete / play),
+the stats/video opener preference (review always opens with the card; there is no preference to
+consult), and the open height. Review therefore has **no delete affordance** — delete lives in
+the session dock only. If review-mode swings later need their own card sections or actions,
+that is a `mode` prop on `AfterSwingSummary` / a second footer in the dock's slot — a local
+change, not a new screen. The capture flow will navigate here with `afterSwing: true`; until
+then the swing log carries a quiet "Preview the after-swing screen" header row.
+Which face a session screen opens with is the golfer's setting: the **opener toggle** (video ▸ /
+stats ▥) top-right in the chrome, stats-first by default, device-persisted
+(`useSummaryPreference`, the same account-sync seam as the star). Flipping to video-first while
+the card is up slides it down immediately — the setting looks like what it does — and video-first
+entry **plays without waiting for the analysis artifact**: only a parked start needs the window,
+and holding the replay hostage to a megabytes fetch is the wrong trade (the loop clamps into the
+window when it lands).
+**Gotchas (each measured on the emulator):** a `ScrollView` with `pointerEvents="box-none"`
+never starts a pan on Android, even from touches on its children — hence the layer-above-it
+design rather than pass-through. A release with velocity must NOT snap at `onScrollEndDrag`
+(the snap fights the native fling and the card rests mid-zone); the fling's own
+`onMomentumScrollEnd` snaps instead, and a fling that clamps at an edge still reconciles the
+detent bookkeeping. The initial placement re-runs on `onContentSizeChange` until the first
+touch — a `scrollTo` issued before the scroll view has content clamps to zero and parks the
+card closed on a screen that asked for it open. A JS `PanResponder` still cannot take a
+vertical pull from a native `ScrollView` (the original measurement stands), and
+`react-native-gesture-handler` stays excluded (D47) — the cover needs neither.
 **Scope:** Delete confirms in the client (`Alert`, destructive, names what is lost) and the screen
 above does the deleting and the leaving. The record cap says plainly that capture has not shipped
 yet. The **star is device-local** (`useStarred`, one AsyncStorage key) — the contract has no
