@@ -40,6 +40,7 @@ export function SheetOverBackdrop({
   backdropOverlay,
   sheetStyle,
   refreshControl,
+  scrollRef,
   testID,
 }: {
   /** The fixed layer (a `HeroBackdrop`, the report's video). Fills the screen. */
@@ -60,6 +61,8 @@ export function SheetOverBackdrop({
   sheetStyle?: object;
   /** A RefreshControl for the sheet's scroll (pull-to-refresh stays a host concern). */
   refreshControl?: React.ReactElement<RefreshControlProps>;
+  /** Imperative seam: the host scrolls (e.g. a "show video" tap → top = backdrop open). */
+  scrollRef?: React.RefObject<{ scrollTo: (opts: { y: number; animated?: boolean }) => void } | null>;
   testID?: string;
 }) {
   const t = useTheme();
@@ -117,6 +120,7 @@ export function SheetOverBackdrop({
       </Animated.View>
 
       <Animated.ScrollView
+        ref={scrollRef as never}
         testID={testID ? `${testID}-scroll` : undefined}
         // Lets the gallery host an instance inside its own scroll; no effect full-screen.
         nestedScrollEnabled

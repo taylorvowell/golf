@@ -26,6 +26,34 @@ and supersedes mobile-app-shell step 03 (the deferred styling pass).
 
 ## Log
 
+## 06 - Swing Report — the sheet
+**Completed:** 2026-08-14 23:55 UTC
+**Phase:** Ideal Swing Design System
+**Summary:** The swing detail's REVIEW shape is now the mockup's report sheet on the step-04
+scaffold (parallax .18/64, overlap 92, initial offset 55% of screen): header (brand/title/
+meta), the `.session-indicator` as a confidence line (band + "N of M checks scored"), the
+`.report-focus` block (still-frame thumb with the aqua play, biggest opportunity from
+`primary`, coach advice deduped when it restates the headline, humanized moment tag), the
+`.report-board` (deterministic strongest/weakest headline, `SwingProfile` with real phase
+callouts + tempo verdict), the `.report-split` panels (findings' human titles — `detail` is a
+raw category id per scoring.py:305, mapped accordingly), and humanized category chips. New
+`features/report/` (selectors + ReportSheet) with 8 unit/render tests pinning honesty
+(abstained phases/categories never numbered, unscored renders "Not scored", never zero).
+Pill dock wired for real: Back, Delete (confirm → deleteSwing), Favorite (device-local
+useStarred, latched state), Latest (jumps to the newest swing). 42 suites / 371 tests green.
+**Named deviations:** the header's mockup three-dot is a Back chevron (a dead menu is worse
+than a changed glyph); the dock ships Back/Delete/Favorite/Latest — "End session" waits for
+practice-loop's session entity and "Swings" duplicated Back; the after-swing and checkpoint
+shapes keep the existing `SwingPlayer` surface until step 07 joins the live player in as the
+backdrop (the backdrop this step is the swing's still frame with an inert center-play). The
+report route now follows the AMBIENT theme (dark pin stays only on the video-parked shapes).
+**Notes:** Emulator-verified light + dark, rest + scrolled; favorite latch and delete-confirm
+exercised on device. Also this session: the wave nav bump recentred on the record button
+(Taylor's screenshot feedback) — circle bottom `totalHeight-54` so bump and button are
+concentric.
+
+---
+
 ## 05 - Swing Log rebuilt to the reference
 **Completed:** 2026-08-14 22:55 UTC
 **Phase:** Ideal Swing Design System

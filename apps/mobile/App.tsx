@@ -68,7 +68,11 @@ SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 // The video-facing surfaces are dark in both themes (see src/theme). Module-level wrappers,
 // not inline closures: an inline component in `component=` remounts its screen every render.
+// The REPORT shape of the swing screen (no afterSwing/checkpoint) follows the ambient theme —
+// its sheet is themed like any page; only the video-parked player shapes stay pinned dark.
 function SwingDetailDark(props: Parameters<typeof SwingDetailRoute>[0]) {
+  const pinned = props.route.params.afterSwing || props.route.params.checkpoint;
+  if (!pinned) return <SwingDetailRoute {...props} />;
   return (
     <FixedDarkTheme>
       <SwingDetailRoute {...props} />

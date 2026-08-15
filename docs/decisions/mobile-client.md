@@ -358,6 +358,12 @@ source for system components, superseding drawn-View glyphs there; SVG's allowed
 gradients. Chrome (nav bars, player controls) may hide **only as a deterministic function of
 scroll position** — the mockup's behaviour — never tap-to-hide and never on a timer; that amends
 the earlier absolute no-hiding rule.
+**The swing screen's shapes (design-system step 06):** opening a swing from the log (review) is
+the **report sheet** on the `SheetOverBackdrop` scaffold and follows the **ambient theme**; the
+after-swing (`afterSwing`) and checkpoint deep-link shapes keep the `SwingPlayer` surface,
+pinned dark. The report's backdrop is the swing's still frame until the live player joins it as
+the video layer (step 07). The report's dock ships Back / Delete / Favorite / Latest — "End
+session" waits for practice-loop's session entity.
 
 ### Deck — the control-surface system, and why controls have depth
 

@@ -119,12 +119,15 @@ export function WaveNav({
     >
       {/* The bar surface. */}
       <View style={{ height: totalHeight, backgroundColor: fill }} />
-      {/* The bump: circle + flatter ellipse in the same fill (`.base::before/::after`). */}
+      {/* The bump: circle + flatter ellipse in the same fill (`.base::before/::after`).
+          The circle is CENTRED on the record button (Taylor 2026-08-14: it sat too high and
+          read as a halo above the button instead of the surface bulging around it). The
+          button's centre sits 6px above the bar top — see the slot row's geometry below. */}
       <View
         pointerEvents="none"
         style={{
           position: "absolute",
-          bottom: totalHeight - 40,
+          bottom: totalHeight - 54,
           alignSelf: "center",
           width: 96,
           height: 96,
@@ -136,7 +139,7 @@ export function WaveNav({
         pointerEvents="none"
         style={{
           position: "absolute",
-          bottom: totalHeight - 8 - 24,
+          bottom: totalHeight - 16,
           alignSelf: "center",
           width: 122,
           height: 24,
