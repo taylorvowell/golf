@@ -21,7 +21,8 @@ machine-level faults that have already cost time.
 | | |
 |---|---|
 | Device | **Galaxy S25+**, `SM-S936U1`, Android 16, Snapdragon 8 Elite. Flagship — read capture results asymmetrically (a failure is decisive, a pass does not clear a mid-range device). **Taylor's daily-driver: never driven without his say-so** (root `CLAUDE.md`). |
-| Desktop emulator | AVD **`swingsage`** → `emulator-5554`. medium_phone 1080×2400 @420dpi, Android 36 `google_apis_playstore` **x86_64**, 4 GB RAM, `hw.gpu.mode=host`. **Claude drives this one freely.** For layout and behaviour only — every *number* off it is meaningless (software-rendered x86_64). RUNBOOK §13. |
+| Desktop emulator | AVD **`swingsage`** → `emulator-5554`. medium_phone 1080×2400 @420dpi, Android 36 `google_apis_playstore` **x86_64**, **8 cores / 8 GB RAM** (raised from 4/4 GB 2026-08-15 for interaction smoothness), `hw.gpu.mode=host` (the GTX 1080 renders), guest window/transition/animator scales set to 0. **Claude drives this one freely.** For layout and behaviour only — every *number* off it is meaningless (software-rendered x86_64). RUNBOOK §13. |
+| Emulator hypervisor | Runs on **WHPX** — the slow path on this AMD 5950X. Google's faster **AEHD** driver is mutually exclusive with the Windows hypervisor, which **Docker Desktop (the dev Postgres) requires** — so AEHD stays off the table unless the DB ever leaves Docker Desktop. Do not re-derive this; it was checked 2026-08-15. |
 | Emulator sign-in | **The one thing it cannot self-serve.** A fresh AVD has no Google account, so native Google sign-in stops at "Checking info…" and everything behind the auth gate is unreachable. Adding one is one-time and persists in the AVD. |
 | No iPhone | iOS is unbuildable locally: no Mac, no device (D5, D12). |
 | adb serial | `R3CY10EZ19E` (the phone). **Always `adb -s <target>`** — with both attached, a bare `adb shell input` is a coin flip between the emulator and Taylor's phone. |
