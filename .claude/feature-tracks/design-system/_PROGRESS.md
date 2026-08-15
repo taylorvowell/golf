@@ -26,6 +26,48 @@ and supersedes mobile-app-shell step 03 (the deferred styling pass).
 
 ## Log
 
+## 07 - Swing Report — the video layer and video-open state
+**Completed:** 2026-08-15 06:13 UTC
+**Phase:** Ideal Swing Design System
+**Summary:** The report's backdrop is now the LIVE frame-accurate player (`features/report/
+VideoLayer.tsx` — FrameClockView + SwingOverlay + useFramePlayer, stage fitted to the
+artifact's aspect via the player's own `fitBox`), and scrolling the sheet away enters the
+mockup's **video-open** state exactly: controls shell fades/slides in 280ms
+(`.report-v2-controls-shell` as the scaffold's `backdropOverlay`), pill nav slides out, and
+the sheet drops a further 132 on its own 320ms clock (new `openSheetDrop` scaffold prop) so
+its peek clears the screen. Open plays / closed pauses (the SummaryCover product decision,
+re-applied). New `SwingScrub` (mockup phase blocks Address/Backswing/Approach/Impact/Finish
+with widths from the artifact's real spans via the transport's one `scrubMap`; the mockup's
+2px gaps drawn as inset margins so the x↔frame mapping stays exact; white dot + stem
+indicator; adjustable role + frame-stepping actions) and `ReportPlayerBar` (0.1×/0.5×/1×
+pill group, aqua gradient play cap, Overlays/Compare pills opening the existing DeckSheet
+panels; compare renders `ReferencePane` beside the stage). 7 new tests pin the open-state
+contract (controls/nav gating, play-on-open, pause-on-close), a11y frame-stepping, artifact
+phase rendering, and honest disable. 43 suites / 378 tests green; Gate 3 spot-check
+(`checkoverlay.ts` on swing1) clean — overlay modules untouched.
+**Named deviations:** `VideoLayer` HOSTS the scaffold rather than being only its backdrop
+slot (the step file's sketch) — the video-open controls live in `backdropOverlay` (the only
+touchable layer over the backdrop) and read the transport at frame rate, so hosting keeps
+the 60Hz path in one component while the sheet arrives as a stable element and bails by
+identity; `SheetOverBackdrop` hardened for that host (Animated.event + interpolations
+hoisted — zero re-attachment per frame). The mockup's top-right Latest/expand buttons are
+not reproduced (Latest lives in the pill nav; expand is meaningless full-screen); the
+center-play stays decorative as in the mockup (no handler there either) and fades out in
+video-open as part of the same scroll state. "Ideal score" label renders as "Score" (brand
+rule).
+**Notes:** Root-caused a real field bug on the way: the artifact fetch (largest payload in
+the app) was LOSING to the ApiClient's 12s default timeout on the LAN dev server — the same
+fetch marginally succeeded or failed per screen, reading as "the overlay sometimes doesn't
+draw". `useAnalysis` now passes the documented per-call override (30s); register updated.
+Emulator behaviour pass recorded both transitions plus a scrub drag (indicator, picture,
+trace and skeleton land together on Impact). Pre-existing dev-only nit observed, not fixed
+(out of step scope): fire-and-forget native calls (`markOverlayCommitted`, `pause`) surface
+as LogBox unhandled-rejection toasts when a Fast Refresh/unmount races an in-flight call —
+also present on the SwingPlayer surface. S25+ device pass filed in HANDOFF as the named
+shortfall (emulator frame numbers are meaningless by rule).
+
+---
+
 ## 06 - Swing Report — the sheet
 **Completed:** 2026-08-14 23:55 UTC
 **Phase:** Ideal Swing Design System

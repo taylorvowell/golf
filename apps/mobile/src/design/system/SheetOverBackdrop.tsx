@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Animated,
   StyleSheet,
@@ -35,6 +35,7 @@ export function SheetOverBackdrop({
   initialOffset = 0,
   overlap = 74,
   onOpenChange,
+  openSheetDrop = 0,
   children,
   stickyFooter,
   backdropOverlay,
@@ -53,6 +54,12 @@ export function SheetOverBackdrop({
   /** How far the sheet's rounded top rides over the backdrop (Log 74, Report 92). */
   overlap?: number;
   onOpenChange?: (open: boolean) => void;
+  /**
+   * How far the sheet body drops while open (the report's `.video-open .report-v2-sheet`
+   * +132px), so its resting peek clears the screen's bottom edge and the backdrop is truly
+   * full-bleed. 0 (the default, the Log's behaviour) leaves the sheet where the scroll put it.
+   */
+  openSheetDrop?: number;
   children: ReactNode;
   /** Floats at the screen's bottom edge over the sheet; slides away while open. */
   stickyFooter?: ReactNode;
@@ -97,24 +104,58 @@ export function SheetOverBackdrop({
     [openThreshold],
   );
 
+  /**
+   * The animated plumbing is hoisted so it survives re-renders of the HOST. The report screen
+   * hosts this scaffold from the component that owns the video transport, which re-renders per
+   * presented frame — an `Animated.event` or interpolation built inline in JSX would be a new
+   * node 60×/s, each one re-attached to the native driver. Hoisted, a host render reconciles
+   * the same nodes and attaches nothing.
+   */
+  const onScrollEvent = useMemo(
+    () =>
+      Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+        useNativeDriver: true,
+        listener: onScroll,
+      }),
+    [scrollY, onScroll],
+  );
+  const parallaxY = useMemo(
+    () =>
+      scrollY.interpolate({
+        inputRange: [0, parallax.cap / parallax.factor],
+        outputRange: [0, parallax.cap],
+        extrapolate: "clamp",
+      }),
+    [scrollY, parallax.cap, parallax.factor],
+  );
+  const overlaySlide = useMemo(
+    () => openAnim.interpolate({ inputRange: [0, 1], outputRange: [24, 0] }),
+    [openAnim],
+  );
+  const footerFade = useMemo(
+    () => openAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
+    [openAnim],
+  );
+  const footerSlide = useMemo(
+    () => openAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 118] }),
+    [openAnim],
+  );
+  // The sheet's own drop rides a separate clock: the mockup gives it .32s against the
+  // chrome's .28s, and that 40ms is visible — the sheet settles just after the controls land.
+  const sheetDrop = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(sheetDrop, {
+      toValue: open ? openSheetDrop : 0,
+      duration: 320,
+      useNativeDriver: true,
+    }).start();
+  }, [open, openSheetDrop, sheetDrop]);
+
   return (
     <View style={{ flex: 1 }} testID={testID}>
       {/* The fixed backdrop, sinking under the sheet at the parallax rate. */}
       <Animated.View
-        style={[
-          StyleSheet.absoluteFill,
-          {
-            transform: [
-              {
-                translateY: scrollY.interpolate({
-                  inputRange: [0, parallax.cap / parallax.factor],
-                  outputRange: [0, parallax.cap],
-                  extrapolate: "clamp",
-                }),
-              },
-            ],
-          },
-        ]}
+        style={[StyleSheet.absoluteFill, { transform: [{ translateY: parallaxY }] }]}
       >
         {backdrop}
       </Animated.View>
@@ -126,10 +167,7 @@ export function SheetOverBackdrop({
         nestedScrollEnabled
         refreshControl={refreshControl}
         contentOffset={{ x: 0, y: initialOffset }}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { y: scrollY } } }],
-          { useNativeDriver: true, listener: onScroll },
-        )}
+        onScroll={onScrollEvent}
         scrollEventThrottle={16}
         // The parallax cap must never be visually exceeded — no rubber-banding above 0.
         bounces={false}
@@ -139,7 +177,7 @@ export function SheetOverBackdrop({
       >
         {/* Transparent spacer — the backdrop shows through; touches here scroll. */}
         <View style={{ height: backdropHeight }} pointerEvents="none" />
-        <View
+        <Animated.View
           style={[
             {
               flexGrow: 1,
@@ -148,32 +186,24 @@ export function SheetOverBackdrop({
               borderTopRightRadius: 30,
               backgroundColor: t.bgElevated,
               ...t.shadowLg,
+              transform: [{ translateY: sheetDrop }],
             },
             sheetStyle,
           ]}
         >
           <SheetHandle />
           {children}
-        </View>
+        </Animated.View>
       </Animated.ScrollView>
 
       {/* Backdrop chrome: present only while open; 0→1 / 24→0 like `.video-open`'s shell. */}
       {backdropOverlay != null && (
         <Animated.View
+          testID={testID ? `${testID}-overlay` : undefined}
           pointerEvents={open ? "box-none" : "none"}
           style={[
             StyleSheet.absoluteFill,
-            {
-              opacity: openAnim,
-              transform: [
-                {
-                  translateY: openAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [24, 0],
-                  }),
-                },
-              ],
-            },
+            { opacity: openAnim, transform: [{ translateY: overlaySlide }] },
           ]}
         >
           {backdropOverlay}
@@ -183,21 +213,15 @@ export function SheetOverBackdrop({
       {/* The floating footer (a SessionPillNav): slides away while the backdrop is open. */}
       {stickyFooter != null && (
         <Animated.View
+          testID={testID ? `${testID}-footer` : undefined}
           pointerEvents={open ? "none" : "box-none"}
           style={{
             position: "absolute",
             left: 0,
             right: 0,
             bottom: 12,
-            opacity: openAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
-            transform: [
-              {
-                translateY: openAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0, 118],
-                }),
-              },
-            ],
+            opacity: footerFade,
+            transform: [{ translateY: footerSlide }],
           }}
         >
           {stickyFooter}

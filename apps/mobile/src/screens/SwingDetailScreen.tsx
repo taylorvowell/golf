@@ -1,30 +1,21 @@
 import { useCallback, useMemo, useRef } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  StyleSheet,
-  Text,
-  View,
-  useWindowDimensions,
-} from "react-native";
-import { Image } from "expo-image";
+import { ActivityIndicator, Alert, StyleSheet, Text, View } from "react-native";
 import {
   ArrowDownToLine,
   ArrowLeft,
-  Play,
   Star,
   Trash2,
 } from "lucide-react-native";
 
-import { SessionPillNav, SheetOverBackdrop } from "../design/system";
+import { SessionPillNav } from "../design/system";
 import { ReportSheet } from "../features/report/ReportSheet";
+import { ReportVideoLayer } from "../features/report/VideoLayer";
 import { buildReportViewModel } from "../features/report/selectors";
 import { SwingPlayer } from "../features/player/SwingPlayer";
 import { useReport } from "../features/player/useReport";
 import { createdAtMs } from "../features/swings/sessions";
 import { useStarred } from "../features/swings/useStarred";
 import { deleteSwing, useSwing, useSwings } from "../features/swings/useSwings";
-import { useAuthenticatedImage } from "../platform/useAuthenticatedImage";
 import { useAppNavigation } from "../navigation";
 import { COLORS, useTheme } from "../theme";
 
@@ -32,11 +23,11 @@ import { COLORS, useTheme } from "../theme";
  * One swing, two shapes:
  *
  * - **Review** (from the log): the Ideal Swing report — the sheet from the reference mockup
- *   riding over a full-bleed picture layer. This step the layer is the swing's still frame;
- *   step 07 replaces it with the live frame-accurate player (the mockup's video-open state).
+ *   over the LIVE frame-accurate player (`ReportVideoLayer`). Scrolling the sheet away enters
+ *   the mockup's video-open state: pill nav out, full player controls in.
  * - **After-swing / checkpoint** (`afterSwing`, `checkpoint`): the existing `SwingPlayer`
  *   surface unchanged — the just-recorded flow and Home's "see it on your swing" both need
- *   the parked picture, which stays the player's job until step 07 joins the two.
+ *   the parked picture and the session chrome, which stay the player's job.
  */
 
 export interface SwingDetailScreenProps {
@@ -105,7 +96,7 @@ export function SwingDetailScreen({
   return <ReportScreen swing={swing} onDelete={onDelete} />;
 }
 
-/** The review shape: the report sheet over the (for now, still) picture layer. */
+/** The review shape: the report sheet over the live player layer (the mockup's video-open). */
 function ReportScreen({
   swing,
   onDelete,
@@ -115,11 +106,9 @@ function ReportScreen({
 }) {
   const navigation = useAppNavigation();
   const t = useTheme();
-  const { height } = useWindowDimensions();
   const report = useReport(swing.id, null, true);
   const { starred, toggle } = useStarred(swing.id);
   const { state: listState } = useSwings();
-  const backdropImage = useAuthenticatedImage(`swings/${swing.id}/thumb?poster=1`);
   const scrollRef = useRef<{ scrollTo: (opts: { y: number; animated?: boolean }) => void }>(
     null,
   );
@@ -141,99 +130,71 @@ function ReportScreen({
     ]);
   }, [onDelete]);
 
-  // The full-bleed picture layer — the mockup's video canvas, still until step 07.
-  const backdrop = (
-    <View style={{ flex: 1, backgroundColor: "#081426" }}>
-      {backdropImage ? (
-        <Image
-          source={backdropImage}
-          style={StyleSheet.absoluteFill}
-          contentFit="cover"
-          cachePolicy="disk"
-        />
-      ) : null}
-      {/* A quiet scrim so the still never fights the sheet's edge. */}
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(8,20,38,0.25)" }]} />
-      {/* .report-v2-center-play — inert until the live player lands behind it. */}
-      <View
-        style={{
-          position: "absolute",
-          left: "50%",
-          top: "42%",
-          marginLeft: -36,
-          width: 72,
-          height: 72,
-          borderRadius: 36,
-          alignItems: "center",
-          justifyContent: "center",
-          backgroundColor: "rgba(255,255,255,0.12)",
-        }}
-      >
-        <Play size={26} color="#FFFFFF" fill="#FFFFFF" strokeWidth={0} />
-      </View>
-    </View>
+  /** The analysed frame's shape off the LIST, so the stage is right on the first paint. */
+  const sized =
+    swing.views.find((v) => v.id === swing.primaryViewId && v.width && v.height) ??
+    swing.views.find((v) => v.width && v.height);
+  const aspectRatio = sized?.width && sized?.height ? sized.width / sized.height : null;
+
+  const primaryView =
+    swing.views.find((v) => v.id === swing.primaryViewId) ?? swing.views[0] ?? null;
+  const viewPill = primaryView ? `${viewName(primaryView)} · ${swing.label}` : swing.label;
+
+  /**
+   * The sheet and the pill nav as stable elements: the video layer under them re-renders per
+   * presented frame, and React must bail on this whole subtree by identity — a report screen
+   * reconciling its scorecard at frame rate is exactly the churn the player rules forbid.
+   */
+  const stickyFooter = useMemo(
+    () => (
+      <SessionPillNav
+        onNew={() => navigation.navigate("Record")}
+        items={[
+          {
+            key: "back",
+            label: "Back",
+            tone: "end",
+            onPress: () => navigation.goBack(),
+            icon: (c) => <ArrowLeft size={18} color={c} strokeWidth={1.9} />,
+          },
+          {
+            key: "delete",
+            label: "Delete",
+            tone: "danger",
+            onPress: confirmDelete,
+            testID: "report-delete",
+            icon: (c) => <Trash2 size={18} color={c} strokeWidth={1.9} />,
+          },
+          {
+            key: "favorite",
+            label: "Favorite",
+            active: starred,
+            onPress: toggle,
+            testID: "report-favorite",
+            icon: (c) => (
+              <Star size={18} color={c} strokeWidth={1.9} fill={starred ? c : "none"} />
+            ),
+          },
+          {
+            key: "latest",
+            label: "Latest",
+            tone: "latest",
+            active: newestId === swing.id,
+            onPress: () => {
+              if (newestId && newestId !== swing.id) {
+                navigation.navigate("SwingDetail", { id: newestId });
+              }
+            },
+            icon: (c) => <ArrowDownToLine size={18} color={c} strokeWidth={1.9} />,
+          },
+        ]}
+      />
+    ),
+    [navigation, confirmDelete, starred, toggle, newestId, swing.id],
   );
 
-  return (
-    <SheetOverBackdrop
-      testID="report"
-      backdrop={backdrop}
-      backdropHeight={height}
-      parallax={{ factor: 0.18, cap: 64 }}
-      initialOffset={Math.round(height * 0.55)}
-      overlap={92}
-      scrollRef={scrollRef}
-      sheetStyle={{ backgroundColor: t.bgElevated }}
-      stickyFooter={
-        <SessionPillNav
-          onNew={() => navigation.navigate("Record")}
-          items={[
-            {
-              key: "back",
-              label: "Back",
-              tone: "end",
-              onPress: () => navigation.goBack(),
-              icon: (c) => <ArrowLeft size={18} color={c} strokeWidth={1.9} />,
-            },
-            {
-              key: "delete",
-              label: "Delete",
-              tone: "danger",
-              onPress: confirmDelete,
-              testID: "report-delete",
-              icon: (c) => <Trash2 size={18} color={c} strokeWidth={1.9} />,
-            },
-            {
-              key: "favorite",
-              label: "Favorite",
-              active: starred,
-              onPress: toggle,
-              testID: "report-favorite",
-              icon: (c) => (
-                <Star
-                  size={18}
-                  color={c}
-                  strokeWidth={1.9}
-                  fill={starred ? c : "none"}
-                />
-              ),
-            },
-            {
-              key: "latest",
-              label: "Latest",
-              tone: "latest",
-              active: newestId === swing.id,
-              onPress: () => {
-                if (newestId && newestId !== swing.id) {
-                  navigation.navigate("SwingDetail", { id: newestId });
-                }
-              },
-              icon: (c) => <ArrowDownToLine size={18} color={c} strokeWidth={1.9} />,
-            },
-          ]}
-        />
-      }
-    >
+  const sheetContent = useMemo(
+    () => (
       <View style={{ paddingBottom: 140 }}>
         {report.kind === "loading" || report.kind === "idle" ? (
           <View style={styles.sheetCentre}>
@@ -266,7 +227,26 @@ function ReportScreen({
           />
         )}
       </View>
-    </SheetOverBackdrop>
+    ),
+    [report.kind, vm, swing.id, navigation, t],
+  );
+
+  return (
+    <ReportVideoLayer
+      testID="report"
+      swingId={swing.id}
+      frameCount={swing.frameCount}
+      fps={swing.fps}
+      aspectRatio={aspectRatio}
+      score={typeof swing.overallScore === "number" ? swing.overallScore : null}
+      tempoRatio={swing.tempoRatio}
+      viewPill={viewPill}
+      scrollRef={scrollRef}
+      sheetStyle={{ backgroundColor: t.bgElevated }}
+      stickyFooter={stickyFooter}
+    >
+      {sheetContent}
+    </ReportVideoLayer>
   );
 }
 

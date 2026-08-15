@@ -957,8 +957,11 @@ const COVER_PEEK = 46;
  * Zero until the viewport has been measured. Zero rather than a guess: a stage that appeared at a
  * default size and then corrected itself is the layout shift this whole chain exists to prevent,
  * and one frame of nothing is invisible where one frame of the wrong size is not.
+ *
+ * Exported for the report's video layer, which must size its stage by exactly this rule —
+ * two copies of "fit the artifact's aspect" is a one-pixel disagreement waiting to be a bug.
  */
-function fitBox(aspect: number, w: number, h: number): { w: number; h: number } {
+export function fitBox(aspect: number, w: number, h: number): { w: number; h: number } {
   if (!(aspect > 0) || w <= 0 || h <= 0) return { w: 0, h: 0 };
   const byWidth = w / aspect;
   return byWidth <= h ? { w, h: byWidth } : { w: h * aspect, h };

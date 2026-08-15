@@ -528,12 +528,15 @@ stay a chip row rather than becoming tiles: there are dozens of fields and every
 tile to say what an angle looks like, and the chips choose which.
 **Scope:** A group the artifact cannot support is still hidden, never disabled.
 
-### A three-way speed slider, no loop button, no frame stepper
+### Three speeds, no loop button, no frame stepper
 
-**Decision:** The dock is: a **segmented speed slider** on the left (`1x` · `0.5x` · `0.1x`, the lit
-pill sliding between segments), the round play cap centred, and **Metrics** and **Analysis** to the
-right. Looping is permanently on and has no control. There is no frame-stepper overlay and no speed
-picker sheet.
+**Decision:** The speed control is three rates — `1x` · `0.5x` · `0.1x` — and nothing else.
+Looping is permanently on and has no control. There is no frame-stepper overlay and no speed
+picker sheet. Two skins carry it: the after-swing/checkpoint player's dock keeps the **segmented
+slider** (the lit pill sliding between segments, play cap centred, **Metrics** and **Analysis**
+to the right), and the Ideal Swing report's video-open player bar draws the same three rates as
+the mockup's **pill group** (`.report-v2-speed`, slowest first) beside its aqua play cap and the
+**Overlays**/**Compare** pills (`ReportPlayerBar`).
 **Gotchas:** Three speeds, not four — a quarter sat between two rates that already do their jobs
 (half is "the whole shape, slower", a tenth is for the transition, which is over in about four
 frames) and made each segment narrow enough to mis-tap. Labels are plain decimals: a `¼` glyph is a
@@ -700,7 +703,10 @@ The cache never decides truth — a 401 clears it, sign-out clears it (auth boun
 revalidate keeps drawing the confirmed list rather than a network-error screen about data the
 device has. Every `ApiClient.request` carries a default **12 s AbortController timeout** (RN's
 OkHttp ships none) mapped to a typed `timeout` error that renders as `unreachable`; fetch hooks
-pass abort signals so a popped screen stops downloading and parsing. Captured media credentials
+pass abort signals so a popped screen stops downloading and parsing. One override: the
+`analysis.json` fetch (`useAnalysis`) runs at **30 s** — the artifact is the largest payload the
+app moves and the 12 s default was measured losing to it on the LAN dev server, which made the
+overlay "sometimes" work per screen. Captured media credentials
 (`useAuthenticatedImage`, the player's video source) re-resolve on `TOKEN_REFRESHED`/`SIGNED_IN`,
 because a `{uri, headers}` pair is a captured token and the media route answers a dead one 404,
 not 401 (D48). Playback pauses on AppState leaving `active` and resumes on return if it was

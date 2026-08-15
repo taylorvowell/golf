@@ -56,7 +56,14 @@ export function useAnalysis(swingId: string | undefined, view?: string | null): 
       : `swings/${swingId}/analysis`;
 
     void api
-      .request<Analysis>(path, { signal: controller.signal })
+      /**
+       * The artifact is the largest payload the app moves (whole-clip keypoints, several MB),
+       * and the default 12s timeout has been measured LOSING to it on the LAN dev server —
+       * the same fetch marginally succeeds or fails per screen, which reads as "the overlay
+       * sometimes doesn't work". 30s is the per-call override the client documents for
+       * anything genuinely slow; a production host answers in a fraction of either number.
+       */
+      .request<Analysis>(path, { signal: controller.signal }, 30_000)
       .then((analysis) => {
         if (live) setState({ kind: "ok", analysis });
       })
