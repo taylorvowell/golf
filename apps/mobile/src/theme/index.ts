@@ -14,8 +14,8 @@
  * footage keeps its own light (see `docs/decisions/mobile-client.md`). Those files, and the
  * deck system layered on them, keep importing `COLORS`; nothing themed may.
  */
-export { BLUE, GREEN, INK } from "./palette";
-export { DARK, LIGHT, type Theme } from "./themes";
+export { AQUA, COBALT, LAVENDER, NAVY, SEMANTIC } from "./palette";
+export { DARK, LIGHT, type ShadowStyle, type Theme } from "./themes";
 export {
   FixedDarkTheme,
   ThemeProvider,

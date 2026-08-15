@@ -36,6 +36,8 @@ export type RootStackParamList = {
   Settings: undefined;
   Goals: undefined;
   DeleteAccount: undefined;
+  /** Dev-only: the design-system living spec (registered under `__DEV__` in App.tsx). */
+  SystemGallery: undefined;
 };
 
 /**

@@ -64,9 +64,11 @@ beforeEach(() => {
 describe("SwingLogScreen", () => {
   it("lists the golfer's swings", async () => {
     mockRequest.mockResolvedValue({ swings: [swing()] });
-    const { getByText } = await render(<SwingLogScreen />);
+    // The score renders in several mockup slots at once (hero ring, avg box, swing ring) —
+    // what is pinned is that the label and the ROUNDED score are on screen, not slot count.
+    const { getByText, getAllByText } = await render(<SwingLogScreen />);
     await waitFor(() => expect(getByText("Driver — 12 Aug")).toBeTruthy());
-    expect(getByText("72")).toBeTruthy();
+    expect(getAllByText("72").length).toBeGreaterThan(0);
   });
 
   it("opens the after-swing preview on the newest swing", async () => {
@@ -124,8 +126,8 @@ describe("SwingLogScreen", () => {
 
   it("does not render an unscored swing as zero", async () => {
     mockRequest.mockResolvedValue({ swings: [swing({ overallScore: null, band: null })] });
-    const { getByText, queryByText } = await render(<SwingLogScreen />);
-    await waitFor(() => expect(getByText(/not\s*scored/)).toBeTruthy());
+    const { getAllByText, queryByText } = await render(<SwingLogScreen />);
+    await waitFor(() => expect(getAllByText(/not scored/i).length).toBeGreaterThan(0));
     expect(queryByText("0")).toBeNull();
   });
 

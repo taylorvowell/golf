@@ -58,6 +58,19 @@ export function SettingsScreen() {
         />
       </ListGroup>
 
+      {__DEV__ && (
+        <>
+          <Text style={styles.tag}>Developer</Text>
+          <ListGroup>
+            <ListRow
+              title="Design system gallery"
+              subtitle="Every primitive, both themes — the living spec"
+              onPress={() => navigation.navigate("SystemGallery")}
+            />
+          </ListGroup>
+        </>
+      )}
+
       <Text style={styles.version}>SwingSage {CLIENT_VERSION}</Text>
     </ScrollView>
   );

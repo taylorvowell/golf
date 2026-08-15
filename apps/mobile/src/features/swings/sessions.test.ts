@@ -1,4 +1,10 @@
-import { SESSION_GAP_MS, sessionize } from "./sessions";
+import {
+  SESSION_GAP_MS,
+  heroHeadline,
+  sessionStats,
+  sessionize,
+  weekMap,
+} from "./sessions";
 import type { SwingSummary } from "@swingsage/schema/contract";
 
 /**
@@ -51,4 +57,60 @@ it("normalizes second-precision createdAt, so old rows land in the right session
   const seconds = Math.floor(T0 / 1000);
   const sessions = sessionize([swing("a", seconds, 50), swing("b", T0 + 60_000, 60)]);
   expect(sessions).toHaveLength(1);
+});
+
+describe("sessionStats (the hero's numbers)", () => {
+  it("derives avg/best/start/improvement from scored swings only", () => {
+    const [s] = sessionize([
+      swing("a", T0, 74),
+      swing("b", T0 + 60_000, null),
+      swing("c", T0 + 120_000, 91),
+      swing("d", T0 + 180_000, 81),
+    ]);
+    expect(sessionStats(s)).toEqual({ avg: 82, best: 91, start: 74, improvement: 7 });
+  });
+
+  it("abstains entirely when nothing scored — never fabricates a zero", () => {
+    const [s] = sessionize([swing("a", T0, null)]);
+    expect(sessionStats(s)).toEqual({ avg: null, best: null, start: null, improvement: null });
+  });
+
+  it("withholds improvement under two scored swings", () => {
+    const [s] = sessionize([swing("a", T0, 80)]);
+    expect(sessionStats(s).improvement).toBeNull();
+  });
+});
+
+describe("weekMap", () => {
+  it("marks today active and days with swings dotted", () => {
+    const sessions = sessionize([swing("a", T0, 70)]);
+    const days = weekMap(sessions, T0);
+    expect(days).toHaveLength(7);
+    expect(days[6].active).toBe(true);
+    expect(days[6].hasSwings).toBe(true);
+    expect(days[0].hasSwings).toBe(false);
+  });
+});
+
+describe("heroHeadline", () => {
+  it("calls the week's strongest session strongest", () => {
+    const sessions = sessionize([
+      swing("a", T0 - SESSION_GAP_MS - 60_000, 70),
+      swing("b", T0, 85),
+    ]);
+    expect(heroHeadline(sessions, T0)).toBe("Your strongest session this week.");
+  });
+
+  it("says most recent when a better session exists this week", () => {
+    const sessions = sessionize([
+      swing("a", T0 - SESSION_GAP_MS - 60_000, 90),
+      swing("b", T0, 70),
+    ]);
+    expect(heroHeadline(sessions, T0)).toBe("Your most recent session.");
+  });
+
+  it("is honest about an unscored latest session", () => {
+    const sessions = sessionize([swing("a", T0, null)]);
+    expect(heroHeadline(sessions, T0)).toBe("Your latest session is not scored yet.");
+  });
 });

@@ -333,6 +333,15 @@ video-open state, the pill nav hiding at the top). The build lives in the `desig
 the reusable component layer is `src/design/system/` over rewritten `src/theme/` tokens, so future
 pages are assembled from existing pieces, never designed ad hoc. This supersedes mobile-app-shell
 step 03 (the deferred styling pass).
+**The token layers (built, step 01):** `palette.ts` holds the mockup's hex values verbatim (ramps +
+per-theme surface sets — the only file where a hex is born); `themes.ts` is the semantic
+`IdealTokens` set including the hero gradient stops, glass, and per-theme `shadowSm/Md/Lg/Cobalt/
+Aqua` spreadable RN shadow styles; `legacy.ts` aliases the old token names (`panel`, `accent`,
+`violet`, …) onto the new palette so untouched screens compile and render recoloured — it is
+temporary and dies in step 09. Type lives in `src/design/system/typography.ts` (`FONT_DISPLAY`/
+`FONT_BODY` weight maps + the six-step `TYPE` scale, em-tracking converted to absolute px); the
+wordmark constant in `src/design/system/brand.ts`. Fonts load in `App.tsx` before the first frame
+(splash holds; a font error degrades to the system face rather than holding the splash).
 **Named deviations from pixel-exactness** (each deliberate, none silent): display type is **Barlow
 Semi Condensed** + **Inter** body, bundled via expo-font — Bahnschrift is Windows-licensed and
 cannot ship; glass surfaces are near-opaque theme fills, not backdrop blur (`expo-blur` stays out

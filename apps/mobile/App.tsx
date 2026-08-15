@@ -1,7 +1,19 @@
+import {
+  BarlowSemiCondensed_700Bold,
+  BarlowSemiCondensed_800ExtraBold,
+  BarlowSemiCondensed_900Black,
+} from "@expo-google-fonts/barlow-semi-condensed";
+import {
+  Inter_400Regular,
+  Inter_600SemiBold,
+  Inter_700Bold,
+} from "@expo-google-fonts/inter";
 import { DarkTheme, DefaultTheme, NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import { useMemo } from "react";
+import { useFonts } from "expo-font";
+import * as SplashScreen from "expo-splash-screen";
+import { useEffect, useMemo } from "react";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -20,7 +32,9 @@ import { RecordScreen } from "./src/screens/RecordScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { SwingDetailRoute } from "./src/screens/SwingDetailRoute";
 import { SwingLogScreen } from "./src/screens/SwingLogScreen";
+import { SystemGalleryScreen } from "./src/screens/SystemGalleryScreen";
 import type { RootStackParamList, TabParamList } from "./src/navigation";
+import { NavVisibilityProvider } from "./src/design/system/navVisibility";
 import { COLORS, FixedDarkTheme, ThemeProvider, useTheme } from "./src/theme";
 
 /**
@@ -47,6 +61,10 @@ import { COLORS, FixedDarkTheme, ThemeProvider, useTheme } from "./src/theme";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<TabParamList>();
+
+// The splash holds until the design system's two faces are on device — a first frame in the
+// system fallback font would flash every title, then reflow. Failure is non-fatal by design.
+SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 // The video-facing surfaces are dark in both themes (see src/theme). Module-level wrappers,
 // not inline closures: an inline component in `component=` remounts its screen every render.
@@ -114,8 +132,9 @@ function Root() {
         <VersionGate>
           <AuthProvider>
             <AuthGate>
-              <NavigationContainer theme={navTheme}>
-                <Stack.Navigator
+              <NavVisibilityProvider>
+                <NavigationContainer theme={navTheme}>
+                  <Stack.Navigator
                   screenOptions={{
                     headerStyle: { backgroundColor: t.bg },
                     headerTintColor: t.text,
@@ -164,8 +183,17 @@ function Root() {
                     component={DeleteAccountRoute}
                     options={{ title: "Delete account" }}
                   />
+                  {/* The design system's living spec — dev clients only, costs nothing in release. */}
+                  {__DEV__ && (
+                    <Stack.Screen
+                      name="SystemGallery"
+                      component={SystemGalleryScreen}
+                      options={{ title: "Design system" }}
+                    />
+                  )}
                 </Stack.Navigator>
-              </NavigationContainer>
+                </NavigationContainer>
+              </NavVisibilityProvider>
             </AuthGate>
           </AuthProvider>
         </VersionGate>
@@ -175,6 +203,24 @@ function Root() {
 }
 
 export default function App() {
+  // The design system's faces (typography.ts). `error` unblocks rather than reports: a
+  // corrupt font asset must degrade to the system face, never hold the splash forever.
+  const [fontsReady, fontsError] = useFonts({
+    BarlowSemiCondensed_700Bold,
+    BarlowSemiCondensed_800ExtraBold,
+    BarlowSemiCondensed_900Black,
+    Inter_400Regular,
+    Inter_600SemiBold,
+    Inter_700Bold,
+  });
+  const ready = fontsReady || fontsError !== null;
+
+  useEffect(() => {
+    if (ready) void SplashScreen.hideAsync().catch(() => undefined);
+  }, [ready]);
+
+  if (!ready) return null;
+
   return (
     <SafeAreaProvider>
       <ThemeProvider>
