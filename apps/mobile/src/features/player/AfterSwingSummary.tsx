@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { Analysis, CheckpointScore, Finding, Priority } from "@swingsage/schema/contract";
 
 import { ArcGauge, RingGauge, TrendLine } from "../../design/gauges";
-import { COLORS } from "../../theme";
+import { AQUA, COBALT, COLORS, LAVENDER } from "../../theme";
 import { checkpointA11yLabel, checkpointTarget } from "./checkpointFrames";
 import { categoryLabel } from "./scoreDisplay";
 import type { ReportState } from "./useReport";
@@ -40,11 +40,11 @@ export interface AfterSwingSummaryProps {
   onSeekToFrame?: (frame: number) => void;
 }
 
-/** The sample's trend violet — slightly brighter than the token, kept as the sample drew it. */
-const TREND = "#9b6cff";
-/** The sample's ring colour by score — cyan when pure, indigo mid, violet low. */
+/** The trend line's voice — lavender, the system's quiet-emphasis colour (step 09 re-token). */
+const TREND = LAVENDER[500];
+/** Ring colour by score — aqua when pure, cobalt mid, lavender low (the ArcGauge's ramp). */
 function ringColor(score: number): string {
-  return score >= 85 ? "#5ed0ff" : score >= 70 ? "#6e92ff" : "#8b7bff";
+  return score >= 85 ? AQUA[400] : score >= 70 ? COBALT[500] : LAVENDER[500];
 }
 
 export function AfterSwingSummary({
@@ -285,12 +285,12 @@ const styles = StyleSheet.create({
   },
   bandChip: {
     borderRadius: 999,
-    backgroundColor: "rgba(163,230,53,0.1)",
+    backgroundColor: "rgba(67,205,208,0.1)",
     paddingHorizontal: 10,
     paddingVertical: 5,
   },
   bandChipText: {
-    color: COLORS.acid,
+    color: COLORS.aqua,
     fontSize: 9,
     fontWeight: "800",
     letterSpacing: 1.8,
@@ -304,8 +304,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
-  deltaValue: { color: COLORS.acid, fontSize: 22, fontWeight: "700", lineHeight: 23 },
-  deltaValueDown: { color: "#ff8b6b" },
+  deltaValue: { color: COLORS.aqua, fontSize: 22, fontWeight: "700", lineHeight: 23 },
+  deltaValueDown: { color: COLORS.red },
   deltaCaption: {
     color: COLORS.dim,
     fontSize: 8,
@@ -318,9 +318,9 @@ const styles = StyleSheet.create({
   sideBlock: { gap: 0 },
   tempoRow: { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 4 },
   tempoValueBox: { alignItems: "center", minWidth: 74 },
-  tempoValue: { color: COLORS.violet, fontSize: 30, fontWeight: "700", letterSpacing: -1 },
+  tempoValue: { color: COLORS.lavender, fontSize: 30, fontWeight: "700", letterSpacing: -1 },
   tempoTag: {
-    color: "rgba(139,123,255,0.7)",
+    color: "rgba(133,141,194,0.7)",
     fontSize: 8,
     fontWeight: "700",
     letterSpacing: 1.8,
@@ -340,9 +340,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(163,230,53,0.1)",
+    backgroundColor: "rgba(67,205,208,0.1)",
   },
-  takeawayGlyph: { color: COLORS.acid, fontSize: 19 },
+  takeawayGlyph: { color: COLORS.aqua, fontSize: 19 },
   takeawayBody: { flex: 1, gap: 3 },
   sectionTag: {
     color: COLORS.muted,
@@ -364,11 +364,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 12,
   },
-  findingBad: { backgroundColor: "rgba(255,139,107,0.07)" },
-  findingGood: { backgroundColor: "rgba(163,230,53,0.06)" },
+  findingBad: { backgroundColor: "rgba(229,87,100,0.07)" },
+  findingGood: { backgroundColor: "rgba(67,205,208,0.06)" },
   findingIcon: { fontSize: 17, fontWeight: "800", width: 20, textAlign: "center" },
-  findingIconBad: { color: "#ff8b6b" },
-  findingIconGood: { color: COLORS.acid },
+  findingIconBad: { color: COLORS.red },
+  findingIconGood: { color: COLORS.aqua },
   findingBody: { flex: 1, gap: 2 },
   findingTitle: { color: COLORS.text, fontSize: 15, fontWeight: "600", lineHeight: 19 },
   findingWhere: {

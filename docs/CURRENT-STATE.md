@@ -613,7 +613,11 @@ Stated as fact, with no implied ordering or plan. See
   headline with its coverage split, the primary fix and drill, the findings, the per-position
   scores, and every individual check with its measured value against the band it was judged on —
   and **any row anchored to a coaching position seeks the player to that frame**. Its two "not
-  scored" reasons stay distinct at every level. **The overlay's frame lock with the trace on is
+  scored" reasons stay distinct at every level. **Every screen renders the Ideal Swing design
+  system** (`src/design/system/` over `src/theme/` tokens; light default, dark by preference or
+  phone): the legacy theme layer and its aliases are deleted, the fixed-dark player/capture
+  palette (`COLORS`) and Deck's control shading derive from the same `palette.ts` ramps, and the
+  old green/violet identity exists nowhere in the client. **The overlay's frame lock with the trace on is
   still unmeasured on the device** (§11b) and dual-view comparison does not exist. The Analysis
   panel's automated oracles pass but it has **not been looked at on the glass** — layout at phone
   width and the landing frame of a tap are unverified. **Side-by-side comparison** puts a second

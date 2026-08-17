@@ -44,8 +44,9 @@ export function PauseGlyph({ size, color }: { size: number; color: string }) {
  * Analysis: the two-diamond sparkle.
  *
  * A diamond is a four-point star with straight edges, and two of them at different sizes is the
- * motif this whole category of feature has settled on. Concave points would need a path, which
- * would need SVG, which this app deliberately does not ship.
+ * motif this whole category of feature has settled on. Concave points would need an SVG path —
+ * deck glyphs stay View-drawn (SVG's scope is `design/gauges` + `design/system`), so the
+ * straight-edged diamond is the shape this surface can draw.
  */
 export function SparkGlyph({ size, color }: { size: number; color: string }) {
   const diamond = (d: number, left: number, top: number, opacity = 1) => ({
@@ -152,85 +153,6 @@ export function BarsGlyph({ size, color }: { size: number; color: string }) {
       <View style={bar(0.45)} />
       <View style={bar(1)} />
       <View style={bar(0.68)} />
-    </View>
-  );
-}
-
-/** Home: a chevron roof over an open box — the house reduced to two strokes. */
-export function HouseGlyph({ size, color, weight = 1.8 }: { size: number; color: string; weight?: number }) {
-  return (
-    <View style={{ width: size, height: size, alignItems: "center" }}>
-      <View
-        style={{
-          width: size * 0.62,
-          height: size * 0.62,
-          marginTop: size * 0.02,
-          borderLeftWidth: weight,
-          borderBottomWidth: weight,
-          borderColor: color,
-          transform: [{ rotate: "135deg" }],
-        }}
-      />
-      <View
-        style={{
-          position: "absolute",
-          bottom: 0,
-          width: size * 0.6,
-          height: size * 0.52,
-          borderWidth: weight,
-          borderTopWidth: 0,
-          borderColor: color,
-          borderBottomLeftRadius: size * 0.1,
-          borderBottomRightRadius: size * 0.1,
-        }}
-      />
-    </View>
-  );
-}
-
-/** The log: three rows, the leading one shorter — a list, not a hamburger. */
-export function RowsGlyph({ size, color }: { size: number; color: string }) {
-  const row = (w: number) => ({
-    width: size * w,
-    height: Math.max(1.8, size * 0.14),
-    borderRadius: size * 0.07,
-    backgroundColor: color,
-  });
-  return (
-    <View style={{ height: size, justifyContent: "center", gap: size * 0.18, alignItems: "flex-start" }}>
-      <View style={row(0.62)} />
-      <View style={row(0.95)} />
-      <View style={row(0.78)} />
-    </View>
-  );
-}
-
-/** Coach: a head over shoulders, both outlined. */
-export function PersonGlyph({ size, color, weight = 1.8 }: { size: number; color: string; weight?: number }) {
-  return (
-    <View style={{ width: size, height: size, alignItems: "center", justifyContent: "flex-end" }}>
-      <View
-        style={{
-          position: "absolute",
-          top: 0,
-          width: size * 0.42,
-          height: size * 0.42,
-          borderRadius: size * 0.21,
-          borderWidth: weight,
-          borderColor: color,
-        }}
-      />
-      <View
-        style={{
-          width: size * 0.78,
-          height: size * 0.4,
-          borderWidth: weight,
-          borderBottomWidth: 0,
-          borderColor: color,
-          borderTopLeftRadius: size * 0.4,
-          borderTopRightRadius: size * 0.4,
-        }}
-      />
     </View>
   );
 }

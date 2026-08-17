@@ -1,9 +1,10 @@
 import { useMemo } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
+import { ChevronRight, UserRound } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { ChevronGlyph, PersonGlyph } from "../design/deck";
-import { TopBar } from "../design/TopBar";
+import { Eyebrow, Panel, ScreenHeader, TitleText } from "../design/system";
+import { FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
 import { createdAtMs } from "../features/swings/sessions";
 import { useSwings } from "../features/swings/useSwings";
 import { useAppNavigation } from "../navigation";
@@ -17,6 +18,10 @@ import { themedStyles, useTheme } from "../theme";
  * the coaching that already works — the deterministic scorecard on every analysed swing. That
  * door is real: it opens the newest scored swing's after-swing view.
  */
+
+/** Lavender at 16% — the coach voice's bed (the Tag pattern's named tint). */
+const LAVENDER_BED = "rgba(133,141,194,0.16)";
+
 export function CoachScreen() {
   const navigation = useAppNavigation();
   const insets = useSafeAreaInsets();
@@ -36,22 +41,22 @@ export function CoachScreen() {
 
   return (
     <View style={styles.root}>
-      <TopBar title="Coach" />
+      <ScreenHeader title="Coach" onProfile={() => navigation.navigate("Profile")} />
       <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 32 + insets.bottom }]}>
-        <View style={styles.card}>
+        <Panel radius="feature" style={styles.card}>
           <View style={styles.heroIcon}>
-            <PersonGlyph size={26} color={t.violet} />
+            <UserRound size={24} color={t.lavender} strokeWidth={2} />
           </View>
-          <Text style={styles.title}>No coach yet</Text>
+          <TitleText>No coach yet</TitleText>
           <Text style={styles.copy}>
             Finding a coach opens with launch. Your coach will see the swings you share, scrub
             them frame by frame, and leave feedback anchored to the exact moment it is about —
             and you stay in control of what they can see.
           </Text>
-        </View>
+        </Panel>
 
-        <View style={styles.card}>
-          <Text style={styles.tag}>Meanwhile</Text>
+        <Panel radius="feature" style={styles.card}>
+          <Eyebrow>Meanwhile</Eyebrow>
           <Text style={styles.copy}>
             Every analysed swing already gets a full scorecard — what was detected, why it
             matters, and what to work on first.
@@ -67,10 +72,10 @@ export function CoachScreen() {
               style={({ pressed }) => [styles.door, pressed && styles.pressed]}
             >
               <Text style={styles.doorText}>See your latest scorecard</Text>
-              <ChevronGlyph size={9} color={t.accent} direction="right" weight={1.8} />
+              <ChevronRight size={15} color={t.cobalt} strokeWidth={2.5} />
             </Pressable>
           ) : null}
-        </View>
+        </Panel>
       </ScrollView>
     </View>
   );
@@ -79,30 +84,17 @@ export function CoachScreen() {
 const useStyles = themedStyles((t) => ({
   root: { flex: 1, backgroundColor: t.bg },
   content: { padding: 16, gap: 12 },
-  card: {
-    borderRadius: 22,
-    backgroundColor: t.panel,
-    padding: 18,
-    gap: 8,
-  },
+  card: { padding: 18, gap: 8 },
   heroIcon: {
     width: 46,
     height: 46,
-    borderRadius: 14,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: t.violetSoft,
+    backgroundColor: LAVENDER_BED,
     marginBottom: 4,
   },
-  title: { color: t.text, fontSize: 21, fontWeight: "700", letterSpacing: -0.6 },
-  tag: {
-    color: t.muted,
-    fontSize: 9,
-    fontWeight: "600",
-    letterSpacing: 1.6,
-    textTransform: "uppercase",
-  },
-  copy: { color: t.muted, fontSize: 14, lineHeight: 21 },
+  copy: { color: t.textSoft, fontFamily: FONT_BODY.regular, fontSize: 13, lineHeight: 20 },
   door: {
     flexDirection: "row",
     alignItems: "center",
@@ -110,6 +102,10 @@ const useStyles = themedStyles((t) => ({
     marginTop: 6,
     paddingTop: 13,
   },
-  doorText: { color: t.accent, fontSize: 13.5, fontWeight: "700" },
+  doorText: {
+    color: t.cobalt,
+    fontFamily: FONT_DISPLAY.extraBold,
+    fontSize: 13,
+  },
   pressed: { opacity: 0.6 },
 }));

@@ -27,7 +27,7 @@ export function AuthGate({ children }: AuthGateProps) {
   if (status === "loading") {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color={t.violet} size="large" />
+        <ActivityIndicator color={t.lavender} size="large" />
       </View>
     );
   }

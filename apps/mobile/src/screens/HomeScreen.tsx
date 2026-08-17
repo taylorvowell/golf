@@ -12,9 +12,9 @@ import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { SwingSummary } from "@swingsage/schema/contract";
 
-import { PlayGlyph } from "../design/deck";
+import { Button, Chip, Delta, PerformanceCard, ScreenHeader } from "../design/system";
+import { FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
 import { StatusMessage } from "../design/StatusMessage";
-import { TopBar } from "../design/TopBar";
 import { useAuth } from "../features/auth/AuthProvider";
 import {
   aggregateFocus,
@@ -32,14 +32,14 @@ import { useAppNavigation, type Navigation } from "../navigation";
 import { COLORS, themedStyles, useTheme } from "../theme";
 
 /**
- * Home — a coach talking over the golfer's own footage, not a dashboard.
+ * Home — a coach talking to the golfer, not a dashboard.
  *
- * The hero is a photograph of THEIR swing (the newest one whose report ranked the focus), with
- * the recommendation written over it and one promise of a button: **see it on your swing** —
- * which opens the player parked at the exact checkpoint the priority is about. The remaining
- * recurring priorities ride a horizontal rail with the same door each. The last session is a
- * slider of swing cards — thumbnail, number, score — because "which one was the good one" is a
- * question about pictures, not a table.
+ * The screen's single dominant card (§07) is the `PerformanceCard`: the recommendation that
+ * recurred across the last session, with one promise of a button — **see it on your swing** —
+ * which opens the player parked at the exact checkpoint the priority is about. The golfer's
+ * own footage stays on the screen where it answers a question: the you-vs-pro compare strip
+ * frozen at the coaching position, and the last session as a slider of swing photographs,
+ * because "which one was the good one" is a question about pictures, not a table.
  *
  * Same honesty rules as ever: every number is measured, a section with no data is absent, and a
  * request that never reached the server renders as "cannot reach", never as an empty home.
@@ -84,7 +84,7 @@ export function HomeScreen() {
 
   return (
     <View style={styles.root}>
-      <TopBar title="SwingSage" brand />
+      <ScreenHeader brand onProfile={() => navigation.navigate("Profile")} />
 
       {state.kind === "loading" ? (
         <View style={styles.centre} testID="home-loading">
@@ -118,7 +118,7 @@ export function HomeScreen() {
               refreshing={refreshing}
               onRefresh={refresh}
               tintColor={t.muted}
-              colors={[t.accent]}
+              colors={[t.cobalt]}
             />
           }
         >
@@ -163,7 +163,7 @@ function openOnSwing(navigation: Navigation, item: FocusItem): void {
   });
 }
 
-/** The recommendation, written over the golfer's own swing. */
+/** §07's dominant card: the recommendation as the screen's one performance card. */
 function FocusHero({
   lead,
   drill,
@@ -177,9 +177,6 @@ function FocusHero({
   firstName: string | null;
   navigation: Navigation;
 }) {
-  // `?poster=1` = one burned-in frame, not the 24-frame contact sheet — grid-as-hero reads as
-  // noise, and the single setup frame with the overlay on it is the product's own photography.
-  const photo = useAuthenticatedImage(`swings/${lead.exemplarId}/thumb?poster=1`);
   const greeting = live
     ? firstName
       ? `${firstName} — focus right now`
@@ -190,51 +187,29 @@ function FocusHero({
   const styles = useStyles();
 
   return (
-    <View style={styles.heroCard} testID="home-focus">
-      {photo ? (
-        <Image source={photo} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" />
-      ) : null}
-      {/* Layered scrims instead of a gradient dependency: a soft wash over the whole photo and a
-          heavy bed under the text, which fades in the middle where they overlap. */}
-      <View style={overPhoto.heroWash} />
-      <View style={overPhoto.heroBed} />
-
-      <View style={overPhoto.heroBody}>
-        <Text style={overPhoto.heroTag}>{greeting}</Text>
-        <Text style={overPhoto.heroLabel}>{lead.label}</Text>
-        {lead.cue ? (
-          <Text style={overPhoto.heroCue} numberOfLines={3}>
-            {lead.cue}
-          </Text>
-        ) : null}
+    <View testID="home-focus" style={styles.heroCardWrap}>
+      <PerformanceCard eyebrow={greeting} title={lead.label} body={lead.cue || undefined}>
         {lead.reportCount >= 2 && lead.seenIn >= 2 ? (
-          <Text style={overPhoto.heroSeen}>
+          <Text style={styles.heroSeen}>
             Seen in {lead.seenIn} of {lead.reportCount} scored swings
           </Text>
         ) : null}
-
-        <View style={overPhoto.heroActions}>
-          <Pressable
+        <View style={styles.heroActions}>
+          <Button
+            variant="performance"
+            label="See it on your swing"
             testID="home-see-it"
-            accessibilityRole="button"
-            accessibilityLabel="See it on your swing"
             onPress={() => openOnSwing(navigation, lead)}
-            style={({ pressed }) => [overPhoto.heroCta, pressed && overPhoto.heroCtaPressed]}
-          >
-            <PlayGlyph size={10} color={COLORS.onAcid} />
-            <Text style={overPhoto.heroCtaText}>See it on your swing</Text>
-          </Pressable>
+          />
           {drill ? (
-            <View style={overPhoto.drillChip}>
-              <Text style={overPhoto.drillChipGlyph}>✦</Text>
-              <Text style={overPhoto.drillChipText} numberOfLines={1}>
-                {drill.title}
-                {drill.dose ? ` · ${drill.dose}` : ""}
-              </Text>
-            </View>
+            <Chip
+              translucent
+              label={`✦ ${drill.title}${drill.dose ? ` · ${drill.dose}` : ""}`}
+              style={styles.drillChip}
+            />
           ) : null}
         </View>
-      </View>
+      </PerformanceCard>
     </View>
   );
 }
@@ -375,10 +350,11 @@ function SessionBlock({ stats, navigation }: { stats: SessionStats; navigation: 
           <Text style={styles.sessionMeta}>{meta}</Text>
         </View>
         {deltaVsPrevious !== null && deltaVsPrevious !== 0 ? (
-          <View style={styles.deltaChip}>
-            <Text style={[styles.deltaValue, deltaVsPrevious < 0 && styles.deltaDown]}>
-              {deltaVsPrevious > 0 ? `+${deltaVsPrevious}` : `−${Math.abs(deltaVsPrevious)}`}
-            </Text>
+          <View style={styles.deltaCol}>
+            <Delta
+              value={`${deltaVsPrevious > 0 ? "+" : "−"}${Math.abs(deltaVsPrevious)}`}
+              direction={deltaVsPrevious > 0 ? "up" : "down"}
+            />
             <Text style={styles.deltaCaption}>vs last time</Text>
           </View>
         ) : null}
@@ -465,69 +441,88 @@ function dateOf(ms: number): string {
   });
 }
 
-const HERO_SCRIM = "rgba(8,10,13,";
+/** The photo scrim's ink — the dark theme's ground, so photos sit in the same world. */
+const PHOTO_SCRIM = "rgba(7,16,31,";
 
 /** The screen's chrome — everything drawn on the theme's own ground. */
 const useStyles = themedStyles((t) => ({
   root: { flex: 1, backgroundColor: t.bg },
   centre: { flex: 1, alignItems: "center", justifyContent: "center" },
-  scroll: { paddingTop: 10, gap: 16 },
+  scroll: { paddingTop: 4, gap: 16 },
   pressed: { opacity: 0.75 },
   tag: {
     color: t.muted,
-    fontSize: 9,
-    fontWeight: "600",
-    letterSpacing: 1.6,
+    fontFamily: FONT_DISPLAY.black,
+    fontSize: 10,
+    letterSpacing: 1,
     textTransform: "uppercase",
   },
 
   hero: { alignItems: "center", gap: 10, paddingVertical: 64, paddingHorizontal: 24 },
-  heroTitle: { color: t.text, fontSize: 17, fontWeight: "600", textAlign: "center" },
+  heroTitle: {
+    color: t.text,
+    fontFamily: FONT_DISPLAY.extraBold,
+    fontSize: 18,
+    textAlign: "center",
+  },
   heroDetail: {
-    color: t.muted,
-    fontSize: 14,
+    color: t.textSoft,
+    fontFamily: FONT_BODY.regular,
+    fontSize: 13,
     lineHeight: 20,
     textAlign: "center",
     maxWidth: 300,
   },
 
-  heroCard: {
-    marginHorizontal: 16,
-    minHeight: 400,
-    borderRadius: 26,
-    // The photo covers this; until it loads, the panel tone keeps the card in-theme.
-    backgroundColor: t.panel,
-    overflow: "hidden",
-    justifyContent: "flex-end",
+  heroCardWrap: { marginHorizontal: 16 },
+  heroSeen: {
+    marginTop: 10,
+    color: "rgba(255,255,255,0.55)",
+    fontFamily: FONT_BODY.regular,
+    fontSize: 11,
   },
+  heroActions: { gap: 10, marginTop: 18, alignItems: "flex-start" },
+  drillChip: { maxWidth: "100%" },
 
   compare: {
     marginHorizontal: 16,
-    borderRadius: 22,
-    backgroundColor: t.panel,
+    borderRadius: 11,
+    backgroundColor: t.surface,
     overflow: "hidden",
+    ...t.shadowSm,
   },
   compareBar: { paddingHorizontal: 14, paddingVertical: 11, gap: 3 },
   compareTag: {
     color: t.muted,
+    fontFamily: FONT_DISPLAY.black,
     fontSize: 9,
-    fontWeight: "600",
-    letterSpacing: 1.6,
+    letterSpacing: 1.26,
     textTransform: "uppercase",
   },
-  compareCue: { color: t.text, fontSize: 13, lineHeight: 18, fontWeight: "500" },
+  compareCue: {
+    color: t.text,
+    fontFamily: FONT_BODY.semiBold,
+    fontSize: 12.5,
+    lineHeight: 18,
+  },
 
   rail: { paddingHorizontal: 16, gap: 10 },
   tipCard: {
     width: 236,
-    borderRadius: 20,
-    backgroundColor: t.panel,
+    borderRadius: 11,
+    backgroundColor: t.surface,
     padding: 16,
     gap: 5,
+    ...t.shadowSm,
   },
-  tipRank: { color: t.violet, fontSize: 13, fontWeight: "800" },
-  tipTitle: { color: t.text, fontSize: 15, fontWeight: "700", lineHeight: 19 },
-  tipCue: { color: t.muted, fontSize: 12, lineHeight: 16.5 },
+  tipRank: { color: t.lavender, fontFamily: FONT_DISPLAY.black, fontSize: 13 },
+  tipTitle: {
+    color: t.text,
+    fontFamily: FONT_DISPLAY.extraBold,
+    fontSize: 15,
+    lineHeight: 18,
+  },
+  tipCue: { color: t.muted, fontFamily: FONT_BODY.regular, fontSize: 11.5, lineHeight: 16.5 },
 
   sessionHead: {
     flexDirection: "row",
@@ -537,94 +532,41 @@ const useStyles = themedStyles((t) => ({
     marginBottom: 12,
   },
   sessionHeadBody: { flex: 1, gap: 3 },
-  sessionDate: { color: t.text, fontSize: 20, fontWeight: "800", letterSpacing: -0.5 },
-  sessionMeta: { color: t.muted, fontSize: 12.5 },
-  deltaChip: {
-    alignItems: "flex-end",
-    borderRadius: 16,
-    backgroundColor: t.panel,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+  sessionDate: {
+    color: t.text,
+    fontFamily: FONT_DISPLAY.extraBold,
+    fontSize: 24,
+    lineHeight: 25,
+    letterSpacing: -0.72,
   },
-  deltaValue: { color: t.accent, fontSize: 20, fontWeight: "700", lineHeight: 21 },
-  deltaDown: { color: t.danger },
+  sessionMeta: { color: t.muted, fontFamily: FONT_BODY.regular, fontSize: 11.5 },
+  deltaCol: { alignItems: "flex-end", gap: 3 },
   deltaCaption: {
-    color: t.dim,
-    fontSize: 8,
-    fontWeight: "700",
-    letterSpacing: 1.2,
+    color: t.muted2,
+    fontFamily: FONT_DISPLAY.black,
+    fontSize: 7,
+    letterSpacing: 0.84,
     textTransform: "uppercase",
-    marginTop: 2,
   },
 
   slider: { paddingHorizontal: 16, gap: 10 },
   slide: {
     width: 150,
     height: 200,
-    borderRadius: 20,
-    backgroundColor: t.panel,
+    borderRadius: 12,
+    backgroundColor: t.surface,
     overflow: "hidden",
     justifyContent: "flex-end",
+    ...t.shadowSm,
   },
 }));
 
 /**
  * Everything drawn OVER a photograph. A photo is its own dark surface in both themes — the
- * same rule that keeps the player dark — so these use the fixed dark palette (`COLORS`) and
- * the accent's dark exposure, never theme tokens.
+ * same rule that keeps the player dark — so these use the fixed dark palette (`COLORS`),
+ * never theme tokens.
  */
 const overPhoto = StyleSheet.create({
-  heroWash: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: `${HERO_SCRIM}0.30)`,
-  },
-  heroBed: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: "72%",
-    backgroundColor: `${HERO_SCRIM}0.62)`,
-  },
-  heroBody: { padding: 20, gap: 7 },
-  heroTag: {
-    color: COLORS.acid,
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 1.8,
-    textTransform: "uppercase",
-  },
-  heroLabel: {
-    color: COLORS.text,
-    fontSize: 29,
-    lineHeight: 33,
-    fontWeight: "700",
-    letterSpacing: -1.2,
-  },
-  heroCue: { color: "rgba(247,248,245,0.88)", fontSize: 14.5, lineHeight: 20, fontWeight: "500" },
-  heroSeen: { color: "rgba(247,248,245,0.55)", fontSize: 11.5 },
-  heroActions: { gap: 10, marginTop: 8 },
-  heroCta: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 9,
-    alignSelf: "flex-start",
-    backgroundColor: COLORS.acid,
-    borderRadius: 999,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-  },
-  heroCtaPressed: { backgroundColor: "#b8f052" },
-  heroCtaText: { color: COLORS.onAcid, fontSize: 14, fontWeight: "800" },
-  drillChip: { flexDirection: "row", alignItems: "center", gap: 7 },
-  drillChipGlyph: { color: COLORS.acid, fontSize: 13 },
-  drillChipText: { color: "rgba(247,248,245,0.75)", fontSize: 12.5, flexShrink: 1 },
-
   compareRow: { flexDirection: "row", height: 190 },
   compareHalf: { flex: 1, backgroundColor: COLORS.bg },
   compareDivider: { width: StyleSheet.hairlineWidth, backgroundColor: "rgba(255,255,255,0.2)" },
@@ -635,23 +577,23 @@ const overPhoto = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 10,
     paddingVertical: 4,
-    backgroundColor: "rgba(8,10,13,0.72)",
+    backgroundColor: `${PHOTO_SCRIM}0.72)`,
   },
   compareChipPro: {
-    backgroundColor: "rgba(163,230,53,0.16)",
+    backgroundColor: "rgba(67,205,208,0.16)",
   },
   compareChipText: {
     color: COLORS.text,
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 1.2,
+    fontFamily: FONT_DISPLAY.black,
+    fontSize: 9,
+    letterSpacing: 1.08,
     textTransform: "uppercase",
   },
   compareChipTextPro: {
-    color: COLORS.acid,
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 1.2,
+    color: COLORS.aqua,
+    fontFamily: FONT_DISPLAY.black,
+    fontSize: 9,
+    letterSpacing: 1.08,
     textTransform: "uppercase",
   },
 
@@ -661,26 +603,31 @@ const overPhoto = StyleSheet.create({
     right: 0,
     bottom: 0,
     height: "55%",
-    backgroundColor: `${HERO_SCRIM}0.62)`,
+    backgroundColor: `${PHOTO_SCRIM}0.62)`,
   },
   slideNumber: {
     position: "absolute",
     top: 10,
     left: 12,
-    color: "rgba(247,248,245,0.85)",
-    fontSize: 12,
-    fontWeight: "800",
+    color: "rgba(255,255,255,0.85)",
+    fontFamily: FONT_DISPLAY.black,
+    fontSize: 11,
   },
   slideFoot: { padding: 12, gap: 0 },
   slideScore: {
     color: COLORS.text,
+    fontFamily: FONT_DISPLAY.black,
     fontSize: 26,
-    fontWeight: "800",
-    letterSpacing: -1,
+    letterSpacing: -0.91,
     fontVariant: ["tabular-nums"],
   },
-  slideScoreBest: { color: COLORS.acid },
-  slideBand: { color: "rgba(247,248,245,0.6)", fontSize: 10.5, textTransform: "capitalize" },
-  slideUnscored: { color: COLORS.dim, fontSize: 11 },
-  slidePending: { color: COLORS.amber, fontSize: 11 },
+  slideScoreBest: { color: COLORS.aqua },
+  slideBand: {
+    color: "rgba(255,255,255,0.6)",
+    fontFamily: FONT_BODY.regular,
+    fontSize: 10,
+    textTransform: "capitalize",
+  },
+  slideUnscored: { color: COLORS.dim, fontFamily: FONT_BODY.regular, fontSize: 11 },
+  slidePending: { color: COLORS.amber, fontFamily: FONT_BODY.regular, fontSize: 11 },
 });

@@ -1,9 +1,12 @@
 import { useState } from "react";
-import { Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuth } from "./AuthProvider";
 import { DELETION_CONSEQUENCES, deleteAccount } from "./deleteAccount";
-import { themedStyles, useTheme } from "../../theme";
+import { Button, Input, Panel, TitleText } from "../../design/system";
+import { FONT_BODY, FONT_DISPLAY } from "../../design/system/typography";
+import { themedStyles } from "../../theme";
 
 /**
  * §4.3 account deletion, with §34's "the user understands what this removes" taken literally.
@@ -30,10 +33,10 @@ export interface DeleteAccountScreenProps {
 
 export function DeleteAccountScreen({ onCancel }: DeleteAccountScreenProps) {
   const { email } = useAuth();
+  const insets = useSafeAreaInsets();
   const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const t = useTheme();
   const styles = useStyles();
 
   const armed = typed.trim().toUpperCase() === CONFIRM_WORD && !busy;
@@ -56,14 +59,17 @@ export function DeleteAccountScreen({ onCancel }: DeleteAccountScreenProps) {
   }
 
   return (
-    <ScrollView style={styles.root} contentContainerStyle={styles.content}>
-      <Text style={styles.heading}>Delete your account</Text>
+    <ScrollView
+      style={styles.root}
+      contentContainerStyle={[styles.content, { paddingBottom: 32 + insets.bottom }]}
+    >
+      <TitleText>Delete your account</TitleText>
       <Text style={styles.lead}>
         This permanently deletes {email ?? "this account"} and everything in it. It cannot be
         undone, and SwingSage cannot restore it afterwards.
       </Text>
 
-      <View style={styles.panel}>
+      <Panel style={styles.panel}>
         <Text style={styles.panelTitle}>What gets deleted</Text>
         {DELETION_CONSEQUENCES.map((line) => (
           <View key={line} style={styles.row}>
@@ -71,10 +77,10 @@ export function DeleteAccountScreen({ onCancel }: DeleteAccountScreenProps) {
             <Text style={styles.rowText}>{line}</Text>
           </View>
         ))}
-      </View>
+      </Panel>
 
-      <Text style={styles.label}>Type {CONFIRM_WORD} to confirm</Text>
-      <TextInput
+      <Input
+        label={`Type ${CONFIRM_WORD} to confirm`}
         value={typed}
         onChangeText={setTyped}
         editable={!busy}
@@ -85,78 +91,52 @@ export function DeleteAccountScreen({ onCancel }: DeleteAccountScreenProps) {
         autoComplete="off"
         spellCheck={false}
         placeholder={CONFIRM_WORD}
-        placeholderTextColor={t.dim}
         testID="delete-confirm-input"
-        style={styles.input}
       />
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      <Pressable
+      <Button
+        variant="danger"
+        label={busy ? "Deleting…" : "Delete my account permanently"}
         onPress={() => void onDelete()}
         disabled={!armed}
-        accessibilityRole="button"
-        accessibilityState={{ disabled: !armed }}
         testID="delete-account"
-        style={({ pressed }) => [
-          styles.danger,
-          !armed && styles.dangerDisabled,
-          pressed && armed && styles.pressed,
-        ]}
-      >
-        <Text style={styles.dangerText}>
-          {busy ? "Deleting…" : "Delete my account permanently"}
-        </Text>
-      </Pressable>
+        style={styles.fullWidth}
+      />
 
-      <Pressable
+      <Button
+        variant="ghost"
+        label="Keep my account"
         onPress={onCancel}
         disabled={busy}
-        accessibilityRole="button"
         testID="delete-cancel"
-        style={({ pressed }) => [styles.cancel, pressed && styles.pressed]}
-      >
-        <Text style={styles.cancelText}>Keep my account</Text>
-      </Pressable>
+        style={styles.fullWidth}
+      />
     </ScrollView>
   );
 }
 
 const useStyles = themedStyles((t) => ({
   root: { flex: 1, backgroundColor: t.bg },
-  content: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 48, gap: 16 },
-  heading: { color: t.text, fontSize: 26, fontWeight: "700" },
-  lead: { color: t.muted, fontSize: 14, lineHeight: 20 },
-  panel: {
-    backgroundColor: t.panel,
-    borderRadius: 14,
-    padding: 16,
-    gap: 8,
-  },
-  panelTitle: { color: t.text, fontSize: 13, fontWeight: "700", marginBottom: 2 },
-  row: { flexDirection: "row", gap: 8 },
-  bullet: { color: t.danger, fontSize: 14, lineHeight: 20 },
-  rowText: { color: t.muted, fontSize: 14, lineHeight: 20, flexShrink: 1 },
-  label: { color: t.text, fontSize: 13, fontWeight: "600" },
-  input: {
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+  content: { paddingHorizontal: 20, paddingTop: 24, gap: 16 },
+  lead: { color: t.textSoft, fontFamily: FONT_BODY.regular, fontSize: 13, lineHeight: 20 },
+  panel: { gap: 8 },
+  panelTitle: {
     color: t.text,
-    fontSize: 16,
-    letterSpacing: 2,
-    backgroundColor: t.panel,
+    fontFamily: FONT_DISPLAY.extraBold,
+    fontSize: 13,
+    marginBottom: 2,
   },
-  error: { color: t.danger, fontSize: 13, lineHeight: 19 },
-  danger: {
-    backgroundColor: t.danger,
-    borderRadius: 999,
-    paddingVertical: 14,
-    alignItems: "center",
+  row: { flexDirection: "row", gap: 8 },
+  bullet: { color: t.bad, fontFamily: FONT_BODY.regular, fontSize: 13, lineHeight: 20 },
+  rowText: {
+    color: t.textSoft,
+    fontFamily: FONT_BODY.regular,
+    fontSize: 13,
+    lineHeight: 20,
+    flexShrink: 1,
   },
-  dangerDisabled: { opacity: 0.35 },
-  dangerText: { color: t.onDanger, fontSize: 15, fontWeight: "700" },
-  cancel: { alignItems: "center", paddingVertical: 12 },
-  cancelText: { color: t.muted, fontSize: 14, fontWeight: "600" },
-  pressed: { opacity: 0.6 },
+  error: { color: t.bad, fontFamily: FONT_BODY.regular, fontSize: 12.5, lineHeight: 19 },
+  fullWidth: { alignSelf: "stretch" },
 }));

@@ -26,6 +26,42 @@ and supersedes mobile-app-shell step 03 (the deferred styling pass).
 
 ## Log
 
+## 09 - Sweep, retirement, and fidelity audit
+**Completed:** 2026-08-17 17:31 UTC
+**Phase:** Ideal Swing Design System
+**Summary:** Every remaining screen moved onto the system and the legacy layer is dead. New
+system compositions (recorded in `docs/decisions/mobile-client.md` as precedent):
+`design/system/ListRow.tsx` (ListGroup/ListRow/ListSectionLabel — §12 selection = surfaceBlue
+fill + cobalt title) and `design/system/ScreenHeader.tsx` (the hero top-row idiom on light
+ground; Home carries the BrandLogo lockup). Rebuilt: Settings, Profile, Goals, Coach, Home
+(the §07 dominant `PerformanceCard` leads, aqua performance CTA; compare strip and session
+photo-slider keep the golfer's own footage), Record, SignIn, DeleteAccount (system `Input` +
+danger/ghost `Button`s), UpgradeRequired, ErrorBoundary fallback, StatusMessage, Skeleton,
+TrendLine, Avatar. Deleted: `theme/legacy.ts` (Theme = IdealTokens now), `design/TopBar.tsx`,
+old `design/ListRow.tsx`, dead deck glyphs (Person/House/Rows). One colour source: fixed-dark
+`COLORS` re-derives from `palette.ts` (keys acid→aqua, onAcid→onAqua, violet→lavender), Deck
+re-tokened (ground = dark bg, primary cap = AQUA 300–600 ramp, faces in `palette.DECK_SHADES`,
+navy glass), ArcGauge runs cobalt→aqua, AfterSwingSummary/AnalysisPanel/PlayerConsole/
+ComparePanel/OverlayControls old-accent rgba mixes re-tinted to aqua/lavender. Typecheck clean;
+45 suites / 398 tests green (was 44/395).
+**Notes:** Grep audits (documented run, this step): hex literals outside `theme/palette.ts`
+exist only in the sanctioned homes — mockup-verbatim design-system/report constants, overlay
+web-parity files (byte-locked, untouched), brand artwork (`brandPaths.ts`), StickThumb
+data-display constants, dev-only SystemGallery, and pure-`#000` video letterbox stages; every
+`border*` is shape-drawing (glyphs, gauge dots, scrub thumb ring, timeline node rings); zero
+imports of deleted components/tokens; every screen consumes insets directly, or sits under a
+native-stack header (Profile/Settings/Goals/DeleteAccount/SystemGallery), or is a centered
+status surface with no edge-adjacent content. Emulator visual pass BOTH themes (screenshots in
+scratchpad step09/): Home L+D, Coach L, Settings L+D (cobalt radio/switch, selected-row tint),
+Profile L, Record (fixed-dark navy+aqua), Swing Log D, Progress D, report sheet, after-swing
+player + scorecard (aqua transport cap, cobalt→aqua gauge, lavender trend). Emulator says
+nothing about frame-lock/fps — measurements unclaimed. The S25+ whole-app design pass is the
+standing HANDOFF row. Deck absorption of the after-swing/capture surfaces remains named future
+work for in-app-capture (no NEW surface may adopt Deck). No knip config exists in the repo —
+the dead-export half of the end-of-track sweep ran as the grep audits above instead.
+
+---
+
 ## 08 - Progress page
 **Completed:** 2026-08-17 16:58 UTC
 **Phase:** Ideal Swing Design System

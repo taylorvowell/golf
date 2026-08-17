@@ -1,5 +1,7 @@
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 
+import { Button } from "./system";
+import { FONT_BODY, FONT_DISPLAY } from "./system/typography";
 import { themedStyles } from "../theme";
 
 /**
@@ -24,35 +26,33 @@ export function StatusMessage({
     <View style={styles.centre}>
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.detail}>{detail}</Text>
-      <Pressable
+      <Button
+        variant="secondary"
+        label="Try again"
         onPress={onRetry}
-        accessibilityRole="button"
         testID={retryTestID}
-        style={({ pressed }) => [styles.retry, pressed && styles.pressed]}
-      >
-        <Text style={styles.retryText}>Try again</Text>
-      </Pressable>
+        style={styles.retry}
+      />
     </View>
   );
 }
 
 const useStyles = themedStyles((t) => ({
   centre: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10, padding: 24 },
-  title: { color: t.text, fontSize: 17, fontWeight: "600", textAlign: "center" },
-  detail: {
-    color: t.muted,
-    fontSize: 14,
+  title: {
+    color: t.text,
+    fontFamily: FONT_DISPLAY.extraBold,
+    fontSize: 18,
     lineHeight: 20,
+    textAlign: "center",
+  },
+  detail: {
+    color: t.textSoft,
+    fontFamily: FONT_BODY.regular,
+    fontSize: 12.5,
+    lineHeight: 19,
     textAlign: "center",
     maxWidth: 300,
   },
-  retry: {
-    marginTop: 6,
-    backgroundColor: t.panel,
-    borderRadius: 999,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-  },
-  pressed: { opacity: 0.6 },
-  retryText: { color: t.text, fontSize: 13, fontWeight: "700" },
+  retry: { marginTop: 6, alignSelf: "center" },
 }));

@@ -29,7 +29,7 @@ export function Skeleton({ style }: { style?: StyleProp<ViewStyle> }) {
       style={[
         {
           borderRadius: 10,
-          backgroundColor: t.well,
+          backgroundColor: t.surface2,
           opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.55, 1] }),
         },
         style,

@@ -25,7 +25,6 @@ jest.mock("../platform/client", () => ({
   },
 }));
 jest.mock("../navigation", () => ({ useAppNavigation: () => ({ navigate: mockNavigate, goBack: jest.fn() }) }));
-jest.mock("../design/TopBar", () => ({ TopBar: () => null }));
 
 import { SwingLogScreen } from "./SwingLogScreen";
 import { clearSwingsCache, useSwings } from "../features/swings/useSwings";

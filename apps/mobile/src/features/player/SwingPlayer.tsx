@@ -1106,7 +1106,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  openerSegOn: { backgroundColor: "rgba(184,255,74,0.14)" },
+  openerSegOn: { backgroundColor: "rgba(87,215,216,0.14)" },
   titleBlock: { flex: 1, alignItems: "center", justifyContent: "center", minHeight: 48, gap: 2 },
   title: {
     color: COLORS.text,
@@ -1142,7 +1142,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: DECK.glass.soft,
   },
-  glassChipOn: { backgroundColor: "rgba(184,255,74,0.14)" },
+  glassChipOn: { backgroundColor: "rgba(87,215,216,0.14)" },
   pressedGlass: { opacity: 0.6 },
 
   referenceRow: { flexDirection: "row", justifyContent: "flex-end", marginTop: 8, marginRight: 4 },
@@ -1154,7 +1154,7 @@ const styles = StyleSheet.create({
     height: 32,
     paddingHorizontal: 12,
     borderRadius: 16,
-    backgroundColor: "rgba(184,255,74,0.14)",
+    backgroundColor: "rgba(87,215,216,0.14)",
   },
   referenceText: { color: DECK.accent, fontSize: 12, fontWeight: "700", flexShrink: 1 },
   referenceClose: { width: 12, height: 12, alignItems: "center", justifyContent: "center" },
@@ -1192,7 +1192,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: DECK.glass.key,
   },
-  speedRowOn: { backgroundColor: "rgba(184,255,74,0.09)" },
+  speedRowOn: { backgroundColor: "rgba(87,215,216,0.09)" },
   speedRowValue: { color: COLORS.text, fontSize: 19, fontWeight: "700", minWidth: 40 },
   speedRowValueOn: { color: DECK.accent },
   speedRowHint: { color: COLORS.muted, fontSize: 12.5, flexShrink: 1 },
@@ -1203,7 +1203,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 12,
     // DECK.ground at 72% — a scrim that mutes the picture behind one line of text.
-    backgroundColor: "rgba(5,7,6,0.72)",
+    backgroundColor: "rgba(7,16,31,0.72)",
   },
   noticeText: { color: COLORS.amber, fontSize: 12, lineHeight: 17 },
 

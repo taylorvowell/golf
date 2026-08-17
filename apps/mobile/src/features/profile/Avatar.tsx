@@ -22,7 +22,7 @@ export function Avatar({ size }: { size: number }) {
     return (
       <Image
         source={{ uri: avatarUrl }}
-        style={{ width: size, height: size, borderRadius: radius, backgroundColor: t.panel }}
+        style={{ width: size, height: size, borderRadius: radius, backgroundColor: t.surface }}
         contentFit="cover"
         cachePolicy="disk"
         accessibilityIgnoresInvertColors
@@ -43,11 +43,14 @@ export function Avatar({ size }: { size: number }) {
   );
 }
 
+/** Lavender at 16% — the Tag pattern's named tint, not a hand-mix beside a token. */
+const LAVENDER_BED = "rgba(133,141,194,0.16)";
+
 const useStyles = themedStyles((t) => ({
   fallback: {
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: t.violetSoft,
+    backgroundColor: LAVENDER_BED,
   },
-  initial: { color: t.violet, fontWeight: "800" },
+  initial: { color: t.lavender, fontWeight: "800" },
 }));

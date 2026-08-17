@@ -1,4 +1,5 @@
-import { COLORS } from "../../theme";
+import { AQUA, COLORS } from "../../theme";
+import { DECK_SHADES } from "../../theme/palette";
 
 /**
  * **Deck** — SwingSage's tactile control surface.
@@ -45,14 +46,13 @@ export const DECK = {
   /**
    * The ground the player floats on, and the accent everything active is lit with.
    *
-   * Both are a hair greener than `theme.ts`'s app palette (`#080a0d` / `#a3e635`), and that is
-   * deliberate rather than drift: the player is the one screen that is *entirely* a control
-   * surface, sitting over grass, and the warmer accent survives being read next to it. The two
-   * palettes are close enough to sit in one app and far enough that the player reads as its own
-   * place. `mobile-app-shell` step 03 decides which of the two the rest of the app takes.
+   * Re-tokened onto the Ideal Swing palette in design-system step 09 (one colour source):
+   * the ground is the dark theme's own near-black navy, and the accent is aqua — §12's
+   * action/motion voice — one stop lighter than the fill accent so it stays legible as a
+   * *light* on small engaged glyphs.
    */
-  ground: "#050706",
-  accent: "#b8ff4a",
+  ground: COLORS.bg,
+  accent: AQUA[400],
 
   radius: {
     /** The console slab itself. */
@@ -77,11 +77,11 @@ export const DECK = {
    */
   glass: {
     /** A floating control over the video — the back cap, the overlays chip. */
-    soft: "rgba(13,18,14,0.72)",
+    soft: "rgba(10,16,28,0.72)",
     /** The dock. Denser, because the transport must never be ambiguous against a bright frame. */
-    dock: "rgba(17,22,18,0.86)",
+    dock: "rgba(13,20,34,0.86)",
     /** A sheet. Denser still — it is a page, not a control. */
-    sheet: "rgba(10,14,11,0.97)",
+    sheet: "rgba(7,13,24,0.97)",
     /** A recessed group inside glass — the speed segment's well. */
     well: "rgba(0,0,0,0.25)",
     /** A flat, unlit control on glass — the frame stepper's keys. */
@@ -90,16 +90,16 @@ export const DECK = {
 
   /** Faces, lit from above: the top of a raised cap is lighter than its bottom. */
   face: {
-    raisedTop: "#232b35",
-    raisedBottom: "#151b23",
+    raisedTop: DECK_SHADES.raisedTop,
+    raisedBottom: DECK_SHADES.raisedBottom,
     /** A cap that is IN — its face is darker overall, as a real recess is. */
-    sunkTop: "#0e131a",
-    sunkBottom: "#161d26",
-    /** The primary transport cap. Warmer, so the one control you press blind is findable. */
-    primaryTop: "#c5ff58",
-    primaryBottom: "#9fe135",
-    primarySunkTop: "#7fb524",
-    primarySunkBottom: "#b6f04c",
+    sunkTop: DECK_SHADES.sunkTop,
+    sunkBottom: DECK_SHADES.sunkBottom,
+    /** The primary transport cap — the aqua ramp, lit top over fill, darkened when pushed in. */
+    primaryTop: AQUA[300],
+    primaryBottom: AQUA[500],
+    primarySunkTop: AQUA[600],
+    primarySunkBottom: AQUA[400],
   },
 
   /**
@@ -142,9 +142,9 @@ export const DECK = {
     /** On a dark cap. */
     onFace: COLORS.text,
     /** On the primary cap — `theme.ts` carries the palette's one inverted pairing. */
-    onPrimary: COLORS.onAcid,
+    onPrimary: COLORS.onAqua,
     /** A cap that is engaged but not primary: lit, so "on" reads without a colour fill. */
-    engaged: "#b8ff4a",
+    engaged: AQUA[400],
     dim: COLORS.dim,
     /** A caption under a glyph on glass. Small, so it needs the contrast. */
     caption: "rgba(255,255,255,0.55)",

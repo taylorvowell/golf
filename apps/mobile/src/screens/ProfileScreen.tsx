@@ -2,7 +2,8 @@ import { useState } from "react";
 import { ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { ListGroup, ListRow } from "../design/ListRow";
+import { ListGroup, ListRow, ListSectionLabel } from "../design/system";
+import { FONT_BODY } from "../design/system/typography";
 import { Avatar } from "../features/profile/Avatar";
 import { useAuth } from "../features/auth/AuthProvider";
 import { useAppNavigation } from "../navigation";
@@ -45,7 +46,7 @@ export function ProfileScreen() {
         </Text>
       </View>
 
-      <Text style={styles.tag}>My coach</Text>
+      <ListSectionLabel>My coach</ListSectionLabel>
       <ListGroup>
         <ListRow
           testID="profile-coach"
@@ -55,7 +56,7 @@ export function ProfileScreen() {
         />
       </ListGroup>
 
-      <Text style={styles.tag}>Your game</Text>
+      <ListSectionLabel>Your game</ListSectionLabel>
       <ListGroup>
         <ListRow
           testID="profile-stats"
@@ -71,7 +72,7 @@ export function ProfileScreen() {
         />
       </ListGroup>
 
-      <Text style={styles.tag}>App</Text>
+      <ListSectionLabel>App</ListSectionLabel>
       <ListGroup>
         <ListRow
           testID="profile-settings"
@@ -95,14 +96,10 @@ const useStyles = themedStyles((t) => ({
   root: { flex: 1, backgroundColor: t.bg },
   content: { padding: 16, gap: 10 },
   hero: { alignItems: "center", gap: 12, paddingVertical: 22 },
-  email: { color: t.text, fontSize: 15, fontWeight: "600", maxWidth: 280 },
-  tag: {
-    color: t.muted,
-    fontSize: 9,
-    fontWeight: "600",
-    letterSpacing: 1.6,
-    textTransform: "uppercase",
-    marginTop: 8,
-    marginLeft: 4,
+  email: {
+    color: t.text,
+    fontFamily: FONT_BODY.semiBold,
+    fontSize: 14,
+    maxWidth: 280,
   },
 }));

@@ -9,7 +9,6 @@ import {
   ON_DARK,
   SEMANTIC,
 } from "./palette";
-import { legacyAliases, type LegacyTokens } from "./legacy";
 
 /**
  * The semantic layer — what a colour is *for*, not what it looks like.
@@ -20,9 +19,9 @@ import { legacyAliases, type LegacyTokens } from "./legacy";
  * giving it a value in BOTH themes — the compiler enforces the "both" via the `Theme` type.
  *
  * The token set is the Ideal Swing design system's
- * (`.claude/ideal-swing-design-system.html`); light is the product's default face. The old
- * token names (`panel`, `accent`, `violet`, …) survive as aliases in `legacy.ts` so untouched
- * screens keep compiling in the new colours — that layer, not this one, dies in step 09.
+ * (`.claude/ideal-swing-design-system.html`); light is the product's default face. The legacy
+ * alias layer (`panel`, `accent`, `violet`, …) died in step 09 — every screen reads these
+ * names and only these.
  */
 
 /**
@@ -95,8 +94,8 @@ export interface IdealTokens {
   shadowAqua: ShadowStyle;
 }
 
-/** What components consume: the Ideal Swing tokens plus the step-09-doomed aliases. */
-export interface Theme extends IdealTokens, LegacyTokens {}
+/** What components consume: the Ideal Swing tokens, nothing else. */
+export type Theme = IdealTokens;
 
 const LIGHT_BASE: IdealTokens = {
   mode: "light",
@@ -199,6 +198,6 @@ const DARK_BASE: IdealTokens = {
   },
 };
 
-export const LIGHT: Theme = { ...LIGHT_BASE, ...legacyAliases(LIGHT_BASE) };
+export const LIGHT: Theme = LIGHT_BASE;
 
-export const DARK: Theme = { ...DARK_BASE, ...legacyAliases(DARK_BASE) };
+export const DARK: Theme = DARK_BASE;

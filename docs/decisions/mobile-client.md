@@ -333,12 +333,15 @@ video-open state, the pill nav hiding at the top). The build lives in the `desig
 the reusable component layer is `src/design/system/` over rewritten `src/theme/` tokens, so future
 pages are assembled from existing pieces, never designed ad hoc. This supersedes mobile-app-shell
 step 03 (the deferred styling pass).
-**The token layers (built, step 01):** `palette.ts` holds the mockup's hex values verbatim (ramps +
-per-theme surface sets — the only file where a hex is born); `themes.ts` is the semantic
-`IdealTokens` set including the hero gradient stops, glass, and per-theme `shadowSm/Md/Lg/Cobalt/
-Aqua` spreadable RN shadow styles; `legacy.ts` aliases the old token names (`panel`, `accent`,
-`violet`, …) onto the new palette so untouched screens compile and render recoloured — it is
-temporary and dies in step 09. Type lives in `src/design/system/typography.ts` (`FONT_DISPLAY`/
+**The token layers:** `palette.ts` holds the mockup's hex values verbatim (ramps + per-theme
+surface sets — the only file where a hex is born; it also holds the video-surface extras:
+`VIDEO_AMBER`, the deck's `DECK_SHADES` neutral faces, and the aqua 300/600 cap stops);
+`themes.ts` is the semantic `IdealTokens` set including the hero gradient stops, glass, and
+per-theme `shadowSm/Md/Lg/Cobalt/Aqua` spreadable RN shadow styles. The legacy alias layer was
+deleted in step 09 — `Theme` **is** `IdealTokens`, every screen reads these names and only
+these, and the fixed-dark `COLORS` (player/capture surfaces) now derives every value from
+`palette.ts` (`aqua`/`onAqua`/`lavender` keys; the old acid green, violet and salmon are gone
+app-wide). Type lives in `src/design/system/typography.ts` (`FONT_DISPLAY`/
 `FONT_BODY` weight maps + the six-step `TYPE` scale, em-tracking converted to absolute px); the
 wordmark constant in `src/design/system/brand.ts`. Fonts load in `App.tsx` before the first frame
 (splash holds; a font error degrades to the system face rather than holding the splash).
@@ -353,7 +356,14 @@ supplied (wordmark reads *Swingsage*; master lockup at
 `.brandmark` square is replaced by the logo's ball-and-swoosh mark wherever a brand lock
 appears. The mark's colours are literal on every surface — the disc plate is what keeps the
 white ball readable on light — and only the wordmark takes a colour via `BrandLogo` (white on
-dark, brand charcoal on light). Home's `TopBar` carries the lockup in place of a title.
+dark, brand charcoal on light). Home's `ScreenHeader` carries the lockup in place of a title.
+**Patterns the mockup lacks (composed in step 09, now precedent):** the settings-style list is
+`design/system/ListRow.tsx` — `ListGroup` (a `.panel` surface, radius 11, shadowSm) of
+`ListRow`s where selection is the `surfaceBlue` fill + cobalt title (§12: cobalt = selected,
+never a border) and pressed is a `surface2` fill, plus `ListSectionLabel` (the `.panel-head`
+label face standing alone); the light-ground tab header is `design/system/ScreenHeader.tsx` —
+the hero screens' top-row idiom (brand eyebrow + display title, or the `BrandLogo` lockup on
+Home) with the cobalt more-circle as the profile door on every tab.
 **Consequences:** `lucide-react-native` (pure JS over the shipped `react-native-svg`) is the icon
 source for system components, superseding drawn-View glyphs there; SVG's allowed scope widens to
 `design/gauges` **and** `design/system`; `expo-linear-gradient` renders the hero/performance
@@ -381,19 +391,22 @@ also what starts playback.
 three depths, panels that come up from the bottom (`DeckSheet`), and glyphs drawn from `View`s. One
 rule governs everything — **light comes from directly above** — so a raised cap catches a highlight
 on its top rim and casts a shadow below itself, and a cap pushed in inverts both. **Pause is the
-play cap latched down**, not a second icon. Deck's ground (`#050706`) and accent (`#b8ff4a`) are a
-shade greener than `theme.ts`'s app palette, deliberately: the player is the one screen that is
-entirely a control surface sitting over grass.
+play cap latched down**, not a second icon. Since step 09 Deck is re-tokened onto the Ideal Swing
+palette (one colour source): its ground is the dark theme's `COLORS.bg`, its accent and primary
+cap run the aqua ramp (`AQUA` 300–600), the neutral cap faces live in `palette.ts` as
+`DECK_SHADES`, and the glass tints are navy.
 **Gotchas:** §41's conditions are bright sunlight, one hand, a driving range, and flat design fails
 all three at once: in glare a filled rectangle converges with its background and there is no shape
 cue left. **Depth survives washout where colour does not**, and it gives state somewhere to live
 that is not colour. `DeckButton` separates a *latched* state (`depressed`, the caller's) from a
 *finger-down* state (its own) — conflating them would pop the pause cap back out the instant the
 finger lifted, which is exactly when a golfer looks at it.
-**Scope:** This is a control-surface system, **not the app's design system**. Type scale, spacing
-rhythm, iconography and the §41 contrast bar belong to the `design-system` track (which superseded
-`mobile-app-shell` step 03); it absorbs this folder surface-by-surface as it rebuilds the screens
-Deck serves — Deck layers on the theme tokens instead of restating them until then.
+**Scope — what remains after the design-system track:** the report surfaces were absorbed by
+`design/system` (steps 06–07), and step 09 deleted the glyphs nothing uses (`PersonGlyph`,
+`HouseGlyph`, `RowsGlyph`). Deck still serves the `SwingPlayer` after-swing/checkpoint surface
+(console, dock, sheets, remaining glyphs) and will be absorbed when **in-app-capture** rebuilds
+the capture/after-swing screens — that absorption is named future work, not this track's. No NEW
+surface may adopt Deck.
 Built on RN 0.86's `boxShadow` (multi-shadow, `inset`) and `experimental_backgroundImage`
 gradients; an earlier React Native would have needed nine-patch images for the same effect.
 

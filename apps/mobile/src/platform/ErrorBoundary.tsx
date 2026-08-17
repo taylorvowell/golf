@@ -1,6 +1,8 @@
 import { Component, type ReactNode } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Text, View } from "react-native";
 
+import { Button, HeadingText, Panel } from "../design/system";
+import { FONT_BODY } from "../design/system/typography";
 import { themedStyles } from "../theme";
 
 /**
@@ -63,40 +65,25 @@ function DefaultFallback({ retry }: { retry: () => void }) {
   const styles = useStyles();
   return (
     <View style={styles.root} testID="error-boundary-fallback">
-      <View style={styles.card}>
-        <Text style={styles.title}>Something went wrong</Text>
+      <Panel radius="feature" style={styles.card}>
+        <HeadingText>Something went wrong</HeadingText>
         <Text style={styles.body}>
           SwingSage hit a problem drawing this screen. Your swings are safe.
         </Text>
-        <Pressable
-          style={styles.button}
-          accessibilityRole="button"
+        <Button
+          label="Try again"
           testID="error-boundary-retry"
           onPress={retry}
-        >
-          <Text style={styles.buttonText}>Try again</Text>
-        </Pressable>
-      </View>
+          style={styles.button}
+        />
+      </Panel>
     </View>
   );
 }
 
 const useStyles = themedStyles((t) => ({
   root: { flex: 1, backgroundColor: t.bg, justifyContent: "center", padding: 20 },
-  card: {
-    backgroundColor: t.panel,
-    borderRadius: 20,
-    padding: 20,
-    gap: 10,
-  },
-  title: { color: t.text, fontSize: 22, fontWeight: "700", letterSpacing: -0.4 },
-  body: { color: t.muted, fontSize: 14, lineHeight: 20 },
-  button: {
-    marginTop: 6,
-    backgroundColor: t.accent,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  buttonText: { color: t.onAccent, fontSize: 15, fontWeight: "700" },
+  card: { padding: 20, gap: 10 },
+  body: { color: t.textSoft, fontFamily: FONT_BODY.regular, fontSize: 13, lineHeight: 20 },
+  button: { marginTop: 6, alignSelf: "stretch" },
 }));

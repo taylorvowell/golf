@@ -1,6 +1,8 @@
-import { Linking, Pressable, Text, View } from "react-native";
+import { Linking, Text, View } from "react-native";
 import type { UpgradeRequired } from "@swingsage/schema/contract";
 
+import { Button, Eyebrow, Panel, TitleText } from "../design/system";
+import { FONT_BODY } from "../design/system/typography";
 import { themedStyles } from "../theme";
 
 export interface UpgradeRequiredScreenProps {
@@ -29,9 +31,9 @@ export default function UpgradeRequiredScreen({
 
   return (
     <View style={styles.root} testID="upgrade-required">
-      <View style={styles.card}>
-        <Text style={styles.eyebrow}>UPDATE REQUIRED</Text>
-        <Text style={styles.title}>SwingSage needs updating</Text>
+      <Panel radius="feature" style={styles.card}>
+        <Eyebrow>Update required</Eyebrow>
+        <TitleText>SwingSage needs updating</TitleText>
         <Text style={styles.body}>
           {detail.message ??
             "This version is too old to read your swings safely. Your swings are all still here."}
@@ -41,14 +43,12 @@ export default function UpgradeRequiredScreen({
           {detail.currentVersion}.
         </Text>
         {detail.storeUrl ? (
-          <Pressable
-            style={styles.button}
-            accessibilityRole="button"
+          <Button
+            label="Update SwingSage"
             testID="upgrade-open-store"
             onPress={() => open(detail.storeUrl as string)}
-          >
-            <Text style={styles.buttonText}>Update SwingSage</Text>
-          </Pressable>
+            style={styles.button}
+          />
         ) : (
           // No store link is a server-side gap, not the golfer's problem — say what to do anyway
           // rather than showing a button that goes nowhere.
@@ -56,29 +56,15 @@ export default function UpgradeRequiredScreen({
             Update SwingSage from your device&apos;s app store to continue.
           </Text>
         )}
-      </View>
+      </Panel>
     </View>
   );
 }
 
 const useStyles = themedStyles((t) => ({
   root: { flex: 1, backgroundColor: t.bg, justifyContent: "center", padding: 20 },
-  card: {
-    backgroundColor: t.panel,
-    borderRadius: 20,
-    padding: 20,
-    gap: 10,
-  },
-  eyebrow: { color: t.amber, fontSize: 10, fontWeight: "700", letterSpacing: 2 },
-  title: { color: t.text, fontSize: 26, fontWeight: "700", letterSpacing: -0.5 },
-  body: { color: t.muted, fontSize: 15, lineHeight: 22 },
-  meta: { color: t.dim, fontSize: 13, lineHeight: 19 },
-  button: {
-    marginTop: 6,
-    backgroundColor: t.accent,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  buttonText: { color: t.onAccent, fontSize: 15, fontWeight: "700" },
+  card: { padding: 20, gap: 10 },
+  body: { color: t.textSoft, fontFamily: FONT_BODY.regular, fontSize: 14, lineHeight: 21 },
+  meta: { color: t.muted, fontFamily: FONT_BODY.regular, fontSize: 12, lineHeight: 18 },
+  button: { marginTop: 6, alignSelf: "stretch" },
 }));

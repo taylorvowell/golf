@@ -1,9 +1,11 @@
 /**
  * The raw colour ramps — the only file where a hex value may be born.
  *
- * Nothing outside `src/theme/` imports from here. Components read **semantic** tokens
- * (`useTheme()` → `themes.ts`); this file is just the paint on the shelf, so that swapping a
- * ramp (a rebrand, a contrast fix) is one edit that cannot miss a screen.
+ * Components read **semantic** tokens (`useTheme()` → `themes.ts`), never this file; the only
+ * imports from outside `src/theme/` are `src/design/deck/` reading its own video-surface
+ * constants (`DECK_SHADES`, `BLACK`) — Deck is a fixed-dark control system with no theme to
+ * read through. This file is just the paint on the shelf, so that swapping a ramp (a rebrand,
+ * a contrast fix) is one edit that cannot miss a screen.
  *
  * Every hex below is copied verbatim from the Ideal Swing reference
  * (`.claude/ideal-swing-design-system.html`, `:root` / `html[data-theme="dark"]` blocks).
@@ -25,10 +27,16 @@ export const COBALT = {
   500: "#3F57DA",
 } as const;
 
-/** Aqua — action, trajectory, motion, improvement. */
+/**
+ * Aqua — action, trajectory, motion, improvement. 300/600 extend the mockup's ramp for the
+ * deck's lit-from-above primary cap (top edge lighter, pushed-in darker) — same hue, no new
+ * colour identity.
+ */
 export const AQUA = {
+  600: "#2FA8AB",
   500: "#43CDD0",
   400: "#57D7D8",
+  300: "#7CE0E2",
   100: "#DDF7F5",
 } as const;
 
@@ -50,12 +58,23 @@ export const ON_DARK = "#FFFFFF";
 export const BLACK = "#000000";
 
 /**
- * The attention/in-progress amber the old theme carried ("analysing…"). The mockup has no
- * amber; these survive only for untouched screens via `legacy.ts` and die with it in step 09.
+ * The video-surface attention amber ("analysing…", frame-sync warnings). The Ideal Swing
+ * mockup has no amber — this survives only on the fixed-dark video surfaces (player, report
+ * video layer), where an in-progress state needs a voice that is neither good nor bad. It is
+ * absorbed when in-app-capture rebuilds those surfaces.
  */
-export const LEGACY_AMBER = {
-  light: "#B45309",
-  dark: "#F59E0B",
+export const VIDEO_AMBER = "#F59E0B";
+
+/**
+ * Deck's lit-from-above neutral faces (video-surface control shading). Lighting, not brand —
+ * blue-cast greys whose only job is the top-lighter-than-bottom read that keeps the player's
+ * controls legible in sunlight. Born here so every hex in the app has one home.
+ */
+export const DECK_SHADES = {
+  raisedTop: "#232B35",
+  raisedBottom: "#151B23",
+  sunkTop: "#0E131A",
+  sunkBottom: "#161D26",
 } as const;
 
 /** The light theme's surfaces and text, verbatim from the mockup `:root`. */

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, StyleSheet, Text, View } from "react-native";
 import Svg, { Circle, Defs, LinearGradient, Path, Stop } from "react-native-svg";
 
-import { COLORS } from "../../theme";
+import { AQUA, COBALT, COLORS } from "../../theme";
 
 /**
  * The designed score meter — `.claude/SAMPLE-afterswing.html`'s `#mainGauge`, as a component.
@@ -31,14 +31,17 @@ export interface ArcGaugeProps {
   testID?: string;
 }
 
-/** The sample's gradient, verbatim. */
+/**
+ * The sample's gradient geometry with the Ideal Swing ramp (step 09 re-token): cobalt (the
+ * authoritative low end) sweeping into aqua (improvement) — §12's two voices, in order.
+ */
 const RAMP: ReadonlyArray<{ offset: string; color: string }> = [
-  { offset: "0", color: "#6d59ff" },
-  { offset: "0.38", color: "#8b7bff" },
-  { offset: "0.72", color: "#49a8ff" },
-  { offset: "1", color: "#6fe5ff" },
+  { offset: "0", color: COBALT[600] },
+  { offset: "0.38", color: COBALT[500] },
+  { offset: "0.72", color: AQUA[500] },
+  { offset: "1", color: AQUA[300] },
 ];
-const MARKER = "#5ed0ff";
+const MARKER = AQUA[400];
 const TRACK = "rgba(255,255,255,0.075)";
 
 const VIEW_W = 360;
@@ -122,8 +125,8 @@ export function ArcGauge({
           strokeDasharray={`${ARC_LEN} ${ARC_LEN}`}
           strokeDashoffset={reveal}
         />
-        <AnimatedCircle cx={cx} cy={cy} r={16} fill="rgba(94,208,255,0.18)" />
-        <AnimatedCircle cx={cx} cy={cy} r={8} fill="#080a0d" stroke={MARKER} strokeWidth={5} />
+        <AnimatedCircle cx={cx} cy={cy} r={16} fill="rgba(87,215,216,0.18)" />
+        <AnimatedCircle cx={cx} cy={cy} r={8} fill={COLORS.bg} stroke={MARKER} strokeWidth={5} />
       </Svg>
 
       {/* RN text over the SVG rather than <SvgText>: the app's font stack, weights and tabular
@@ -158,14 +161,14 @@ const styles = StyleSheet.create({
     lineHeight: 66,
     fontVariant: ["tabular-nums"],
   },
-  outOf: { color: "#7e8691", fontSize: 10, fontWeight: "700", letterSpacing: 2.4 },
+  outOf: { color: COLORS.muted, fontSize: 10, fontWeight: "700", letterSpacing: 2.4 },
   scaleRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     paddingHorizontal: 6,
     marginTop: -14,
   },
-  scaleStart: { color: "#6f6fa1", fontSize: 10 },
-  scaleMid: { color: "#8e90c7", fontSize: 10 },
-  scaleEnd: { color: "#6fe5ff", fontSize: 10 },
+  scaleStart: { color: COLORS.dim, fontSize: 10 },
+  scaleMid: { color: COLORS.lavender, fontSize: 10 },
+  scaleEnd: { color: AQUA[300], fontSize: 10 },
 });

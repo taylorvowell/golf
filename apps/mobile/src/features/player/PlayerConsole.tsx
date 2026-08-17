@@ -349,7 +349,7 @@ function seconds(frames: number, fps: number): string {
 const styles = StyleSheet.create({
   scrim: {
     paddingTop: 72,
-    experimental_backgroundImage: `linear-gradient(180deg, rgba(5,7,6,0) 0%, rgba(5,7,6,0.86) 42%, ${DECK.ground} 100%)`,
+    experimental_backgroundImage: `linear-gradient(180deg, rgba(7,16,31,0) 0%, rgba(7,16,31,0.86) 42%, ${DECK.ground} 100%)`,
   },
   timeline: { paddingHorizontal: 20 },
   readout: {
@@ -377,7 +377,7 @@ const styles = StyleSheet.create({
     marginLeft: -1,
     backgroundColor: DECK.accent,
     boxShadow: [
-      { offsetX: 0, offsetY: 0, blurRadius: 10, spreadDistance: 0, color: "rgba(184,255,74,0.5)" },
+      { offsetX: 0, offsetY: 0, blurRadius: 10, spreadDistance: 0, color: "rgba(87,215,216,0.5)" },
     ],
   },
 
@@ -410,7 +410,7 @@ const styles = StyleSheet.create({
     width: SEGMENT,
     height: 44 - WELL_PAD * 2,
     borderRadius: 11,
-    backgroundColor: "rgba(184,255,74,0.16)",
+    backgroundColor: "rgba(87,215,216,0.16)",
   },
   segment: { width: SEGMENT, height: "100%", alignItems: "center", justifyContent: "center" },
   segmentText: { color: DECK.label.caption, fontSize: 11.5, fontWeight: "700" },

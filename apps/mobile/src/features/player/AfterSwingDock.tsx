@@ -193,6 +193,6 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: COLORS.onAcid,
+    backgroundColor: COLORS.onAqua,
   },
 });

@@ -259,7 +259,7 @@ const styles = StyleSheet.create({
   },
   headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   header: { color: COLORS.muted, fontSize: 11, fontWeight: "700", letterSpacing: 1 },
-  reset: { color: COLORS.violet, fontSize: 12, fontWeight: "600" },
+  reset: { color: COLORS.lavender, fontSize: 12, fontWeight: "600" },
   grid: { flexDirection: "row", gap: 8 },
   cell: {
     flex: 1,
@@ -279,7 +279,7 @@ const styles = StyleSheet.create({
   line: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
   lineLabel: { color: COLORS.dim, fontSize: 11, flexShrink: 1 },
   lineValue: {
-    color: COLORS.acid,
+    color: COLORS.aqua,
     fontSize: 11,
     fontWeight: "600",
     fontVariant: ["tabular-nums"],
@@ -292,8 +292,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 10,
-    backgroundColor: "rgba(139,123,255,0.14)",
+    backgroundColor: "rgba(133,141,194,0.14)",
   },
   sweepBusy: { opacity: 0.55 },
-  sweepLabel: { color: COLORS.violet, fontSize: 13, fontWeight: "700" },
+  sweepLabel: { color: COLORS.lavender, fontSize: 13, fontWeight: "700" },
 });

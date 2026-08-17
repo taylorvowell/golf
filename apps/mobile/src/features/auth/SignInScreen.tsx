@@ -3,6 +3,8 @@ import { useState } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 
 import { useAuth } from "./AuthProvider";
+import { DisplayText, Eyebrow } from "../../design/system";
+import { FONT_BODY } from "../../design/system/typography";
 import { themedStyles, useTheme } from "../../theme";
 import { GoogleSignInCancelled } from "./google";
 
@@ -47,8 +49,8 @@ export function SignInScreen() {
   return (
     <View style={styles.root}>
       <View style={styles.header}>
-        <Text style={styles.eyebrow}>SWINGSAGE</Text>
-        <Text style={styles.h1}>Sign in</Text>
+        <Eyebrow>SwingSage</Eyebrow>
+        <DisplayText>Sign in</DisplayText>
         <Text style={styles.lede}>
           No password to choose, and nothing to remember. Your swings stay tied to this account on
           every device you sign in on.
@@ -63,7 +65,7 @@ export function SignInScreen() {
           disabled={busy}
           onPress={() => void onGoogle()}
         />
-        {busy ? <ActivityIndicator color={t.violet} /> : null}
+        {busy ? <ActivityIndicator color={t.lavender} /> : null}
         {error ? (
           <Text style={styles.error} accessibilityRole="alert">
             {error}
@@ -78,12 +80,10 @@ export function SignInScreen() {
 
 const useStyles = themedStyles((t) => ({
   root: { flex: 1, backgroundColor: t.bg, padding: 24, justifyContent: "center", gap: 28 },
-  header: { gap: 6 },
-  eyebrow: { color: t.accent, fontSize: 10, fontWeight: "700", letterSpacing: 2 },
-  h1: { color: t.text, fontSize: 32, fontWeight: "700", letterSpacing: -0.5 },
-  lede: { color: t.muted, fontSize: 14, lineHeight: 21 },
+  header: { gap: 8 },
+  lede: { color: t.textSoft, fontFamily: FONT_BODY.regular, fontSize: 13, lineHeight: 20 },
   actions: { gap: 14, alignItems: "stretch" },
   google: { width: "100%", height: 48 },
-  error: { color: t.danger, fontSize: 13, lineHeight: 19 },
-  footer: { color: t.dim, fontSize: 12, lineHeight: 18 },
+  error: { color: t.bad, fontFamily: FONT_BODY.regular, fontSize: 12.5, lineHeight: 19 },
+  footer: { color: t.muted2, fontFamily: FONT_BODY.regular, fontSize: 11.5, lineHeight: 18 },
 }));

@@ -394,7 +394,7 @@ const styles = StyleSheet.create({
     gap: 8,
     padding: 14,
     borderRadius: 16,
-    backgroundColor: "rgba(184,255,74,0.07)",
+    backgroundColor: "rgba(87,215,216,0.07)",
   },
   primaryTag: {
     color: DECK.accent,
@@ -420,7 +420,7 @@ const styles = StyleSheet.create({
   },
 
   finding: { flexDirection: "row", alignItems: "flex-start", gap: 9 },
-  findingIcon: { color: "#ff8b6b", fontSize: 13, fontWeight: "800", lineHeight: 19, width: 11 },
+  findingIcon: { color: COLORS.red, fontSize: 13, fontWeight: "800", lineHeight: 19, width: 11 },
   findingIconGood: { color: DECK.accent },
   findingBody: { flex: 1, gap: 1 },
   findingTitle: { color: COLORS.text, fontSize: 13, fontWeight: "600", lineHeight: 19 },

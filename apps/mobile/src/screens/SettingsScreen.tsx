@@ -1,7 +1,8 @@
 import { ScrollView, Switch, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { ListGroup, ListRow } from "../design/ListRow";
+import { ListGroup, ListRow, ListSectionLabel } from "../design/system";
+import { FONT_BODY } from "../design/system/typography";
 import { useSummaryPreference } from "../features/swings/useSummaryPreference";
 import { useAppNavigation } from "../navigation";
 import { CLIENT_VERSION } from "../platform/version";
@@ -13,6 +14,10 @@ import { themedStyles, useTheme, useThemePreference, type ThemePreference } from
  * Delete account lives at the bottom, past everything, in the danger tone — it moved here from
  * the swing log's footer, which was only ever standing in for this screen.
  */
+
+/** Cobalt at 35/45% — the on-position switch track (the Tag pattern's named tints). */
+const COBALT_TRACK = { light: "rgba(47,70,207,0.35)", dark: "rgba(63,87,218,0.45)" } as const;
+
 export function SettingsScreen() {
   const navigation = useAppNavigation();
   const insets = useSafeAreaInsets();
@@ -25,10 +30,10 @@ export function SettingsScreen() {
       style={styles.root}
       contentContainerStyle={[styles.content, { paddingBottom: 32 + insets.bottom }]}
     >
-      <Text style={styles.tag}>Appearance</Text>
+      <ListSectionLabel>Appearance</ListSectionLabel>
       <AppearancePicker />
 
-      <Text style={styles.tag}>After a swing</Text>
+      <ListSectionLabel>After a swing</ListSectionLabel>
       <ListGroup>
         <ListRow
           title="Lead with the scorecard"
@@ -40,14 +45,14 @@ export function SettingsScreen() {
               // Null means the stored value has not loaded yet — a flip written now would race it.
               disabled={statsFirst === null}
               onValueChange={set}
-              trackColor={{ false: t.well, true: t.accentTrack }}
-              thumbColor={statsFirst ? t.accent : t.muted}
+              trackColor={{ false: t.surface3, true: COBALT_TRACK[t.mode] }}
+              thumbColor={statsFirst ? t.cobalt : t.muted}
             />
           }
         />
       </ListGroup>
 
-      <Text style={styles.tag}>Account</Text>
+      <ListSectionLabel>Account</ListSectionLabel>
       <ListGroup>
         <ListRow
           testID="open-delete-account"
@@ -60,7 +65,7 @@ export function SettingsScreen() {
 
       {__DEV__ && (
         <>
-          <Text style={styles.tag}>Developer</Text>
+          <ListSectionLabel>Developer</ListSectionLabel>
           <ListGroup>
             <ListRow
               title="Design system gallery"
@@ -109,7 +114,7 @@ function AppearancePicker() {
   );
 }
 
-/** A flat radio: accent disc with a punched centre when chosen, a well when not. */
+/** A flat radio: cobalt disc with a punched centre when chosen, a well when not (§12). */
 function ChoiceMark({ selected }: { selected: boolean }) {
   const styles = useStyles();
   return (
@@ -122,16 +127,13 @@ function ChoiceMark({ selected }: { selected: boolean }) {
 const useStyles = themedStyles((t) => ({
   root: { flex: 1, backgroundColor: t.bg },
   content: { padding: 16, gap: 10 },
-  tag: {
-    color: t.muted,
-    fontSize: 9,
-    fontWeight: "600",
-    letterSpacing: 1.6,
-    textTransform: "uppercase",
-    marginTop: 8,
-    marginLeft: 4,
+  version: {
+    color: t.muted2,
+    fontFamily: FONT_BODY.regular,
+    fontSize: 11,
+    textAlign: "center",
+    marginTop: 18,
   },
-  version: { color: t.dim, fontSize: 11, textAlign: "center", marginTop: 18 },
 
   mark: {
     width: 20,
@@ -139,8 +141,8 @@ const useStyles = themedStyles((t) => ({
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: t.well,
+    backgroundColor: t.surface3,
   },
-  markSelected: { backgroundColor: t.accent },
-  markDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: t.onAccent },
+  markSelected: { backgroundColor: t.cobalt },
+  markDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: t.onDark },
 }));

@@ -1,6 +1,7 @@
 import { StyleSheet, View } from "react-native";
 
 import { DECK } from "../../design/deck";
+import { COLORS } from "../../theme";
 import { stepFrame, type Extent } from "./frames";
 import type { ScrubMap } from "./phaseBands";
 import { useSeekSurface } from "./useSeekSurface";
@@ -124,6 +125,6 @@ const styles = StyleSheet.create({
     marginLeft: -THUMB / 2,
     borderWidth: 5,
     borderColor: DECK.accent,
-    backgroundColor: "#0b0e0c",
+    backgroundColor: COLORS.bg,
   },
 });

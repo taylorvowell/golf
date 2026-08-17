@@ -209,7 +209,7 @@ const styles = StyleSheet.create({
     gap: 8,
     backgroundColor: DECK.glass.key,
   },
-  tileOn: { backgroundColor: "rgba(184,255,74,0.07)" },
+  tileOn: { backgroundColor: "rgba(87,215,216,0.07)" },
   tilePressed: { opacity: 0.6 },
   // A window onto the swing, not a paint chip: the darker inner square is what makes the
   // miniature read as a picture of the video rather than as an icon.
@@ -253,7 +253,7 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     backgroundColor: DECK.glass.key,
   },
-  chipOn: { backgroundColor: "rgba(184,255,74,0.1)" },
+  chipOn: { backgroundColor: "rgba(87,215,216,0.1)" },
   chipPressed: { opacity: 0.6 },
   chipText: { color: COLORS.muted, fontSize: 12, fontWeight: "600" },
   chipTextOn: { color: DECK.accent },

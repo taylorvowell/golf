@@ -1,6 +1,8 @@
-import { ScrollView, Text, View } from "react-native";
+import { ScrollView, Text } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { Eyebrow, Panel, TitleText } from "../design/system";
+import { FONT_BODY } from "../design/system/typography";
 import { themedStyles } from "../theme";
 
 /**
@@ -19,21 +21,21 @@ export function GoalsScreen() {
       style={styles.root}
       contentContainerStyle={[styles.content, { paddingBottom: 32 + insets.bottom }]}
     >
-      <View style={styles.card}>
-        <Text style={styles.title}>Goals are on the way</Text>
+      <Panel radius="feature" style={styles.card}>
+        <TitleText>Goals are on the way</TitleText>
         <Text style={styles.copy}>
           You&apos;ll pick a swing style to work toward, choose curated goals, and every session
           will get a focus that moves you there — with drills matched to what your swings
           actually show.
         </Text>
-      </View>
-      <View style={styles.card}>
-        <Text style={styles.tag}>Already working</Text>
+      </Panel>
+      <Panel radius="feature" style={styles.card}>
+        <Eyebrow>Already working</Eyebrow>
         <Text style={styles.copy}>
           Home already recommends a focus for your next session from what recurred in your last
           one. Goals will steer that recommendation toward what you care about most.
         </Text>
-      </View>
+      </Panel>
     </ScrollView>
   );
 }
@@ -41,19 +43,6 @@ export function GoalsScreen() {
 const useStyles = themedStyles((t) => ({
   root: { flex: 1, backgroundColor: t.bg },
   content: { padding: 16, gap: 12 },
-  card: {
-    borderRadius: 22,
-    backgroundColor: t.panel,
-    padding: 18,
-    gap: 8,
-  },
-  title: { color: t.text, fontSize: 21, fontWeight: "700", letterSpacing: -0.6 },
-  tag: {
-    color: t.muted,
-    fontSize: 9,
-    fontWeight: "600",
-    letterSpacing: 1.6,
-    textTransform: "uppercase",
-  },
-  copy: { color: t.muted, fontSize: 14, lineHeight: 21 },
+  card: { padding: 18, gap: 8 },
+  copy: { color: t.textSoft, fontFamily: FONT_BODY.regular, fontSize: 13, lineHeight: 20 },
 }));

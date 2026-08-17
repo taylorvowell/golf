@@ -30,7 +30,7 @@ export function TrendLine({
 }: TrendLineProps) {
   const t = useTheme();
   // Hooks above this early return — `history` can change length between renders.
-  const stroke = color ?? t.violet;
+  const stroke = color ?? t.lavender;
   if (history.length < 2) return null;
   const lo = Math.min(...history);
   const hi = Math.max(...history);
@@ -84,9 +84,9 @@ export function TrendLine({
               width: r * 2,
               height: r * 2,
               borderRadius: r,
-              // The panel colour, because the dots sit on a card and punch a hole through
+              // The card colour, because the dots sit on a card and punch a hole through
               // the line (a shape-drawing border — exempt from the no-borders rule).
-              backgroundColor: t.panel,
+              backgroundColor: t.surface,
               borderWidth: 2.5,
               borderColor: stroke,
             }}

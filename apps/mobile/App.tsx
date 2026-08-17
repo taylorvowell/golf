@@ -89,8 +89,8 @@ function RecordDark() {
 
 function Tabs() {
   return (
-    // Headerless: each tab draws the shared TopBar (title + the profile avatar) itself, which
-    // is what owns the top inset.
+    // Headerless: each tab draws its own header (the hero top row on Swings/Progress, the
+    // system ScreenHeader on Home/Coach), which is what owns the top inset.
     <Tab.Navigator
       screenOptions={{ headerShown: false }}
       tabBar={(props) => <TabBar {...props} />}
@@ -115,7 +115,7 @@ function Root() {
       ...base,
       colors: {
         ...base.colors,
-        primary: t.accent,
+        primary: t.cobalt,
         background: t.bg,
         card: t.bg,
         text: t.text,

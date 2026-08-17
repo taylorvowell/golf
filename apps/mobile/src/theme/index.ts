@@ -16,6 +16,7 @@
  */
 export { AQUA, COBALT, LAVENDER, NAVY, SEMANTIC } from "./palette";
 export { DARK, LIGHT, type ShadowStyle, type Theme } from "./themes";
+import { AQUA, DARK_SURFACES, LAVENDER, NAVY, SEMANTIC, VIDEO_AMBER } from "./palette";
 export {
   FixedDarkTheme,
   ThemeProvider,
@@ -26,18 +27,23 @@ export {
 } from "./ThemeProvider";
 export { themedStyles } from "./themedStyles";
 
-/** The fixed dark palette of the video-facing surfaces (player, capture, deck). */
+/**
+ * The fixed dark palette of the video-facing surfaces (player, capture, deck) — since step 09
+ * every value derives from `palette.ts`'s Ideal Swing ramps, so the app has ONE colour source.
+ * The keys are the video surfaces' own vocabulary (`aqua` is the action accent the old system
+ * called acid); `amber` is the one value with no mockup equivalent (see `VIDEO_AMBER`).
+ */
 export const COLORS = {
-  bg: "#080a0d",
-  panel: "#12161c",
-  border: "#232a33",
-  text: "#f7f8f5",
-  muted: "#7e8691",
-  dim: "#5b636e",
-  acid: "#a3e635",
-  violet: "#8b7bff",
-  amber: "#f59e0b",
-  red: "#e5484d",
-  /** Text on top of an `acid` fill — the palette's only inverted pairing. */
-  onAcid: "#0b0f14",
+  bg: DARK_SURFACES.bg,
+  panel: DARK_SURFACES.surface,
+  border: DARK_SURFACES.surface3,
+  text: DARK_SURFACES.text,
+  muted: DARK_SURFACES.muted,
+  dim: DARK_SURFACES.muted2,
+  aqua: AQUA[500],
+  lavender: LAVENDER[500],
+  amber: VIDEO_AMBER,
+  red: SEMANTIC.bad,
+  /** Text on top of an `aqua` fill — the palette's only inverted pairing. */
+  onAqua: NAVY[900],
 } as const;

@@ -314,7 +314,7 @@ const styles = StyleSheet.create({
     height: 38,
     borderRadius: 11,
   },
-  tabOn: { backgroundColor: "rgba(184,255,74,0.14)" },
+  tabOn: { backgroundColor: "rgba(87,215,216,0.14)" },
   tabText: { color: "rgba(255,255,255,0.5)", fontSize: 12.5, fontWeight: "600" },
   tabTextOn: { color: DECK.accent },
   tabCount: {

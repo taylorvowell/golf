@@ -24,7 +24,6 @@ jest.mock("../platform/client", () => ({
 jest.mock("../navigation", () => ({
   useAppNavigation: () => ({ navigate: mockNavigate, goBack: jest.fn() }),
 }));
-jest.mock("../design/TopBar", () => ({ TopBar: () => null }));
 jest.mock("../features/auth/AuthProvider", () => ({
   useAuth: () => ({
     status: "signed-in",

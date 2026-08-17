@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { BLACK } from "../../theme/palette";
 import { DECK } from "./tokens";
 
 /**
@@ -340,7 +341,7 @@ export function DeckSheet({
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  backdropFill: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "#000" },
+  backdropFill: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: BLACK },
   panel: {
     position: "absolute",
     left: 0,
