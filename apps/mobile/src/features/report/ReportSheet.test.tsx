@@ -46,7 +46,7 @@ function vm(over: Partial<ReportViewModel> = {}): ReportViewModel {
 
 it("renders every slot the selector filled", async () => {
   const { getByText } = await render(
-    <ReportSheet vm={vm()} swingId="s-1" onBack={() => {}} onShowVideo={() => {}} />,
+    <ReportSheet vm={vm()} swingId="s-1" onShowVideo={() => {}} />,
   );
   expect(getByText("7iron-2")).toBeTruthy();
   expect(getByText("irons · down the line · 60 fps")).toBeTruthy();
@@ -72,7 +72,6 @@ it("renders the unscored board as an abstention, never a zero", async () => {
         chips: [],
       })}
       swingId="s-1"
-      onBack={() => {}}
       onShowVideo={() => {}}
     />,
   );
@@ -80,14 +79,11 @@ it("renders the unscored board as an abstention, never a zero", async () => {
   expect(queryByText("0")).toBeNull();
 });
 
-it("wires back and show-video", async () => {
-  const onBack = jest.fn();
+it("wires show-video", async () => {
   const onShowVideo = jest.fn();
   const { getByLabelText } = await render(
-    <ReportSheet vm={vm()} swingId="s-1" onBack={onBack} onShowVideo={onShowVideo} />,
+    <ReportSheet vm={vm()} swingId="s-1" onShowVideo={onShowVideo} />,
   );
-  fireEvent.press(getByLabelText("Back"));
-  expect(onBack).toHaveBeenCalled();
   fireEvent.press(getByLabelText("Show full video"));
   expect(onShowVideo).toHaveBeenCalled();
 });

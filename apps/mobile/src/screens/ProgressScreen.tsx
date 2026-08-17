@@ -3,27 +3,45 @@ import {
   ActivityIndicator,
   Pressable,
   RefreshControl,
-  ScrollView,
   Text,
   View,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { ChevronGlyph } from "../design/deck";
-import { TrendLine } from "../design/gauges";
+import {
+  BRAND,
+  Chip,
+  HeroBackdrop,
+  Panel,
+  PanelHead,
+  SheetOverBackdrop,
+  TrendRing,
+} from "../design/system";
+import { FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
 import { StatusMessage } from "../design/StatusMessage";
-import { TopBar } from "../design/TopBar";
-import { progressStats, sessionAverages } from "../features/progress/progressModel";
-import { sessionize } from "../features/swings/sessions";
+import { CoachFocusRow } from "../features/progress/CoachFocusRow";
+import { CompareThenNow } from "../features/progress/CompareThenNow";
+import { MiniTrendTile } from "../features/progress/MiniTrendTile";
+import {
+  PLACEHOLDER_COACH_NOTE,
+  PLACEHOLDER_PRIORITIES,
+  PLACEHOLDER_TRENDS,
+  progressViewModel,
+} from "../features/progress/viewModel";
 import { useSwings } from "../features/swings/useSwings";
 import { useAppNavigation } from "../navigation";
 import { themedStyles, useTheme } from "../theme";
 
 /**
- * Progress — the long view. Home answers "what next"; this answers "is it working": all-time
- * records as tiles, then session averages across visits as the trend. Every number is from the
- * swing list; when there is not enough scored history for a claim, the section says so instead
- * of drawing a chart through two points of noise.
+ * Progress, rebuilt to the Ideal Swing reference (`.progress-*`): the hero carries the
+ * 30-day story — deterministic headline, the net-gain trend ring, real count chips — and the
+ * sheet carries the coaching roadmap: AI coach priorities, category trends, the coach note,
+ * and the then-vs-now compare. Real aggregates are real; coaching content is the flagged
+ * placeholder block in `viewModel.ts` until priority-engine/goal-progression fill the seam.
+ *
+ * The mockup's "Coach confidence rising" chip is deliberately absent: a canned trust
+ * statement fails the honesty bar, and no measured confidence aggregate exists yet.
  */
 export function ProgressScreen() {
   const navigation = useAppNavigation();
@@ -32,199 +50,301 @@ export function ProgressScreen() {
   const t = useTheme();
   const styles = useStyles();
 
-  const sessions = useMemo(
-    () => (state.kind === "ok" ? sessionize(state.swings) : []),
+  const vm = useMemo(
+    () => (state.kind === "ok" ? progressViewModel(state.swings, Date.now()) : null),
     [state],
   );
-  const stats = useMemo(
-    () => (state.kind === "ok" ? progressStats(state.swings, sessions.length) : null),
-    [state, sessions],
-  );
-  const series = useMemo(() => sessionAverages(sessions), [sessions]);
 
-  return (
-    <View style={styles.root}>
-      <TopBar title="Progress" />
-
-      {state.kind === "loading" ? (
-        <View style={styles.centre}>
-          <ActivityIndicator color={t.muted} />
-        </View>
-      ) : null}
-      {state.kind === "signed-out" ? (
-        <StatusMessage
-          title="Your session has expired"
-          detail="Sign out and sign back in to continue."
-          onRetry={refresh}
-        />
-      ) : null}
-      {state.kind === "unreachable" ? (
-        <StatusMessage
-          title="Cannot reach SwingSage"
-          detail="Your swings are safe — this device just could not connect. Check your network."
-          onRetry={refresh}
-        />
-      ) : null}
-
-      {state.kind === "ok" && stats ? (
-        <ScrollView
-          contentContainerStyle={[styles.content, { paddingBottom: 32 + insets.bottom }]}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={refresh}
-              tintColor={t.muted}
-              colors={[t.accent]}
-            />
-          }
-        >
-          {stats.totalSwings === 0 ? (
-            <View style={styles.card} testID="progress-empty">
-              <Text style={styles.emptyTitle}>Nothing to chart yet</Text>
-              <Text style={styles.copy}>
-                Your records and trends build themselves as you swing.
-              </Text>
+  const hero = (
+    <HeroBackdrop>
+      <View style={[styles.heroContent, { paddingTop: insets.top + 12 }]}>
+        {/* .progress-topbar — brand + title left, the more-circle (profile door) right. */}
+        <View style={styles.heroTopRow}>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.heroBrand}>{BRAND}</Text>
+            <Text style={styles.heroTitle}>Progress</Text>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Profile and settings"
+            onPress={() => navigation.navigate("Profile")}
+            hitSlop={8}
+            style={({ pressed }) => [styles.heroMore, pressed && styles.pressed]}
+          >
+            <View style={styles.heroMoreDots}>
+              <View style={styles.heroMoreDot} />
+              <View style={styles.heroMoreDot} />
+              <View style={styles.heroMoreDot} />
             </View>
-          ) : (
-            <>
-              <View style={styles.tiles} testID="progress-tiles">
-                <Tile
-                  value={stats.best ? String(Math.round(stats.best.score)) : "—"}
-                  label="All-time best"
-                  accent
-                />
-                <Tile
-                  value={stats.medianTempo ? `${stats.medianTempo.toFixed(1)}:1` : "—"}
-                  label="Typical tempo"
-                />
-                <Tile value={String(stats.totalSwings)} label="Swings" />
-                <Tile value={String(stats.totalSessions)} label="Sessions" />
-              </View>
-
-              <View style={styles.card}>
-                <Text style={styles.tag}>Session averages</Text>
-                {series.length >= 2 ? (
-                  <>
-                    <TrendLine
-                      history={series.map((p) => p.average)}
-                      height={64}
-                      style={styles.trend}
-                      accessibilityLabel={`Average score across your last ${series.length} sessions`}
-                    />
-                    <View style={styles.axisRow}>
-                      <Text style={styles.axisLabel}>{dateOf(series[0].start)}</Text>
-                      <Text style={styles.axisLabel}>{dateOf(series[series.length - 1].start)}</Text>
-                    </View>
-                  </>
-                ) : (
-                  <Text style={styles.copy} testID="progress-no-trend">
-                    Two scored sessions make a trend — one more visit and this draws itself.
+          </Pressable>
+        </View>
+        {/* .progress-meta-row — the 30-day story left, the trend ring right. */}
+        {vm != null && vm.kind !== "empty" ? (
+          <>
+            <View style={styles.heroMeta}>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.heroEyebrow}>Last 30 days</Text>
+                <Text style={styles.heroHeadline}>{vm.headline}</Text>
+                {vm.window.best !== null && (
+                  <Text style={styles.heroCopy}>
+                    Best score {vm.window.best} across{" "}
+                    {vm.window.scoredSessions === 1
+                      ? "one scored session"
+                      : `${vm.window.scoredSessions} scored sessions`}
+                    .
                   </Text>
                 )}
               </View>
-
-              {stats.best ? (
-                <Pressable
-                  testID="progress-watch-best"
-                  accessibilityRole="button"
-                  accessibilityLabel={`Watch your all-time best swing, scored ${Math.round(stats.best.score)}`}
-                  onPress={() =>
-                    navigation.navigate("SwingDetail", { id: (stats.best as { swingId: string }).swingId })
-                  }
-                  style={({ pressed }) => [styles.bestRow, pressed && styles.pressed]}
-                >
-                  <View style={styles.bestBody}>
-                    <Text style={styles.bestTitle}>Watch your all-time best</Text>
-                    <Text style={styles.bestMeta}>
-                      {Math.round(stats.best.score)} · {dateOf(stats.best.at)}
-                    </Text>
-                  </View>
-                  <ChevronGlyph size={9} color={t.accent} direction="right" weight={1.8} />
-                </Pressable>
-              ) : null}
-            </>
-          )}
-        </ScrollView>
-      ) : null}
-    </View>
+              <TrendRing
+                value={
+                  vm.window.netGain === null
+                    ? "—"
+                    : `${vm.window.netGain >= 0 ? "+" : ""}${vm.window.netGain}`
+                }
+                caption="Net gain"
+                // The sweep is the latest session average — a real level; the number is the
+                // real delta. Track-only until either exists.
+                fraction={vm.window.latestAvg === null ? null : vm.window.latestAvg / 100}
+              />
+            </View>
+            {/* .progress-chip-row — real counts only (no canned confidence chip). */}
+            <View style={styles.heroChips} testID="progress-chips">
+              <Chip
+                translucent
+                label={`${vm.window.sessions} ${vm.window.sessions === 1 ? "session" : "sessions"}`}
+              />
+              <Chip
+                translucent
+                label={`${vm.window.swings} ${vm.window.swings === 1 ? "swing" : "swings"}`}
+              />
+              {vm.window.best !== null && (
+                <Chip translucent label={`Best score ${vm.window.best}`} />
+              )}
+            </View>
+          </>
+        ) : null}
+      </View>
+    </HeroBackdrop>
   );
-}
 
-function Tile({ value, label, accent = false }: { value: string; label: string; accent?: boolean }) {
-  const styles = useStyles();
   return (
-    <View style={styles.tile}>
-      <Text style={[styles.tileValue, accent && styles.tileAccent]}>{value}</Text>
-      <Text style={styles.tileLabel}>{label}</Text>
-    </View>
-  );
-}
+    <SheetOverBackdrop
+      testID="progress"
+      backdrop={hero}
+      backdropHeight={396 + insets.top}
+      parallax={{ factor: 0.22, cap: 72 }}
+      initialOffset={0}
+      overlap={92}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={refresh}
+          tintColor={t.muted}
+          colors={[t.cobalt]}
+        />
+      }
+    >
+      <View style={[styles.sheetContent, { paddingBottom: 108 + insets.bottom }]}>
+        {state.kind === "loading" ? (
+          <View style={styles.centre}>
+            <ActivityIndicator color={t.muted} />
+          </View>
+        ) : null}
 
-function dateOf(ms: number): string {
-  return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+        {state.kind === "signed-out" ? (
+          <StatusMessage
+            title="Your session has expired"
+            detail="Sign out and sign back in to continue."
+            onRetry={refresh}
+            retryTestID="progress-retry"
+          />
+        ) : null}
+
+        {state.kind === "unreachable" ? (
+          <StatusMessage
+            title="Cannot reach SwingSage"
+            detail="Your swings are safe — this device just could not connect. Check your network."
+            onRetry={refresh}
+            retryTestID="progress-retry"
+          />
+        ) : null}
+
+        {vm != null && vm.kind === "empty" ? (
+          <View style={styles.centre} testID="progress-empty">
+            <Text style={styles.emptyTitle}>Nothing to chart yet</Text>
+            <Text style={styles.emptyDetail}>
+              Your last 30 days have no swings. Records and trends build themselves as you
+              practise.
+            </Text>
+          </View>
+        ) : null}
+
+        {vm != null && vm.kind !== "empty" ? (
+          <>
+            {/* .progress-block — AI coach priorities. */}
+            <Panel radius="feature">
+              <PanelHead label="AI coach priorities" meta="Ordered by impact" />
+              <View style={styles.focusList}>
+                {PLACEHOLDER_PRIORITIES.map((priority) => (
+                  <CoachFocusRow key={priority.category} priority={priority} />
+                ))}
+              </View>
+            </Panel>
+
+            {/* .progress-block — category trends + the coach note. */}
+            <Panel radius="feature" style={styles.block}>
+              <PanelHead label="Where you improved" meta="Category trend" />
+              {vm.kind === "low-data" ? (
+                <Text style={styles.lowData} testID="progress-low-data">
+                  Keep practising to unlock trends — two scored sessions make one.
+                </Text>
+              ) : (
+                <View style={styles.trendGrid}>
+                  {PLACEHOLDER_TRENDS.map((trend) => (
+                    <MiniTrendTile key={trend.category} trend={trend} />
+                  ))}
+                </View>
+              )}
+              {/* .coach-note — aqua→cobalt tint bed. Canned narrative, flagged in the model. */}
+              <LinearGradient
+                colors={[
+                  "rgba(67,205,208,0.16)",
+                  t.mode === "dark" ? "rgba(63,87,218,0.14)" : "rgba(47,70,207,0.10)",
+                ]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.coachNote}
+              >
+                <Text style={styles.coachNoteLabel}>Coach note</Text>
+                <Text style={styles.coachNoteText}>{PLACEHOLDER_COACH_NOTE}</Text>
+              </LinearGradient>
+            </Panel>
+
+            {/* .progress-block — compare then vs now (real swings, real scores). */}
+            <Panel radius="feature" style={styles.block}>
+              <PanelHead label="Compare then vs now" meta="Old swing vs new swing" />
+              {vm.compare != null ? (
+                <CompareThenNow then={vm.compare.then} now={vm.compare.now} />
+              ) : (
+                <Text style={styles.lowData} testID="progress-no-compare">
+                  Two scored swings in the window make a comparison — this fills in as you
+                  practise.
+                </Text>
+              )}
+            </Panel>
+          </>
+        ) : null}
+      </View>
+    </SheetOverBackdrop>
+  );
 }
 
 const useStyles = themedStyles((t) => ({
-  root: { flex: 1, backgroundColor: t.bg },
-  centre: { flex: 1, alignItems: "center", justifyContent: "center" },
-  content: { padding: 16, gap: 12 },
-  pressed: { opacity: 0.6 },
-  copy: { color: t.muted, fontSize: 13.5, lineHeight: 19 },
-  tag: {
-    color: t.muted,
+  heroContent: { paddingHorizontal: 18 },
+  heroTopRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  /* .progress-brand */
+  heroBrand: {
+    color: "rgba(180,235,238,1)",
+    fontFamily: FONT_DISPLAY.black,
     fontSize: 9,
-    fontWeight: "600",
-    letterSpacing: 1.6,
+    letterSpacing: 1.62,
     textTransform: "uppercase",
   },
-
-  tiles: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  tile: {
-    flexBasis: "47%",
-    flexGrow: 1,
-    borderRadius: 18,
-    backgroundColor: t.panel,
-    paddingVertical: 16,
-    paddingHorizontal: 16,
-    gap: 2,
+  /* .progress-top h3 — 31/900/-5% */
+  heroTitle: {
+    marginTop: 6,
+    color: t.onDark,
+    fontFamily: FONT_DISPLAY.black,
+    fontSize: 31,
+    lineHeight: 31,
+    letterSpacing: -1.55,
   },
-  tileValue: {
-    color: t.text,
-    fontSize: 30,
-    fontWeight: "800",
-    letterSpacing: -1.2,
-    fontVariant: ["tabular-nums"],
-  },
-  tileAccent: { color: t.accent },
-  tileLabel: {
-    color: t.muted,
-    fontSize: 9,
-    fontWeight: "600",
-    letterSpacing: 1.4,
-    textTransform: "uppercase",
-  },
-
-  card: {
-    borderRadius: 22,
-    backgroundColor: t.panel,
-    padding: 18,
-    gap: 10,
-  },
-  emptyTitle: { color: t.text, fontSize: 17, fontWeight: "600" },
-  trend: { marginHorizontal: 4, opacity: 0.9, marginTop: 4 },
-  axisRow: { flexDirection: "row", justifyContent: "space-between" },
-  axisLabel: { color: t.dim, fontSize: 10 },
-
-  bestRow: {
-    flexDirection: "row",
+  /* .progress-more — 42px white-10 glass circle, three dots. */
+  heroMore: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: "center",
-    gap: 12,
-    borderRadius: 18,
-    backgroundColor: t.panel,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.10)",
   },
-  bestBody: { flex: 1, gap: 2 },
-  bestTitle: { color: t.accent, fontSize: 14, fontWeight: "700" },
-  bestMeta: { color: t.muted, fontSize: 12 },
+  heroMoreDots: { flexDirection: "row", gap: 3.5 },
+  heroMoreDot: { width: 3.5, height: 3.5, borderRadius: 2, backgroundColor: t.onDark },
+  /* .progress-meta-row — align-items flex-end in the mockup. */
+  heroMeta: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+    gap: 14,
+    marginTop: 18,
+  },
+  heroEyebrow: {
+    color: "rgba(255,255,255,0.74)",
+    fontFamily: FONT_DISPLAY.black,
+    fontSize: 9,
+    letterSpacing: 1.62,
+    textTransform: "uppercase",
+  },
+  /* .progress-meta-row h4 — 26/900/1.03 */
+  heroHeadline: {
+    marginTop: 8,
+    color: t.onDark,
+    fontFamily: FONT_DISPLAY.black,
+    fontSize: 26,
+    lineHeight: 27,
+  },
+  heroCopy: {
+    marginTop: 8,
+    color: "rgba(255,255,255,0.66)",
+    fontFamily: FONT_BODY.regular,
+    fontSize: 10,
+    lineHeight: 14.5,
+  },
+  /* .progress-chip-row (the chips themselves are the system `Chip translucent`). */
+  heroChips: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 18 },
+
+  /* .progress-sheet — padding 12 14, blocks stacked 12 apart. */
+  sheetContent: { paddingHorizontal: 14, paddingTop: 12 },
+  block: { marginTop: 12 },
+  focusList: { gap: 10 },
+  trendGrid: { flexDirection: "row", gap: 10 },
+  lowData: {
+    color: t.textSoft,
+    fontFamily: FONT_BODY.regular,
+    fontSize: 11,
+    lineHeight: 16,
+  },
+  /* .coach-note */
+  coachNote: { marginTop: 10, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 12 },
+  coachNoteLabel: {
+    marginBottom: 4,
+    color: t.text,
+    fontFamily: FONT_DISPLAY.black,
+    fontSize: 8,
+    letterSpacing: 0.64,
+    textTransform: "uppercase",
+  },
+  coachNoteText: {
+    color: t.text,
+    fontFamily: FONT_BODY.regular,
+    fontSize: 10,
+    lineHeight: 15.5,
+  },
+
+  centre: { alignItems: "center", justifyContent: "center", gap: 10, padding: 24, minHeight: 260 },
+  emptyTitle: {
+    color: t.text,
+    fontFamily: FONT_DISPLAY.extraBold,
+    fontSize: 17,
+    textAlign: "center",
+  },
+  emptyDetail: {
+    color: t.muted,
+    fontFamily: FONT_BODY.regular,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: "center",
+    maxWidth: 300,
+  },
+  pressed: { opacity: 0.6 },
 }));

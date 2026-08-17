@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Animated,
+  Pressable,
   StyleSheet,
   View,
   type NativeScrollEvent,
@@ -20,8 +21,17 @@ import { SheetHandle } from "./SheetHandle";
  * - "Open" when scrollY < threshold (60): the host's `backdropOverlay` fades/slides in
  *   (opacity 0→1, translateY 24→0, 280ms) and the sticky footer slides away. Hysteresis of
  *   12px on the way closed so the boundary never flickers.
+ * - The overlay lives INSIDE the scroll surface, before the sheet card, counter-translated by
+ *   the scroll offset so it stays screen-fixed. That is what makes the mockup's stacking
+ *   (video < controls shell < sheet) hold at every scroll position — the card always paints
+ *   over the chrome, including mid-drag — while the controls stay tappable, because children
+ *   of the scroll content take touches where a sibling under the scroll view never could.
  * - `initialOffset` lands the first paint with the sheet riding partway up (Log 170,
  *   Report 520).
+ * - `presented={false}` parks the card low with the scroll gesture off until the host's
+ *   content is real; flipping it true is the card's slide-up entrance.
+ * - `onBackdropTap` makes the backdrop a tap target while closed — the report's
+ *   tap-the-video-to-open door.
  *
  * One Animated.Value drives everything through native-driver interpolations; the scroll
  * listener only flips React state on threshold CROSSINGS, never per frame — cold code, but
@@ -36,6 +46,10 @@ export function SheetOverBackdrop({
   overlap = 74,
   onOpenChange,
   openSheetDrop = 0,
+  presented = true,
+  presentDrop,
+  onBackdropTap,
+  backdropTapLabel = "Show the video",
   children,
   stickyFooter,
   backdropOverlay,
@@ -60,6 +74,19 @@ export function SheetOverBackdrop({
    * full-bleed. 0 (the default, the Log's behaviour) leaves the sheet where the scroll put it.
    */
   openSheetDrop?: number;
+  /**
+   * False while the sheet's content is not ready to show: the card waits low over the
+   * backdrop (a peek showing its skeletons) with the scroll gesture off, then slides up to
+   * its resting offset when this flips true — content arriving IS the card's entrance.
+   */
+  presented?: boolean;
+  /** How far below rest the card waits while not presented. Defaults to `initialOffset`
+   *  (the card's scroll-0 peek at the screen's bottom edge). */
+  presentDrop?: number;
+  /** Makes the backdrop area a tap target while closed (e.g. tap the video → scroll open).
+   *  The tap is the host's to interpret; drags still scroll. */
+  onBackdropTap?: () => void;
+  backdropTapLabel?: string;
   children: ReactNode;
   /** Floats at the screen's bottom edge over the sheet; slides away while open. */
   stickyFooter?: ReactNode;
@@ -128,9 +155,15 @@ export function SheetOverBackdrop({
       }),
     [scrollY, parallax.cap, parallax.factor],
   );
-  const overlaySlide = useMemo(
-    () => openAnim.interpolate({ inputRange: [0, 1], outputRange: [24, 0] }),
-    [openAnim],
+  // The overlay's translateY: the counter-scroll that pins it to the viewport (it lives in
+  // the scroll content), plus the mockup's 24→0 entrance slide.
+  const overlayY = useMemo(
+    () =>
+      Animated.add(
+        scrollY,
+        openAnim.interpolate({ inputRange: [0, 1], outputRange: [24, 0] }),
+      ),
+    [scrollY, openAnim],
   );
   const footerFade = useMemo(
     () => openAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
@@ -150,6 +183,27 @@ export function SheetOverBackdrop({
       useNativeDriver: true,
     }).start();
   }, [open, openSheetDrop, sheetDrop]);
+  // The entrance: not-presented parks the card `presentDrop` below rest; presenting slides it
+  // up. Additive with the open drop — they answer different questions and must not fight.
+  const presentAnim = useRef(new Animated.Value(presented ? 0 : 1)).current;
+  useEffect(() => {
+    Animated.timing(presentAnim, {
+      toValue: presented ? 0 : 1,
+      duration: 340,
+      useNativeDriver: true,
+    }).start();
+  }, [presented, presentAnim]);
+  const sheetY = useMemo(
+    () =>
+      Animated.add(
+        sheetDrop,
+        presentAnim.interpolate({
+          inputRange: [0, 1],
+          outputRange: [0, Math.max(0, presentDrop ?? initialOffset)],
+        }),
+      ),
+    [sheetDrop, presentAnim, presentDrop, initialOffset],
+  );
 
   return (
     <View style={{ flex: 1 }} testID={testID}>
@@ -165,6 +219,9 @@ export function SheetOverBackdrop({
         testID={testID ? `${testID}-scroll` : undefined}
         // Lets the gallery host an instance inside its own scroll; no effect full-screen.
         nestedScrollEnabled
+        // The gesture waits with the content: a card that is not presented yet must not be
+        // draggable into a half-loaded state. Programmatic scrolls (backdrop tap) still work.
+        scrollEnabled={presented}
         refreshControl={refreshControl}
         contentOffset={{ x: 0, y: initialOffset }}
         onScroll={onScrollEvent}
@@ -175,8 +232,46 @@ export function SheetOverBackdrop({
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ flexGrow: 1 }}
       >
-        {/* Transparent spacer — the backdrop shows through; touches here scroll. */}
-        <View style={{ height: backdropHeight }} pointerEvents="none" />
+        {/* Transparent spacer — the backdrop shows through. With `onBackdropTap` it is the
+            backdrop's tap target (drags still belong to the scroll, which wins the responder
+            on movement); without, touches here only scroll. It sits BEFORE the overlay so the
+            overlay's controls hit-test first — a tappable spacer after them would eat their
+            touches. */}
+        {onBackdropTap != null ? (
+          <Pressable
+            testID={testID ? `${testID}-backdrop-tap` : undefined}
+            accessibilityRole="button"
+            accessibilityLabel={backdropTapLabel}
+            disabled={open}
+            onPress={onBackdropTap}
+            style={{ height: backdropHeight }}
+          />
+        ) : (
+          <View style={{ height: backdropHeight }} pointerEvents="none" />
+        )}
+        {/* Backdrop chrome: present only while open; 0→1 / 24→0 like `.video-open`'s shell.
+            BEFORE the sheet card on purpose — the card paints over it at every scroll
+            position (the mockup's video < controls < sheet stacking). The counter-translate
+            in `overlayY` keeps it screen-fixed on the scroll's own native clock; `box-none`
+            while open lets its controls take touches and the gaps fall through, so
+            swipe-to-close keeps working. */}
+        {backdropOverlay != null && (
+          <Animated.View
+            testID={testID ? `${testID}-overlay` : undefined}
+            pointerEvents={open ? "box-none" : "none"}
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              height: backdropHeight,
+              opacity: openAnim,
+              transform: [{ translateY: overlayY }],
+            }}
+          >
+            {backdropOverlay}
+          </Animated.View>
+        )}
         <Animated.View
           style={[
             {
@@ -186,7 +281,7 @@ export function SheetOverBackdrop({
               borderTopRightRadius: 30,
               backgroundColor: t.bgElevated,
               ...t.shadowLg,
-              transform: [{ translateY: sheetDrop }],
+              transform: [{ translateY: sheetY }],
             },
             sheetStyle,
           ]}
@@ -195,20 +290,6 @@ export function SheetOverBackdrop({
           {children}
         </Animated.View>
       </Animated.ScrollView>
-
-      {/* Backdrop chrome: present only while open; 0→1 / 24→0 like `.video-open`'s shell. */}
-      {backdropOverlay != null && (
-        <Animated.View
-          testID={testID ? `${testID}-overlay` : undefined}
-          pointerEvents={open ? "box-none" : "none"}
-          style={[
-            StyleSheet.absoluteFill,
-            { opacity: openAnim, transform: [{ translateY: overlaySlide }] },
-          ]}
-        >
-          {backdropOverlay}
-        </Animated.View>
-      )}
 
       {/* The floating footer (a SessionPillNav): slides away while the backdrop is open. */}
       {stickyFooter != null && (

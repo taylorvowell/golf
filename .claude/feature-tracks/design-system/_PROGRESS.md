@@ -26,6 +26,40 @@ and supersedes mobile-app-shell step 03 (the deferred styling pass).
 
 ## Log
 
+## 08 - Progress page
+**Completed:** 2026-08-17 16:58 UTC
+**Phase:** Ideal Swing Design System
+**Summary:** Progress rebuilt to the mockup (`.progress-*`) as a `SheetOverBackdrop` hero
+instance: `HeroBackdrop` top with brand/title/more-circle, the 30-day story (deterministic
+headline, new system `TrendRing` — value "+net" over an aqua sweep at the latest session
+average), real count chips (system `Chip translucent`); sheet blocks per mockup geometry —
+AI coach priorities (`CoachFocusRow`: 48px `StickThumb`, ordinal/title/copy, priority pill),
+"Where you improved" (`MiniTrendTile` ×3), the aqua→cobalt `coach-note` bed, and
+`CompareThenNow` (real earliest-vs-latest scored swings in the window: labels, dates, and
+`ScoreOrb`s swept to the real scores — lavender then, aqua now). All real aggregates flow
+through `features/progress/viewModel.ts` (`progressViewModel`: 30-day window stats, net gain
+across ≥2 scored sessions, compare ends) — the typed seam priority-engine/goal-progression
+fill later; canned coaching content is `PLACEHOLDER_PRIORITIES`/`_TRENDS`/`_COACH_NOTE`
+(single swap point, categories from the scoring config's own vocabulary). Old
+`progressModel.ts` deleted (superseded). 13 new tests (window/netGain/compare abstention,
+placeholder-honesty pins, screen states); 44 suites / 395 green; emulator pixel pass both
+themes recorded.
+**Named deviations (honesty over mockup):** the mockup's Before/Now priority bars, "+9"
+trend deltas, compare commentary/tags and the "Coach confidence rising" chip are all
+OMITTED — each is a number or claim nobody has measured yet. The components render them the
+moment real values arrive (`progress`/`delta`/`copy`/`tags` props are plumbed and
+null today); the confidence chip stays off until a measured aggregate backs it. Trend-ring
+sweep = real latest session average (the mockup's 82% is decorative); low-data (<2 scored
+sessions) renders the honest "keep practising" copy, empty window the honest empty state.
+Conic gradients as SVG arcs per the standing deviation.
+**Notes:** Emulator pass against live seed data: hero "+2 net gain / 5 sessions / 10 swings
+/ best 80" all real; compare drew swing1 70 (Aug 5) vs pro_3 77 (Aug 9). Dark pass done via
+the Settings appearance toggle (the emulator carries a persisted "Light" preference, so
+`cmd uimode night` alone does not flip the app — preference restored to Light after).
+No S25+ row needed: JS-only change, Metro serves it to the installed dev build.
+
+---
+
 ## 07 - Swing Report — the video layer and video-open state
 **Completed:** 2026-08-15 06:13 UTC
 **Phase:** Ideal Swing Design System

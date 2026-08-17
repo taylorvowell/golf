@@ -153,6 +153,22 @@ Road not taken (updated): **ElevenLabs** — still excellent, loses on style ste
 on needing a new paid vendor account; retained as the explicit fallback. OpenAI / Google
 Cloud TTS classic / Polly / device-native — unchanged from the original analysis.
 
+**Addendum 2026-08-17 — Replicate is the generation route.** Taylor has a Replicate account
+in active use (ENVIRONMENT.md § Replicate) and pointed out — correcting an initial wrong
+claim in this addendum's first draft — that **the chosen model itself is on Replicate as an
+official listing: `replicate.com/google/gemini-3.1-flash-tts`** (verified 2026-08-17: same
+30 voices, style prompts plus inline tags `[whispering]`/`[excitedly]`/`[short pause]` etc.).
+That collapses the plumbing: **D57's model choice is unchanged, and its API route becomes
+Replicate** — one existing account now covers the chosen model AND the bake-off alternates
+(MiniMax Speech 02 HD ≈ $5/bank, Chatterbox ≈ $1.25, Kokoro ≈ $1, ElevenLabs remains the
+off-Replicate fallback vendor). The Google AI Studio key HANDOFF row is superseded by a
+`REPLICATE_API_TOKEN` in the generation script's env; `voice_config` pins the Replicate
+model ref + voice, and the whole-bank regeneration policy is unchanged. The model page lists
+no explicit price — immaterial at bank scale; read it off the page when the bank first
+generates. Separately noted: Replicate's larger potential lever is the analyzer worker host
+(custom Cog models, per-second GPU billing — fits the bursty session shape); that belongs to
+the open worker-host decision, not this record.
+
 ## Full candidate comparison (verified 2026-08-14)
 
 Workload normalization: the whole bank ≈ 500 short lines ≈ 50k characters ≈ 33 minutes of

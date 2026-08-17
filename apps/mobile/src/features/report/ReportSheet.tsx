@@ -1,6 +1,6 @@
 import { Pressable, Text, View } from "react-native";
 import { Image } from "expo-image";
-import { ChevronLeft, Play } from "lucide-react-native";
+import { Play } from "lucide-react-native";
 
 import { SwingProfile, Tag, type ProfileCallout } from "../../design/system";
 import { FONT_BODY, FONT_DISPLAY } from "../../design/system/typography";
@@ -14,18 +14,17 @@ import type { ReportViewModel } from "./selectors";
  * panels and the metric chips. Pure presentation of the selector's view-model — every number
  * traces to the coach report, and an abstention renders as an abstention.
  *
- * Named deviation: the mockup header's three-dot button is a BACK chevron here — the sheet
- * needs a way out more than an empty menu, and a dead control is worse than a changed glyph.
+ * Named deviation: the mockup header's three-dot slot is EMPTY here — the page's back door is
+ * the screen-level floating orb (always visible, every scroll state), and a second back button
+ * a hand-width from it is exactly the repetition the restraint rule cuts.
  */
 export function ReportSheet({
   vm,
   swingId,
-  onBack,
   onShowVideo,
 }: {
   vm: ReportViewModel;
   swingId: string;
-  onBack: () => void;
   /** Scrolls the scaffold to the top — the video-open state (live video in step 07). */
   onShowVideo: () => void;
 }) {
@@ -104,25 +103,6 @@ export function ReportSheet({
             {vm.header.meta}
           </Text>
         </View>
-        {/* .phone-more slot — the back door (named deviation above). */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          onPress={onBack}
-          hitSlop={8}
-          style={({ pressed }) => ({
-            width: 42,
-            height: 42,
-            borderRadius: 21,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: t.cobalt,
-            opacity: pressed ? 0.8 : 1,
-            ...t.shadowCobalt,
-          })}
-        >
-          <ChevronLeft size={20} color={t.onDark} strokeWidth={2.4} />
-        </Pressable>
       </View>
 
       {/* .session-indicator — the confidence line. */}

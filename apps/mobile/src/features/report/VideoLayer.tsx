@@ -15,7 +15,7 @@ import { FrameClockView } from "../../../modules/frame-clock/src";
 import { ErrorBoundary } from "../../platform/ErrorBoundary";
 import { useAuthenticatedImage } from "../../platform/useAuthenticatedImage";
 import { DeckSheet } from "../../design/deck";
-import { SheetOverBackdrop } from "../../design/system";
+import { FloatingBack, SheetOverBackdrop } from "../../design/system";
 import { FONT_DISPLAY } from "../../design/system/typography";
 import { COLORS, FixedDarkTheme } from "../../theme";
 import { ComparePanel } from "../player/ComparePanel";
@@ -46,8 +46,9 @@ import { SwingScrub } from "./SwingScrub";
  *
  * The step file sketches "SwingDetailScreen hosts the scaffold, VideoLayer is the backdrop slot" —
  * but the video-open controls (scrub, speed, play) live in the scaffold's `backdropOverlay` slot
- * (the only layer over the backdrop that can take touches; everything under the scroll surface
- * cannot), and they read the transport at frame rate. If the screen hosted the transport to feed
+ * (screen-fixed inside the scroll surface, under the sheet card — the one arrangement where the
+ * card paints over the chrome AND the controls can still take touches), and they read the
+ * transport at frame rate. If the screen hosted the transport to feed
  * both slots, the whole report sheet would re-render per presented frame. Hosting the scaffold
  * HERE keeps the 60 Hz path inside one component: the sheet content arrives as a stable element
  * from the (cold) screen and React bails on it by identity — the SwingPlayer discipline, inverted.
@@ -73,6 +74,13 @@ export interface ReportVideoLayerProps {
   tempoRatio?: number | null;
   /** The `.report-full-pill` line — view name and swing label ("Down the line · Swing #12"). */
   viewPill: string;
+  /** The page's way out — the floating back orb pinned over everything, in every scroll state. */
+  onBack?: () => void;
+  /**
+   * False while the report is still loading: the sheet waits low (skeletons in its peek) and
+   * slides up to rest when this flips true — the content's arrival is the card's entrance.
+   */
+  sheetPresented?: boolean;
   /** The report sheet's content — a stable element from the cold screen above. */
   children: ReactNode;
   /** The SessionPillNav — the scaffold slides it away in video-open. */
@@ -94,6 +102,8 @@ export function ReportVideoLayer({
   score,
   tempoRatio,
   viewPill,
+  onBack,
+  sheetPresented = true,
   children,
   stickyFooter,
   scrollRef,
@@ -102,6 +112,16 @@ export function ReportVideoLayer({
 }: ReportVideoLayerProps) {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+
+  /** The scroll seam, host's or our own — the backdrop tap needs one either way. */
+  const localScrollRef = useRef<{
+    scrollTo: (opts: { y: number; animated?: boolean }) => void;
+  } | null>(null);
+  const scroll = scrollRef ?? localScrollRef;
+  /** Tap on the picture = the same ask as the sheet's play tile: scroll open (which plays). */
+  const onBackdropTap = useCallback(() => {
+    scroll.current?.scrollTo({ y: 0, animated: true });
+  }, [scroll]);
 
   const source = useAuthenticatedImage(`swings/${swingId}/video`);
   /** The exact first frame, full resolution — the placeholder and the video are one picture. */
@@ -312,8 +332,12 @@ export function ReportVideoLayer({
         ) : null}
       </View>
 
-      {/* .report-full-pill — view · swing, top-left over the picture. Context, not a control. */}
-      <View style={[styles.topRow, { top: insets.top + 16 }]} pointerEvents="none">
+      {/* .report-full-pill — view · swing, top-left over the picture (right of the back orb).
+          Context, not a control. */}
+      <View
+        style={[styles.topRow, { top: insets.top + 16, left: onBack ? 68 : 16 }]}
+        pointerEvents="none"
+      >
         <View style={styles.viewPill}>
           <Text style={styles.viewPillText} numberOfLines={1}>
             {viewPill}
@@ -397,14 +421,28 @@ export function ReportVideoLayer({
         // Video-open drops the sheet a further 132 so its peek clears the screen entirely
         // (.report-v2-scroll.video-open .report-v2-sheet).
         openSheetDrop={132}
-        scrollRef={scrollRef}
+        scrollRef={scroll}
         sheetStyle={sheetStyle}
         onOpenChange={onOpenChange}
         backdropOverlay={controls}
         stickyFooter={stickyFooter}
+        presented={sheetPresented}
+        // Waiting height: enough peek for the skeleton's first rows to breathe (~200 on a
+        // phone), never negative on a short window.
+        presentDrop={Math.max(0, Math.round(height * 0.55) - 108)}
+        onBackdropTap={onBackdropTap}
       >
         {children}
       </SheetOverBackdrop>
+
+      {/* The page's way out — over the scroll surface, so it works in every scroll state. */}
+      {onBack ? (
+        <FloatingBack
+          testID="report-back"
+          onPress={onBack}
+          style={{ position: "absolute", top: insets.top + 10, left: 16 }}
+        />
+      ) : null}
 
       <DeckSheet
         testID="report-overlays-sheet"

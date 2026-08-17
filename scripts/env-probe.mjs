@@ -127,7 +127,7 @@ const containers = (docker ?? "").split("\n").filter((l) => l.toLowerCase().incl
 say(`- docker: ${containers.length ? containers.join("; ") : "no golf containers running (`docker compose up -d`)"}`);
 
 // --- env presence, never values -----------------------------------------------------------
-say(`- apps/web/.env: ${envKeys("apps/web/.env", ["DATABASE_URL", "APP_DATABASE_URL", "NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SECRET_KEY", "AUTH_ALLOWED_EMAILS", "DEV_USER_EMAIL"]).join("  ")}`);
+say(`- apps/web/.env: ${envKeys("apps/web/.env", ["DATABASE_URL", "APP_DATABASE_URL", "NEXT_PUBLIC_SUPABASE_URL", "SUPABASE_SECRET_KEY", "AUTH_ALLOWED_EMAILS", "DEV_USER_EMAIL", "REPLICATE_API_TOKEN"]).join("  ")}`);
 say(`- apps/mobile/.env: ${envKeys("apps/mobile/.env", ["EXPO_PUBLIC_SUPABASE_URL", "EXPO_PUBLIC_API_BASE_URL", "EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID"]).join("  ")}`);
 
 // --- outstanding human tasks ---------------------------------------------------------------

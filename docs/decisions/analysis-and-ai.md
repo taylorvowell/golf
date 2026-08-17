@@ -188,12 +188,15 @@ real swing?" classifier; stated intent is the only admissible signal.
 
 **Decision:** Focus-mode verdicts are spoken from a **bundled asset bank**: authored lines
 (verdict phrasings × moments × per-area feel cues) batch-rendered once with **Gemini 3.1
-Flash TTS**, selected with no-repeat rotation. A versioned `voice_config` pins voice + model
-version; a manifest (line → text hash → asset) drives regeneration, and any model change
+Flash TTS, called via Replicate** (`replicate.com/google/gemini-3.1-flash-tts`, official
+listing — Taylor's existing account; `REPLICATE_API_TOKEN` in the generation script's env),
+selected with no-repeat rotation. A versioned `voice_config` pins the Replicate model ref +
+voice; a manifest (line → text hash → asset) drives regeneration, and any model change
 regenerates the whole bank. The app never calls a TTS vendor at runtime; device TTS is the
 offline fallback; settings disclose the AI voice. ElevenLabs is the named fallback vendor
-behind a script flag. No STT, no conversational voice — deferred to the icebox, and any
-future conversational tier belongs to the AI-coach provider seam and its cost ceilings.
+behind a script flag; the bake-off alternates (MiniMax, Chatterbox) also run on Replicate.
+No STT, no conversational voice — deferred to the icebox, and any future conversational tier
+belongs to the AI-coach provider seam and its cost ceilings.
 **Gotchas:** Spoken lines obey the same honesty rules as the screen — abstention is spoken
 as abstention, and no line may claim a streak or achievement the evidence model has not
 produced. Gemini output carries a SynthID watermark (inaudible; fine).

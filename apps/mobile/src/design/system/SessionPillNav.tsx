@@ -144,9 +144,28 @@ export function SessionPillNav({
               borderColor: "rgba(20,36,79,0.84)",
             }}
           />
-          <Text style={{ color: "#10204A", fontFamily: FONT_DISPLAY.black, fontSize: 30, lineHeight: 32 }}>
-            +
-          </Text>
+          {/* The + drawn as two bars, not a text glyph — font metrics seat a "+" character
+              off the ring's optical centre, and inside concentric circles a pixel reads. */}
+          <View style={{ width: 18, height: 18, alignItems: "center", justifyContent: "center" }}>
+            <View
+              style={{
+                position: "absolute",
+                width: 18,
+                height: 3,
+                borderRadius: 1.5,
+                backgroundColor: "#10204A",
+              }}
+            />
+            <View
+              style={{
+                position: "absolute",
+                width: 3,
+                height: 18,
+                borderRadius: 1.5,
+                backgroundColor: "#10204A",
+              }}
+            />
+          </View>
         </LinearGradient>
       </Pressable>
     </Animated.View>

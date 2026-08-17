@@ -136,7 +136,7 @@ coaching, billing, hosting) is unbuilt.
 | 19.2/20 | Professional reference library, admin-managed, tier-gated | 🟡 | `proSwings.ts` is a hardcoded 2-entry list pointing at local fixture files. No pro profiles, no admin, no tiering. |
 | 19.4 | Make differences clear rather than showing two videos | ⬜ | Today it shows two videos. |
 | 21.1 | Browse/search/filter/favorites/coach-reviewed/delete | 🟡 | A sortable list exists. No search, filter, favorites, or delete. |
-| 21.2/21.3 | Historical improvement and trends | ⬜ | Scores are stored per swing and denormalized onto the row, so the data to compute trends exists — nothing computes or shows them. |
+| 21.2/21.3 | Historical improvement and trends | 🟡 | The mobile Progress screen (Ideal Swing design-system step 08) computes real 30-day aggregates from the swing list — session/swing counts, best, session-average net gain, a then-vs-now compare of real swings. The coaching layer on it (priorities, category trends, coach note) is flagged placeholder content behind a `ProgressViewModel` seam that `priority-engine`/`goal-progression` fill; no per-category trend is computed yet. |
 | 22 | Manually entered launch/simulator data | ⬜ | No fields, no UI, no storage. Owned by the `launch-data` track — and note it is the only authoritative source of face-angle degrees, which video never provides. |
 
 ### 23–28. Coach platform

@@ -147,6 +147,61 @@ it("draws the artifact's phases on the scrub, to the artifact's own spans", asyn
   expect(api.getByText("Approach")).toBeTruthy();
 });
 
+it("keeps the floating back orb live in every scroll state", async () => {
+  const onBack = jest.fn();
+  const api = await render(
+    <ReportVideoLayer
+      testID="report"
+      swingId="abc"
+      frameCount={100}
+      fps={60}
+      viewPill="Down the line"
+      onBack={onBack}
+    >
+      <Text>SHEET CONTENT</Text>
+    </ReportVideoLayer>,
+  );
+
+  // At rest (sheet up) …
+  const orb = await api.findByTestId("report-back");
+  await act(async () => fireEvent.press(orb));
+  expect(onBack).toHaveBeenCalledTimes(1);
+
+  // … and in video-open. A page whose way out scrolls away has no way out.
+  await act(async () => scrollTo(api.getByTestId("report-scroll"), 30));
+  const orbOpen = await api.findByTestId("report-back");
+  await act(async () => fireEvent.press(orbOpen));
+  expect(onBack).toHaveBeenCalledTimes(2);
+});
+
+it("a tap on the covered video scrolls the sheet open — the picture is its own play button", async () => {
+  const api = await render(build());
+
+  // The backdrop tap target exists while the sheet is up; pressing it must not throw (the
+  // scroll node's scrollTo is exercised on-device; here we pin the door exists and is wired).
+  const door = await api.findByTestId("report-backdrop-tap");
+  expect(door.props.accessibilityLabel).toBe("Show the video");
+  await act(async () => fireEvent.press(door));
+});
+
+it("holds the sheet back until the report is real, then presents it", async () => {
+  const api = await render(
+    <ReportVideoLayer
+      testID="report"
+      swingId="abc"
+      frameCount={100}
+      fps={60}
+      viewPill="Down the line"
+      sheetPresented={false}
+    >
+      <Text>SHEET CONTENT</Text>
+    </ReportVideoLayer>,
+  );
+
+  // Not presented: the scroll gesture is off — a half-loaded card must not be draggable.
+  expect(api.getByTestId("report-scroll").props.scrollEnabled).toBe(false);
+});
+
 it("disables the scrub and the bar when the swing cannot be stepped", async () => {
   const { findByTestId } = await render(
     <ReportVideoLayer

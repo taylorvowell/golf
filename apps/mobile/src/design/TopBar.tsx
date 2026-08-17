@@ -1,26 +1,30 @@
 import { Pressable, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { BrandLogo } from "./system";
 import { Avatar } from "../features/profile/Avatar";
 import { useAppNavigation } from "../navigation";
 import { themedStyles } from "../theme";
 
 /**
  * The tab screens' shared header: the screen's name on the left, the golfer on the right.
+ * Home carries the brand instead of a name — `brand` swaps the title text for the real
+ * lockup (the wordmark already says SwingSage; writing it again beside itself is the
+ * repetition rule's textbook case).
  *
  * The avatar is the one persistent door into the profile surface, so it appears on every tab in
  * the same corner. It owns the top inset (the tab navigator draws no header), and in development
  * builds it steps left of the expo-dev-client bubble — the same accommodation the old account
  * bar carried, gated so release keeps the corner.
  */
-export function TopBar({ title }: { title: string }) {
+export function TopBar({ title, brand = false }: { title: string; brand?: boolean }) {
   const insets = useSafeAreaInsets();
   const navigation = useAppNavigation();
   const styles = useStyles();
 
   return (
     <View style={[styles.bar, { paddingTop: insets.top + 10 }]}>
-      <Text style={styles.title}>{title}</Text>
+      {brand ? <BrandLogo height={26} /> : <Text style={styles.title}>{title}</Text>}
       <Pressable
         testID="open-profile"
         accessibilityRole="button"

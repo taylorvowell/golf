@@ -175,3 +175,22 @@ The product's own deletion path is unaffected — `DELETE /api/v1/account` remov
   opened after a web-server restart shows "the analysis could not be loaded" while everything
   else works. Reopening the swing succeeds (the route is compiled). Development-only; a
   production build has no on-demand compile.
+
+## Replicate
+
+Taylor has a **Replicate account in active use** (stated 2026-08-17). Its API token lives in
+**`apps/web/.env` as `REPLICATE_API_TOKEN`** (added 2026-08-17; server-side and gitignored,
+never the mobile env — the consumer is the D57 voice-bank generation script). The session
+probe reports its presence. Relevant to two open
+decisions, neither yet switched to it:
+
+- **Voice bank generation (D57):** Replicate hosts the chosen model itself —
+  **`google/gemini-3.1-flash-tts`, official listing** (verified 2026-08-17: 30 voices,
+  style prompts + inline tags like `[whispering]`/`[excitedly]`/pause controls) — plus the
+  bake-off alternates (MiniMax Speech 02 HD $0.10/1k chars, Chatterbox $0.025/1k, Kokoro
+  $0.02/1k). **Replicate is the generation route:** one existing account covers the chosen
+  model and every alternate; no Google AI Studio key needed. Page shows no explicit price;
+  immaterial at ~$1–5/bank scale.
+- **Analyzer worker host (open HANDOFF row / D18 reopened):** Replicate runs custom models
+  via Cog on per-second GPU billing — a candidate for the bursty serverless-GPU shape the
+  session economics point at. Input to that decision, not decided.

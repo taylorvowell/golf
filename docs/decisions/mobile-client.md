@@ -347,11 +347,13 @@ Semi Condensed** + **Inter** body, bundled via expo-font — Bahnschrift is Wind
 cannot ship; glass surfaces are near-opaque theme fills, not backdrop blur (`expo-blur` stays out
 until a fill provably fails); conic-gradient score rings render as SVG arcs; and every
 "Ideal Swing" string in the mockups renders as **SwingSage** — settled by the real logo Taylor
-supplied 2026-08-14 (wordmark reads *Swingsage*; master lockup at
-`apps/mobile/assets/brand/swingsage-logo.svg`, white-on-dark with the aqua swoosh mark). The
-mockup's placeholder `.brandmark` square is replaced by the logo's ball-and-swoosh mark wherever
-a brand lock appears; the full-colour lockup is for dark/hero surfaces, and light surfaces tint
-the wordmark navy via the `BrandLogo` component's colour prop.
+supplied (wordmark reads *Swingsage*; master lockup at
+`apps/mobile/assets/brand/swingsage-logo.svg`: green→cyan gradient swooshes, a charcoal
+`#282828` disc plate behind the white ball, charcoal wordmark). The mockup's placeholder
+`.brandmark` square is replaced by the logo's ball-and-swoosh mark wherever a brand lock
+appears. The mark's colours are literal on every surface — the disc plate is what keeps the
+white ball readable on light — and only the wordmark takes a colour via `BrandLogo` (white on
+dark, brand charcoal on light). Home's `TopBar` carries the lockup in place of a title.
 **Consequences:** `lucide-react-native` (pure JS over the shipped `react-native-svg`) is the icon
 source for system components, superseding drawn-View glyphs there; SVG's allowed scope widens to
 `design/gauges` **and** `design/system`; `expo-linear-gradient` renders the hero/performance
@@ -364,6 +366,14 @@ after-swing (`afterSwing`) and checkpoint deep-link shapes keep the `SwingPlayer
 pinned dark. The report's backdrop is the swing's still frame until the live player joins it as
 the video layer (step 07). The report's dock ships Back / Delete / Favorite / Latest — "End
 session" waits for practice-loop's session entity.
+**Report stacking and doors:** the layer order is fixed at video < controls shell < sheet card —
+the scaffold hosts `backdropOverlay` **inside** the scroll surface (counter-translated to stay
+screen-fixed) so the card always paints over the chrome and the controls still take touches.
+Every full-bleed page's way out is the **`FloatingBack` orb** pinned top-left over everything
+(the report's sheet lost its in-card back — one back per region). The report sheet holds low
+with `Skeleton` placeholders until the report is real, then slides up as its entrance
+(`presented`), and a tap on the covered video (`onBackdropTap`) scrolls the sheet open, which is
+also what starts playback.
 
 ### Deck — the control-surface system, and why controls have depth
 

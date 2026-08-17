@@ -7,7 +7,7 @@ import {
   Trash2,
 } from "lucide-react-native";
 
-import { SessionPillNav } from "../design/system";
+import { SessionPillNav, Skeleton } from "../design/system";
 import { ReportSheet } from "../features/report/ReportSheet";
 import { ReportVideoLayer } from "../features/report/VideoLayer";
 import { buildReportViewModel } from "../features/report/selectors";
@@ -197,9 +197,7 @@ function ReportScreen({
     () => (
       <View style={{ paddingBottom: 140 }}>
         {report.kind === "loading" || report.kind === "idle" ? (
-          <View style={styles.sheetCentre}>
-            <ActivityIndicator color={t.muted} />
-          </View>
+          <ReportSkeleton />
         ) : null}
         {report.kind === "unreachable" ? (
           <View style={styles.sheetCentre}>
@@ -222,7 +220,6 @@ function ReportScreen({
           <ReportSheet
             vm={vm}
             swingId={swing.id}
-            onBack={() => navigation.goBack()}
             onShowVideo={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
           />
         )}
@@ -241,12 +238,40 @@ function ReportScreen({
       score={typeof swing.overallScore === "number" ? swing.overallScore : null}
       tempoRatio={swing.tempoRatio}
       viewPill={viewPill}
+      onBack={() => navigation.goBack()}
+      sheetPresented={report.kind !== "loading" && report.kind !== "idle"}
       scrollRef={scrollRef}
       sheetStyle={{ backgroundColor: t.bgElevated }}
       stickyFooter={stickyFooter}
     >
       {sheetContent}
     </ReportVideoLayer>
+  );
+}
+
+/**
+ * The report's shape before the report: the header, indicator and focus rows as breathing
+ * blocks, so the waiting card promises the layout it will keep. Shown in the sheet's peek
+ * while it waits low, and never beside a spinner — one loading language per surface.
+ */
+function ReportSkeleton() {
+  return (
+    <View testID="report-skeleton" style={styles.skeleton}>
+      <Skeleton style={{ width: 84, height: 10 }} />
+      <Skeleton style={{ width: 190, height: 26, marginTop: 10 }} />
+      <Skeleton style={{ width: 140, height: 12, marginTop: 8 }} />
+      <Skeleton style={{ width: 220, height: 34, borderRadius: 17, marginTop: 16 }} />
+      <View style={styles.skeletonRow}>
+        <Skeleton style={{ width: 108, height: 128, borderRadius: 18 }} />
+        <View style={{ flex: 1, gap: 8 }}>
+          <Skeleton style={{ width: "58%", height: 10 }} />
+          <Skeleton style={{ width: "100%", height: 16 }} />
+          <Skeleton style={{ width: "92%", height: 16 }} />
+          <Skeleton style={{ width: "70%", height: 16 }} />
+        </View>
+      </View>
+      <Skeleton style={{ width: 210, height: 210, borderRadius: 105, alignSelf: "center", marginTop: 26 }} />
+    </View>
   );
 }
 
@@ -330,6 +355,8 @@ function viewName(v: { view: string }): string {
 const styles = StyleSheet.create({
   centre: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10, padding: 24 },
   sheetCentre: { alignItems: "center", justifyContent: "center", gap: 10, padding: 24, minHeight: 220 },
+  skeleton: { paddingHorizontal: 16, paddingTop: 6 },
+  skeletonRow: { flexDirection: "row", gap: 14, marginTop: 22 },
   panel: { paddingVertical: 2 },
   title: { color: COLORS.text, fontSize: 17, fontWeight: "600", textAlign: "center" },
   detail: {

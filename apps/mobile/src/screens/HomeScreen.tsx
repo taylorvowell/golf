@@ -84,7 +84,7 @@ export function HomeScreen() {
 
   return (
     <View style={styles.root}>
-      <TopBar title="SwingSage" />
+      <TopBar title="SwingSage" brand />
 
       {state.kind === "loading" ? (
         <View style={styles.centre} testID="home-loading">
