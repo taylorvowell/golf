@@ -117,9 +117,40 @@ run under the enqueuing user's identity (no elevation on a request path, D26). A
 `PipelineError` is an answer: the worker acks it 200 so QStash never retries a deterministic
 refusal; only infrastructure failures 5xx into the retry schedule. `WORKER_CLUB_DETECTOR` must
 be set explicitly (path or `none`) — the club detector is never defaulted, per the standing
-trap. Per-user fair queuing (flow-control keys), retry/DLQ policy and remote-orphan detection
-are later steps of `analyzer-service`.
+trap.
 **See:** ARCHIVE D9, D18.
+
+### Queue policy: fairness, dead letters, orphans, backpressure
+
+**Decision:** The queue path polices itself; every threshold is env-tunable with defaults in
+`lib/jobs/policy.ts` (pure, DB-free, unit-tested), never inline. Four mechanisms:
+**Fairness** — every publish carries QStash flow control keyed by the enqueuing user
+(`user:<id>`, `JOBS_FLOW_PARALLELISM`, default 1 concurrent delivery), so a burst queues
+behind itself, never in front of other users. **Dead letters** — every publish names a
+failure callback (`/api/internal/jobs/<id>/failure`); when QStash exhausts retries (3, its
+exponential backoff) the route settles job + view `failed`, writes the reason into
+`jobs.error` (its first writer), and records the `dlqId` in the job log. Its credential is
+the job token recovered from the dead message's own body (`sourceBody`) — the `body` field
+(the destination's response) is never trusted for identity, and the web side still holds no
+QStash signing key. **Orphans** — the events route stamps `jobs.last_event_at` on every
+worker post; `reconcile()`'s queue branch settles `running` rows silent past
+`JOBS_QUEUE_HEARTBEAT_TIMEOUT_S` (default 900 — must survive the club stage's multi-minute
+quiet stretch on CPU) and `queued` rows older than `JOBS_QUEUE_PENDING_TIMEOUT_S` (default
+3600 — the backstop behind the failure callback). **Backpressure** — enqueue refuses,
+user-readably, once the actor holds `JOBS_MAX_ACTIVE_PER_USER` (default 3) active queue jobs,
+counted by swing ownership join, not RLS visibility (which would count coach-readable rows).
+**Gotchas:** Refusals (`PipelineError`, acked 200) never retry and never dead-letter — only
+infra failures reach the DLQ, so the failure callback firing always means infrastructure.
+Every done event self-reports `elapsedS` (true pipeline seconds) into the job log — telemetry,
+never a golfer-facing surface.
+**Capacity model (measured 2026-08-18, this machine, feeding the SLO row below):** a 5.4s
+60fps clip (322 CFR frames) took **341s end-to-end** on CPU pose + GTX 1080 club detector —
+worker single-flight ⇒ ~10.5 jobs/hour/worker. Step 01 measured CUDA pose 2.32× (70.4 →
+30.4 ms/frame); pose is roughly half the wall clock, so a CUDA host projects to ~4.5 min/job
+(~13/hr) and the p95 < 180s SLO still fails on a single worker of this class — meeting it
+needs a faster host class and/or horizontal workers behind per-user flow control, which is
+exactly the sizing question the worker-host HANDOFF decision (spend) must answer.
+**See:** ARCHIVE D9, D18, D26.
 
 ### Three environments, each with its own Supabase project
 
@@ -149,3 +180,30 @@ $25/mo — a spend decision, so it is [`../HANDOFF.md`](../HANDOFF.md)'s, not Cl
 hosted worker is an explicit `analyzer-service` deliverable; these numbers get revised there with
 measurements rather than quietly missed. Overlay drift is the one target with no tolerance.
 **See:** ARCHIVE D13.
+
+### Coaching conversations are one feed; messages are immutable, referenced objects carry state
+
+**Decision:** Coach↔golfer communication is a **conversation substrate**: `conversations` +
+`conversation_participants` + `messages`, where every exchange — text, a video lesson, a
+review request, a drill assignment, a plan update, a shared swing — is a typed message
+entry rendered as a card in one chronological feed. The lesson list, the review queue and
+the message thread are filtered views over this log, never separate systems. Messages are
+immutable after insert (soft-delete tombstones only); workflow state (a review request's
+open/answered) lives on the referenced object and the card renders it live. The schema is
+generic N-participant user-to-user; conversation creation is gated on an approved
+`coach_links` relationship, and relationship end freezes the thread read-only for both
+sides. Per-participant `last_read_at` provides unread counts. Delivery is push-driven
+refresh via the notifications system; Supabase Realtime on the messages table is the
+designed live-update seam. Report (admin-visible row) and block (freezes the thread) live
+in the substrate — a UGC store-review requirement.
+**Scope:** `lessons` hang off a **swing view** (the event log is frame-indexed, and
+everything frame-indexed hangs off a view); `review_requests` carry the open/answered
+state; `lesson_drills` joins attachments. `drills` carries `author_type system|coach` +
+nullable `author_id` (+ RLS) — coach drills are one authorship dimension on the one drill
+model, always plain class (never coach-authored check specs).
+**Gotchas:** The job `kind` discriminator is `swing | drill | demo | lesson_finalize` — the
+latter three are short CPU-only work in the fast lane, never queued behind swing
+club-tracking. Plain-drill completion is a self-report: coach roll-ups label it
+self-reported and never mingle it with camera-verified rep counts.
+**See:** ARCHIVE D60; `PROJECT_MAIN.md` §26.4, §27;
+`.claude/architecture/coach-video-lessons-2026-08-18.md`.

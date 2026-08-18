@@ -4,6 +4,38 @@ Append-only. One entry per completed step: timestamp, what changed, anything wor
 
 ---
 
+## 05 - Fair Queuing, Dead Letters, and Orphan Detection
+**Completed:** 2026-08-18 15:05 UTC
+**Phase:** Platform Foundation
+**Summary:** The queue path now polices itself, all host-agnostically and proven live against
+the QStash dev server. Publish carries per-user flow control (`user-<id>`,
+`JOBS_FLOW_PARALLELISM`=1) and a failure callback; the new
+`/api/internal/jobs/<id>/failure` route settles retry-exhausted jobs `failed`, writes
+`jobs.error` (its first writer) and logs the `dlqId` — authenticated by the job token
+recovered from the dead message's own `sourceBody`, so the web side still holds no QStash
+signing key. The events route stamps `jobs.last_event_at` (migration 0011) on every worker
+post, and `reconcile()`'s queue branch settles silent `running` rows (heartbeat 900s) and
+undelivered `queued` rows (3600s backstop). Enqueue refuses at 3 active jobs per user
+(swing-ownership join, not RLS visibility). Done events self-report `elapsedS` into the job
+log. All policy pure + unit-tested (`lib/jobs/policy.ts`, 13 tests). Gates: analyzer
+165/2s/1x, web tsc+lint clean vitest 192 (+13), migration applied, positive e2e PASSED twice
+(view rev 3→4→5, "pipeline elapsed 407.3s" logged), negative path PASSED FOR REAL — worker
+killed, QStash burned all 4 deliveries (~35 min of true backoff), failure callback settled
+the job with `dlqId 1787064288255-0`.
+**Notes:** Two dev-server facts learned empirically: flow-control keys reject colons
+(alphanumeric/hyphen/underscore/period only — publish 400s), and the failure callback DOES
+carry `sourceBody`, so the token-from-body design works without a QStash signing key on the
+web side. Refusals (PipelineError, acked 200) never retry and never dead-letter — the
+failure callback firing always means infrastructure. Capacity model recorded in
+docs/decisions/platform-data.md: 269–407s/job measured on CPU pose + GTX 1080 detector,
+~10.5 jobs/hr/worker single-flight; CUDA projects ~4.5 min/job — the p95<180s SLO needs a
+faster host class and/or horizontal workers, which is the sizing half of the worker-host
+HANDOFF decision. The route-auth meta-test now accepts `jobContextForClaims` (the shared
+verifier behind `requireJobAccess`) as a sanctioned internal-route guard. Step 06 (declared,
+lazy) is the deploy half — blocked on the worker-host HANDOFF row.
+
+---
+
 ## 04 - The Queue-Driven Worker Loop
 **Completed:** 2026-08-13 21:12 UTC
 **Phase:** Platform Foundation

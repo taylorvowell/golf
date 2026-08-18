@@ -1489,6 +1489,25 @@ Versioned configuration per drill, like the scoring config — never hardcoded:
   prose (D58 layering). Physical limitations in the profile (§5.5) gate which drills are
   offered.
 
+## 18.5 Coach-authored drills
+
+> **ADDED 2026-08-18 (D60).** Coaches maintain their own pre-recorded drills alongside the
+> system library — one drill model with an authorship dimension, never a second library
+> system.
+
+- **Create:** record in-app or upload a demo video; name it; optional description, cues,
+  equipment. Deliberately lightweight — that is the entire authoring flow.
+- **Use:** attach to lessons (§26.4), assign in the conversation (§27) or in plans (§28) —
+  anywhere a system drill can go. Browsable/searchable in the coach's workspace.
+- **Scope:** visible to the coach and to students it has been shared with — never a public
+  library, never in the golfer-facing system catalog.
+- **Class:** every coach drill is **plain** (§18.1). Check specs remain repo-versioned
+  engineering config; a coach never authors geometry.
+- **Follow-through:** plain drills carry a lightweight **"marked done"** self-report so an
+  assigned drill is not fire-and-forget. Coach roll-ups always label it self-reported and
+  never mingle it with camera-verified rep counts; self-reports touch no durable swing
+  metric.
+
 ---
 
 # 19. Swing Comparison
@@ -1778,6 +1797,13 @@ A coach should be able to:
 - Provide personalized tips.
 - Mark a swing as reviewed.
 
+> **AMENDED 2026-08-18 (D60).** §25.1's "swings needing review" is fed by a formal
+> **review-request loop**: a golfer asks their coach to review a specific swing (optional
+> note), the request posts into the conversation (§27) and notifies the coach, and the
+> coach's queue is the open-request filter over that feed. Recording a lesson (§26.4) or
+> replying answers the request; answering flips its state. No SLA mechanics or expiry
+> pressure — a coach's queue is their own to manage.
+
 ---
 
 # 26. Coach Comments and Annotations
@@ -1817,6 +1843,36 @@ Golfers should be able to clearly distinguish:
 - Coach annotations.
 - Their own notes.
 
+## 26.4 Recorded video lessons
+
+> **ADDED 2026-08-18 (D60).** The coach records a **lesson** over a student's swing:
+> playing, pausing and scrubbing the video while drawing on it and talking. The student
+> receives that performance — voice, transport and drawings replayed in sync over the
+> original full-quality video. Design and architecture:
+> `.claude/architecture/coach-video-lessons-2026-08-18.md`.
+
+- **Recording is effortless.** One record control with countdown; pause/resume of the
+  recording itself; everything the coach does is captured (transport, drawing, clearing,
+  overlay toggles); finish → preview → send or discard — nothing sends unseen.
+- **Toolset is deliberately tiny:** straight line (drag), freeform pencil, highlight
+  circle (tap to drop, drag to size), one color/thickness control, clear, undo. Drawings
+  persist across transport until cleared.
+- **A lesson stroke is timeline-anchored and ephemeral** — it exists at a moment of the
+  *lesson*, over whatever frame the coach had up. Distinct from §26.2's frame-anchored
+  persistent annotations; the two share a drawing toolset and nothing else.
+- **Captured as events + audio, never as a screen recording** — the lesson replays by
+  re-driving the player, is scrubbable itself, and stays small enough to upload from a
+  range on cellular.
+- **On send:** optional note, attached drills (system or coach-authored, each with an
+  optional "why this drill for you"), loudness normalization, and an auto-generated
+  transcript (accessibility, search, and the email body — always presented as
+  auto-generated, never as coach-authored text). The lesson posts into the conversation
+  (§27) and notifies the student (§29).
+- **Length limits are entitlement dials (§30.1)** enforced honestly in the recorder — a
+  visible timer and warning, never a silent cutoff.
+- A delivered lesson is the **student's to keep** — it survives the end of the coaching
+  relationship and coach account deletion (§24.3, §34).
+
 ---
 
 # 27. Two-Way Messaging
@@ -1833,6 +1889,26 @@ Messaging may support:
 - Future attachments where useful.
 
 The experience should keep coaching conversations connected to the golfer's improvement history.
+
+> **AMENDED 2026-08-18 (D60) — messaging is a conversation feed, and everything lands in
+> it.** A conversation is the continuous record of a coaching relationship: plain text both
+> directions, and every coaching artifact — a lesson (§26.4), a review request (§25.3), a
+> drill assignment, a plan update, a shared swing — posts into the same feed as a typed
+> entry rendered as a rich card. The lesson list, the review queue and the message thread
+> are **views over one log**, not separate systems: one unread model, one notification
+> source.
+>
+> - **Messages are immutable records; referenced objects carry state.** A request's
+>   open/answered status lives on the request and its card renders it live — the feed never
+>   rewrites history. Deletes are soft tombstones.
+> - **Generic by design, gated by relationship.** The model is user-to-user with N
+>   participants; at launch, conversation creation requires an approved coach relationship
+>   (resolving §43's open question — messaging exists only within an active relationship).
+>   Relationship end **freezes the thread read-only for both sides**; the record persists.
+> - **Report and block** live in the feed (report any message/lesson/drill; block freezes
+>   the thread) — a store-review requirement for user-generated content, minimal by design.
+> - Delivery is push-driven refresh at launch; live updates are a designed seam, not new
+>   architecture. Conversation notifications group rather than firing per message (§29).
 
 ---
 
@@ -1901,6 +1977,13 @@ Potential notification events include:
 > goal; a focus goal was achieved (the celebration moment); a maintained goal regressed and
 > was re-proposed. Coach: a golfer achieved a goal the coach assigned.
 
+> **AMENDED 2026-08-18 (D60) — lesson and conversation events (§26.4, §27).** Golfer:
+> coach sent a video lesson (the headline event — push + email + home-screen card); coach
+> replied in the conversation; coach answered a review request. Coach: student requested a
+> review; student sent a message; student viewed a lesson (quiet, roster-level); student
+> marked an assigned drill done (digest-grade, never a per-event push). Conversation
+> messages collapse into grouped notifications rather than one push per message.
+
 Notification preferences should be user-manageable where appropriate.
 
 ---
@@ -1953,6 +2036,10 @@ Potential entitlement dimensions include:
 - Storage limits.
 - Export/share functionality.
 - Future premium capabilities.
+
+> **AMENDED 2026-08-18 (D60).** Video lessons (§26.4) add coach-side dimensions: lessons
+> per month, maximum lesson length, and coach drill library size. Messaging itself and
+> *receiving* lessons cost the golfer nothing at any tier.
 
 Exact tier limits should remain configurable.
 
@@ -2387,7 +2474,8 @@ The following items should not be silently assumed. The build roadmap should mak
 - Whether a golfer can have one active coach or multiple active coaches.
 - Whether a coach can invite a golfer or only golfers can initiate requests.
 - Whether coach access covers all historical swings or only selected swings.
-- Whether golfers can submit specific swings for review.
+- ~~Whether golfers can submit specific swings for review.~~ **Resolved 2026-08-18 (D60):
+  yes — the review-request loop, §25.3.**
 - Whether coach roster size is determined by subscription tier.
 
 ## Swing capture
@@ -2436,7 +2524,9 @@ The following items should not be silently assumed. The build roadmap should mak
 - Whether SwingSage will eventually facilitate coach payments.
 - Whether coach ratings/reviews will exist.
 - Whether coaches need identity or credential verification.
-- Whether messaging is available only during an active coach relationship.
+- ~~Whether messaging is available only during an active coach relationship.~~ **Resolved
+  2026-08-18 (D60): creation requires an active relationship; relationship end freezes the
+  thread read-only for both sides, §27.**
 
 ## Subscriptions
 

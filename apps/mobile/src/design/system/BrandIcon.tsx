@@ -55,6 +55,17 @@ export function BrandIcon({
       {art.polygons?.map((points, i) => (
         <Polygon key={`p${i}`} points={points} fill={color} />
       ))}
+      {art.strokes?.map((s, i) => (
+        <Path
+          key={`s${i}`}
+          d={s.d}
+          stroke={color}
+          strokeWidth={s.w}
+          strokeLinecap={s.cap ?? "butt"}
+          strokeLinejoin="round"
+          fill="none"
+        />
+      ))}
     </Svg>
   );
 }

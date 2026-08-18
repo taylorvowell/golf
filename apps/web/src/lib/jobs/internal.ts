@@ -21,13 +21,16 @@ export interface JobContext {
   view: ResolvedView;
 }
 
-/** Token → claims → the job row and its view, or an error Response ready to return. */
-export async function requireJobAccess(
-  req: Request,
+/**
+ * Verified claims → the job row and its view, or an error Response ready to return. Shared by
+ * the bearer-token routes (via `requireJobAccess`) and the QStash failure callback, whose
+ * token arrives inside the dead message's body rather than a header — the verification is the
+ * same either way, only the transport differs.
+ */
+export async function jobContextForClaims(
+  claims: JobTokenClaims | null,
   jobId: string,
 ): Promise<JobContext | { error: Response }> {
-  const token = bearerToken(req);
-  const claims = token ? verifyJobToken(token) : null;
   if (!claims || claims.jobId !== jobId) {
     return { error: Response.json({ error: "unauthorized" }, { status: 401, headers: noStore }) };
   }
@@ -43,6 +46,15 @@ export async function requireJobAccess(
     return { error: Response.json({ error: "no such job" }, { status: 404, headers: noStore }) };
   }
   return { claims, ...found };
+}
+
+/** Token → claims → the job row and its view, or an error Response ready to return. */
+export async function requireJobAccess(
+  req: Request,
+  jobId: string,
+): Promise<JobContext | { error: Response }> {
+  const token = bearerToken(req);
+  return jobContextForClaims(token ? verifyJobToken(token) : null, jobId);
 }
 
 /** The stored original's key for a view, or null when no source was ever stored (D29). */

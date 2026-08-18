@@ -234,7 +234,9 @@ def run_queue_job(
 
         uploaded = _upload_artifacts(job, result.artifacts, send)
         forward.post_soft({"kind": "progress", "logLine": f"uploaded {len(uploaded)} artifacts"})
-        forward.post({"kind": "done"})
+        # elapsedS is capacity-model telemetry: every job self-reports its true pipeline
+        # duration into the web app's job log (never a golfer-facing surface).
+        forward.post({"kind": "done", "elapsedS": result.elapsed_s})
         return True
     except BaseException:
         keep_scratch = True  # leave the evidence for a human

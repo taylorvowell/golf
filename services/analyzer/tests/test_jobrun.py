@@ -141,6 +141,8 @@ class TestRunQueueJob:
         assert rec.puts() == ["analysis.json", "coach_report.json", "overlay.mp4"]
         kinds = [e["kind"] for e in rec.events()]
         assert kinds[-1] == "done"
+        # the done post self-reports the true pipeline duration — capacity-model telemetry
+        assert rec.events()[-1]["elapsedS"] == 1.0
         stages = [e.get("stage") for e in rec.events() if e["kind"] == "progress"]
         assert "probe" in stages and "pose" in stages
         # done posts AFTER every upload — the ordering the publish-then-flip rule depends on

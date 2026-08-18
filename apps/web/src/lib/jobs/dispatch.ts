@@ -8,6 +8,7 @@ import { getAnalysis } from "@/lib/swings";
 import { SOURCE_BUCKET } from "@/lib/media/keys";
 import { getMediaStore } from "@/lib/media/store";
 import { signJobToken } from "@/lib/jobs/token";
+import { envInt, queuePublishOptions } from "@/lib/jobs/policy";
 import type { Job } from "@/lib/jobs";
 
 /**
@@ -113,6 +114,7 @@ export async function enqueueReanalysis(
     log: [],
     startedAt: Date.now(),
     finishedAt: null,
+    lastEventAt: null,
     runner: "queue",
   };
 
@@ -129,10 +131,17 @@ export async function enqueueReanalysis(
     baseUrl: requireEnv("QSTASH_URL"),
     token: requireEnv("QSTASH_TOKEN"),
   });
+  // Flow control keyed by the enqueuing user (fairness: a burst queues behind itself, not in
+  // front of everyone else); the failure callback is how retry exhaustion becomes a failed row
+  // instead of a message silently parked in the DLQ.
   await client.publishJSON({
-    url: requireEnv("WORKER_URL"),
+    ...queuePublishOptions({
+      workerUrl: requireEnv("WORKER_URL"),
+      actorId,
+      failureCallbackUrl: `${base}/api/internal/jobs/${jobId}/failure`,
+      parallelism: envInt("JOBS_FLOW_PARALLELISM", 1),
+    }),
     body: spec,
-    retries: 3,
   });
 
   return job;

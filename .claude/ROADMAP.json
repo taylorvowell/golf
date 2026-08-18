@@ -104,10 +104,10 @@
     },
     {
       "id": "analyzer-service",
-      "spine": false,
+      "spine": true,
       "lifecycle": "active",
       "phase": "foundation",
-      "goal": "Promote the analyzer from a hand-invoked CLI to a hosted, queue-driven worker reading and writing object storage. FIRST STEP is a measurement, not a deploy: pose inference currently runs on CPU and only the club detector uses GPU, so measure CPU-vs-CUDA pose on this pipeline and let that choose the host (D18 reopened Railway, which has no GPU). Then the capacity and cost model, per-user fair queuing so one workload cannot degrade everyone else's (§38), backpressure, retry/dead-letter handling, and a validated analysis-latency SLO. The job model carries a kind discriminator (swing | drill, D59) and priority classes from day one — guided-drill jobs are short and CPU-only and must not queue behind swing club-tracking for the 'verdict in seconds' loop (.claude/architecture/guided-drills-architecture-2026-08-17.md).",
+      "goal": "Promote the analyzer from a hand-invoked CLI to a hosted, queue-driven worker reading and writing object storage. FIRST STEP is a measurement, not a deploy: pose inference currently runs on CPU and only the club detector uses GPU, so measure CPU-vs-CUDA pose on this pipeline and let that choose the host (D18 reopened Railway, which has no GPU). Then the capacity and cost model, per-user fair queuing so one workload cannot degrade everyone else's (§38), backpressure, retry/dead-letter handling, and a validated analysis-latency SLO. The job model carries a kind discriminator (swing | drill | demo | lesson_finalize, D59/D60) and priority classes from day one — drill, demo-transcode and lesson-finalize jobs are short and CPU-only and must not queue behind swing club-tracking (.claude/architecture/guided-drills-architecture-2026-08-17.md, .claude/architecture/coach-video-lessons-2026-08-18.md).",
       "statusFile": ".claude/feature-tracks/analyzer-service/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#32-analysis-processing-experience",
@@ -124,12 +124,12 @@
         }
       ],
       "blockedBy": "docs/decisions/ARCHIVE-numbered.md D18 — worker host undecided",
-      "sequencingNote": "Spine moved to design-system 2026-08-14: this track is blocked on the worker-host HANDOFF decision, and Taylor directed the full UI overhaul as the immediate work. Spine returns here (or onward) when design-system completes or the host decision lands first."
+      "sequencingNote": "Spine returned here 2026-08-18 when design-system completed. Steps 01-04 are done (measurement, pipeline entry point, reproducible env + worker skeleton, queue loop proven locally); the remaining work — fair queuing, retry/DLQ, orphan detection, backpressure, capacity model — is host-agnostic and provable locally. Only the DEPLOY half waits on the worker-host HANDOFF row."
     },
     {
       "id": "design-system",
-      "spine": true,
-      "lifecycle": "active",
+      "spine": false,
+      "lifecycle": "complete",
       "phase": "golfer-core",
       "goal": "The Ideal Swing design system: rebuild the app's theme and pages to match .claude/ideal-swing-design-system.html EXACTLY — the Swing Log pixel-perfect, the Swing Report's sheet-over-video scroll behaviour (video-open state, hiding pill nav, sliding player controls) matched precisely, the Progress page built on the same system with placeholder data plumbed for later tracks. Deliverable is a reusable React Native component system (tokens, type, buttons, tags, score marks, cards, wave nav, session pill nav, the SheetOverBackdrop scaffold) so every future page is assembled, not designed. Supersedes mobile-app-shell step 03 (the deferred styling pass) — Deck absorption happens here for the surfaces this track rebuilds.",
       "statusFile": ".claude/feature-tracks/design-system/_STATUS.json",
@@ -151,7 +151,7 @@
           "blocking": false
         }
       ],
-      "sequencingNote": "Created 2026-08-14 at Taylor's direction ('MAJOR theme and UI overhaul... this is what we will use to create and manage ALL pages'). Made the spine because analyzer-service is blocked on the worker-host decision. Named deviations from pixel-exactness are declared in the track's _PROGRESS.md (font licensing, backdrop blur, conic-gradient primitive). The brand question is settled: the real SwingSage logo (apps/mobile/assets/brand/swingsage-logo.svg) replaces every 'Ideal Swing' string and the mockup's placeholder brandmark."
+      "sequencingNote": "COMPLETE 2026-08-17, all nine steps; spine moved on to analyzer-service 2026-08-18. Created 2026-08-14 at Taylor's direction ('MAJOR theme and UI overhaul... this is what we will use to create and manage ALL pages'). Named deviations from pixel-exactness are declared in the track's _PROGRESS.md (font licensing, backdrop blur, conic-gradient primitive). The 2026-08-17 player rebuild (one swing-screen shape, AppHeader, chrome scroll) landed on this system post-track and is recorded in docs/decisions/mobile-client.md."
     },
     {
       "id": "media-pipeline",
@@ -202,7 +202,7 @@
       "spine": false,
       "lifecycle": "planned",
       "phase": "foundation",
-      "goal": "Push and email notification infrastructure with user-manageable preferences. Platform-layer because §29's very first golfer event — 'swing analysis completed' — is needed the moment analysis becomes async, not in the coach phase where the rest of §29's events live.",
+      "goal": "Push and email notification infrastructure with user-manageable preferences. Platform-layer because §29's very first golfer event — 'swing analysis completed' — is needed the moment analysis becomes async, not in the coach phase where the rest of §29's events live. The event taxonomy includes the D60 lesson/conversation events from day one ('coach sent a video lesson' is the coach platform's headline notification), and the design supports GROUPED/digest delivery — conversation messages collapse rather than firing one push per message (§29's 'without becoming noisy').",
       "statusFile": ".claude/feature-tracks/notifications/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#29-notifications",
@@ -437,7 +437,7 @@
       "spine": false,
       "lifecycle": "planned",
       "phase": "coaching",
-      "goal": "A managed, preconfigured drill library with finding-to-drill mappings — explicitly not drills invented per-response by the AI. Content is authored and curated through the admin surface. Drills classify as plain (content only) or guided (D59): a guided drill carries a versioned check spec and a pose-only drill analysis mode in the analyzer verifies execution per rep ('Check my form') — hold drills first, trigger drills second. Launch scope, core function. BINDING DESIGN: the accepted architecture in .claude/architecture/guided-drills-architecture-2026-08-17.md (pipeline profile not a service; repo-versioned drill_config split from DB content; sibling drill_analysis.json/drill_report.json artifacts, analysis.json untouched; structural quarantine via drill_attempts tables, never swings; redrill.py + checkdrill.py built with the first check). FIRST HANDOFF when this track starts: film drill fixture pairs — correct AND wrong execution — no existing fixture can test a drill check.",
+      "goal": "A managed, preconfigured drill library with finding-to-drill mappings — explicitly not drills invented per-response by the AI. Content is authored and curated through the admin surface. Drills classify as plain (content only) or guided (D59): a guided drill carries a versioned check spec and a pose-only drill analysis mode in the analyzer verifies execution per rep ('Check my form') — hold drills first, trigger drills second. Launch scope, core function. BINDING DESIGN: the accepted architecture in .claude/architecture/guided-drills-architecture-2026-08-17.md (pipeline profile not a service; repo-versioned drill_config split from DB content; sibling drill_analysis.json/drill_report.json artifacts, analysis.json untouched; structural quarantine via drill_attempts tables, never swings; redrill.py + checkdrill.py built with the first check). FIRST HANDOFF when this track starts: film drill fixture pairs — correct AND wrong execution — no existing fixture can test a drill check. D60 adds an AUTHORSHIP dimension in the FIRST schema migration (author_type system|coach + author_id + RLS — retrofitting an RLS dimension later is the expensive path): coach-authored drills are always plain class, scoped to the coach and students they are shared with, never the public catalog. Plain drills gain a 'marked done' self-report for coach roll-ups — always labelled self-reported, never mingled with camera-verified reps, never touching a durable swing metric.",
       "statusFile": ".claude/feature-tracks/drill-library/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#18-training-drills-and-exercises",
@@ -663,7 +663,7 @@
       "spine": false,
       "lifecycle": "planned",
       "phase": "commerce",
-      "goal": "Privacy, retention and deletion made real in code — including the full deletion cascade across object storage, derived artifacts, AI conversation history and coach-visible copies — plus tier-driven storage lifecycle, load testing against the SLOs, and the concurrency and isolation posture §38 requires.",
+      "goal": "Privacy, retention and deletion made real in code — including the full deletion cascade across object storage, derived artifacts, AI conversation history and coach-visible copies — plus tier-driven storage lifecycle, load testing against the SLOs, and the concurrency and isolation posture §38 requires. Inherits D60's delivered-content deletion semantics as stated requirements: recipient-keyed lessons survive coach account deletion (author tombstones); coach drill demos die with the coach and tombstone in feeds; frozen conversation threads persist read-only for both sides.",
       "statusFile": ".claude/feature-tracks/production-readiness/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#34-privacy-permissions-and-data-control",
@@ -736,7 +736,7 @@
       "spine": false,
       "lifecycle": "planned",
       "phase": "coach-platform",
-      "goal": "Frame-anchored annotations and comments clearly distinguishable from AI findings, two-way messaging, and coach-created improvement plans the AI Coach is aware of and does not silently contradict.",
+      "goal": "Frame-anchored annotations and comments clearly distinguishable from AI findings, two-way messaging, and coach-created improvement plans the AI Coach is aware of and does not silently contradict. Owns the CONVERSATION SUBSTRATE (D60): conversations/messages/read-state where every coaching artifact — text, lesson, review request, drill assignment, plan update — is a typed IMMUTABLE entry in one feed (referenced objects carry state); creation gated on an approved coach_link, threads frozen read-only on relationship end; report/block (UGC store requirement); push-driven refresh with Supabase Realtime as the designed live seam. Owns the REVIEW-REQUEST loop (golfer submits a swing, coach queue = open-request filter over the feed). Builds packages/annotations as a SHARED toolset (tools, color/width state, normalized-coordinate strokes) consumed by both static annotations and the coach-video-lessons recorder.",
       "statusFile": ".claude/feature-tracks/coach-collaboration/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#26-coach-comments-and-annotations",
@@ -759,6 +759,44 @@
           "track": "notifications"
         }
       ]
+    },
+    {
+      "id": "coach-video-lessons",
+      "spine": false,
+      "lifecycle": "planned",
+      "phase": "coach-platform",
+      "differentiator": true,
+      "goal": "Coach video lessons (D60, launch-blocking): the coach records a telestration + voiceover lesson over a student's swing — play/pause/scrub while drawing (straight line, freeform pencil, highlight circle, color/thickness, clear, undo) and talking — captured as a lesson.json EVENT LOG + AAC audio and replayed by RE-DRIVING the player, never a screen recording. Recorder (mobile v1) with pause/resume, preview-before-send, entitlement-honest length limits; send-time lesson_finalize job (loudness normalization + transcript); delivery as a conversation entry with notification fan-out; the student's replay player with lesson-scrubbing (state at t is a pure function of events ≤ t); attached notes and drills; coach drill authoring UI (record/upload demo, demo transcode job) over drill-library's authorship dimension; delivered/viewed state. BINDING DESIGN: .claude/architecture/coach-video-lessons-2026-08-18.md (lessons hang off a swing VIEW; recipient-keyed media; immutable conversation entries; replay-fidelity gates). FIRST HANDOFF when this track starts: a second test account (no coach exists in any seeded environment) and a recorded-on-device lesson fixture. PREREQUISITE READING: the D51 Skia measurement — freeform stroke rendering is its second consumer.",
+      "statusFile": ".claude/feature-tracks/coach-video-lessons/_STATUS.json",
+      "specRefs": [
+        ".claude/ai-instructions/PROJECT_MAIN.md#264-recorded-video-lessons",
+        ".claude/ai-instructions/PROJECT_MAIN.md#27-two-way-messaging",
+        ".claude/ai-instructions/PROJECT_MAIN.md#185-coach-authored-drills",
+        ".claude/ai-instructions/PROJECT_MAIN.md#29-notifications",
+        ".claude/architecture/coach-video-lessons-2026-08-18.md"
+      ],
+      "owns": [
+        "apps/mobile/src/features/lessons",
+        "apps/web/src/db/lessons.ts"
+      ],
+      "dependsOn": [
+        {
+          "track": "coach-relationships"
+        },
+        {
+          "track": "coach-collaboration"
+        },
+        {
+          "track": "drill-library"
+        },
+        {
+          "track": "notifications"
+        },
+        {
+          "track": "mobile-player"
+        }
+      ],
+      "sequencingNote": "Declared launch-blocking by Taylor 2026-08-18 (D60) — a core piece of the 'AI coach and human coach in one product' differentiator and the feature that justifies Coach tiers. Depends hard on coach-collaboration because that track builds the conversation substrate lessons deliver through and the shared packages/annotations drawing toolset; on drill-library for the authorship dimension and attachment; on notifications for the fan-out. The export-to-MP4 render (server-side burn-in over the same event log) lands with sharing-and-export, not here — but it doubles as this track's replay-fidelity reference gate, so the pure state_at(t) oracle is built here regardless."
     },
     {
       "id": "dual-device-capture",
@@ -785,7 +823,7 @@
       "spine": false,
       "lifecycle": "planned",
       "phase": "launch",
-      "goal": "The gate between built and shipped. Store submission for both platforms including Apple App Privacy and Google Data Safety declarations — both mandatory, both requiring an exact answer to what data is collected, shared and retained. Plus a security review of the whole surface (media access, coach authorization, service-role isolation, receipt validation), load testing against the SLOs rather than merely defining them, §41 accessibility verification in real outdoor conditions, a closed beta with a feedback and support channel, and the legal surface: privacy policy, terms, and subscription disclosures.",
+      "goal": "The gate between built and shipped. Store submission for both platforms including Apple App Privacy and Google Data Safety declarations — both mandatory, both requiring an exact answer to what data is collected, shared and retained. Plus a security review of the whole surface (media access, coach authorization, service-role isolation, receipt validation), load testing against the SLOs rather than merely defining them, §41 accessibility verification in real outdoor conditions, a closed beta with a feedback and support channel, and the legal surface: privacy policy, terms, and subscription disclosures. Store submission verifies the D60 UGC requirements: report and block mechanisms on the coaching conversation (lessons, coach drills, messages) — a store-rejection risk if absent.",
       "statusFile": ".claude/feature-tracks/launch-readiness/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#34-privacy-permissions-and-data-control",
@@ -804,6 +842,9 @@
         },
         {
           "track": "coach-collaboration"
+        },
+        {
+          "track": "coach-video-lessons"
         },
         {
           "track": "dual-device-capture"

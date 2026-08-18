@@ -27,10 +27,13 @@ const GUARDS = ["requireViewAccess", "requireUserIdOrNull", "requireUserId"];
  * version namespace because it is not a client API — no store-shipped build ever calls it, so
  * the D41 "cannot take an unversioned path back" problem does not apply, and versioning it
  * would imply a compatibility promise to native clients that does not exist. Held to its own
- * mechanical rule below: every internal route must call `requireJobAccess`.
+ * mechanical rule below: every internal route must verify the signed per-job token — via
+ * `requireJobAccess` (token in the Authorization header) or `jobContextForClaims` (the same
+ * verifier, for the QStash failure callback whose token arrives inside the dead message's
+ * body). Both 401 without valid claims; only the transport differs.
  */
 const INTERNAL_PREFIX = "internal/jobs/";
-const INTERNAL_GUARD = "requireJobAccess";
+const INTERNAL_GUARDS = ["requireJobAccess", "jobContextForClaims"];
 
 /**
  * Routes that are deliberately unauthenticated, each with the reason it has to be.
@@ -87,12 +90,15 @@ describe("API route authentication", () => {
   it("authenticates every internal worker route with the job token", () => {
     const open = files
       .filter((f) => routeId(f).startsWith(INTERNAL_PREFIX))
-      .filter((f) => !readFileSync(f, "utf8").includes(INTERNAL_GUARD))
+      .filter((f) => {
+        const text = readFileSync(f, "utf8");
+        return !INTERNAL_GUARDS.some((g) => text.includes(g));
+      })
       .map((f) => f.replace(process.cwd(), "."));
     expect(
       open,
       "Internal worker routes have no user session; authority is the signed per-job token and " +
-        "nothing else. Every one of them must call requireJobAccess.",
+        "nothing else. Every one of them must call requireJobAccess or jobContextForClaims.",
     ).toEqual([]);
   });
 

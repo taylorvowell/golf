@@ -213,6 +213,14 @@ pnpm --filter web queue:e2e
 queue is opt-in (`JOBS_DRIVER=queue`) exactly like `MEDIA_DRIVER`. The worker holds no DB or
 storage credential; everything it reads and writes goes over HTTP with a signed per-job token.
 
+Queue policy (step 05) is env-tunable, defaults in `apps/web/src/lib/jobs/policy.ts`:
+`JOBS_FLOW_PARALLELISM` (per-user concurrent deliveries, 1), `JOBS_MAX_ACTIVE_PER_USER`
+(active jobs per user, 3), `JOBS_QUEUE_HEARTBEAT_TIMEOUT_S` (900) and
+`JOBS_QUEUE_PENDING_TIMEOUT_S` (3600) for the orphan sweep. To exercise the failure path
+locally: enqueue with the worker process DOWN — after QStash's 3 retries the failure callback
+(`/api/internal/jobs/<id>/failure`) settles the job `failed` with the `dlqId` in its log; if
+it never fires, the pending-timeout sweep settles it on the next poll instead.
+
 ---
 
 ## 5. Tests

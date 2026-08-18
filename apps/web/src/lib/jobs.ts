@@ -2,9 +2,10 @@ import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { withUser, type DbTx } from "@/db/session";
-import { jobs as jobsTable, swingViews as viewsTable } from "@/db/schema";
+import { jobs as jobsTable, swings as swingsTable, swingViews as viewsTable } from "@/db/schema";
+import { envInt, queueAdmission, queueOrphanVerdict } from "@/lib/jobs/policy";
 import { syncSwingScore } from "@/db/scores";
 import { mediaAddress, type ResolvedView } from "@/db/views";
 import { getAnalysis } from "@/lib/swings";
@@ -37,6 +38,8 @@ export interface Job {
   log: string[];
   startedAt: number;
   finishedAt: number | null;
+  /** Queue jobs only: the worker's last event post — the orphan sweep's heartbeat. */
+  lastEventAt: number | null;
   /** Which path runs it: a child process here (`spawn`) or the hosted worker (`queue`). */
   runner: "spawn" | "queue";
 }
@@ -52,6 +55,7 @@ function toJob(row: typeof jobsTable.$inferSelect): Job {
     log: row.log,
     startedAt: row.startedAt.getTime(),
     finishedAt: row.finishedAt ? row.finishedAt.getTime() : null,
+    lastEventAt: row.lastEventAt ? row.lastEventAt.getTime() : null,
     runner: row.runner,
   };
 }
@@ -136,10 +140,14 @@ async function persist(actorId: string, job: Job) {
  */
 async function reconcile(actorId: string, job: Job, view: ResolvedView): Promise<Job> {
   if (job.status !== "running" && job.status !== "queued") return job;
-  // A queue job's working directory is on the worker's machine — the lock and artifact this
-  // probes do not exist here, and "no lock" must not read as "the analyzer died". Remote
-  // orphan detection (heartbeat/timeout) is the retry/DLQ step's job.
-  if (job.runner !== "spawn") return job;
+  // A queue job's working directory is on the worker's machine — the lock and artifact the
+  // spawn probe below reads do not exist here. Its liveness evidence is the heartbeat
+  // instead: the events route stamps `last_event_at` on every post the worker makes, so a
+  // `running` row whose heartbeat went stale, or a `queued` row that outlived the delivery
+  // window (QStash's whole retry schedule), is settled `failed` on the next poll. The
+  // failure callback usually gets there first for undelivered messages; this sweep is the
+  // backstop for a worker host that died mid-run — which posts nothing, ever again.
+  if (job.runner !== "spawn") return reconcileQueue(actorId, job);
   const dir = workingDirFor(view.mediaKey);
   try {
     await fs.access(path.join(dir, ".analysis.lock"));
@@ -178,6 +186,33 @@ async function reconcile(actorId: string, job: Job, view: ResolvedView): Promise
   return job;
 }
 
+/**
+ * Settle a queue job the remote side will never finish. Same best-effort write semantics as
+ * the spawn branch: `jobs_write` admits the owner only, so a coach's poll settles nothing and
+ * the golfer's next poll does it.
+ */
+async function reconcileQueue(actorId: string, job: Job): Promise<Job> {
+  const verdict = queueOrphanVerdict(job, Date.now(), {
+    heartbeatTimeoutMs: envInt("JOBS_QUEUE_HEARTBEAT_TIMEOUT_S", 900) * 1000,
+    pendingTimeoutMs: envInt("JOBS_QUEUE_PENDING_TIMEOUT_S", 3600) * 1000,
+  });
+  if (verdict === "alive") return job;
+
+  const reason = verdict === "silent-worker"
+    ? "the worker went silent mid-analysis — no progress within the heartbeat window"
+    : "the analysis was never delivered to a worker";
+  job.status = "failed";
+  job.message = reason;
+  job.finishedAt = Date.now();
+  await withUser(actorId, (tx) => tx.update(jobsTable).set({
+    status: "failed", message: reason, error: reason, finishedAt: new Date(),
+  }).where(eq(jobsTable.id, job.id))).catch(() => {});
+  await withUser(actorId, (tx) => tx.update(viewsTable)
+    .set({ status: "failed", failureReason: reason })
+    .where(eq(viewsTable.id, job.viewId))).catch(() => {});
+  return job;
+}
+
 export async function getJob(tx: DbTx, actorId: string, view: ResolvedView): Promise<Job | null> {
   const inMemory = live.get(view.viewId);
   if (inMemory) return inMemory;
@@ -206,6 +241,23 @@ export async function startReanalysis(
   }
 
   if (jobsDriverName() === "queue") {
+    // Backpressure at the door: one user piles work behind their own cap, never behind
+    // everyone else's. The per-view "one active job" check above still applies; this bounds
+    // the actor ACROSS views. The count joins to swing ownership rather than trusting RLS
+    // visibility, which also admits coach-readable rows.
+    const cap = envInt("JOBS_MAX_ACTIVE_PER_USER", 3);
+    const active = await tx.select({ id: jobsTable.id })
+      .from(jobsTable)
+      .innerJoin(viewsTable, eq(jobsTable.viewId, viewsTable.id))
+      .innerJoin(swingsTable, eq(viewsTable.swingId, swingsTable.id))
+      .where(and(
+        eq(swingsTable.userId, actorId),
+        eq(jobsTable.runner, "queue"),
+        inArray(jobsTable.status, ["queued", "running"]),
+      ));
+    const refusal = queueAdmission(active.length, cap);
+    if (refusal) throw new Error(refusal);
+
     // Dynamic import so the spawn path never loads the QStash client or its configuration.
     const { enqueueReanalysis } = await import("@/lib/jobs/dispatch");
     return enqueueReanalysis(tx, actorId, view);
@@ -234,6 +286,7 @@ export async function startReanalysis(
     log: [],
     startedAt: Date.now(),
     finishedAt: null,
+    lastEventAt: null,
     runner: "spawn",
   };
   live.set(view.viewId, job);

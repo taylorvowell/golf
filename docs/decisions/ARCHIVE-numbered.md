@@ -3157,3 +3157,70 @@ only rewrites the correction into coach prose (D58). Coach assignment rides prac
 Sequencing inside the track: hold drills first (zero new event detection), trigger drills
 second. Known cost: a new fixture class — every existing fixture is a full DTL right-handed
 swing, so nothing on disk can test a drill check.
+
+## D60 — Coach video lessons, the coaching conversation, and coach-authored drills — launch scope
+
+**Date:** 2026-08-18 · **Status:** ACTIVE · **Spec:** PROJECT_MAIN §25.3, §26.4, §27, §18.5, §29, §30.1 (amended) · **Analysis:** .claude/architecture/coach-video-lessons-2026-08-18.md
+
+Taylor asked for coach-recorded annotated video responses: the coach plays, pauses and
+scrubs a student's swing while drawing on it (straight line, freeform pencil, highlight
+circle, color/thickness, clear) and talking; the student receives that performance, plus
+notes and drills — from the system library or the coach's own pre-recorded drills — with
+push/email/home-screen notification. Extended same day with a generic user-to-user chat
+feed. Declared **launch-blocking** by Taylor: it is a core piece of the "AI coach and human
+coach in one product" differentiator and the feature that justifies Coach tiers.
+
+**The core call: record the events, not the pixels.** A lesson is a `lesson.json` event
+log (transport ops, strokes in normalized video coordinates, clears, overlay toggles, all
+timestamped against the audio clock) plus one AAC track — replayed by re-driving the
+player, never a screen recording. ~3 MB versus ~100 MB, original video quality, and the
+lesson itself is scrubbable because state at any t is a pure function of events ≤ t. The
+frame-exact transport it needs is already built and measured (D40 per-platform seek rules).
+Rejected: ReplayKit/MediaProjection screen capture (re-encoded video-of-a-video,
+unscrubbable opaque pixels, permission dialogs, captured chrome); server-composited MP4 as
+the primary format (kept only as the sharing-and-export fallback, reusing the analyzer's
+burn-in machinery — which doubles as the replay-fidelity reference render).
+
+**Lesson strokes are timeline-anchored and ephemeral** — distinct from §26.2's
+frame-anchored persistent annotations; the two share the drawing toolset
+(`packages/annotations`) and nothing else.
+
+**The conversation substrate:** messaging (§27) generalized into one feed per relationship
+where text, lessons, review requests, drill assignments and plan updates are typed
+immutable entries rendered as cards — the lesson list, review queue and thread are views
+over one log (one unread model, one notification source). Messages never mutate;
+referenced objects carry state. Schema is generic N-participant user-to-user; creation is
+gated on an approved coach_link at launch, and relationship end freezes the thread
+read-only for both sides. Resolves two §43 open questions (review submission: yes;
+messaging: active-relationship-only). Delivery is push-driven refresh; Supabase Realtime
+is the designed live-update seam. Report/block lives in the feed (UGC store-review
+requirement). Rejected: three bespoke inboxes; mutable messages carrying workflow state;
+socket infrastructure at launch.
+
+**Delivered content is keyed under the recipient.** Lesson media lives at
+`u/<golferId>/l/<lessonId>/…` with the coach as DB-row author — so student deletion removes
+their lessons with their swings, and coach deletion leaves delivered lessons intact
+(author tombstones), with no re-homing migration against derived-not-stored keys. Coach
+drill demos stay under the coach (`u/<coachId>/dr/<drillId>/…`) — authored content, not
+delivered — and die with the coach, tombstoning in feeds. Rejected: author-keyed lesson
+media (coach deletion would destroy the student's lesson library or force re-keying).
+
+**Coach drills are plain drills with an authorship dimension** (`author_type`/`author_id`
++ RLS on the one `drills` model) — never a second library, and never coach-authored guided
+check specs (the D59 validation rationale at third-party scale). Plain drills gain a
+"marked done" self-report for coach roll-ups, always labelled self-reported and never
+mingled with camera-verified reps.
+
+**New job kinds, no CV:** `demo` (drill-demo transcode + poster) and `lesson_finalize`
+(loudness normalization + transcript) extend D59's `kind` discriminator in the fast lane.
+The analyzer pipeline and `analysis.json` are untouched; lessons store the artifact
+version they were recorded against (replayed overlays may drift after re-analysis —
+accepted for v1, "pin or warn" available later).
+
+Known costs, named: replay fidelity is the product risk (pure-function state oracle +
+reference render are the gates); audio-session config (mic while playing video) is known
+platform work; the D51 Skia reading gains a second consumer (freeform strokes) and should
+land before the track starts; no coach exists in any seeded environment (first HANDOFF of
+the track); transcript vendor is a track-start strategic decision (voice data reaches a
+vendor). Recorder v1 is mobile; coach-web recording, comparison telestration, tablet, and
+web replay are named deferrals.

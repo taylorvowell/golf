@@ -1,5 +1,7 @@
 # Architecture decisions — index
 
+- [coach-video-lessons-2026-08-18.md](coach-video-lessons-2026-08-18.md) — Coach video lessons + the coaching conversation: recorded telestration + voiceover captured as an event-log artifact (`lesson.json` + AAC audio) replayed by re-driving the player — never a screen recording; one generic conversation feed where text, lessons, review requests and drill assignments are typed immutable entries; coach-authored plain drills as an authorship dimension on the one drill model; recipient-keyed delivered content; new CPU-only job kinds (`demo`, `lesson_finalize`); UGC report/block. ACCEPTED 2026-08-18, launch-blocking → D60.
+
 - [guided-drills-architecture-2026-08-17.md](guided-drills-architecture-2026-08-17.md) — Where guided drills (D59) live: a second pipeline profile in the analyzer (pose-only, no GPU), repo-versioned `drill_config/` specs split from DB-authored content, sibling `drill_analysis.json`/`drill_report.json` artifacts, structural quarantine via `drill_attempts` tables, drill jobs on the same queue with a `kind` + fast lane. ACCEPTED 2026-08-17 → D59.
 
 - [coach-and-focus-2026-08-14.md](coach-and-focus-2026-08-14.md) — Focus surfaces present as the Coach's guidance (product IA: yes), but the Coach is a persona over deterministic systems and never owns focus state (system: no). ACCEPTED 2026-08-14 → D58.

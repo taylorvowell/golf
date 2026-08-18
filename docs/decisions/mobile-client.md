@@ -773,3 +773,22 @@ against it and a stage at any other aspect would letterbox the picture and put t
 the golfer. The two agree because both are written from the same probe: the prop is not a guess the
 artifact later corrects, it is the artifact's own number, sooner. A view analysed before those
 columns existed carries nulls and falls through to portrait.
+
+### A lesson replays by re-driving the player, never by playing a screen recording
+
+**Decision:** A coach video lesson is captured as a `lesson.json` event log (transport
+ops, strokes normalized 0–1 to the video rect, highlight/clear/overlay events — all
+timestamped) plus one AAC audio track, and replayed by re-driving the player: the audio
+clock is the master, transport events use each platform's own seek rule (the D40
+arithmetic), strokes reveal progressively, and video re-syncs to the audio clock at every
+transport boundary so drift cannot accumulate. Replay state at any t is a pure function of
+events ≤ t — which is what makes the lesson itself scrubbable. Lesson strokes are
+timeline-anchored and ephemeral; §26.2 static annotations are frame-anchored and
+persistent — the two share the `packages/annotations` drawing toolset and nothing else.
+**Gotchas:** Replay fidelity is the product risk: the pure `state_at(t)` oracle is
+unit-tested, and the server-side burn-in render (sharing-and-export) doubles as the
+combined reference gate. Freeform stroke rendering is a second consumer for the open D51
+Skia question — take that reading before the track starts. Audio-session config (record
+mic while playing video) is known platform work, flagged for the track's first step.
+**See:** ARCHIVE D60; `PROJECT_MAIN.md` §26.4;
+`.claude/architecture/coach-video-lessons-2026-08-18.md`.

@@ -1,5 +1,4 @@
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
-import { House } from "lucide-react-native";
 
 import { BrandIcon } from "./system/BrandIcon";
 import { WaveNav, type WaveNavItem } from "./system/WaveNav";
@@ -29,7 +28,7 @@ const ICON_SIZE = 26;
 function iconFor(route: string): WaveNavItem["icon"] {
   switch (route) {
     case "Home":
-      return (color) => <House size={ICON_SIZE} color={color} strokeWidth={2} />;
+      return (color) => <BrandIcon name="home" size={ICON_SIZE} color={color} />;
     case "SwingLog":
       return (color) => <BrandIcon name="swingLog" size={ICON_SIZE} color={color} />;
     case "Progress":

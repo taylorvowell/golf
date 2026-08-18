@@ -55,3 +55,18 @@ resolves to an object nobody ever published there. `db:claim-fixtures` did exact
 **Scope:** Applies to every future owner change — a coach transfer, an account merge, identity
 linking (D31). §4.3 deletion already sweeps `u/<userId>` for the same reason.
 **See:** ARCHIVE D33, D45, D47.
+
+### Delivered content is keyed under the recipient
+
+**Decision:** A video lesson's media (audio + `lesson.json`) lives under the **student's**
+prefix — `u/<golferId>/l/<lessonId>/…` — with the coach as author in the DB row. Delivered
+lessons are the student's to keep: student deletion removes them with the student's swings;
+coach deletion leaves them intact (the author renders as a tombstone name). Drafts sit
+under the same key, hidden by RLS until sent; unsent drafts are purged on relationship end
+or coach deletion. Coach drill demo videos are authored content, not delivered content —
+they stay under the coach (`u/<coachId>/dr/<drillId>/…`), die with the coach's account, and
+tombstone in any feed that referenced them.
+**Gotchas:** Storage keys are derived from identity, never stored — which is exactly why
+author-keyed lesson media would be wrong: coach deletion would either destroy the student's
+lesson library or force a re-homing migration against keys that cannot be rewritten.
+**See:** ARCHIVE D60; `.claude/architecture/coach-video-lessons-2026-08-18.md`.

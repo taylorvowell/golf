@@ -275,6 +275,20 @@ looked healthy and were wrong. Build the debug view when the work starts, not af
   [`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md).** Not grep it for one string; read the section.
   It is the file the session-start probe explicitly points at, and it already holds most of what
   gets re-derived.
+- **Scale the work to the ask. A simple request gets the edit and nothing else.** Swapping an
+  icon, changing a string, renaming a prop, adjusting a constant — that is *one file edit, save,
+  say complete*. No test run, no typecheck, no emulator, no build, no screenshot, no summary of
+  what was verified. The build system's verification machinery exists for build steps and large
+  features; attaching it to a one-line change is the failure mode, not diligence. If a simple edit
+  incidentally reveals something broken elsewhere, **say so in one line and stop** — do not repair
+  it inside the task. Escalate to full verification only when the change is a large feature, could
+  break something, or is a tracked step with a Verification section.
+- **The final verification is TAYLOR'S, not Claude's. Never perform it.** When the work is done,
+  end the turn — the reply *is* the hand-off, and he checks the result himself. Do not run a last
+  build, launch, screenshot or test pass "to confirm it worked" before replying, and do not hold
+  the turn open waiting on one. Say what changed and where, name what he should look at, and stop.
+  (Taylor, 2026-08-18.) Automated oracles run *during* a tracked step's Verification section still
+  apply — this rule is about the confirming pass at the end of a turn.
 - **Checkpoint at feature boundaries, not at decisions.** Run to the end of a step, or to the
   point where something is genuinely testable by hand — then stop and say so. Do not stop
   mid-step to confirm an approach.
@@ -289,10 +303,16 @@ looked healthy and were wrong. Build the debug view when the work starts, not af
   wrong call is a revert rather than a migration.
 - **Two Androids, two different rules. Know which one you are touching.**
   - **The desktop emulator (`swingsage` AVD, `emulator-5554`) is YOURS — drive it freely and
-    without asking.** Boot it, install, tap, type, screenshot, wipe and recreate it as needed. It
-    is a disposable VM on this machine, so there is no one to interrupt and nothing to break that
-    a re-create does not fix. **Use it as the default way to see a change** rather than reporting
-    a UI as unverified. Procedure: [`docs/RUNBOOK.md`](docs/RUNBOOK.md) §13.
+    without asking, WHEN the task warrants it at all.** Boot it, install, tap, type, screenshot,
+    wipe and recreate it as needed. It is a disposable VM on this machine, so there is no one to
+    interrupt and nothing to break that a re-create does not fix. Procedure:
+    [`docs/RUNBOOK.md`](docs/RUNBOOK.md) §13.
+    **The emulator is for MAJOR verification only** — a large feature, a potentially breaking
+    change, or a step whose Verification is failing and is being self-corrected. It is never the
+    default way to look at a change. On a simple request, booting it, rebuilding an APK or
+    screenshotting is the wrong move: it turns a one-minute edit into a fifteen-minute one, and
+    any unrelated breakage it uncovers hijacks the task. (Taylor, 2026-08-18, after an icon swap
+    did exactly that.)
   - **The S25+ is Taylor's daily-driver phone — NEVER drive it without him saying so in the
     current conversation.** `adb shell input`, taps, force-stop/relaunch and screenshot loops all
     need an explicit go-ahead each time, even when the device is connected and input is landing.
@@ -362,9 +382,16 @@ was already said. A finding worth flagging is one line, not a section.
 the one place brevity costs more than it saves.
 
 **Do it yourself before asking.** Builds, installs, launches, adb taps, log pulls, servers —
-attempt them and report the result. Hand Taylor only what genuinely needs him: a physical
-device interaction, a credential, a dashboard, a spend, or a judgement call. "Run this command"
-is almost never one of those; run it. Long jobs go in the background rather than being delegated.
+when the task actually calls for one, attempt it and report the result rather than handing it
+over. Hand Taylor only what genuinely needs him: a physical device interaction, a credential, a
+dashboard, a spend, or a judgement call. "Run this command" is almost never one of those; run it.
+Long jobs go in the background rather than being delegated. **This is about not delegating work
+the task needs — never a reason to invent work it does not.** On a simple edit the correct number
+of builds, installs and launches is zero.
+
+**The last check belongs to Taylor.** Never run a confirming pass — a build, launch, screenshot or
+test sweep — just to prove the work landed before replying. Finish the change, say what changed and
+where, name what he should look at, end the turn. He verifies from there.
 
 ## Working Practices
 

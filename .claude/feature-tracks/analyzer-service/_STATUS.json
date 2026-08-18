@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "featureName": "analyzer-service",
-  "currentStep": "05",
+  "currentStep": "06",
   "phase": "Platform Foundation",
-  "lastUpdated": "2026-08-13T21:12:52Z",
+  "lastUpdated": "2026-08-18T15:05:05Z",
   "steps": {
     "01": {
       "status": "complete",
@@ -26,8 +26,13 @@
       "note": "The queue loop is BUILT AND PROVEN locally, host-agnostically: dispatch (lib/jobs/dispatch.ts, behind JOBS_DRIVER=queue - opt-in, spawn stays default) -> QStash local dev server -> worker HTTP server (service/server.py, signature-verified, single-flight) -> source download -> pipeline.run with throttled event forwarding -> artifact PUTs -> verified done callback -> Postgres job state and view flip. E2E harness (pnpm --filter web queue:e2e) PASSED on pro_2: job done, view ready at revision 2, fps 60. The worker holds no DB/storage credential - only URLs plus an HMAC-signed per-job token whose claims carry {jobId, viewId, actorId, targetRevision, exp}; internal routes (/api/internal/jobs/*) verify it and write as the enqueuing user (no elevation on a request path, D26). Failure taxonomy is load-bearing: PipelineError acks 200 (refusals are answers, never retried); infra failures 5xx into QStash's retry schedule. done is verified, not believed (isPublished at targetRevision before the row flips). WORKER_CLUB_DETECTOR must be explicit (path or 'none') - the standing club-detector trap, now enforced at enqueue. Gates: analyzer 165/2s/1x (+24 new); web tsc+lint clean, vitest 179; schema additive (Job.runner) locked, 100 passed; container rebuilt with qstash 3.4.0 pin, in-container 127/13s/1x. Deploy + production QStash credentials + fair queuing/retry/DLQ are later steps; worker host stays the OPEN handoff row."
     },
     "05": {
+      "status": "complete",
+      "completedAt": "2026-08-18T15:05:05Z",
+      "note": "Fair queuing, dead letters, orphan detection, backpressure, capacity model - all host-agnostic, all proven live against the QStash dev server. Publish now carries flowControl (key user-<id>, JOBS_FLOW_PARALLELISM, default 1 - keys allow no colon, dev server enforces) and a failureCallback (/api/internal/jobs/<id>/failure) that authenticates via the job token recovered from the dead message's OWN body (sourceBody - the dev server does send it), settles job+view failed, writes jobs.error (its first writer) and logs the dlqId. Events route stamps jobs.last_event_at (migration 0011) on every worker post; reconcile()'s new queue branch settles running rows silent past JOBS_QUEUE_HEARTBEAT_TIMEOUT_S (900) and queued rows past JOBS_QUEUE_PENDING_TIMEOUT_S (3600). Enqueue refuses at JOBS_MAX_ACTIVE_PER_USER (3) active jobs, counted by swing-ownership join not RLS visibility. done events self-report elapsedS into the job log. All policy is pure + unit-tested in lib/jobs/policy.ts (13 tests). PROVEN LIVE: positive e2e PASSED twice (view rev 3->4->5; 'pipeline elapsed 407.3s' in the log), negative path PASSED for real - worker killed, QStash burned 4 deliveries (~35min backoff), failure callback settled the job with dlqId 1787064288255-0. Gates: analyzer 165/2s/1x; web tsc+lint clean, vitest 192 (+13); migration applied. Capacity model in docs/decisions/platform-data.md: ~4.5-6.8min/job CPU pose (269-407s measured), ~10.5 jobs/hr/worker single-flight; CUDA projects ~4.5min - p95<180s SLO needs a faster host class and/or horizontal workers. route-auth meta-test now accepts jobContextForClaims (the shared verifier) alongside requireJobAccess."
+    },
+    "06": {
       "status": "not-started",
-      "note": "Declared, file not yet authored (lazy). Natural scope per the track goal: per-user fair queuing (QStash flow-control keys at enqueue), retry/dead-letter policy (failure callbacks + DLQ), remote-orphan detection for queue jobs (heartbeat/timeout - reconcile() is spawn-only today), backpressure, and the capacity/cost model feeding the analysis-latency SLO. The deploy half still waits on the OPEN worker-host handoff row (Taylor, spend)."
+      "note": "Declared, file not yet authored (lazy). The deploy half: choose and provision the worker host (BLOCKED on the OPEN HANDOFF row - spend, Taylor), production QStash credentials, club-head best.pt fetch path for the container (open since step 03), then the deployed loop re-proven end-to-end and the capacity model re-measured on the real host class against the p95<180s SLO."
     }
   },
   "blockers": [],

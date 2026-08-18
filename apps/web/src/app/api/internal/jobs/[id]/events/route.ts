@@ -22,7 +22,11 @@ interface ProgressEvent {
   message?: string;
   logLine?: string;
 }
-interface DoneEvent { kind: "done" }
+interface DoneEvent {
+  kind: "done";
+  /** The pipeline's own wall-clock seconds — recorded in the job log, never shown to a golfer. */
+  elapsedS?: number;
+}
 interface FailedEvent { kind: "failed"; reason: string }
 type WorkerEvent = ProgressEvent | DoneEvent | FailedEvent;
 
@@ -41,7 +45,10 @@ function parseEvent(body: unknown): WorkerEvent | null {
       logLine: b.logLine as string | undefined,
     };
   }
-  if (b.kind === "done") return { kind: "done" };
+  if (b.kind === "done") {
+    if (b.elapsedS !== undefined && typeof b.elapsedS !== "number") return null;
+    return { kind: "done", elapsedS: b.elapsedS as number | undefined };
+  }
   if (b.kind === "failed" && typeof b.reason === "string") return { kind: "failed", reason: b.reason };
   return null;
 }
@@ -86,6 +93,7 @@ export async function POST(
         : job.progressPct,
       message: event.message ?? job.message,
       log,
+      lastEventAt: new Date(),
     }).where(eq(jobsTable.id, job.id)));
     if (job.status === "queued") {
       await withUser(actorId, (tx) => tx.update(viewsTable)
@@ -94,9 +102,13 @@ export async function POST(
     return Response.json({ ok: true }, { headers: noStore });
   }
 
-  const finishRow = (status: "done" | "failed", stage: string, pct: number, message: string) =>
+  const finishRow = (
+    status: "done" | "failed", stage: string, pct: number, message: string, log?: string[],
+  ) =>
     withUser(actorId, (tx) => tx.update(jobsTable).set({
       status, stage, progressPct: pct, message, finishedAt: new Date(),
+      lastEventAt: new Date(),
+      ...(log ? { log } : {}),
     }).where(eq(jobsTable.id, job.id)));
 
   if (event.kind === "failed") {
@@ -114,7 +126,15 @@ export async function POST(
     await markViewFailed(actorId, view.viewId, reason);
     return Response.json({ ok: false, error: reason }, { status: 409, headers: noStore });
   }
-  await finishRow("done", "complete", 100, "analysis rewritten");
+  // The true pipeline duration goes to the LOG — it is capacity-model telemetry (feeding the
+  // analysis-latency SLO), not something a golfer acts on, so it never reaches a product screen.
+  const doneLog = job.log.slice();
+  if (event.elapsedS !== undefined) {
+    doneLog.push(`pipeline elapsed ${event.elapsedS.toFixed(1)}s`);
+    while (doneLog.length > 200) doneLog.shift();
+  }
+  await finishRow("done", "complete", 100, "analysis rewritten",
+    event.elapsedS !== undefined ? doneLog : undefined);
   await markViewReady(actorId, view, targetRevision);
   return Response.json({ ok: true }, { headers: noStore });
 }

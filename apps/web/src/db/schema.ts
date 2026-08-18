@@ -242,6 +242,11 @@ export const jobs = pgTable("jobs", {
    * one immutable address no matter what the view row does while the job runs.
    */
   targetRevision: integer("target_revision"),
+  /**
+   * Queue jobs only: when the worker last posted ANY event — the orphan sweep's heartbeat.
+   * Null for spawn jobs, whose liveness probe is the working-directory lock on this machine.
+   */
+  lastEventAt: timestamp("last_event_at", { withTimezone: true }),
 });
 
 /**

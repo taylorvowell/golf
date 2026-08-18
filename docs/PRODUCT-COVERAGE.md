@@ -128,6 +128,7 @@ coaching, billing, hosting) is unbuilt.
 | 17 | AI Coach — swing-aware conversation, personalized context, scoped to swing/session/history/plan | ⬜ | Nothing. No provider abstraction, no prompts, no conversation storage. |
 | 18 | Preconfigured drill library, findings→drills mapping, admin-managed | ⬜ | Each check carries a one-line `fix` string. That is not a drill library. |
 | 18.1–18.4 | Guided drills — per-drill check spec (hold/trigger), pose-only drill analysis mode, "Check my form" rep loop, coach roll-up, metric quarantine | ⬜ | Added 2026-08-17 (D59). Nothing exists; needs a new analyzer mode and a new fixture class (no current fixture is drill footage). Owning track: `drill-library`. |
+| 18.5 | Coach-authored drills — one drill model with an authorship dimension, always plain class, "marked done" self-report labelled as such | ⬜ | Added 2026-08-18 (D60). Owning tracks: `drill-library` (schema/RLS), `coach-video-lessons` (authoring UI + demo transcode). |
 
 ### 19–22. Comparison, reference library, history, launch data
 
@@ -146,9 +147,10 @@ coaching, billing, hosting) is unbuilt.
 |---|---|---|
 | 23 | Coach directory, listings, discovery | ⬜ |
 | 24 | Golfer↔coach relationship, request/approve, revocable, access boundaries | ⬜ |
-| 25 | Coach workspace, roster, golfer detail, swing review | ⬜ |
+| 25 | Coach workspace, roster, golfer detail, swing review, review-request queue (D60) | ⬜ |
 | 26 | Comments and frame-anchored video annotations, distinguishable from AI findings | ⬜ |
-| 27 | Two-way messaging | ⬜ |
+| 26.4 | Recorded video lessons — telestration + voice as an event-log artifact replayed by re-driving the player, transcripts, delivered-content persistence | ⬜ |
+| 27 | Messaging as one conversation feed — typed immutable entries, lesson/review/drill cards as views over one log, report/block (D60) | ⬜ |
 | 28 | Coach-created improvement plans, AI aware of the active plan | ⬜ |
 
 > The player's existing hand-correction tools (`head_markers`, `swing_stages`) are the closest

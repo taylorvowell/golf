@@ -1,4 +1,4 @@
-# SwingSage Roadmap — generated 2026-08-15
+# SwingSage Roadmap — generated 2026-08-18
 
 > Macro source of truth. Declarations live in `.claude/ROADMAP.json`; this rollup is DERIVED by `/roadmap`
 > (`node scripts/roadmap/derive.mjs`). Do not hand-edit the table — re-run the script. Single-track detail:
@@ -13,11 +13,11 @@ Platform Foundation → Core Golfer Experience → Capture & Multi-Device → Co
 | Track | Phase | Goal | Progress | Current | Lifecycle | Blocked on |
 |-------|-------|------|----------|---------|-----------|------------|
 | platform-foundation | Platform Foundation | Close PROJECT_MAIN §44's open architecture questions, then build identity, t… | 6/10 (60%, 1 in-prog) | 04 | active | — |
-| analyzer-service | Platform Foundation | Promote the analyzer from a hand-invoked CLI to a hosted, queue-driven worke… | 4/5 (80%) | 05 | active | — |
+| **analyzer-service** (spine) | Platform Foundation | Promote the analyzer from a hand-invoked CLI to a hosted, queue-driven worke… | 4/5 (80%, 1 in-prog) | 05 | active | — |
 | media-pipeline | Platform Foundation | Get 270-330MB phone video off a device on cellular, reliably: on-device trim… | 0/0 (—) | — | planned | — |
 | observability-and-slos | Platform Foundation | Define and instrument the targets that make 'production ready' falsifiable: … | 0/0 (—) | — | planned | — |
 | notifications | Platform Foundation | Push and email notification infrastructure with user-manageable preferences.… | 0/0 (—) | — | planned | — |
-| **design-system** (spine) | Core Golfer Experience | The Ideal Swing design system: rebuild the app's theme and pages to match .c… | 0/9 (0%) | 01 | active | — |
+| design-system | Core Golfer Experience | The Ideal Swing design system: rebuild the app's theme and pages to match .c… | 9/9 (100%) | 09 | complete | — |
 | mobile-app-shell | Core Golfer Experience | Mobile client scaffold for iPhone and Android: navigation, auth flows, onboa… | 1/3 (33%) | 02 | active | — |
 | mobile-player | Core Golfer Experience | Re-express the frame-accurate player and overlay system on mobile, plus the … | 4/4 (100%) | null | complete | — |
 | swing-ingest | Core Golfer Experience | The product flow on top of the media pipeline: turn one or two uploaded vide… | 0/0 (—) | — | planned | — |
@@ -37,6 +37,7 @@ Platform Foundation → Core Golfer Experience → Capture & Multi-Device → Co
 | practice-loop | Improvement Tracking | The simulator/range session experience (§8.1–8.5, §9.5) — the product's prim… | 0/0 (—) | — | planned | — |
 | coach-relationships | Coach Platform | The coach directory, the golfer-initiated request/approve relationship with … | 0/0 (—) | — | planned | — |
 | coach-collaboration | Coach Platform | Frame-anchored annotations and comments clearly distinguishable from AI find… | 0/0 (—) | — | planned | — |
+| coach-video-lessons | Coach Platform | Coach video lessons (D60, launch-blocking): the coach records a telestration… | 0/1 (0%) | 01 | planned | — |
 | billing-iap | Subscriptions & Data Governance | Attach native in-app purchase to the entitlement engine built in foundation … | 0/0 (—) | — | planned | — |
 | production-readiness | Subscriptions & Data Governance | Privacy, retention and deletion made real in code — including the full delet… | 0/0 (—) | — | planned | — |
 | sharing-and-export | Subscriptions & Data Governance | Share a swing with controlled access, export an eligible swing with selected… | 0/0 (—) | — | planned | — |
@@ -45,12 +46,12 @@ Platform Foundation → Core Golfer Experience → Capture & Multi-Device → Co
 
 ## Consistency
 
-- ✅ spine: exactly one active (design-system)
+- ✅ spine: exactly one active (analyzer-service)
 - ⚠ dependency: analyzer-service has started work but its HARD dep platform-foundation is not complete
 - ✅ ownership overlap: none
 - ✅ lifecycle/derived: none
 
 ## Recommended next
 
-Spine: **design-system 01** (`/build`). Then the other unblocked active/planned tracks per phase order. Externally-blocked
+Spine: **analyzer-service 05** (`/build`). Then the other unblocked active/planned tracks per phase order. Externally-blocked
 tracks wait on their `unblockTrigger`.
