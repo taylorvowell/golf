@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { ActivityIndicator, RefreshControl, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -10,9 +10,12 @@ import {
   HeroBackdrop,
   Panel,
   PanelHead,
+  HERO_PARALLAX,
+  HERO_SHEET_GAP,
   SheetOverBackdrop,
   TrendRing,
   useChromeScroll,
+  WAVE_NAV_CLEARANCE,
 } from "../design/system";
 import { FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
 import { StatusMessage } from "../design/StatusMessage";
@@ -45,7 +48,12 @@ export function ProgressScreen() {
   const { state, refreshing, refresh } = useSwings();
   const t = useTheme();
   const styles = useStyles();
-  const onChromeScroll = useChromeScroll();
+  const { onScroll: onChromeScroll, chromePx } = useChromeScroll();
+  // Measured once the hero lays out; until then the previous hand-tuned height keeps the first
+  // frame in the right place, so nothing jumps.
+  const [heroHeight, setHeroHeight] = useState<number | null>(null);
+  const backdropHeight =
+    heroHeight === null ? 424 + insets.top : heroHeight + 92 + HERO_SHEET_GAP;
 
   const vm = useMemo(
     () => (state.kind === "ok" ? progressViewModel(state.swings, Date.now()) : null),
@@ -53,8 +61,16 @@ export function ProgressScreen() {
   );
 
   const hero = (
-    <HeroBackdrop>
-      <View style={[styles.heroContent, { paddingTop: insets.top + APP_HEADER_BAR }]}>
+    <HeroBackdrop overscan={HERO_PARALLAX.cap}>
+      <View
+        style={[styles.heroContent, { paddingTop: insets.top + APP_HEADER_BAR }]}
+        // The sheet's resting edge is derived from this, so the gap below the hero is the same
+        // on every hero screen instead of falling out of a hand-tuned backdrop height.
+        onLayout={(e) => {
+          const h = Math.round(e.nativeEvent.layout.height);
+          setHeroHeight((prev) => (prev === h ? prev : h));
+        }}
+      >
         {/* The brand + profile door live in the floating AppHeader above; the hero keeps
             only the screen's own title. */}
         <Text style={styles.heroTitle}>Progress</Text>
@@ -112,8 +128,8 @@ export function ProgressScreen() {
     <SheetOverBackdrop
       testID="progress"
       backdrop={hero}
-      backdropHeight={424 + insets.top}
-      parallax={{ factor: 0.22, cap: 72 }}
+      backdropHeight={backdropHeight}
+      parallax={HERO_PARALLAX}
       initialOffset={0}
       overlap={92}
       onScrollY={onChromeScroll}
@@ -126,7 +142,7 @@ export function ProgressScreen() {
         />
       }
     >
-      <View style={[styles.sheetContent, { paddingBottom: 108 + insets.bottom }]}>
+      <View style={[styles.sheetContent, { paddingBottom: 108 + WAVE_NAV_CLEARANCE + insets.bottom }]}>
         {state.kind === "loading" ? (
           <View style={styles.centre}>
             <ActivityIndicator color={t.muted} />
@@ -221,6 +237,7 @@ export function ProgressScreen() {
 
     <AppHeader
       hero
+      chromePx={chromePx}
       onProfile={() => navigation.navigate("Profile")}
       profileTestID="progress-profile"
     />

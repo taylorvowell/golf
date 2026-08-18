@@ -5,7 +5,7 @@ import { FONT_DISPLAY } from "./typography";
 
 /**
  * `.segmented` (mockup §05): surface2 track (radius 8, 3px padding), 36pt segments
- * (radius 5); the active segment lifts onto a surface fill with cobalt text + shadowSm.
+ * (radius 5); the active segment lifts onto a surface fill with cobalt text.
  * Selection is fill + colour, never an outline (borderless rule).
  */
 export function Segmented({
@@ -53,7 +53,6 @@ export function Segmented({
                 justifyContent: "center",
                 backgroundColor: active ? t.surface : "transparent",
               },
-              active ? t.shadowSm : null,
             ]}
           >
             <Text

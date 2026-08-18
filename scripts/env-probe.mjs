@@ -44,6 +44,31 @@ const portOpen = (host, port, ms = 700) =>
   });
 
 /**
+ * Is METRO on this address — not merely "is 8081 open".
+ *
+ * The distinction is load-bearing. The QStash dev server's log server also binds 8081, so an
+ * open port proves nothing: on 2026-08-18 the probe reported "metro :8081 UP" while QStash held
+ * loopback, Metro was not running at all, and the emulator showed a white screen. Metro answers
+ * `/status` with `packager-status:running`; QStash answers 404 `Cannot GET /status`. Ask for the
+ * body, never the socket.
+ *
+ * Checked on BOTH loopback and the LAN address because they can disagree: a specific
+ * `127.0.0.1` bind beats Metro's wildcard bind for loopback traffic, which is exactly how the
+ * emulator (loopback both via `adb reverse` and via `10.0.2.2`) ends up talking to the wrong
+ * server while the phone on the LAN address is fine.
+ */
+const metroAt = async (host, ms = 900) => {
+  try {
+    const res = await fetch(`http://${host}:8081/status`, {
+      signal: AbortSignal.timeout(ms),
+    });
+    return (await res.text()).includes("packager-status:running");
+  } catch {
+    return false;
+  }
+};
+
+/**
  * Outstanding human tasks, read out of `docs/HANDOFF.md`.
  *
  * Injected rather than looked up, for the same reason the phone's address is: a hand-off that
@@ -86,12 +111,13 @@ function envKeys(relPath, keys) {
 const lines = [];
 const say = (s) => lines.push(s);
 
-const [devices, docker, lanIp, web, metro] = await Promise.all([
+const [devices, docker, lanIp, web, port8081, metroLoopback] = await Promise.all([
   run("adb", ["devices", "-l"]),
   run("docker", ["ps", "--format", "{{.Names}} {{.Status}}"]),
   run("node", ["-e", "const n=require('os').networkInterfaces();for(const a of Object.values(n).flat())if(a&&a.family==='IPv4'&&!a.internal&&a.address.startsWith('10.'))console.log(a.address)"]),
   portOpen("127.0.0.1", 3000),
   portOpen("127.0.0.1", 8081),
+  metroAt("127.0.0.1"),
 ]);
 
 say("## Running system (scripts/env-probe.mjs)");
@@ -121,7 +147,21 @@ if (online.length) {
 
 // --- machine + services ------------------------------------------------------------------
 say(`- this PC on the LAN: ${lanIp || "no 10.x address found"} (phones reach the API here, never localhost)`);
-say(`- next dev :3000 ${web ? "UP" : "down"}   metro :8081 ${metro ? "UP" : "down"}`);
+const metroLan = lanIp ? await metroAt(lanIp) : false;
+const metro =
+  metroLoopback && metroLan
+    ? "UP"
+    : metroLan
+      ? `UP on ${lanIp} ONLY — loopback:8081 is a SQUATTER (qstash log server). The emulator ` +
+        "reaches the host through loopback, so it will show a WHITE SCREEN until the dev client " +
+        `is relaunched on the LAN url: adb -s emulator-5554 shell am start -a ` +
+        `android.intent.action.VIEW -d "swingsage://expo-development-client/?url=http%3A%2F%2F${lanIp}%3A8081"`
+      : metroLoopback
+        ? "UP on loopback only (no LAN address found)"
+        : port8081
+          ? "DOWN — something else holds :8081 (`netstat -ano | grep :8081`); Metro is NOT running"
+          : "down";
+say(`- next dev :3000 ${web ? "UP" : "down"}   metro :8081 ${metro}`);
 
 const containers = (docker ?? "").split("\n").filter((l) => l.toLowerCase().includes("golf"));
 say(`- docker: ${containers.length ? containers.join("; ") : "no golf containers running (`docker compose up -d`)"}`);

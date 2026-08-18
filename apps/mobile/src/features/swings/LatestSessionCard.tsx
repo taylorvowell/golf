@@ -70,7 +70,6 @@ export function LatestSessionCard({
         padding: 16,
         borderRadius: 14,
         backgroundColor: t.surface,
-        ...t.shadowSm,
       }}
     >
       {/* .session-head */}

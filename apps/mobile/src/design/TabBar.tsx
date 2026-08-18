@@ -1,4 +1,5 @@
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
+import { View } from "react-native";
 
 import { BrandIcon } from "./system/BrandIcon";
 import { WaveNav, type WaveNavItem } from "./system/WaveNav";
@@ -22,8 +23,8 @@ const LABELS: Record<string, string> = {
   Coach: "Coach",
 };
 
-/** One knob for the whole row — the tab glyph size (Taylor 2026-08-17: larger). */
-const ICON_SIZE = 26;
+/** One knob for the whole row — the tab glyph, 21px inside `WaveNav`'s 24px icon box. */
+const ICON_SIZE = 21;
 
 function iconFor(route: string): WaveNavItem["icon"] {
   switch (route) {
@@ -61,11 +62,18 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
   }));
 
   return (
-    <WaveNav
-      items={items}
-      hidden={hidden}
-      recordTestID="tab-record"
-      onRecord={() => navigation.navigate("Record" as never)}
-    />
+    // Zero height on purpose. `BottomTabView` lays its tabBar out as the last flex child of a
+    // column, so anything with real height here is space the screen never gets back — and a bar
+    // that hides by translating away leaves that space behind as a blank strip. The bar inside
+    // is absolutely positioned and overlays the content instead; screens clear
+    // `WAVE_NAV_CLEARANCE` for it.
+    <View style={{ height: 0 }}>
+      <WaveNav
+        items={items}
+        hidden={hidden}
+        recordTestID="tab-record"
+        onRecord={() => navigation.navigate("Record" as never)}
+      />
+    </View>
   );
 }

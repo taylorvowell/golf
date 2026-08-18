@@ -176,7 +176,6 @@ export function ReportSheet({
                 alignItems: "center",
                 justifyContent: "center",
                 backgroundColor: t.aqua,
-                ...t.shadowAqua,
               }}
             >
               <Play size={16} color="#10204A" fill="#10204A" strokeWidth={0} />
@@ -337,7 +336,6 @@ export function ReportSheet({
                 padding: 14,
                 borderRadius: 12,
                 backgroundColor: t.surface,
-                ...t.shadowSm,
               }}
             >
               <Text
@@ -371,7 +369,6 @@ export function ReportSheet({
                 padding: 14,
                 borderRadius: 12,
                 backgroundColor: t.surface,
-                ...t.shadowSm,
               }}
             >
               <Text

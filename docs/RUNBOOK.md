@@ -892,3 +892,40 @@ echo no | "$SDK/cmdline-tools/latest/bin/avdmanager.bat" create avd -n swingsage
 
 `hw.gpu.enabled` defaults to **no**, which software-renders everything and makes a video player
 unusable — setting it is not optional.
+
+### Hiding the dev-client bubble (the floating button in the top-right corner)
+
+`expo-dev-client` draws a movable floating action button that opens the dev menu. It pins itself
+over the app's own top-right control and swallows taps there. It is a **persisted device
+preference**, not a build flag, so it turns off without a rebuild:
+
+```bash
+export MSYS_NO_PATHCONV=1                      # Git Bash rewrites /data/... into a Windows path
+cat > /tmp/devmenu.xml <<'XML'
+<?xml version='1.0' encoding='utf-8' standalone='yes' ?>
+<map>
+    <boolean name="isOnboardingFinished" value="true" />
+    <boolean name="showsAtLaunch" value="false" />
+    <boolean name="showFab" value="false" />
+</map>
+XML
+adb -s emulator-5554 shell am force-stop com.swingsage.spike
+adb -s emulator-5554 push /tmp/devmenu.xml /data/local/tmp/devmenu.xml
+adb -s emulator-5554 shell chmod 644 /data/local/tmp/devmenu.xml
+adb -s emulator-5554 shell 'run-as com.swingsage.spike sh -c   "cat /data/local/tmp/devmenu.xml > shared_prefs/expo.modules.devmenu.sharedpreferences.xml"'
+adb -s emulator-5554 shell monkey -p com.swingsage.spike -c android.intent.category.LAUNCHER 1
+```
+
+**Force-stop first.** `SharedPreferences` are cached in memory and flushed on exit, so rewriting
+the file under a live app gets overwritten the moment it next writes.
+
+`showFab` is read from `expo.modules.devmenu.DevMenuPreferences`; the other keys in that file are
+the shake/touch gestures and the show-at-launch flag, and the same trick sets any of them. The
+dev menu itself still opens — `adb shell input keyevent 82`, or a shake — so nothing is lost.
+
+**It does not survive a reinstall or an AVD wipe**, because it lives in the app's own data
+directory. Re-run the block above after either — and note that `AppHeader` no longer reserves the
+corner for it (the `__DEV__` 56px offset on the profile control went 2026-08-18, so the control
+sits flush to the page gutter). With the bubble back on, the two overlap. The build-time default is the manifest meta-data
+`EXDevMenuShowFloatingActionButton`, which would need an `app.json` config change and a
+`prebuild --clean` + rebuild — not worth it for a preference that is one command.

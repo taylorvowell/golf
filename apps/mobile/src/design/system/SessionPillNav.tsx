@@ -64,7 +64,6 @@ export function SessionPillNav({
           paddingRight: 84,
           borderRadius: 999,
           backgroundColor: t.mode === "dark" ? "rgba(16,28,50,0.94)" : "rgba(255,255,255,0.94)",
-          ...t.shadowLg,
           transform: [
             {
               translateY: slide.interpolate({ inputRange: [0, 1], outputRange: [0, 180] }),
@@ -132,7 +131,6 @@ export function SessionPillNav({
             borderRadius: 31,
             alignItems: "center",
             justifyContent: "center",
-            ...t.shadowAqua,
           }}
         >
           <View

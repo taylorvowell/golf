@@ -8,7 +8,7 @@ import { FONT_BODY, FONT_DISPLAY } from "./typography";
 
 /**
  * `.performance-card` (mockup §07): the hero gradient card — heroStart→heroMid(58%)→heroEnd,
- * radius 13, shadowLg, an aqua radial glow bleeding off the top-right corner (SVG — RN has
+ * radius 13, an aqua radial glow bleeding off the top-right corner (SVG — RN has
  * no CSS radial-gradient), white text throughout. The single dominant card per screen.
  */
 export function PerformanceCard({
@@ -29,7 +29,7 @@ export function PerformanceCard({
 }) {
   const t = useTheme();
   return (
-    <View style={[{ borderRadius: 13, overflow: "hidden" }, t.shadowLg, style]}>
+    <View style={[{ borderRadius: 13, overflow: "hidden" }, style]}>
       <LinearGradient
         colors={[t.heroStart, t.heroMid, t.heroEnd]}
         locations={[0, 0.58, 1]}

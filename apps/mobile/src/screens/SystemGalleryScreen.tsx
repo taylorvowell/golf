@@ -37,6 +37,7 @@ import {
   ScoreRing,
   Segmented,
   SessionPillNav,
+  HERO_PARALLAX,
   SheetOverBackdrop,
   StickThumb,
   SwingProfile,
@@ -297,7 +298,7 @@ export function SystemGalleryScreen() {
           <View style={{ height: 520, borderRadius: 20, overflow: "hidden" }}>
             <SheetOverBackdrop
               backdrop={
-                <HeroBackdrop>
+                <HeroBackdrop overscan={HERO_PARALLAX.cap}>
                   <View style={{ padding: 20, paddingTop: 28 }}>
                     <Eyebrow>SwingSage</Eyebrow>
                     <DisplayText color="#FFFFFF" style={{ marginTop: 8 }}>

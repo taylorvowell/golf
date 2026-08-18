@@ -5,15 +5,14 @@ import { FONT_BODY, FONT_DISPLAY } from "./typography";
 
 /**
  * `.panel` / `.progress-block` (mockup §07): the standard information surface — surface
- * fill, radius 11 (`card`) or 14 (`feature`, the mockup's hero radius), shadowSm by default.
+ * fill, radius 11 (`card`) or 14 (`feature`, the mockup's hero radius). Flat — no shadow.
  * `PanelHead` is `.panel-head`'s label + muted meta row without the hairline (borderless).
  */
 export function Panel({
   radius = "card",
-  elevated,
   style,
   ...rest
-}: ViewProps & { radius?: "card" | "feature"; elevated?: boolean }) {
+}: ViewProps & { radius?: "card" | "feature" }) {
   const t = useTheme();
   return (
     <View
@@ -24,7 +23,6 @@ export function Panel({
           padding: 14,
           backgroundColor: t.surface,
         },
-        elevated ? t.shadowMd : t.shadowSm,
         style,
       ]}
     />

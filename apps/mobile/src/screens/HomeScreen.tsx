@@ -20,6 +20,7 @@ import {
   Delta,
   PerformanceCard,
   useChromeScroll,
+  WAVE_NAV_CLEARANCE,
 } from "../design/system";
 import { FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
 import { StatusMessage } from "../design/StatusMessage";
@@ -62,7 +63,7 @@ export function HomeScreen() {
   const { state, refreshing, refresh } = useSwings();
   const t = useTheme();
   const styles = useStyles();
-  const onChromeScroll = useChromeScroll();
+  const { onScroll: onChromeScroll, chromePx } = useChromeScroll();
 
   const sessions = useMemo(
     () => (state.kind === "ok" ? sessionize(state.swings) : []),
@@ -123,7 +124,7 @@ export function HomeScreen() {
             styles.scroll,
             {
               paddingTop: insets.top + APP_HEADER_BAR + 4,
-              paddingBottom: 28 + insets.bottom,
+              paddingBottom: 28 + WAVE_NAV_CLEARANCE + insets.bottom,
             },
           ]}
           onScroll={(e) => onChromeScroll(e.nativeEvent.contentOffset.y)}
@@ -167,7 +168,7 @@ export function HomeScreen() {
         </ScrollView>
       ) : null}
 
-      <AppHeader onProfile={() => navigation.navigate("Profile")} />
+      <AppHeader chromePx={chromePx} onProfile={() => navigation.navigate("Profile")} />
     </View>
   );
 }
@@ -505,7 +506,6 @@ const useStyles = themedStyles((t) => ({
     borderRadius: 11,
     backgroundColor: t.surface,
     overflow: "hidden",
-    ...t.shadowSm,
   },
   compareBar: { paddingHorizontal: 14, paddingVertical: 11, gap: 3 },
   compareTag: {
@@ -529,7 +529,6 @@ const useStyles = themedStyles((t) => ({
     backgroundColor: t.surface,
     padding: 16,
     gap: 5,
-    ...t.shadowSm,
   },
   tipRank: { color: t.lavender, fontFamily: FONT_DISPLAY.black, fontSize: 13 },
   tipTitle: {
@@ -573,7 +572,6 @@ const useStyles = themedStyles((t) => ({
     backgroundColor: t.surface,
     overflow: "hidden",
     justifyContent: "flex-end",
-    ...t.shadowSm,
   },
 }));
 

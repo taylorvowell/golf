@@ -15,11 +15,13 @@ Run from anywhere (the script resolves the repo root itself):
 bash .claude/skills/emulator/scripts/launch.sh
 ```
 
-Cold boot takes ~30–60 s; already-running takes ~10 s. The script prints exactly two summary lines — `EMULATOR: …` and `PHONE: …`.
+Cold boot takes ~30–60 s; already-running takes ~10 s. The script prints exactly three summary lines — `METRO: …`, `EMULATOR: …` and `PHONE: …`.
+
+`METRO:` comes first because it is the one that used to be missing: the script now verifies Metro is genuinely serving (asking `/status` for `packager-status:running`, not just that :8081 is open), starts it if it is not, and launches the dev client **at that exact server**. A line reading `UP on http://10.0.1.107:8081 — loopback :8081 is squatted` is normal and healthy — it means the QStash dev server holds loopback and the app was pointed at the LAN address instead.
 
 ## Then reply
 
-Relay the two summary lines in plain words and stop. No extra diagnostics, no screenshots unless asked. A missing phone is the **expected** case, not an error — pass on the one-line hint about enabling wireless debugging and move on.
+Relay the three summary lines in plain words and stop. No extra diagnostics, no screenshots unless asked. A missing phone is the **expected** case, not an error — pass on the one-line hint about enabling wireless debugging and move on.
 
 ## Rules that bind here
 

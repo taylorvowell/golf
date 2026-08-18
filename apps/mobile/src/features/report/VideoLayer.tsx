@@ -429,6 +429,9 @@ export function ReportVideoLayer({
       <SheetOverBackdrop
         testID={testID}
         backdrop={backdrop}
+        // This backdrop is video on the fixed dark ground, not a HeroBackdrop, so it names its
+        // own colour for the strip the parallax uncovers above it.
+        overscan={COLORS.bg}
         backdropHeight={height}
         // The report's parallax and threshold, straight from the mockup script (k=.18 cap=64,
         // video-open at scrollTop < 60, initial offset ~520 of a 940 canvas).

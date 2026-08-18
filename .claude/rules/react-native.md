@@ -126,11 +126,16 @@ along.
   dark `COLORS` palette. Deck (`src/design/deck/`) is the player's control-surface system, layered
   on those fixed dark tokens. **No hand-mixed rgba beside a token that nearly matches** — use the
   token or name a new one. Overlay data colours are web-parity constants and stay literal.
-- **No borders, anywhere** (Taylor, 2026-08-14). Surfaces are flat: separation is fill and shadow,
-  selection is background tint + text colour, a divider is spacing. `border*` styles are legal only
-  when they *draw a shape* (View-drawn glyphs, overlay markers, gauge dots, the scrub thumb's ring).
-  The edge tokens were deleted — do not reintroduce them. A control whose only visual was its
-  border gets a fill, never the border back.
+- **No borders and no drop shadows, anywhere** (Taylor, 2026-08-14 / 2026-08-18). Surfaces are
+  flat: separation is fill, radius and spacing, selection is background tint + text colour, a
+  divider is spacing, and elevation is the surface ramp (`bg` → `bgElevated` → `surface` →
+  `surface2` → `surface3`), never a cast shadow. `border*` styles are legal only when they *draw a
+  shape* (View-drawn glyphs, overlay markers, gauge dots, the scrub thumb's ring). The edge tokens
+  AND the five shadow tokens (`shadowSm|Md|Lg|Cobalt|Aqua`, with `ShadowStyle`) were deleted — the
+  `Theme` type carries neither, so reintroducing one is a type error, and hand-writing
+  `shadowColor`/`shadowOffset`/`shadowOpacity`/`elevation` or a non-`inset` `boxShadow` is the same
+  violation by another route. Deck's `boxShadow` arrays are **inset only**; `DeckButton.test.tsx`
+  pins that. A control whose only visual was its border or shadow gets a fill, never the edge back.
 - **Every interactive control is accessible**: role, label, state; drag-only surfaces get
   `adjustable` + `accessibilityValue` + increment/decrement actions (scrub), or explicit
   screen-reader buttons (DeckSheet's pattern). 48 pt touch targets via hitSlop where the drawn

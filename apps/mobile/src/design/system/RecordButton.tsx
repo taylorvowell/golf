@@ -53,7 +53,11 @@ export function RecordButton({
           inset: 0,
           borderRadius: 999,
           backgroundColor: t.glass,
-          ...t.shadowSm,
+          // The mockup pairs a cast shadow with a lit top rim; only the rim survives the
+          // no-drop-shadows rule, and it is the half that reads as "proud of the surface".
+          boxShadow: [
+            { offsetX: 0, offsetY: 1, blurRadius: 0, color: "rgba(255,255,255,0.72)", inset: true },
+          ],
         }}
       />
       {/* ::after — the face. */}
@@ -66,7 +70,9 @@ export function RecordButton({
             backgroundColor: "#42CBCE",
             alignItems: "center",
             justifyContent: "center",
-            ...t.shadowAqua,
+            boxShadow: [
+              { offsetX: 0, offsetY: 1, blurRadius: 0, color: "rgba(255,255,255,0.20)", inset: true },
+            ],
           }}
         >
           <Plus size={(21 / 64) * size} color="#14244F" strokeWidth={2.35} />
@@ -81,7 +87,9 @@ export function RecordButton({
             borderRadius: 999,
             alignItems: "center",
             justifyContent: "center",
-            ...t.shadowMd,
+            boxShadow: [
+              { offsetX: 0, offsetY: 1, blurRadius: 0, color: "rgba(255,255,255,0.08)", inset: true },
+            ],
           }}
         >
           <Plus size={(21 / 64) * size} color="#FFFFFF" strokeWidth={2.35} />

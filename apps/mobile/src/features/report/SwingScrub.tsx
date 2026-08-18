@@ -184,13 +184,6 @@ const styles = StyleSheet.create({
     height: DOT,
     borderRadius: DOT / 2,
     backgroundColor: "#FFFFFF",
-    ...{
-      shadowColor: "#000000",
-      shadowOffset: { width: 0, height: 8 },
-      shadowRadius: 9,
-      shadowOpacity: 0.26,
-      elevation: 4,
-    },
   },
   stem: {
     position: "absolute",

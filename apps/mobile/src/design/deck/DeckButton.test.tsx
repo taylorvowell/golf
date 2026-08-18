@@ -7,11 +7,15 @@ import { DECK } from "./tokens";
 /**
  * The one rule this whole system rests on: **light comes from directly above.**
  *
- * A raised cap therefore casts a shadow BELOW itself and catches a highlight on its TOP rim; a cap
- * that has been pushed in does the opposite — dark at the top where the rim now overhangs it. Get
- * that backwards on one component and the surface stops reading as a physical object everywhere,
- * which is the only thing the depth is for. It is also the kind of mistake that is invisible in a
- * diff and obvious on a phone, so it is asserted here rather than eyeballed.
+ * A raised cap therefore catches a highlight on its TOP rim and is dark underneath; a cap that has
+ * been pushed in does the opposite — dark at the top where the rim now overhangs it. Get that
+ * backwards on one component and the surface stops reading as a physical object everywhere, which
+ * is the only thing the depth is for. It is also the kind of mistake that is invisible in a diff
+ * and obvious on a phone, so it is asserted here rather than eyeballed.
+ *
+ * All of it is INSET. Nothing in this product casts a drop shadow (Taylor, 2026-08-18), so the
+ * first assertion below is the guard against one creeping back in on the surface that used to
+ * have the most of them.
  *
  * The second thing asserted is that **a finger down and a latch down are different states**. The
  * transport depends on it completely: pause is the play cap staying in after the finger has gone.
@@ -30,11 +34,12 @@ function offsetOf(el: { props: { style?: unknown } }) {
   return t?.[0]?.translateY ?? 0;
 }
 
-it("casts its shadow downward when raised, and none of it inside the cap", async () => {
+it("shades a raised cap from inside it, and casts nothing", async () => {
   const { getByTestId } = await render(<DeckButton testID="cap" label="A" onPress={() => {}} />);
-  const cast = shadowOf(getByTestId("cap")).filter((s) => !s.inset);
-  expect(cast.length).toBeGreaterThan(0);
-  for (const s of cast) expect(s.offsetY).toBeGreaterThan(0);
+  const shadows = shadowOf(getByTestId("cap"));
+  expect(shadows.every((s) => s.inset)).toBe(true);
+  // The lit rim sits at the TOP — a positive inset offset draws the light down from the top edge.
+  expect(shadows[0].offsetY).toBeGreaterThan(0);
 });
 
 it("inverts to a shadow at the TOP, inside the cap, once latched in", async () => {

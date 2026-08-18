@@ -6,7 +6,7 @@ import { DECK_SHADES } from "../../theme/palette";
  *
  * One idea, stated once here and obeyed by every component in this folder: **the light comes from
  * directly above.** Everything else follows from it and nothing is chosen by eye. A control that
- * stands proud of the surface catches that light on its top edge and casts a shadow below itself; a
+ * stands proud of the surface catches that light on its top edge and is dark on its underside; a
  * control that has been pushed in does the exact opposite — dark at the top where the rim now
  * overhangs it, light at the bottom where the floor catches the light. Get the direction wrong on
  * one component and the whole surface stops reading as a physical object, which is the only thing
@@ -16,7 +16,7 @@ import { DECK_SHADES } from "../../theme/palette";
  *
  * §41's stated conditions are bright sunlight, one hand, and a driving range. Flat design fails all
  * three at once: in glare a filled rectangle and its background converge, and there is no shape cue
- * left to tell a control from a label. A raised cap keeps a highlight and a shadow no matter what
+ * left to tell a control from a label. A raised cap keeps a highlight and a dark underside whatever
  * the ambient light does to its fill, and **depth survives washout where colour does not**. It also
  * gives state somewhere to live that is not colour — a pressed transport reads as pressed at a
  * glance and from an angle, which is how a golfer actually looks at a phone on a mat.
@@ -73,7 +73,8 @@ export const DECK = {
    * No `backdrop-filter`, and no `expo-blur`: real blur is a native module, which costs a fresh
    * dev-client install on the device every time this design moves. Translucent fills alone read
    * as glass at this size — surfaces are flat by decree (no borders, no drawn edges; depth comes
-   * from fill and shadow only), so there are no edge/hairline tokens here and none may be added.
+   * from fill and INSET shading only — nothing here casts), so there are no edge/hairline tokens
+ * here, and none may be added.
    */
   glass: {
     /** A floating control over the video — the back cap, the overlays chip. */
@@ -103,22 +104,26 @@ export const DECK = {
   },
 
   /**
-   * Shadow recipes, as `boxShadow` arrays.
+   * Shading recipes, as `boxShadow` arrays — **inset only**.
+   *
+   * No drop shadows anywhere in this product (Taylor, 2026-08-18), so nothing here casts onto
+   * the surface below it. Depth is carried entirely by shading INSIDE the cap: a lit top rim
+   * and a dark underside when it stands proud, inverted when it is pushed in. That is still the
+   * one rule — light from directly above — and it survives the cast shadow going, because a
+   * rim highlight is what the eye reads at a glance in glare anyway.
    *
    * `inset` and multi-shadow arrays are RN 0.86 (new architecture) features. They are what make
    * this possible without a gradient library, a canvas, or nine-patch images — an earlier
    * React Native would have needed all three.
    */
   shadow: {
-    /** Proud of the surface: a cast shadow below, a lit top rim, a dark underside inside the cap. */
+    /** Proud of the surface: a lit top rim and a dark underside, both inside the cap. */
     raised: [
-      { offsetX: 0, offsetY: 3, blurRadius: 6, spreadDistance: 0, color: "rgba(0,0,0,0.55)" },
       { offsetX: 0, offsetY: 1, blurRadius: 0, spreadDistance: 0, color: "rgba(255,255,255,0.16)", inset: true },
       { offsetX: 0, offsetY: -2, blurRadius: 3, spreadDistance: 0, color: "rgba(0,0,0,0.45)", inset: true },
     ],
-    /** Mid-press. Same shape as raised, with the cast shadow nearly gone. */
+    /** Mid-press. Same shape as raised, with the rim highlight dimmed. */
     pressing: [
-      { offsetX: 0, offsetY: 1, blurRadius: 2, spreadDistance: 0, color: "rgba(0,0,0,0.5)" },
       { offsetX: 0, offsetY: 1, blurRadius: 0, spreadDistance: 0, color: "rgba(255,255,255,0.1)", inset: true },
     ],
     /** Pushed in and staying in. Dark at the top where the rim overhangs; light at the floor. */
@@ -126,14 +131,12 @@ export const DECK = {
       { offsetX: 0, offsetY: 3, blurRadius: 5, spreadDistance: 0, color: "rgba(0,0,0,0.75)", inset: true },
       { offsetX: 0, offsetY: -2, blurRadius: 3, spreadDistance: 0, color: "rgba(255,255,255,0.09)", inset: true },
     ],
-    /** The console slab, at the bottom of the screen, so its shadow is thrown UPWARD. */
+    /** The console slab. Its top edge catches the light; it throws nothing onto the picture. */
     slab: [
-      { offsetX: 0, offsetY: -10, blurRadius: 24, spreadDistance: -6, color: "rgba(0,0,0,0.7)" },
       { offsetX: 0, offsetY: 1, blurRadius: 0, spreadDistance: 0, color: "rgba(255,255,255,0.06)", inset: true },
     ],
-    /** A surface floating clear of the page — the dock, a sheet. Shadow on every side. */
+    /** A surface floating clear of the page — the dock, a sheet. Lit rim, no cast. */
     float: [
-      { offsetX: 0, offsetY: 8, blurRadius: 28, spreadDistance: -4, color: "rgba(0,0,0,0.8)" },
       { offsetX: 0, offsetY: 1, blurRadius: 0, spreadDistance: 0, color: "rgba(255,255,255,0.08)", inset: true },
     ],
   },

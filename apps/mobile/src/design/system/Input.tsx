@@ -13,8 +13,9 @@ import { FONT_BODY, FONT_DISPLAY } from "./typography";
 
 /**
  * `.field` + `.input` (mockup §05): eyebrow-face label, 44pt input on a surface fill,
- * radius 7. The mockup's focus border+ring becomes the aqua shadow alone (borderless rule) —
- * on Android that is the elevation glow, which is the closest borderless read of "focused".
+ * radius 7. The mockup's focus border+ring becomes a **fill change** — no border (borderless
+ * rule) and no glow (no drop shadows), so focus reads the same way selection does everywhere
+ * else in this system: the field lifts onto the blue-tinted surface.
  */
 export function Input({
   label,
@@ -54,12 +55,11 @@ export function Input({
             minHeight: 44,
             paddingHorizontal: 12,
             borderRadius: 7,
-            backgroundColor: focused && t.mode === "light" ? t.surface : t.surface,
+            backgroundColor: focused ? t.surfaceBlue : t.surface2,
             color: t.text,
             fontFamily: FONT_BODY.regular,
             fontSize: 12,
           },
-          focused ? t.shadowAqua : t.shadowSm,
           inputProps.style,
         ]}
       />

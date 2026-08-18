@@ -354,12 +354,14 @@ are near-opaque theme fills, not backdrop blur (`expo-blur` stays out
 until a fill provably fails); conic-gradient score rings render as SVG arcs; and every
 "Ideal Swing" string in the mockups renders as **SwingSage** — settled by the real logo Taylor
 supplied (wordmark reads *Swingsage*; master lockup at
-`apps/mobile/assets/brand/swingsage-logo.svg`: green→cyan gradient swooshes, a charcoal
-`#282828` disc plate behind the white ball, charcoal wordmark). The mockup's placeholder
-`.brandmark` square is replaced by the logo's ball-and-swoosh mark wherever a brand lock
-appears. The mark's colours are literal on every surface — the disc plate is what keeps the
-white ball readable on light — and only the wordmark takes a colour via `BrandLogo` (white on
-dark, brand charcoal on light). Home's `ScreenHeader` carries the lockup in place of a title.
+`apps/mobile/assets/brand/swingsage-logo.svg`: the ball on two swing-path arcs — one `#3fb0f5`
+accent, one brand-ink `#1c0032` — with the ball carrying a radial highlight gradient under a
+white dimple field, and an ink wordmark). The mockup's placeholder `.brandmark` square is
+replaced by the logo's ball-and-swoosh mark wherever a brand lock appears. The mark's colours
+are literal on every surface with one exception: the **ink-coloured swing path follows the
+wordmark colour** (white on dark), because painted `BRAND_INK` it disappears into a dark
+surface. The accent arc is a brand colour and never changes. Home's `ScreenHeader` carries the
+lockup in place of a title.
 **Patterns the mockup lacks (composed in step 09, now precedent):** the settings-style list is
 `design/system/ListRow.tsx` — `ListGroup` (a `.panel` surface, radius 11, shadowSm) of
 `ListRow`s where selection is the `surfaceBlue` fill + cobalt title (§12: cobalt = selected,
@@ -432,19 +434,41 @@ with **in-app-capture**; no NEW surface may adopt Deck.
 Built on RN 0.86's `boxShadow` (multi-shadow, `inset`) and `experimental_backgroundImage`
 gradients; an earlier React Native would have needed nine-patch images for the same effect.
 
-### Surfaces are flat — no borders, anywhere
+### Surfaces are flat — no borders and no drop shadows, anywhere
 
-**Decision (Taylor, 2026-08-14):** No visible borders in any mobile styling — no card outlines, no
-chip edges, no hairline dividers, no accent rings around a selected control. Surfaces separate by
-**fill and shadow only**: a card is a filled rounded rectangle on the background, a selected state
-is a background tint plus text colour, a divider is spacing. The deck's edge tokens
-(`glass.hairline`, `hairlineStrong`, `keyEdge`) and `COLORS.amberEdge` were deleted so a border
-cannot quietly return through a token. The only `border*` styles that remain are ones that **draw a
-shape** — the `View`-drawn glyphs, overlay keypoint rings, gauge dots, the scrub thumb's ring, and
-the tab bar's record button's bg-coloured mask ring — none of which read as an outline.
-**Gotchas:** A control whose only visual was its border needs a fill when the border goes
+**Decision (Taylor, 2026-08-14, extended 2026-08-18):** No visible borders and **no drop shadows**
+in any mobile styling — no card outlines, no chip edges, no hairline dividers, no accent rings
+around a selected control, and nothing casting onto the surface beneath it. Surfaces separate by
+**fill, radius and spacing only**: a card is a filled rounded rectangle on the background, a
+selected state is a background tint plus text colour, a divider is spacing, and elevation is the
+`bg` → `bgElevated` → `surface` → `surface2` → `surface3` ramp rather than a shadow.
+
+Both rules are enforced by **deletion of the tokens**, so neither can quietly return: the edge
+tokens (`glass.hairline`, `hairlineStrong`, `keyEdge`, `COLORS.amberEdge`) went in 2026-08-14, and
+`shadowSm` / `shadowMd` / `shadowLg` / `shadowCobalt` / `shadowAqua` — with the `ShadowStyle` type
+— went in 2026-08-18. The `Theme` type no longer carries a shadow of any kind, so a surface that
+wants one does not compile.
+
+Deck (`src/design/deck/`) keeps its `boxShadow` arrays but they are now **inset only**: a raised
+cap reads by the lit top rim and dark underside *inside* it, never by a shadow thrown below.
+`DeckButton.test.tsx` asserts every entry is `inset`, which is the tripwire for the surface that
+used to carry the most cast shadows.
+
+**The reference mockup carries the rule too.** `.claude/ideal-swing-design-system.html` has its
+five `--shadow-*` variables pinned to `none` in both themes and every literal cast shadow removed,
+with the reason in a comment at the top of the file — a spec that still teaches shadows is how one
+comes back. What survives there is `inset` shading and zero-offset spread rings (`0 0 0 4px <c>`),
+which draw a shape rather than cast: the score orbit's rings, the timeline dot's collar, the focus
+ring. The mockup still draws 1px `--line` borders it inherited from before the borderless rule;
+the code does not, and the code is right.
+
+The only `border*` styles that remain are ones that **draw a shape** — the `View`-drawn glyphs,
+overlay keypoint rings, gauge dots, the scrub thumb's ring, and the tab bar's record button's
+bg-coloured mask ring — none of which read as an outline.
+**Gotchas:** A control whose only visual was its border or its shadow needs a fill when that goes
 (StatusMessage's retry pill, the overlay angle chips, the frame-sync sweep button) — deleting the
-border alone leaves an invisible control.
+edge alone leaves an invisible control. `Panel`'s `elevated` prop went with the
+shadows — it only ever chose between two of them, and it had no call sites.
 
 ### Light is the default; dark is a choice; the video surfaces ignore both
 
@@ -520,6 +544,14 @@ velocity first — or a fast flick that has travelled 20pt springs back and the 
 `react-native-gesture-handler` is excluded from autolinking (D47) and this is one axis with one
 decision at the end of it. Glass is translucent fills, **not `expo-blur`**: real backdrop blur is a
 native module, and every design change would then cost a fresh dev-client install on the device.
+
+**The header's scroll offset is PER SCREEN; the tab bar's flag is global.** Every screen keeps its own scroll position, so a shared offset holds whatever screen moved last — returning to a screen left scrolled drew its header over its own content, and arriving at one resting at the top could leave the header hidden (Taylor, 2026-08-18). `useChromeScroll` therefore returns `{ onScroll, chromePx }` and each screen hands its own `chromePx` to its own `AppHeader`. Resetting scroll position on navigation would have hidden the same bug at the cost of losing the golfer's place, so it was not done. The tab bar's `hidden` stays global: it is one bar for the whole shell.
+
+**The two bars move on different models** (Taylor, 2026-08-18). The TAB BAR latches: its `hidden` flag flips once a run of 15% of the window height reads as intent, then it animates — it is a tap target, and one that flickers under the thumb is worse than one that lags. The TOP BAR takes **two inputs and obeys whichever hides it more**. A latch is the driver: once the screen is `SLIDE_AFTER_BAR_HEIGHTS` (1.2x the bar's own height) past the top, the bar animates fully out, so it is only ever all the way in or all the way out, never parked half on screen. Under that buffer it has not committed — the bar is still there, merely pushed by the content — so a short drag that settles again costs nothing. `chromePx` (the raw scroll offset, at a slight 1.15x parallax) is a floor under that slide: if the content gets ahead of the animation — a fling the JS scroll callback cannot keep up with, or just the first frames of the slide — the push has already carried the bar clear, so it cannot be drawn over. The floor alone would leave the bar partly visible, which is why it is a floor and not the driver. **The latch's two thresholds differ on purpose:** it engages once the screen is past that buffer, but releases only while returning UP and already within one bar-height of the top — so the bar stays gone however you drag mid-page, and the last stretch of the return is the content carrying it back down rather than a second animation. It lives in `AppHeader` rather than the provider because both thresholds are the bar's own height. `Animated` has no `max`, so the two inputs are summed and clamped to that height: a clamped sum is never less than either, and overshoot is off screen and free. Being locked to the content is also why the bar needs no ground of its own. The buffer is measured in bar-heights rather than as a fraction of the window because it is about this bar — "let the content push it most of the way off before committing" is a fixed relationship to the bar's height, and a window fraction gave phones with different status-bar insets different behaviour for no reason.
+
+**A hero's sheet edge is derived from its content, not tuned.** `backdropHeight` was a hand-picked constant per screen (330 on the log, 424 on Progress) with no relationship to what the hero actually held, so the gap between the hero's content and the sheet's top edge was whatever fell out of two independently chosen numbers — and it fell out different (Taylor, 2026-08-18). Hero screens now measure their hero with `onLayout` and set `backdropHeight = heroHeight + overlap + HERO_SHEET_GAP`, so the sheet lands the same distance below the content on every hero screen and keeps doing so when the content changes. The old constant stays as the pre-measurement fallback so the first frame does not jump.
+
+**A parallaxed backdrop overscans upward** (Taylor, 2026-08-18). Sinking is exactly what uncovers a backdrop's own top edge: at full parallax the old `absoluteFill` layer had translated `cap` px down and the screen's ground showed as a bar across the top. `SheetOverBackdrop`'s layer now extends `parallax.cap` above the screen and paints an `overscan` colour there, and `HeroBackdrop` takes an `overscan` of its own — negative margin plus equal padding, so the painted ground grows upward while its children stay put, and the corner glow has somewhere to bleed instead of being cropped flat by `overflow: hidden`. The two numbers must agree, so the hero preset lives once as `HERO_PARALLAX` rather than being copied into both screens. A backdrop that is not a `HeroBackdrop` (the report's video) names its own overscan colour instead.
 
 ### Where you are is a NAME and a hairline bar, not a strip of thumbnails
 
@@ -699,14 +731,31 @@ whole screen — the player, capture, the profile pages — lives on the root st
 navigator and covers the bar by construction; the swing screen keeps its own navigation because
 of where it sits, never because a flag hid a bar. Every tab draws the shared `design/TopBar`
 (screen name left, the golfer's avatar right — Google photo when the session metadata carries
-one, else the address's initial). The avatar opens **Profile** (`slide_from_right`): identity,
-Find a coach (→ Coach tab), Swing stats (→ Progress tab), Goals, Settings, Log out. Settings owns
+one, else the address's initial). The header's profile control opens **Profile**, which is a
+**drawer sliding in from the right over the tab that opened it** (Taylor's design, 2026-08-18),
+not a pushed page: a route with `presentation: "transparentModal"` and `animation: "none"`, so
+the screen underneath stays visible behind a dimmed scrim while `design/system/SideDrawer` runs
+the slide itself. The panel takes 86 % of the width, floats clear of the safe area top and
+bottom, and rounds only its left corners because it stays flush to the right edge. It closes
+three ways — the X, a tap on the dimmed strip, or a drag to the right — and a row **closes
+before it navigates**, so coming back from Settings lands on the tab rather than on a drawer
+left hanging open. Contents, in Taylor's order: identity, the coach block (the connected coach
+card over the local-directory card, whose CTA is the Coach tab), then the menu — My profile,
+Lesson history, Notifications, Settings, Privacy, Help — then Appearance and Sign out. **Only
+Settings has a screen behind it**; the other five are drawn as designed and inert until their
+screens exist, which `ProfileScreen.test.tsx` pins so that wiring one is a deliberate edit. The
+connected-coach state reads `useConnectedCoach`, which is sample data under `__DEV__` and null
+in release until the coach platform lands. The design's navy/white button pair maps to
+`cobalt`/`surface`, because a navy fill on the dark theme's navy card is an invisible button.
+Settings owns
 the real preferences — Appearance and **Delete account**, which moved off the log's footer to
 its planned home (the after-swing "lead with the scorecard" toggle died with the legacy
 player). Progress is the
 long view (all-time best, typical tempo as a median over ≥3 swings, counts, session-average
 trend); Coach and Goals are honest placeholders with real doors, not dead buttons. `AccountBar`
 is deleted; sign-out lives in Profile.
+The wave bar **floats over the content rather than taking layout space**, with a gradient fade above it, so content dissolves behind it instead of stopping at a hard edge (Taylor, 2026-08-18). The fade is **the same dark ramp in both themes** (`#0B1528`, 0 -> full), not a theme-following one: a white fade over the light theme's near-white `bg` is invisible, and only the transparent end is ever on screen anyway — the solid end sits behind the bar. That is not decoration: `BottomTabView` lays its tabBar out as the last flex child of a column, so a bar that hides by translating away leaves its reserved height behind as a blank strip. `TabBar` hosts it in a zero-height view, `WaveNav`'s root is absolutely positioned, and the fade rides inside the animated group so it leaves with the bar. The root box is sized to include the fade rather than letting it overflow upward — Android does not honour `overflow: visible` reliably, and a gradient drawn past the container's edge simply did not render — which also makes the root `pointerEvents="box-none"`, or the transparent band would eat every touch in it. Tab screens clear `WAVE_NAV_CLEARANCE` at the bottom of their own scroll, because nothing reserves it for them any more.
+Each tab is a **21px glyph in a 24px box over a drawn 7/900 label** (Taylor, 2026-08-18 — the labels used to exist only on `accessibilityLabel`), the centre slot is 86px wide, and the raised section under Record is 126x96 with a 158x26 blend back into the bar. The active colour is cobalt on light and **aqua on dark**, which is the one place the nav's active voice is not the app's primary.
 **Gotchas:** Tab glyphs are drawn `View`s in `design/deck/Glyphs.tsx` — no icon font, no SVG
 outside `design/gauges`. From a root-stack screen a tab is reached as
 `navigate("Tabs", { screen })`; a bare `navigate("Progress")` searches upward and fails at

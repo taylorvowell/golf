@@ -10,6 +10,7 @@ import {
   Panel,
   TitleText,
   useChromeScroll,
+  WAVE_NAV_CLEARANCE,
 } from "../design/system";
 import { FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
 import { createdAtMs } from "../features/swings/sessions";
@@ -35,7 +36,7 @@ export function CoachScreen() {
   const { state } = useSwings();
   const t = useTheme();
   const styles = useStyles();
-  const onChromeScroll = useChromeScroll();
+  const { onScroll: onChromeScroll, chromePx } = useChromeScroll();
 
   // The newest scored swing — the "see it in action" door's target.
   const latestScored = useMemo(() => {
@@ -52,7 +53,10 @@ export function CoachScreen() {
       <ScrollView
         contentContainerStyle={[
           styles.content,
-          { paddingTop: insets.top + APP_HEADER_BAR + 4, paddingBottom: 32 + insets.bottom },
+          {
+            paddingTop: insets.top + APP_HEADER_BAR + 4,
+            paddingBottom: 32 + WAVE_NAV_CLEARANCE + insets.bottom,
+          },
         ]}
         onScroll={(e) => onChromeScroll(e.nativeEvent.contentOffset.y)}
         scrollEventThrottle={16}
@@ -91,7 +95,7 @@ export function CoachScreen() {
         </Panel>
       </ScrollView>
 
-      <AppHeader onProfile={() => navigation.navigate("Profile")} />
+      <AppHeader chromePx={chromePx} onProfile={() => navigation.navigate("Profile")} />
     </View>
   );
 }

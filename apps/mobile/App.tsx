@@ -158,10 +158,18 @@ function Root() {
                       contentStyle: { backgroundColor: COLORS.bg },
                     }}
                   />
+                  {/* The profile drawer covers the tab it was opened from rather than replacing
+                      it: a transparent modal with NO stack animation, because the screen runs
+                      its own slide, scrim and swipe-to-dismiss (see `SideDrawer`). */}
                   <Stack.Screen
                     name="Profile"
                     component={ProfileScreen}
-                    options={{ title: "Profile", animation: "slide_from_right" }}
+                    options={{
+                      headerShown: false,
+                      presentation: "transparentModal",
+                      animation: "none",
+                      contentStyle: { backgroundColor: "transparent" },
+                    }}
                   />
                   <Stack.Screen
                     name="Settings"

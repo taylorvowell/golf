@@ -8,7 +8,7 @@ import { FONT_BODY, FONT_DISPLAY } from "./typography";
 /**
  * The settings-style list, composed from system pieces (the mockup has no settings screen —
  * composition recorded in `docs/decisions/mobile-client.md` as the precedent): rows on a
- * `.panel` surface (radius 11, shadowSm), separation by spacing alone, and the §12 selection
+ * `.panel` surface (radius 11, flat), separation by spacing alone, and the §12 selection
  * rule — a selected row sits on the blue-tinted surface with cobalt title, never a border.
  * `danger` is for the irreversible rows — red title, same layout, so destructive actions are
  * never dressed as something else. `right` replaces the chevron for rows that carry a control
@@ -88,11 +88,11 @@ export function ListRow({
   );
 }
 
-/** Rows grouped on one `.panel` surface — radius 11, shadowSm, spacing does the separating. */
+/** Rows grouped on one `.panel` surface — radius 11, flat, spacing does the separating. */
 export function ListGroup({ children }: { children: ReactNode }) {
   const t = useTheme();
   return (
-    <View style={[{ borderRadius: 11, backgroundColor: t.surface, overflow: "hidden" }, t.shadowSm]}>
+    <View style={{ borderRadius: 11, backgroundColor: t.surface, overflow: "hidden" }}>
       {children}
     </View>
   );

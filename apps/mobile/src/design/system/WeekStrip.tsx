@@ -6,7 +6,7 @@ import { FONT_DISPLAY } from "./typography";
 
 /**
  * `.week-strip` / `.day-chip` (mockup §01 phone): seven 52pt day chips — surface gradient at
- * rest, cobalt gradient + cobalt shadow when active, a 4px aqua dot on days with swings.
+ * rest, cobalt gradient when active, a 4px aqua dot on days with swings.
  */
 export interface WeekDay {
   /** Two-letter day label, e.g. "MO". */
@@ -71,14 +71,14 @@ export function WeekStrip({
           <LinearGradient
             key={day.label + day.dayOfMonth}
             colors={[t.cobalt, t.cobaltPressed]}
-            style={{ ...shared, ...t.shadowCobalt }}
+            style={shared}
           >
             {inner}
           </LinearGradient>
         ) : (
           <View
             key={day.label + day.dayOfMonth}
-            style={{ ...shared, backgroundColor: t.surface, ...t.shadowSm }}
+            style={{ ...shared, backgroundColor: t.surface }}
           >
             {inner}
           </View>

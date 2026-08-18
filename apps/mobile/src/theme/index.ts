@@ -15,7 +15,7 @@
  * deck system layered on them, keep importing `COLORS`; nothing themed may.
  */
 export { AQUA, COBALT, LAVENDER, NAVY, SEMANTIC } from "./palette";
-export { DARK, LIGHT, type ShadowStyle, type Theme } from "./themes";
+export { DARK, LIGHT, type Theme } from "./themes";
 import { AQUA, DARK_SURFACES, LAVENDER, NAVY, SEMANTIC, VIDEO_AMBER } from "./palette";
 export {
   FixedDarkTheme,

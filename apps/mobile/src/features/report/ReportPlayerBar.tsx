@@ -149,13 +149,6 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    ...{
-      shadowColor: "#43CDD0",
-      shadowOffset: { width: 0, height: 12 },
-      shadowRadius: 13,
-      shadowOpacity: 0.28,
-      elevation: 8,
-    },
   },
   playFace: {
     flex: 1,

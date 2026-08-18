@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -15,9 +15,12 @@ import {
   HeroBackdrop,
   ScoreOrb,
   ScoreRing,
+  HERO_PARALLAX,
+  HERO_SHEET_GAP,
   SheetOverBackdrop,
   formatDayTitle,
   useChromeScroll,
+  WAVE_NAV_CLEARANCE,
 } from "../design/system";
 import { FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
 import { StatusMessage } from "../design/StatusMessage";
@@ -43,7 +46,12 @@ export function SwingLogScreen() {
   const insets = useSafeAreaInsets();
   const t = useTheme();
   const styles = useStyles();
-  const onChromeScroll = useChromeScroll();
+  const { onScroll: onChromeScroll, chromePx } = useChromeScroll();
+  // Measured once the hero lays out; until then the previous hand-tuned height keeps the first
+  // frame in the right place, so nothing jumps.
+  const [heroHeight, setHeroHeight] = useState<number | null>(null);
+  const backdropHeight =
+    heroHeight === null ? 330 + insets.top : heroHeight + 74 + HERO_SHEET_GAP;
 
   const sessions = useMemo(
     () => (state.kind === "ok" ? sessionize(state.swings) : []),
@@ -54,8 +62,16 @@ export function SwingLogScreen() {
   const log = useMemo(() => logStats(sessions), [sessions]);
 
   const hero = (
-    <HeroBackdrop>
-      <View style={[styles.heroContent, { paddingTop: insets.top + APP_HEADER_BAR }]}>
+    <HeroBackdrop overscan={HERO_PARALLAX.cap}>
+      <View
+        style={[styles.heroContent, { paddingTop: insets.top + APP_HEADER_BAR }]}
+        // The sheet's resting edge is derived from this, so the gap below the hero is the same
+        // on every hero screen instead of falling out of a hand-tuned backdrop height.
+        onLayout={(e) => {
+          const h = Math.round(e.nativeEvent.layout.height);
+          setHeroHeight((prev) => (prev === h ? prev : h));
+        }}
+      >
         {/* The brand + profile door live in the floating AppHeader above; the hero keeps
             only the screen's own title. */}
         <Text style={styles.heroTitle}>Swing Log</Text>
@@ -101,8 +117,8 @@ export function SwingLogScreen() {
     <SheetOverBackdrop
       testID="swing-log"
       backdrop={hero}
-      backdropHeight={330 + insets.top}
-      parallax={{ factor: 0.22, cap: 72 }}
+      backdropHeight={backdropHeight}
+      parallax={HERO_PARALLAX}
       // 0 = the sheet rests at the backdrop's edge on first paint. The mockup's 170 rode the
       // card halfway up the hero, which read as the sheet covering the screen (Taylor 2026-08-17).
       initialOffset={0}
@@ -118,7 +134,7 @@ export function SwingLogScreen() {
         />
       }
     >
-      <View style={[styles.sheetContent, { paddingBottom: 120 + insets.bottom }]}>
+      <View style={[styles.sheetContent, { paddingBottom: 120 + WAVE_NAV_CLEARANCE + insets.bottom }]}>
         {state.kind === "loading" ? (
           <View style={styles.centre} testID="swing-log-loading">
             <ActivityIndicator color={t.muted} />
@@ -201,6 +217,7 @@ export function SwingLogScreen() {
 
     <AppHeader
       hero
+      chromePx={chromePx}
       onProfile={() => navigation.navigate("Profile")}
       profileTestID="swing-log-profile"
     />
@@ -273,7 +290,6 @@ const useStyles = themedStyles((t) => ({
     padding: 16,
     borderRadius: 14,
     backgroundColor: t.surface,
-    ...t.shadowSm,
   },
   olderMeta: {
     marginTop: 4,

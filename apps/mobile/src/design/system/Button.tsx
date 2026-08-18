@@ -16,7 +16,7 @@ import { FONT_DISPLAY } from "./typography";
  * fill — the mockup's `:active`, which reads as the button being pushed in.
  *
  * The mockup's `.btn-secondary`/`.btn-danger` hairline borders become fills (the borderless
- * rule): secondary sits on `surface` with its shadow, danger on a 9% red tint.
+ * rule): secondary sits on `surface`, danger on a 9% red tint. Flat — no shadow.
  */
 export type ButtonVariant =
   | "primary"
@@ -42,29 +42,20 @@ export interface ButtonProps {
 function fills(t: Theme, variant: ButtonVariant, pressed: boolean) {
   switch (variant) {
     case "primary": // .btn-primary
-      return {
-        bg: pressed ? t.cobaltPressed : t.cobalt,
-        fg: t.onDark,
-        shadow: t.shadowCobalt,
-      };
+      return { bg: pressed ? t.cobaltPressed : t.cobalt, fg: t.onDark };
     case "performance": // .btn-performance — aqua fill, navy text
-      return {
-        bg: t.aqua,
-        fg: t.mode === "dark" ? "#10204A" : t.text,
-        shadow: t.shadowAqua,
-      };
+      return { bg: t.aqua, fg: t.mode === "dark" ? "#10204A" : t.text };
     case "secondary": // .btn-secondary
-      return { bg: pressed ? t.surface2 : t.surface, fg: t.text, shadow: t.shadowSm };
+      return { bg: pressed ? t.surface2 : t.surface, fg: t.text };
     case "ghost": // .btn-ghost
-      return { bg: pressed ? t.surface2 : "transparent", fg: t.textSoft, shadow: null };
+      return { bg: pressed ? t.surface2 : "transparent", fg: t.textSoft };
     case "danger": // .btn-danger — 9% red fill, red text
       return {
         bg: pressed ? "rgba(229,87,100,0.16)" : "rgba(229,87,100,0.09)",
         fg: t.bad,
-        shadow: null,
       };
     case "icon": // .btn-icon — glass square
-      return { bg: pressed ? t.surface2 : t.glass, fg: t.text, shadow: t.shadowSm };
+      return { bg: pressed ? t.surface2 : t.glass, fg: t.text };
   }
 }
 
@@ -110,7 +101,6 @@ export function Button({
           opacity: disabled ? 0.45 : 1,
           transform: [{ translateY: pressed ? 1 : 0 }],
         },
-        f.shadow,
         style,
       ]}
     >

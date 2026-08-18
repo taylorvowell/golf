@@ -1,11 +1,9 @@
 import {
   AQUA,
-  BLACK,
   COBALT,
   DARK_SURFACES,
   LAVENDER,
   LIGHT_SURFACES,
-  NAVY,
   ON_DARK,
   SEMANTIC,
 } from "./palette";
@@ -23,18 +21,6 @@ import {
  * alias layer (`panel`, `accent`, `violet`, …) died in step 09 — every screen reads these
  * names and only these.
  */
-
-/**
- * A ready-to-spread RN shadow: iOS `shadow*` plus an Android `elevation` approximation.
- * `shadowRadius` is the CSS blur halved — iOS blurs roughly twice as wide per point.
- */
-export interface ShadowStyle {
-  shadowColor: string;
-  shadowOffset: { width: number; height: number };
-  shadowRadius: number;
-  shadowOpacity: number;
-  elevation: number;
-}
 
 /** The Ideal Swing token set proper — everything a rebuilt screen reads. */
 export interface IdealTokens {
@@ -86,12 +72,6 @@ export interface IdealTokens {
   bad: string;
   /** Text/glyphs on a cobalt, hero or photo fill — white in both themes. */
   onDark: string;
-
-  shadowSm: ShadowStyle;
-  shadowMd: ShadowStyle;
-  shadowLg: ShadowStyle;
-  shadowCobalt: ShadowStyle;
-  shadowAqua: ShadowStyle;
 }
 
 /** What components consume: the Ideal Swing tokens, nothing else. */
@@ -108,43 +88,6 @@ const LIGHT_BASE: IdealTokens = {
   good: SEMANTIC.good,
   bad: SEMANTIC.bad,
   onDark: ON_DARK,
-  // Mockup: 0 4px 12px rgba(20,36,79,.055) / 0 12px 30px .085 / 0 26px 70px .16
-  shadowSm: {
-    shadowColor: NAVY[800],
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 6,
-    shadowOpacity: 0.055,
-    elevation: 2,
-  },
-  shadowMd: {
-    shadowColor: NAVY[800],
-    shadowOffset: { width: 0, height: 12 },
-    shadowRadius: 15,
-    shadowOpacity: 0.085,
-    elevation: 6,
-  },
-  shadowLg: {
-    shadowColor: NAVY[800],
-    shadowOffset: { width: 0, height: 26 },
-    shadowRadius: 35,
-    shadowOpacity: 0.16,
-    elevation: 14,
-  },
-  // 0 12px 28px rgba(47,70,207,.20) / rgba(67,205,208,.22)
-  shadowCobalt: {
-    shadowColor: COBALT[600],
-    shadowOffset: { width: 0, height: 12 },
-    shadowRadius: 14,
-    shadowOpacity: 0.2,
-    elevation: 8,
-  },
-  shadowAqua: {
-    shadowColor: AQUA[500],
-    shadowOffset: { width: 0, height: 12 },
-    shadowRadius: 14,
-    shadowOpacity: 0.22,
-    elevation: 8,
-  },
 };
 
 const DARK_BASE: IdealTokens = {
@@ -159,43 +102,6 @@ const DARK_BASE: IdealTokens = {
   good: SEMANTIC.good,
   bad: SEMANTIC.bad,
   onDark: ON_DARK,
-  // Mockup dark: 0 4px 12px rgba(0,0,0,.20) / 0 12px 30px .28 / 0 26px 70px .42
-  shadowSm: {
-    shadowColor: BLACK,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 6,
-    shadowOpacity: 0.2,
-    elevation: 2,
-  },
-  shadowMd: {
-    shadowColor: BLACK,
-    shadowOffset: { width: 0, height: 12 },
-    shadowRadius: 15,
-    shadowOpacity: 0.28,
-    elevation: 6,
-  },
-  shadowLg: {
-    shadowColor: BLACK,
-    shadowOffset: { width: 0, height: 26 },
-    shadowRadius: 35,
-    shadowOpacity: 0.42,
-    elevation: 14,
-  },
-  // 0 12px 30px rgba(47,70,207,.25) / rgba(67,205,208,.16)
-  shadowCobalt: {
-    shadowColor: COBALT[600],
-    shadowOffset: { width: 0, height: 12 },
-    shadowRadius: 15,
-    shadowOpacity: 0.25,
-    elevation: 8,
-  },
-  shadowAqua: {
-    shadowColor: AQUA[500],
-    shadowOffset: { width: 0, height: 12 },
-    shadowRadius: 15,
-    shadowOpacity: 0.16,
-    elevation: 8,
-  },
 };
 
 export const LIGHT: Theme = LIGHT_BASE;

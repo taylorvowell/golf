@@ -8,8 +8,8 @@ import { DECK } from "./tokens";
  *
  * Three states, and they are three different physical situations rather than three styles:
  *
- *   * **raised** — at rest, standing proud. Lit on its top rim, casting a shadow below.
- *   * **pressing** — a finger is on it. The cast shadow collapses and the cap moves down by
+ *   * **raised** — at rest, standing proud. Lit on its top rim, dark on its underside.
+ *   * **pressing** — a finger is on it. The rim highlight dims and the cap moves down by
  *     `DECK.travel`; nothing else changes, because a finger on a button does not recolour it.
  *   * **sunk** — pushed in and latched there. The whole lighting model inverts: dark at the top
  *     where the rim now overhangs, light at the floor. This is a *state*, not a gesture, which is

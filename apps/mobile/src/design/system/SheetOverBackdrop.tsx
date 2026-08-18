@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import {
   Animated,
   Pressable,
-  StyleSheet,
   View,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -37,10 +36,29 @@ import { SheetHandle } from "./SheetHandle";
  * listener only flips React state on threshold CROSSINGS, never per frame — cold code, but
  * the player's discipline anyway.
  */
+/** The hero screens' parallax, in one place — the backdrop's `overscan` must match its `cap`,
+ *  and two screens copying both numbers is how those two drift apart. */
+export const HERO_PARALLAX = { factor: 0.22, cap: 72 } as const;
+
+/**
+ * The breathing room between the bottom of a hero's content and the top edge of the sheet that
+ * rises over it.
+ *
+ * Declared, not tuned. `backdropHeight` used to be a hand-picked constant per screen (330 on the
+ * log, 424 on Progress) with no relationship to what the hero actually contained, so the gap was
+ * whatever fell out of two numbers chosen independently — and it fell out different (Taylor,
+ * 2026-08-18). Screens now MEASURE their hero and set
+ * `backdropHeight = heroHeight + overlap + HERO_SHEET_GAP`, which makes the sheet's top edge land
+ * exactly this far below the content on every screen, and keeps doing so when the content
+ * changes.
+ */
+export const HERO_SHEET_GAP = 20;
+
 export function SheetOverBackdrop({
   backdrop,
+  overscan,
   backdropHeight,
-  parallax = { factor: 0.22, cap: 72 },
+  parallax = HERO_PARALLAX,
   openThreshold = 60,
   initialOffset = 0,
   overlap = 74,
@@ -61,6 +79,10 @@ export function SheetOverBackdrop({
 }: {
   /** The fixed layer (a `HeroBackdrop`, the report's video). Fills the screen. */
   backdrop: ReactNode;
+  /** What to paint in the strip the parallax uncovers above the backdrop. Defaults to the hero
+   *  gradient's first stop, which is right for every `HeroBackdrop`; a backdrop that is not one
+   *  (the report's video layer) passes its own ground. */
+  overscan?: string;
   /** How much of the backdrop shows above the sheet's resting edge (the spacer height). */
   backdropHeight: number;
   parallax?: { factor: number; cap: number };
@@ -211,11 +233,27 @@ export function SheetOverBackdrop({
 
   return (
     <View style={{ flex: 1 }} testID={testID}>
-      {/* The fixed backdrop, sinking under the sheet at the parallax rate. */}
+      {/* The fixed backdrop, sinking under the sheet at the parallax rate.
+          The layer is `parallax.cap` TALLER THAN THE SCREEN, extending above it, because
+          sinking is exactly what uncovers its own top edge: at full parallax the old
+          `absoluteFill` had translated `cap` px down and the screen's own ground showed as a
+          bar across the top. The overscan strip is painted rather than filled with the
+          backdrop itself so the backdrop's children keep their original position — the
+          gradient's first stop is this colour, so the join is invisible. */}
       <Animated.View
-        style={[StyleSheet.absoluteFill, { transform: [{ translateY: parallaxY }] }]}
+        pointerEvents="box-none"
+        style={{
+          position: "absolute",
+          top: -parallax.cap,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: overscan ?? t.heroStart,
+          transform: [{ translateY: parallaxY }],
+        }}
       >
-        {backdrop}
+        <View style={{ height: parallax.cap }} pointerEvents="none" />
+        <View style={{ flex: 1 }}>{backdrop}</View>
       </Animated.View>
 
       <Animated.ScrollView
@@ -284,7 +322,6 @@ export function SheetOverBackdrop({
               borderTopLeftRadius: 30,
               borderTopRightRadius: 30,
               backgroundColor: t.bgElevated,
-              ...t.shadowLg,
               transform: [{ translateY: sheetY }],
             },
             sheetStyle,

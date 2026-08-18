@@ -34,7 +34,6 @@ export function Chip({
               paddingHorizontal: 10,
               borderRadius: 5,
               backgroundColor: t.surface,
-              ...t.shadowSm,
             },
         { alignSelf: "flex-start", alignItems: "center", justifyContent: "center" },
         style,

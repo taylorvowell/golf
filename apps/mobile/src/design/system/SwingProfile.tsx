@@ -124,7 +124,6 @@ export function SwingProfile({
                 // The mockup's 0-0-0-4px surface halo — a shape-drawing ring, not an outline.
                 borderWidth: nodeRing,
                 borderColor: t.surface,
-                ...t.shadowSm,
               }}
             />
           );
@@ -144,7 +143,6 @@ export function SwingProfile({
             borderRadius: 999,
             alignItems: "center",
             justifyContent: "center",
-            ...t.shadowMd,
           }}
         >
           <Text
@@ -184,7 +182,6 @@ export function SwingProfile({
             padding: compact ? 5 : 8,
             borderRadius: compact ? 4 : 6,
             backgroundColor: t.surface,
-            ...t.shadowSm,
             ...calloutPos[call.slot],
           }}
         >
