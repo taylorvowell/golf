@@ -120,7 +120,7 @@ export function BrandLogo({
 }) {
   const t = useTheme();
   const wordColor = color ?? (t.mode === "dark" ? "#FFFFFF" : BRAND_INK);
-  const width = height * (305.16 / 73.45);
+  const width = height * (305.15 / 73.45);
   return (
     <View
       accessibilityRole="image"

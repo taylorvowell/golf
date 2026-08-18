@@ -143,9 +143,7 @@ export function AppHeader({
           gap: 10,
         }}
       >
-        {/* Nudged down 2px against the profile cap: the wordmark's own optical centre sits
-            above its box's, so row-centring the two leaves the logo reading high. */}
-        <BrandLogo height={26} color={hero ? "#FFFFFF" : undefined} style={{ marginTop: 2 }} />
+        <BrandLogo height={26} color={hero ? "#FFFFFF" : undefined} />
         <Pressable
           testID={profileTestID}
           accessibilityRole="button"
