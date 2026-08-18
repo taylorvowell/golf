@@ -153,7 +153,7 @@ export function SwingProfile({
               fontFamily: FONT_DISPLAY.black,
               fontSize: compact ? 23 : 39,
               lineHeight: compact ? 20 : 33,
-              letterSpacing: -0.07 * (compact ? 23 : 39),
+              letterSpacing: -0.03 * (compact ? 23 : 39),
             }}
           >
             {score}

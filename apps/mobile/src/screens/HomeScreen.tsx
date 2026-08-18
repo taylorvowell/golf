@@ -12,7 +12,15 @@ import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { SwingSummary } from "@swingsage/schema/contract";
 
-import { Button, Chip, Delta, PerformanceCard, ScreenHeader } from "../design/system";
+import {
+  APP_HEADER_BAR,
+  AppHeader,
+  Button,
+  Chip,
+  Delta,
+  PerformanceCard,
+  useChromeScroll,
+} from "../design/system";
 import { FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
 import { StatusMessage } from "../design/StatusMessage";
 import { useAuth } from "../features/auth/AuthProvider";
@@ -36,7 +44,7 @@ import { COLORS, themedStyles, useTheme } from "../theme";
  *
  * The screen's single dominant card (§07) is the `PerformanceCard`: the recommendation that
  * recurred across the last session, with one promise of a button — **see it on your swing** —
- * which opens the player parked at the exact checkpoint the priority is about. The golfer's
+ * which opens the exemplar swing's report. The golfer's
  * own footage stays on the screen where it answers a question: the you-vs-pro compare strip
  * frozen at the coaching position, and the last session as a slider of swing photographs,
  * because "which one was the good one" is a question about pictures, not a table.
@@ -54,6 +62,7 @@ export function HomeScreen() {
   const { state, refreshing, refresh } = useSwings();
   const t = useTheme();
   const styles = useStyles();
+  const onChromeScroll = useChromeScroll();
 
   const sessions = useMemo(
     () => (state.kind === "ok" ? sessionize(state.swings) : []),
@@ -84,8 +93,6 @@ export function HomeScreen() {
 
   return (
     <View style={styles.root}>
-      <ScreenHeader brand onProfile={() => navigation.navigate("Profile")} />
-
       {state.kind === "loading" ? (
         <View style={styles.centre} testID="home-loading">
           <ActivityIndicator color={t.muted} />
@@ -112,13 +119,22 @@ export function HomeScreen() {
 
       {state.kind === "ok" ? (
         <ScrollView
-          contentContainerStyle={[styles.scroll, { paddingBottom: 28 + insets.bottom }]}
+          contentContainerStyle={[
+            styles.scroll,
+            {
+              paddingTop: insets.top + APP_HEADER_BAR + 4,
+              paddingBottom: 28 + insets.bottom,
+            },
+          ]}
+          onScroll={(e) => onChromeScroll(e.nativeEvent.contentOffset.y)}
+          scrollEventThrottle={16}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
               onRefresh={refresh}
               tintColor={t.muted}
               colors={[t.cobalt]}
+              progressViewOffset={insets.top + APP_HEADER_BAR}
             />
           }
         >
@@ -150,17 +166,17 @@ export function HomeScreen() {
           )}
         </ScrollView>
       ) : null}
+
+      <AppHeader onProfile={() => navigation.navigate("Profile")} />
     </View>
   );
 }
 
-/** The deep link every focus door shares: the player, parked where the fault is visible. */
+/** The deep link every focus door shares: the exemplar swing's report (the one player).
+ *  Parking at the priority's checkpoint is deferred until the report player learns it —
+ *  see the mobile-client decisions entry (2026-08-17). */
 function openOnSwing(navigation: Navigation, item: FocusItem): void {
-  navigation.navigate("SwingDetail", {
-    id: item.exemplarId,
-    afterSwing: true,
-    ...(item.checkpoint ? { checkpoint: item.checkpoint } : {}),
-  });
+  navigation.navigate("SwingDetail", { id: item.exemplarId });
 }
 
 /** §07's dominant card: the recommendation as the screen's one performance card. */
@@ -448,7 +464,7 @@ const PHOTO_SCRIM = "rgba(7,16,31,";
 const useStyles = themedStyles((t) => ({
   root: { flex: 1, backgroundColor: t.bg },
   centre: { flex: 1, alignItems: "center", justifyContent: "center" },
-  scroll: { paddingTop: 4, gap: 16 },
+  scroll: { gap: 16 },
   pressed: { opacity: 0.75 },
   tag: {
     color: t.muted,
@@ -537,7 +553,7 @@ const useStyles = themedStyles((t) => ({
     fontFamily: FONT_DISPLAY.extraBold,
     fontSize: 24,
     lineHeight: 25,
-    letterSpacing: -0.72,
+    letterSpacing: -0.48,
   },
   sessionMeta: { color: t.muted, fontFamily: FONT_BODY.regular, fontSize: 11.5 },
   deltaCol: { alignItems: "flex-end", gap: 3 },
@@ -618,7 +634,7 @@ const overPhoto = StyleSheet.create({
     color: COLORS.text,
     fontFamily: FONT_DISPLAY.black,
     fontSize: 26,
-    letterSpacing: -0.91,
+    letterSpacing: -0.52,
     fontVariant: ["tabular-nums"],
   },
   slideScoreBest: { color: COLORS.aqua },

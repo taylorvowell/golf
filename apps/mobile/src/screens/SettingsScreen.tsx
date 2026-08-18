@@ -1,12 +1,11 @@
-import { ScrollView, Switch, Text, View } from "react-native";
+import { ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ListGroup, ListRow, ListSectionLabel } from "../design/system";
 import { FONT_BODY } from "../design/system/typography";
-import { useSummaryPreference } from "../features/swings/useSummaryPreference";
 import { useAppNavigation } from "../navigation";
 import { CLIENT_VERSION } from "../platform/version";
-import { themedStyles, useTheme, useThemePreference, type ThemePreference } from "../theme";
+import { themedStyles, useThemePreference, type ThemePreference } from "../theme";
 
 /**
  * Settings — the app's real preferences, and only those. No placeholder toggles for features
@@ -15,14 +14,9 @@ import { themedStyles, useTheme, useThemePreference, type ThemePreference } from
  * the swing log's footer, which was only ever standing in for this screen.
  */
 
-/** Cobalt at 35/45% — the on-position switch track (the Tag pattern's named tints). */
-const COBALT_TRACK = { light: "rgba(47,70,207,0.35)", dark: "rgba(63,87,218,0.45)" } as const;
-
 export function SettingsScreen() {
   const navigation = useAppNavigation();
   const insets = useSafeAreaInsets();
-  const { statsFirst, set } = useSummaryPreference();
-  const t = useTheme();
   const styles = useStyles();
 
   return (
@@ -32,25 +26,6 @@ export function SettingsScreen() {
     >
       <ListSectionLabel>Appearance</ListSectionLabel>
       <AppearancePicker />
-
-      <ListSectionLabel>After a swing</ListSectionLabel>
-      <ListGroup>
-        <ListRow
-          title="Lead with the scorecard"
-          subtitle="Slide the summary up over the video after each swing"
-          right={
-            <Switch
-              testID="setting-stats-first"
-              value={statsFirst ?? true}
-              // Null means the stored value has not loaded yet — a flip written now would race it.
-              disabled={statsFirst === null}
-              onValueChange={set}
-              trackColor={{ false: t.surface3, true: COBALT_TRACK[t.mode] }}
-              thumbColor={statsFirst ? t.cobalt : t.muted}
-            />
-          }
-        />
-      </ListGroup>
 
       <ListSectionLabel>Account</ListSectionLabel>
       <ListGroup>

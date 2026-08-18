@@ -75,6 +75,43 @@ re-apply the same truncated `MIN_CONF` gate as everywhere else. A goal whose che
 camera view the golfer does not film must say so at assignment time, not sit at 0%.
 **See:** ARCHIVE D55; `PROJECT_MAIN.md` §16.3.
 
+### Guided drills are checked by a pose-only drill analysis mode, never the swing pipeline
+
+**Decision:** A drill (`PROJECT_MAIN.md` §18) is either **plain** (content only) or **guided** —
+carrying a versioned per-drill **check spec** (required view + handedness-aware targets;
+checkpoint type **hold** — judge the stable window — or **trigger** — judge at a kinematic
+event; checks from the existing measured-angle catalogue; per-rep verdicts hit / adjust /
+cannot-evaluate). Checking is record → analyze → verdict in seconds — **never a live
+client-side mirror**, which would move CV into the client. Verdicts are deterministic
+geometry; AI only rewrites the correction into coach prose. Hold drills build first; trigger
+drills second. Five placements (accepted 2026-08-17):
+1. **A pipeline profile, not a service or fork** — `services/analyzer/swingsage/drills/`
+   reuses stages 0/0b/2/3 byte-identical, then rep segmentation → drill metrics (existing
+   angle catalogue + `geom`) → verdicts. Never the swing pipeline on non-swing motion; no
+   club, no YOLO — the drill profile is CPU-only.
+2. **Spec/content split** — check specs are repo-versioned `drill_config/v<N>.json` beside
+   `scoring_config/`, engineering-authored and fixture-validated; drill *content* (video,
+   cues, mappings, active flag) is admin-managed DB rows carrying a nullable `check_id`.
+   Admin never authors geometry.
+3. **Sibling artifacts** — `drill_analysis.json` (49-keypoint block conventions, rep-array
+   shape from day one) + `drill_report.json` (per-rep verdicts, drawing geometry,
+   `drill_spec_version`), both in `packages/schema`, additive. `analysis.json` stays
+   swing-only. Verdicts are a pure function of artifact + spec — `redrill.py` re-verdicts
+   without re-inference, like `rescore.py`.
+4. **Structural quarantine** — rep/verdict data lives in `drill_attempts` (+ per-rep rows),
+   never in `swings`; storage keys `u/<userId>/d/<attemptId>/…`; same RLS/`withUser()`
+   boundary. Coach roll-ups are deterministic DB aggregates over these rows.
+5. **Same job seam, fast lane** — jobs carry `kind: swing | drill`; the worker design gives
+   short CPU-only drill jobs a priority class so "verdict in seconds" survives queueing.
+**Gotchas:** Confidence and abstention rules apply exactly as in swing scoring — the wrong
+camera angle says so at *drill selection time* (`required_view` in drill metadata), never
+guesses after recording. No existing fixture can test a drill check (all are full DTL
+right-handed swings); drill fixtures are filmed as **pairs — correct AND characteristically
+wrong execution** — before any band is trusted, and `scripts/checkdrill.py` is built with the
+first check, not after.
+**See:** ARCHIVE D59; `PROJECT_MAIN.md` §18;
+`.claude/architecture/guided-drills-architecture-2026-08-17.md`.
+
 ### Never fabricate a face-angle number from video
 
 **Decision:** Video yields checkpoint **classifications** (square/open/closed) only. Degrees

@@ -78,7 +78,7 @@ const styles = StyleSheet.create({
     fontFamily: FONT_DISPLAY.black,
     fontSize: 28,
     lineHeight: 29,
-    letterSpacing: -0.98,
+    letterSpacing: -0.56,
   },
   sub: { color: COLORS.muted, fontFamily: FONT_BODY.regular, fontSize: 13, lineHeight: 20 },
   card: {

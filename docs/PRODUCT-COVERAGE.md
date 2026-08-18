@@ -127,6 +127,7 @@ coaching, billing, hosting) is unbuilt.
 | 16.3.7 | The Focus page — browsable area catalog (area = goal template viewed through measured performance), per-area averages + windowed trend arrows, area detail with focus-scoped pro comparison, train-this-focus entry | ⬜ | Added 2026-08-14 (D56). Nothing exists. Owning track: `goal-progression` (comparison scope: `comparison-and-reference`; log rendering: `history-and-trends`). |
 | 17 | AI Coach — swing-aware conversation, personalized context, scoped to swing/session/history/plan | ⬜ | Nothing. No provider abstraction, no prompts, no conversation storage. |
 | 18 | Preconfigured drill library, findings→drills mapping, admin-managed | ⬜ | Each check carries a one-line `fix` string. That is not a drill library. |
+| 18.1–18.4 | Guided drills — per-drill check spec (hold/trigger), pose-only drill analysis mode, "Check my form" rep loop, coach roll-up, metric quarantine | ⬜ | Added 2026-08-17 (D59). Nothing exists; needs a new analyzer mode and a new fixture class (no current fixture is drill footage). Owning track: `drill-library`. |
 
 ### 19–22. Comparison, reference library, history, launch data
 

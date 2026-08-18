@@ -107,7 +107,7 @@
       "spine": false,
       "lifecycle": "active",
       "phase": "foundation",
-      "goal": "Promote the analyzer from a hand-invoked CLI to a hosted, queue-driven worker reading and writing object storage. FIRST STEP is a measurement, not a deploy: pose inference currently runs on CPU and only the club detector uses GPU, so measure CPU-vs-CUDA pose on this pipeline and let that choose the host (D18 reopened Railway, which has no GPU). Then the capacity and cost model, per-user fair queuing so one workload cannot degrade everyone else's (§38), backpressure, retry/dead-letter handling, and a validated analysis-latency SLO.",
+      "goal": "Promote the analyzer from a hand-invoked CLI to a hosted, queue-driven worker reading and writing object storage. FIRST STEP is a measurement, not a deploy: pose inference currently runs on CPU and only the club detector uses GPU, so measure CPU-vs-CUDA pose on this pipeline and let that choose the host (D18 reopened Railway, which has no GPU). Then the capacity and cost model, per-user fair queuing so one workload cannot degrade everyone else's (§38), backpressure, retry/dead-letter handling, and a validated analysis-latency SLO. The job model carries a kind discriminator (swing | drill, D59) and priority classes from day one — guided-drill jobs are short and CPU-only and must not queue behind swing club-tracking for the 'verdict in seconds' loop (.claude/architecture/guided-drills-architecture-2026-08-17.md).",
       "statusFile": ".claude/feature-tracks/analyzer-service/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#32-analysis-processing-experience",
@@ -437,15 +437,17 @@
       "spine": false,
       "lifecycle": "planned",
       "phase": "coaching",
-      "goal": "A managed, preconfigured drill library with finding-to-drill mappings — explicitly not drills invented per-response by the AI. Content is authored and curated through the admin surface.",
+      "goal": "A managed, preconfigured drill library with finding-to-drill mappings — explicitly not drills invented per-response by the AI. Content is authored and curated through the admin surface. Drills classify as plain (content only) or guided (D59): a guided drill carries a versioned check spec and a pose-only drill analysis mode in the analyzer verifies execution per rep ('Check my form') — hold drills first, trigger drills second. Launch scope, core function. BINDING DESIGN: the accepted architecture in .claude/architecture/guided-drills-architecture-2026-08-17.md (pipeline profile not a service; repo-versioned drill_config split from DB content; sibling drill_analysis.json/drill_report.json artifacts, analysis.json untouched; structural quarantine via drill_attempts tables, never swings; redrill.py + checkdrill.py built with the first check). FIRST HANDOFF when this track starts: film drill fixture pairs — correct AND wrong execution — no existing fixture can test a drill check.",
       "statusFile": ".claude/feature-tracks/drill-library/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#18-training-drills-and-exercises",
-        ".claude/ai-instructions/PROJECT_MAIN.md#312-drill-library-management"
+        ".claude/ai-instructions/PROJECT_MAIN.md#312-drill-library-management",
+        ".claude/architecture/guided-drills-architecture-2026-08-17.md"
       ],
       "owns": [
         "apps/web/src/db/drills.ts",
-        "apps/mobile/src/features/drills"
+        "apps/mobile/src/features/drills",
+        "services/analyzer/swingsage/drills"
       ],
       "dependsOn": [
         {

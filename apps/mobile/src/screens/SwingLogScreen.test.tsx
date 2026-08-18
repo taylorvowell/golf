@@ -64,21 +64,11 @@ describe("SwingLogScreen", () => {
   it("lists the golfer's swings", async () => {
     mockRequest.mockResolvedValue({ swings: [swing()] });
     // The score renders in several mockup slots at once (hero ring, avg box, swing ring) —
-    // what is pinned is that the label and the ROUNDED score are on screen, not slot count.
+    // what is pinned is that the numbered swing row and the ROUNDED score are on screen, not
+    // slot count. Rows say "Swing N", never `label` — golfers do not type titles.
     const { getByText, getAllByText } = await render(<SwingLogScreen />);
-    await waitFor(() => expect(getByText("Driver — 12 Aug")).toBeTruthy());
+    await waitFor(() => expect(getByText("Swing 1")).toBeTruthy());
     expect(getAllByText("72").length).toBeGreaterThan(0);
-  });
-
-  it("opens the after-swing preview on the newest swing", async () => {
-    // The temporary door into the after-swing screen — it leaves when the capture flow starts
-    // navigating there itself. Pinned so it cannot silently open the ordinary player instead.
-    mockRequest.mockResolvedValue({ swings: [swing()] });
-    const { getByTestId } = await render(<SwingLogScreen />);
-    await waitFor(() => expect(getByTestId("open-after-swing")).toBeTruthy());
-
-    fireEvent.press(getByTestId("open-after-swing"));
-    expect(mockNavigate).toHaveBeenCalledWith("SwingDetail", { id: "s-1", afterSwing: true });
   });
 
   it("never renders a network failure as an empty swing log", async () => {

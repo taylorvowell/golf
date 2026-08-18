@@ -60,65 +60,30 @@ export function sessionStats(session: SwingSession): SessionStats {
   };
 }
 
-/** A deterministic session name from its start hour — the mockup's "Afternoon Practice". */
-export function sessionTitle(session: SwingSession): string {
-  const hour = new Date(session.start).getHours();
-  if (hour < 12) return "Morning Practice";
-  if (hour < 17) return "Afternoon Practice";
-  return "Evening Practice";
+/** The whole log in four numbers — the hero's overview (counts + all-swings average). */
+export interface LogStats {
+  sessions: number;
+  swings: number;
+  /** Rounded mean over every scored swing in the log, or null when nothing scored. */
+  avg: number | null;
+  best: number | null;
 }
 
-export interface WeekDayCell {
-  /** Single-letter day label, the mockup's strip. */
-  label: string;
-  dayOfMonth: number;
-  /** Today. */
-  active: boolean;
-  /** Any swing landed that day. */
-  hasSwings: boolean;
-}
-
-/** The trailing 7 days ending today — the `.week-strip`. */
-export function weekMap(sessions: SwingSession[], now: number): WeekDayCell[] {
-  const swingDays = new Set<string>();
+export function logStats(sessions: SwingSession[]): LogStats {
+  let swings = 0;
+  const scored: number[] = [];
   for (const session of sessions) {
+    swings += session.swings.length;
     for (const swing of session.swings) {
-      swingDays.add(new Date(createdAtMs(swing)).toDateString());
+      if (typeof swing.overallScore === "number") scored.push(swing.overallScore);
     }
   }
-  const letters = ["S", "M", "T", "W", "T", "F", "S"];
-  const days: WeekDayCell[] = [];
-  for (let back = 6; back >= 0; back--) {
-    const d = new Date(now);
-    d.setDate(d.getDate() - back);
-    days.push({
-      label: letters[d.getDay()],
-      dayOfMonth: d.getDate(),
-      active: back === 0,
-      hasSwings: swingDays.has(d.toDateString()),
-    });
-  }
-  return days;
-}
-
-/**
- * The hero headline — deterministic, from the data alone: strongest of the trailing week
- * beats "most recent", and nothing scored says so honestly.
- */
-export function heroHeadline(sessions: SwingSession[], now: number): string {
-  const latest = sessions[0];
-  if (!latest) return "";
-  const stats = sessionStats(latest);
-  if (stats.avg === null) return "Your latest session is not scored yet.";
-  const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
-  const weekBest = sessions
-    .filter((s) => s.end >= weekAgo)
-    .map((s) => sessionStats(s).avg)
-    .filter((v): v is number => v !== null);
-  if (weekBest.length >= 2 && stats.avg >= Math.max(...weekBest)) {
-    return "Your strongest session this week.";
-  }
-  return "Your most recent session.";
+  return {
+    sessions: sessions.length,
+    swings,
+    avg: scored.length ? Math.round(scored.reduce((a, b) => a + b, 0) / scored.length) : null,
+    best: scored.length ? Math.round(Math.max(...scored)) : null,
+  };
 }
 
 /** Newest session first; swings inside each session oldest first. */

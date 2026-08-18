@@ -7,11 +7,5 @@ import type { RootStackParamList } from "../navigation";
 export function SwingDetailRoute({
   route,
 }: NativeStackScreenProps<RootStackParamList, "SwingDetail">) {
-  return (
-    <SwingDetailScreen
-      id={route.params.id}
-      afterSwing={route.params.afterSwing ?? false}
-      checkpoint={route.params.checkpoint ?? null}
-    />
-  );
+  return <SwingDetailScreen id={route.params.id} />;
 }

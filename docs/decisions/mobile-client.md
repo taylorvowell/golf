@@ -345,9 +345,12 @@ app-wide). Type lives in `src/design/system/typography.ts` (`FONT_DISPLAY`/
 `FONT_BODY` weight maps + the six-step `TYPE` scale, em-tracking converted to absolute px); the
 wordmark constant in `src/design/system/brand.ts`. Fonts load in `App.tsx` before the first frame
 (splash holds; a font error degrades to the system face rather than holding the splash).
-**Named deviations from pixel-exactness** (each deliberate, none silent): display type is **Barlow
-Semi Condensed** + **Inter** body, bundled via expo-font — Bahnschrift is Windows-licensed and
-cannot ship; glass surfaces are near-opaque theme fills, not backdrop blur (`expo-blur` stays out
+**Named deviations from pixel-exactness** (each deliberate, none silent): display type is **Sora**
++ **Inter** body, bundled via expo-font — Bahnschrift is Windows-licensed and cannot ship, and the
+condensed stand-in (Barlow Semi Condensed) read as bulky and hard to scan on device, so the display
+face is deliberately non-condensed: each `FONT_DISPLAY` key maps one weight lighter than its name
+and display tracking sits near -2% (typography.ts holds the mapping and the why); glass surfaces
+are near-opaque theme fills, not backdrop blur (`expo-blur` stays out
 until a fill provably fails); conic-gradient score rings render as SVG arcs; and every
 "Ideal Swing" string in the mockups renders as **SwingSage** — settled by the real logo Taylor
 supplied (wordmark reads *Swingsage*; master lockup at
@@ -361,26 +364,46 @@ dark, brand charcoal on light). Home's `ScreenHeader` carries the lockup in plac
 `design/system/ListRow.tsx` — `ListGroup` (a `.panel` surface, radius 11, shadowSm) of
 `ListRow`s where selection is the `surfaceBlue` fill + cobalt title (§12: cobalt = selected,
 never a border) and pressed is a `surface2` fill, plus `ListSectionLabel` (the `.panel-head`
-label face standing alone); the light-ground tab header is `design/system/ScreenHeader.tsx` —
-the hero screens' top-row idiom (brand eyebrow + display title, or the `BrandLogo` lockup on
-Home) with the cobalt more-circle as the profile door on every tab.
+label face standing alone); the tab header is `design/system/AppHeader.tsx` — one persistent
+floating bar on every tab: the `BrandLogo` lockup left, the cobalt more-circle (the profile
+door) right. Screens keep their own display titles in their content/hero; the header never
+carries a title. It floats over the screen (each tab pads its scroll by `APP_HEADER_BAR` + the
+top inset) and is **transparent at every scroll position** — no ground of its own, the
+screen's surface always shows through it.
 **Consequences:** `lucide-react-native` (pure JS over the shipped `react-native-svg`) is the icon
-source for system components, superseding drawn-View glyphs there; SVG's allowed scope widens to
+source for system components, superseding drawn-View glyphs there — except where Taylor
+supplies the art: supplied single-colour icons live in the **brand icon registry**
+(`design/system/brandIconPaths.ts`, art data verbatim, named for meaning — `tempo`, not
+`metronome`) and render through `BrandIcon` (bare glyph, caller's colour as fill — the Coach
+tab) or `BrandIconThumb` (the glyph on StickThumb's exact bed — Progress category tiles,
+where an `icon` on a priority/trend entry supersedes its placeholder stick figure). Adding an
+icon is one registry entry; no new components; SVG's allowed scope widens to
 `design/gauges` **and** `design/system`; `expo-linear-gradient` renders the hero/performance
 gradients. Chrome (nav bars, player controls) may hide **only as a deterministic function of
 scroll position** — the mockup's behaviour — never tap-to-hide and never on a timer; that amends
-the earlier absolute no-hiding rule.
-**The swing screen's shapes (design-system step 06):** opening a swing from the log (review) is
-the **report sheet** on the `SheetOverBackdrop` scaffold and follows the **ambient theme**; the
-after-swing (`afterSwing`) and checkpoint deep-link shapes keep the `SwingPlayer` surface,
-pinned dark. The report's backdrop is the swing's still frame until the live player joins it as
-the video layer (step 07). The report's dock ships Back / Delete / Favorite / Latest — "End
-session" waits for practice-loop's session entity.
+the earlier absolute no-hiding rule. On the tab screens the function is **scroll direction**
+(Taylor 2026-08-17): a downward run hides both the `AppHeader` and the wave tab bar, an upward
+run brings them back, and the top of a screen always shows them. The flip distance is
+**15% of the window height** (`CHROME_RUN_FRACTION`) in either direction — a drag that small
+is not intent, so an incidental touch never moves the chrome.
+`useChromeScroll` (in `navVisibility.ts`) is the one sanctioned driver; its pure step function
+carries a reversal anchor so finger jitter never strobes the bars. The `hidden` flag is global
+— a tab switch requires a visible bar, so the next screen inherits shown chrome by
+construction. The swing screen's own chrome (`SessionPillNav`, the report controls) keeps its
+separate open/closed scroll rule and does not ride this flag.
+**The swing screen's ONE shape (Taylor 2026-08-17 — the legacy `SwingPlayer` surface and its
+`afterSwing`/`checkpoint` route params are DELETED; two player types was tech debt):** every
+door — log row, Home's focus cards and you-vs-pro strip, Coach's scorecard link, and the
+future capture flow — opens the **report sheet** on the `SheetOverBackdrop` scaffold, ambient
+theme. The report's dock ships Back / Delete / Favorite / Latest — "End session" waits for
+practice-loop's session entity.
 **Report stacking and doors:** the layer order is fixed at video < controls shell < sheet card —
 the scaffold hosts `backdropOverlay` **inside** the scroll surface (counter-translated to stay
 screen-fixed) so the card always paints over the chrome and the controls still take touches.
 Every full-bleed page's way out is the **`FloatingBack` orb** pinned top-left over everything
-(the report's sheet lost its in-card back — one back per region). The report sheet holds low
+(the report's sheet lost its in-card back — one back per region). Its top-right mirror in
+video-open is the **layers orb** (lucide `Layers2`, same glass) — the overlays sheet's one
+opener; the transport bar carries no overlays pill (Taylor 2026-08-17). The report sheet holds low
 with `Skeleton` placeholders until the report is real, then slides up as its entrance
 (`presented`), and a tap on the covered video (`onBackdropTap`) scrolls the sheet open, which is
 also what starts playback.
@@ -401,12 +424,11 @@ cue left. **Depth survives washout where colour does not**, and it gives state s
 that is not colour. `DeckButton` separates a *latched* state (`depressed`, the caller's) from a
 *finger-down* state (its own) — conflating them would pop the pause cap back out the instant the
 finger lifted, which is exactly when a golfer looks at it.
-**Scope — what remains after the design-system track:** the report surfaces were absorbed by
-`design/system` (steps 06–07), and step 09 deleted the glyphs nothing uses (`PersonGlyph`,
-`HouseGlyph`, `RowsGlyph`). Deck still serves the `SwingPlayer` after-swing/checkpoint surface
-(console, dock, sheets, remaining glyphs) and will be absorbed when **in-app-capture** rebuilds
-the capture/after-swing screens — that absorption is named future work, not this track's. No NEW
-surface may adopt Deck.
+**Scope — what remains:** the report surfaces were absorbed by `design/system` (steps 06–07),
+step 09 deleted the glyphs nothing uses, and the legacy `SwingPlayer` deletion (2026-08-17)
+took the console/dock/summary consumers with it — Deck now serves only `DeckSheet` (the
+report's tool sheets), `DeckButton`, and the glyphs those still draw. Full absorption lands
+with **in-app-capture**; no NEW surface may adopt Deck.
 Built on RN 0.86's `boxShadow` (multi-shadow, `inset`) and `experimental_backgroundImage`
 gradients; an earlier React Native would have needed nine-patch images for the same effect.
 
@@ -441,8 +463,8 @@ dark renders only when chosen or when the phone itself is dark. `userInterfaceSt
 "match my phone" can see a light OS).
 **The accent is one green with two exposures:** deep `#2A7F4F` on light surfaces (white text on
 it), the original acid `#A3E635` on dark ones — same brand, contrast-matched to the ground.
-**What stays dark in both themes:** the player, capture, and the after-swing surfaces (pinned via
-`FixedDarkTheme`), plus anything drawn **over a photograph or video frame** (Home's hero and
+**What stays dark in both themes:** capture (pinned via `FixedDarkTheme`) and the report's
+video-open chrome, plus anything drawn **over a photograph or video frame** (Home's hero and
 swing slides, compare chips, thumbnail grounds) — footage is its own dark surface, and those
 layers use the fixed `COLORS` palette and the accent's acid exposure deliberately.
 **Gotchas:** shared themed components rendered inside the player (the trend line) get their dark
@@ -555,11 +577,10 @@ tile to say what an angle looks like, and the chips choose which.
 
 **Decision:** The speed control is three rates — `1x` · `0.5x` · `0.1x` — and nothing else.
 Looping is permanently on and has no control. There is no frame-stepper overlay and no speed
-picker sheet. Two skins carry it: the after-swing/checkpoint player's dock keeps the **segmented
-slider** (the lit pill sliding between segments, play cap centred, **Metrics** and **Analysis**
-to the right), and the Ideal Swing report's video-open player bar draws the same three rates as
-the mockup's **pill group** (`.report-v2-speed`, slowest first) beside its aqua play cap and the
-**Overlays**/**Compare** pills (`ReportPlayerBar`).
+picker sheet. One skin carries it (the legacy dock died with `SwingPlayer`, 2026-08-17): the
+report's video-open player bar draws the three rates as the mockup's **pill group**
+(`.report-v2-speed`, slowest first) beside its aqua play cap and the **Compare** pill
+(`ReportPlayerBar`; the overlays opener is the top layers orb).
 **Gotchas:** Three speeds, not four — a quarter sat between two rates that already do their jobs
 (half is "the whole shape, slower", a tenth is for the transition, which is over in about four
 frames) and made each segment narrow enough to mis-tap. Labels are plain decimals: a `¼` glyph is a
@@ -572,83 +593,61 @@ stop-at-end when off.
 **Scope:** Speed is still applied natively (`setPlaybackSpeed`) — a JS timer would drop frames and
 show a tenth of the swing while calling it slow motion.
 
-### Every swing is a card over a fixed video; a just-recorded one adds the session chrome
+### One player: the legacy SwingPlayer surface is deleted
 
-**Decision:** `SwingPlayer` takes `mode: "review" | "session"` (review is the default; the
-`SwingDetail` route's `afterSwing?: boolean` param maps to session). The screen is a **fixed
-video that never moves with the scorecard card riding over it** (`SummaryCover`): the card is
-always on screen at one of two detents — up over the picture, or parked at a ~46pt bottom peek
-with the whole video exposed — and is draggable from anywhere on itself or the glass. The card
-is a full-screen `ScrollView` whose content is a transparent spacer plus the card, so the drag
-IS a native scroll; release inside the travel zone snaps by drag direction (down parks, up
-opens), and past the open detent the same gesture reads on through the card — one continuous
-scroll, no inner scroll view. Open heights: session rides high, leaving about an inch of video
-(the swing just happened; the card is the subject); review opens at **half the viewport** (an
-old swing was opened to be looked at). Sliding the card down starts playback; pulling it up
-interrupts nothing; a scorecard row slides it down *without* playing and lands paused on the
-frame it names. The report is fetched from mount in both modes.
-Because the cover's scroll surface takes every touch, **all tappable controls are layered above
-it**: the chrome (back, title, opener toggle), the transport console — pinned above the card's
-peek and rendered only while the card is down (its surface is covered when the card is up, like
-the overlay/compare chips, which hide the same way) — and the session dock. The dock mirrors
-the card: expanded while the card is up, folded to its tab while the video is the subject.
-What separates the modes is the session chrome only: the dock (record / star / delete / play),
-the stats/video opener preference (review always opens with the card; there is no preference to
-consult), and the open height. Review therefore has **no delete affordance** — delete lives in
-the session dock only. If review-mode swings later need their own card sections or actions,
-that is a `mode` prop on `AfterSwingSummary` / a second footer in the dock's slot — a local
-change, not a new screen. The capture flow will navigate here with `afterSwing: true`; until
-then the swing log carries a quiet "Preview the after-swing screen" header row.
-Which face a session screen opens with is the golfer's setting: the **opener toggle** (video ▸ /
-stats ▥) top-right in the chrome, stats-first by default, device-persisted
-(`useSummaryPreference`, the same account-sync seam as the star). Flipping to video-first while
-the card is up slides it down immediately — the setting looks like what it does — and video-first
-entry **plays without waiting for the analysis artifact**: only a parked start needs the window,
-and holding the replay hostage to a megabytes fetch is the wrong trade (the loop clamps into the
-window when it lands).
-**Gotchas (each measured on the emulator):** a `ScrollView` with `pointerEvents="box-none"`
-never starts a pan on Android, even from touches on its children — hence the layer-above-it
-design rather than pass-through. A release with velocity must NOT snap at `onScrollEndDrag`
-(the snap fights the native fling and the card rests mid-zone); the fling's own
-`onMomentumScrollEnd` snaps instead, and a fling that clamps at an edge still reconciles the
-detent bookkeeping. The initial placement re-runs on `onContentSizeChange` until the first
-touch — a `scrollTo` issued before the scroll view has content clamps to zero and parks the
-card closed on a screen that asked for it open. A JS `PanResponder` still cannot take a
-vertical pull from a native `ScrollView` (the original measurement stands), and
-`react-native-gesture-handler` stays excluded (D47) — the cover needs neither.
-**Scope:** Delete confirms in the client (`Alert`, destructive, names what is lost) and the screen
-above does the deleting and the leaving. The record cap says plainly that capture has not shipped
-yet. The **star is device-local** (`useStarred`, one AsyncStorage key) — the contract has no
-`starred` field yet, and that hook is the single seam to rewire when the additive field lands (D41).
+**Decision (Taylor 2026-08-17):** The app has **one player** — the report
+(`ReportVideoLayer` + `ReportSheet` on the `SheetOverBackdrop` scaffold). The legacy
+`SwingPlayer` surface (the card-over-fixed-video screen with `SummaryCover`,
+`AfterSwingSummary`, `AfterSwingDock`, `PlayerConsole`, `AnalysisPanel`, `PhaseStrip`,
+`ScrubBar`, `FrameSyncPanel`, `checkpointFrames`, `useSummaryPreference`) is **deleted**, with
+its tests, its `afterSwing`/`checkpoint` route params, the log's dev preview door, and the
+Settings "lead with the scorecard" toggle. Two player types was tech debt; every door opens
+the report. `fitBox` (stage sizing) moved to `player/frames.ts`; the overlay engine, frame
+clock, `ComparePanel`, `ReferencePane` and `OverlayControls` were always shared and stay.
+**Named deferrals, not descopes:** (1) **checkpoint parking** — Home's "see it on your swing"
+opened the old player parked at the priority's P-code; the report player does not park yet, so
+the door opens the report plainly until it learns a `checkpoint` param. (2) The **after-swing
+session chrome** (record-another dock, score history strip) returns as part of
+**in-app-capture**, built on the report player. (3) The **frame-sync oracle** (`FrameSyncPanel`)
+died with the surface and must be rebuilt inside the report player's `__DEV__` chrome before
+the next hot-path perf claim — until then there is no drift measurement on the phone.
+The cover-scroll gotchas the old screen measured (box-none ScrollViews never pan on Android;
+snap on `onMomentumScrollEnd`, not `onScrollEndDrag`) remain true and archived in git history.
+**Scope:** Delete still confirms in the client (`Alert`, destructive) on the report's dock; the
+**star stays device-local** (`useStarred`) until the contract's additive field lands (D41).
 
-### The summary wears the designed skin, and the meters are SVG
+### The meters are SVG, and gauges outlive any one screen
 
-**Decision:** `AfterSwingSummary` is the mobile rendering of **`.claude/SAMPLE-afterswing.html`**
-— the one screen with a finished visual design, followed closely on purpose: headline, the
-violet→cyan arc gauge with the marker at the score, band chip, "last 5 swings" delta, tempo (in
-the slot the mock's ArcShift™ held — tempo is real, ArcShift is not), coach takeaway, trend
-polyline, two-tone finding boxes, and an indicator rail of score rings. Every number on it is a
-measured field; a section with no data is not rendered. The meters are **`design/gauges`** —
-`ArcGauge` and `RingGauge`, drawn with **`react-native-svg`** and animated (band draw-in, marker
-sweep, count-up on one clock; ring fill by stroke-dashoffset).
-**Gotchas:** `react-native-svg` is the app's first SVG runtime and `design/gauges` is **the one
-place allowed to import it**. D23 stands untouched: the overlay stays on plain `View`s (that was
-a measurement), and the transport glyphs stay drawn. The gauge animations are JS-driven
-(`useNativeDriver: false` — SVG props are not native-animatable) and run once on cold surfaces,
-never on the 60 Hz path. Sample geometry (viewBox 360×220, r 140, strokes 34/22) and gradient
-stops are kept verbatim so the skinning pass has one source of truth.
-**Scope:** Gauges are a design-system module because score meters outlive the player — session
+**Decision:** `design/gauges` (`ArcGauge`, `RingGauge`, `TrendLine`) is the SVG meter module —
+drawn with `react-native-svg`, animated JS-side (`useNativeDriver: false` — SVG props are not
+native-animatable), once on cold surfaces, never on the 60 Hz path. Its first consumer
+(`AfterSwingSummary`, the SAMPLE-afterswing rendering) was deleted with the legacy player
+(2026-08-17); the module stays because score meters outlive any player — the report, session
 summaries and goals want the same faces. The ring's `null` progress draws the track alone: the
 abstaining shape, distinct from zero.
+**Gotchas:** D23 stands untouched: the overlay stays on plain `View`s (that was a measurement).
 
-### The swing log is an accordion of sessions, and the row is number · time · score
+### The swing log is a sheet of sessions, and the row is "Swing N" · date · score
 
-**Decision:** The log groups swings into practice **sessions** (`sessionize`) rendered as
-accordion cards (`SessionCard`), newest session expanded. The row leads with the swing's number
-in the session, its time, and its score — the thumbnails are near-identical frames of the same
-person on the same mat, so they carry no per-row information; one still on the session header
-says where you were. The session's best score is acid in the header and on its row, so "which
-one was the good one" is answered with the card open or closed.
+**Decision:** The log groups swings into practice **sessions** (`sessionize`): the newest as the
+featured card (`LatestSessionCard`), the rest as flat rows below. The hero carries the WHOLE
+log's overview (Taylor 2026-08-17): session + swing counts and the all-swings average in the
+`ScoreRing` — never the latest session's own numbers, which live in the card right below
+(`logStats` in `sessions.ts`). **Averages are circles, swings are muted:** every session
+average renders in the circle face (`ScoreOrb` size 56 with the `Avg` caption — the rect
+avg-boxes are gone), and the per-swing scores in the timeline render `ScoreOrb muted` (muted
+ring, soft number) so the session's average stays the prominent number. A session's title IS
+its date
+— "Sunday, Aug 9th" (`DateTitle`, the ordinal suffix small and raised; Taylor 2026-08-17, which
+retired the derived "Morning/Afternoon/Evening Practice" names) with the start time alone
+beneath (the weekday moved into the title) — never a swing count (the timeline below the latest
+card *is* the count) and never a golfer-typed title (`swing.label` is machine-minted; nobody
+names swings). A swing row is **"Swing N"** (numbered in
+hit order), its date · time, and its score orb — the thumbnails are near-identical frames of the
+same person on the same mat, so they carry no per-row information; one still on the session
+header says where you were. The latest card carries no LATEST pill and no tinted wrap — its
+position at the top already says it (Taylor 2026-08-17, declutter pass). The sheet rests at the
+backdrop's edge on first paint (`initialOffset` 0) so the hero is fully visible on load.
 **Gotchas:** A session is **inferred from time** — swings ≤ 2 h apart — because the contract
 carries no session id yet and no capture flow mints session rows. When it does, the contract
 grows `sessionId` (additive, D41) and `sessions.ts` switches to it; the screens never see the
@@ -662,10 +661,9 @@ golfer's own footage rather than laid out as a dashboard (Taylor, 2026-08-13: "i
 boring"). The **hero** is a full-bleed photo of the newest swing whose report ranked the focus
 priority (its thumbnail under layered scrims — no gradient dependency), with a by-name greeting
 ("Hey Taylor — next time out"), the recurring priority, its newest cue, the provenance line, the
-drill as a chip, and one promise of a button: **"See it on your swing"**, which opens the player
-on that exemplar swing **parked at the priority's checkpoint** (`SwingDetail`'s `checkpoint`
-param → `SwingPlayer.initialCheckpoint`: skips the arrival slide-up, waits for the artifact,
-seeks the P-code's frame via `checkpointTarget`, paused). The remaining recurring priorities are
+drill as a chip, and one promise of a button: **"See it on your swing"**, which opens the
+exemplar swing's report (one player, 2026-08-17; parking at the priority's checkpoint is the
+named deferral in the one-player entry). The remaining recurring priorities are
 a horizontal **rail** of cards with the same door each. Between hero and rail sits the
 **you-vs-pro strip**: the exemplar swing and the newest bundled reference swing frozen side by
 side at the tip's checkpoint (both stills from `/frame?checkpoint=`, resolved through each
@@ -703,8 +701,9 @@ of where it sits, never because a flag hid a bar. Every tab draws the shared `de
 (screen name left, the golfer's avatar right — Google photo when the session metadata carries
 one, else the address's initial). The avatar opens **Profile** (`slide_from_right`): identity,
 Find a coach (→ Coach tab), Swing stats (→ Progress tab), Goals, Settings, Log out. Settings owns
-the real preferences — the after-swing "lead with the scorecard" toggle (`useSummaryPreference`)
-and **Delete account**, which moved off the log's footer to its planned home. Progress is the
+the real preferences — Appearance and **Delete account**, which moved off the log's footer to
+its planned home (the after-swing "lead with the scorecard" toggle died with the legacy
+player). Progress is the
 long view (all-time best, typical tempo as a median over ≥3 swings, counts, session-average
 trend); Coach and Goals are honest placeholders with real doors, not dead buttons. `AccountBar`
 is deleted; sign-out lives in Profile.
@@ -748,8 +747,10 @@ testing — live in `.claude/rules/react-native.md`, path-scoped to `apps/mobile
 project's other rules files. Produced by the 2026-08-12 performance review
 (`.claude/audits/mobile-rn-perf-2026-08-12/` — findings and the phased fix plan). This register
 holds decisions; the rules file holds mechanics; where they overlap, the register wins.
-**Gotchas:** Hot-path changes are **measurement-gated**: the FrameSyncPanel's overlayDrift and
-view-count numbers on the S25+ decide, not inference — the review's Phase 7 items
+**Gotchas:** Hot-path changes are **measurement-gated**: the frame-sync oracle's overlayDrift
+and view-count numbers on the S25+ decide, not inference (`FrameSyncPanel` died with the legacy
+player, 2026-08-17 — the oracle must be rebuilt in the report player's `__DEV__` chrome before
+the next hot-path claim) — the review's Phase 7 items
 (`useSyncExternalStore` for the frame value, transform-based primitive positioning, React
 Compiler adoption) are explicitly *experiments to measure*, not backlog. Re-litigating D23
 (plain-View overlay) without fresh numbers is the named anti-pattern.
@@ -757,9 +758,9 @@ Compiler adoption) are explicitly *experiments to measure*, not backlog. Re-liti
 
 ### The picture's box is sized from the swing list, and never resizes
 
-**Decision:** `SwingPlayer` takes an `aspectRatio` prop, resolved by the screen from
-`SwingViewSummary`'s `width / height` — data the swing log already holds before the detail screen
-mounts. The stage box is therefore correct on the first frame of layout. A placeholder holds that
+**Decision:** the player layer (`ReportVideoLayer`) takes an `aspectRatio` prop, resolved by
+the screen from `SwingViewSummary`'s `width / height` — data the swing log already holds before
+the detail screen mounts. The stage box is therefore correct on the first frame of layout. A placeholder holds that
 box, with a loader, until a frame has actually reached the glass, then fades out over it.
 **Gotchas:** The stage used to default to **16:9**, so a portrait clip loaded squat and jumped to
 full height the moment the artifact landed — shoving the analysis below it down the screen while it

@@ -74,7 +74,7 @@ export function PerformanceCard({
               fontFamily: FONT_DISPLAY.black,
               fontSize: 32,
               lineHeight: 32,
-              letterSpacing: -1.12,
+              letterSpacing: -0.64,
             }}
           >
             {title}

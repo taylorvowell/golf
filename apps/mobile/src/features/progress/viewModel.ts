@@ -1,6 +1,6 @@
 import type { SwingSummary } from "@swingsage/schema/contract";
 
-import type { StickFigure } from "../../design/system";
+import type { BrandIconName, StickFigure } from "../../design/system";
 import {
   createdAtMs,
   sessionStats,
@@ -152,6 +152,9 @@ export interface ProgressPriority {
   level: "high" | "med" | "low";
   levelLabel: string;
   figure: StickFigure;
+  /** A supplied brand glyph for the category; set, it replaces the stick figure on the tile.
+   *  Categories gain these as Taylor draws them (tempo first). */
+  icon?: BrandIconName;
   /** Real before/now category scores arrive with goal-progression; null draws no bar —
    *  a bar at a canned width is a measurement nobody made. */
   progress: { before: number; now: number } | null;
@@ -165,6 +168,8 @@ export interface ProgressTrend {
   title: string;
   copy: string;
   figure: StickFigure;
+  /** Same contract as `ProgressPriority.icon`. */
+  icon?: BrandIconName;
   /** Real per-category delta arrives with goal-progression; null renders no number. */
   delta: number | null;
   placeholder: boolean;
@@ -247,6 +252,7 @@ export const PLACEHOLDER_PRIORITIES: readonly ProgressPriority[] = [
     level: "low",
     levelLabel: "On track",
     figure: FIGURE_TEMPO,
+    icon: "tempo",
     progress: null,
     placeholder: true,
   },
@@ -268,6 +274,7 @@ export const PLACEHOLDER_TRENDS: readonly ProgressTrend[] = [
     title: "Tempo",
     copy: "Backswing-to-downswing ratio.",
     figure: FIGURE_TEMPO,
+    icon: "tempo",
     delta: null,
     placeholder: true,
   },

@@ -1,13 +1,14 @@
 import { memo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { Pause, Play } from "lucide-react-native";
+import { ArrowLeftRight, Pause, Play } from "lucide-react-native";
 
 import { FONT_DISPLAY } from "../../design/system/typography";
 
 /**
  * `.report-v2-player-bar` — the video-open transport row: the speed pill group on the left,
- * the aqua play cap in the middle, the Overlays / Compare tool pills on the right.
+ * the aqua play cap in the middle, the Compare tool pill on the right. (The overlays opener
+ * is the layers orb at the top of the player, not a bar pill — Taylor 2026-08-17.)
  *
  * Behind its own memo taking primitives only: the shell's parent re-renders per presented
  * frame (the scrub indicator rides `frame`), and nothing in this bar changes at that rate.
@@ -26,7 +27,6 @@ export interface ReportPlayerBarProps {
   disabled?: boolean;
   onToggle: () => void;
   onSpeed: (speed: number) => void;
-  onOverlays: () => void;
   onCompare: () => void;
   /** True while a comparison reference is set — the Compare pill lights up. */
   comparing?: boolean;
@@ -38,7 +38,6 @@ export const ReportPlayerBar = memo(function ReportPlayerBar({
   disabled = false,
   onToggle,
   onSpeed,
-  onOverlays,
   onCompare,
   comparing = false,
 }: ReportPlayerBarProps) {
@@ -92,15 +91,6 @@ export const ReportPlayerBar = memo(function ReportPlayerBar({
       {/* .report-v2-toolset */}
       <View style={styles.toolset}>
         <Pressable
-          testID="report-overlays-open"
-          accessibilityRole="button"
-          accessibilityLabel="Overlays"
-          onPress={onOverlays}
-          style={({ pressed }) => [styles.tool, pressed && styles.pressed]}
-        >
-          <Text style={styles.toolText}>Overlays</Text>
-        </Pressable>
-        <Pressable
           testID="report-compare-open"
           accessibilityRole="button"
           accessibilityLabel="Compare with another swing"
@@ -108,6 +98,7 @@ export const ReportPlayerBar = memo(function ReportPlayerBar({
           onPress={onCompare}
           style={({ pressed }) => [styles.tool, comparing && styles.toolOn, pressed && styles.pressed]}
         >
+          <ArrowLeftRight size={12} color="#FFFFFF" strokeWidth={2.5} />
           <Text style={styles.toolText}>Compare</Text>
         </Pressable>
       </View>
@@ -178,8 +169,10 @@ const styles = StyleSheet.create({
     minHeight: 32,
     paddingHorizontal: 12,
     borderRadius: 999,
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
+    gap: 6,
     backgroundColor: "rgba(255,255,255,0.08)",
   },
   toolOn: { backgroundColor: "rgba(67,205,208,0.28)" },

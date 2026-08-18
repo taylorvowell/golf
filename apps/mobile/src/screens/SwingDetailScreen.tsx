@@ -11,7 +11,6 @@ import { SessionPillNav, Skeleton } from "../design/system";
 import { ReportSheet } from "../features/report/ReportSheet";
 import { ReportVideoLayer } from "../features/report/VideoLayer";
 import { buildReportViewModel } from "../features/report/selectors";
-import { SwingPlayer } from "../features/player/SwingPlayer";
 import { useReport } from "../features/player/useReport";
 import { createdAtMs } from "../features/swings/sessions";
 import { useStarred } from "../features/swings/useStarred";
@@ -20,27 +19,18 @@ import { useAppNavigation } from "../navigation";
 import { COLORS, useTheme } from "../theme";
 
 /**
- * One swing, two shapes:
- *
- * - **Review** (from the log): the Ideal Swing report — the sheet from the reference mockup
- *   over the LIVE frame-accurate player (`ReportVideoLayer`). Scrolling the sheet away enters
- *   the mockup's video-open state: pill nav out, full player controls in.
- * - **After-swing / checkpoint** (`afterSwing`, `checkpoint`): the existing `SwingPlayer`
- *   surface unchanged — the just-recorded flow and Home's "see it on your swing" both need
- *   the parked picture and the session chrome, which stay the player's job.
+ * One swing, ONE shape (Taylor 2026-08-17: the legacy `SwingPlayer` surface is deleted — two
+ * player types was tech debt): the Ideal Swing report — the sheet from the reference mockup
+ * over the LIVE frame-accurate player (`ReportVideoLayer`). Scrolling the sheet away enters
+ * the mockup's video-open state: pill nav out, full player controls in. Every door (log row,
+ * Home's focus cards, Coach's scorecard link) lands here.
  */
 
 export interface SwingDetailScreenProps {
   id: string;
-  afterSwing?: boolean;
-  checkpoint?: string | null;
 }
 
-export function SwingDetailScreen({
-  id,
-  afterSwing = false,
-  checkpoint = null,
-}: SwingDetailScreenProps) {
+export function SwingDetailScreen({ id }: SwingDetailScreenProps) {
   const { state, swing } = useSwing(id);
   const navigation = useAppNavigation();
 
@@ -67,29 +57,6 @@ export function SwingDetailScreen({
             : "This device could not reach SwingSage, so it cannot tell you about this swing."}
         </Text>
       </View>
-    );
-  }
-
-  if (afterSwing || checkpoint) {
-    return (
-      <AfterSwingPlayer
-        swing={swing}
-        afterSwing={afterSwing}
-        checkpoint={checkpoint}
-        history={
-          state.kind === "ok"
-            ? state.swings
-                .filter(
-                  (s) =>
-                    typeof s.overallScore === "number" && s.createdAt <= swing.createdAt,
-                )
-                .sort((a, b) => a.createdAt - b.createdAt)
-                .map((s) => s.overallScore as number)
-                .slice(-5)
-            : undefined
-        }
-        onDelete={onDelete}
-      />
     );
   }
 
@@ -275,79 +242,6 @@ function ReportSkeleton() {
   );
 }
 
-/** The just-recorded / parked-checkpoint shape — the existing player surface, unchanged. */
-function AfterSwingPlayer({
-  swing,
-  afterSwing,
-  checkpoint,
-  history,
-  onDelete,
-}: {
-  swing: NonNullable<ReturnType<typeof useSwing>["swing"]>;
-  afterSwing: boolean;
-  checkpoint: string | null;
-  history: number[] | undefined;
-  onDelete: () => Promise<void>;
-}) {
-  const navigation = useAppNavigation();
-  const scored = typeof swing.overallScore === "number";
-  const sized =
-    swing.views.find((v) => v.id === swing.primaryViewId && v.width && v.height) ??
-    swing.views.find((v) => v.width && v.height);
-  const aspectRatio = sized?.width && sized?.height ? sized.width / sized.height : null;
-
-  return (
-    <SwingPlayer
-      swingId={swing.id}
-      frameCount={swing.frameCount}
-      fps={swing.fps}
-      title={swing.label}
-      subtitle={formatDate(swing.createdAt)}
-      score={scored ? (swing.overallScore as number) : null}
-      tempoRatio={swing.tempoRatio}
-      aspectRatio={aspectRatio}
-      onBack={navigation.canGoBack() ? navigation.goBack : undefined}
-      mode={afterSwing ? "session" : "review"}
-      initialCheckpoint={checkpoint}
-      band={swing.band}
-      history={history}
-      onDelete={onDelete}
-    >
-      <View testID="swing-detail" style={styles.panel}>
-        <Row
-          label="Score"
-          value={
-            scored
-              ? `${Math.round(swing.overallScore as number)}${swing.band ? ` · ${swing.band}` : ""}`
-              : "Not scored"
-          }
-        />
-        <Row label="Angles" value={swing.views.map(viewName).join(", ") || "—"} />
-        <Row label="Frames" value={`${swing.frameCount} at ${swing.fps} fps`} />
-        <Row label="Pose coverage" value={`${Math.round(swing.poseCoverage * 100)}%`} />
-        <Row label="Club trace" value={swing.traceEnabled ? "Available" : "Not available"} />
-        {swing.tempoRatio ? (
-          <Row label="Tempo" value={`${swing.tempoRatio.toFixed(1)} : 1`} />
-        ) : null}
-      </View>
-    </SwingPlayer>
-  );
-}
-
-function formatDate(epoch: number): string {
-  const ms = epoch < 1e12 ? epoch * 1000 : epoch;
-  return new Date(ms).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.row}>
-      <Text style={styles.rowLabel}>{label}</Text>
-      <Text style={styles.rowValue}>{value}</Text>
-    </View>
-  );
-}
-
 function viewName(v: { view: string }): string {
   return v.view === "face_on" ? "Face-on" : "Down the line";
 }
@@ -357,7 +251,6 @@ const styles = StyleSheet.create({
   sheetCentre: { alignItems: "center", justifyContent: "center", gap: 10, padding: 24, minHeight: 220 },
   skeleton: { paddingHorizontal: 16, paddingTop: 6 },
   skeletonRow: { flexDirection: "row", gap: 14, marginTop: 22 },
-  panel: { paddingVertical: 2 },
   title: { color: COLORS.text, fontSize: 17, fontWeight: "600", textAlign: "center" },
   detail: {
     color: COLORS.muted,
@@ -366,13 +259,4 @@ const styles = StyleSheet.create({
     textAlign: "center",
     maxWidth: 300,
   },
-  row: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    justifyContent: "space-between",
-    gap: 16,
-    paddingVertical: 9,
-  },
-  rowLabel: { color: COLORS.muted, fontSize: 13 },
-  rowValue: { color: COLORS.text, fontSize: 13, fontWeight: "600", flexShrink: 1 },
 });

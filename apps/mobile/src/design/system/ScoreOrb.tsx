@@ -16,6 +16,7 @@ export function ScoreOrb({
   size = 92,
   color,
   caption,
+  muted = false,
   style,
 }: {
   /** 0–100; also the rendered number. */
@@ -23,10 +24,12 @@ export function ScoreOrb({
   size?: 92 | 56 | 40 | number;
   color?: string;
   caption?: string;
+  /** The receded face (the log's per-swing scores): muted ring, soft number. */
+  muted?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
   const t = useTheme();
-  const ringColor = color ?? t.aqua;
+  const ringColor = color ?? (muted ? t.muted : t.aqua);
   const stroke = (8 / 92) * size;
   const r = size / 2 - stroke / 2;
   const c = size / 2;
@@ -67,22 +70,22 @@ export function ScoreOrb({
       >
         <Text
           style={{
-            color: t.text,
+            color: muted ? t.textSoft : t.text,
             fontFamily: FONT_DISPLAY.black,
             fontSize,
-            letterSpacing: -0.05 * fontSize,
+            letterSpacing: -0.02 * fontSize,
           }}
         >
           {score}
         </Text>
-        {caption != null && size >= 92 && (
+        {caption != null && size >= 56 && (
           <Text
             style={{
               position: "absolute",
-              bottom: 10,
+              bottom: size >= 92 ? 10 : 4,
               color: t.muted,
               fontFamily: FONT_DISPLAY.black,
-              fontSize: 7,
+              fontSize: size >= 92 ? 7 : 6,
               letterSpacing: 0.84,
               textTransform: "uppercase",
             }}

@@ -87,7 +87,7 @@ export function ReportSheet({
               fontFamily: FONT_DISPLAY.black,
               fontSize: 28,
               lineHeight: 28,
-              letterSpacing: -1.4,
+              letterSpacing: -0.56,
             }}
           >
             {vm.header.title}
@@ -202,7 +202,7 @@ export function ReportSheet({
                 fontFamily: FONT_DISPLAY.black,
                 fontSize: 18,
                 lineHeight: 18.5,
-                letterSpacing: -0.63,
+                letterSpacing: -0.36,
               }}
             >
               {vm.focus.issue}
@@ -282,7 +282,7 @@ export function ReportSheet({
             fontFamily: FONT_DISPLAY.black,
             fontSize: 22,
             lineHeight: 22.5,
-            letterSpacing: -0.88,
+            letterSpacing: -0.44,
           }}
         >
           {vm.board.headline}

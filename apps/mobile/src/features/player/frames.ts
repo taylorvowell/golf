@@ -144,3 +144,13 @@ export function fpsDisagrees(containerFps: number, declaredFps: number): boolean
 export function isSeekable(e: Extent, fps: number): boolean {
   return extent(e).last >= 0 && Number.isFinite(fps) && fps > 0;
 }
+
+/**
+ * Fit an aspect ratio inside a box — the stage sizing every player surface shares (moved here
+ * from the retired `SwingPlayer` when the legacy surface was deleted, 2026-08-17).
+ */
+export function fitBox(aspect: number, w: number, h: number): { w: number; h: number } {
+  if (!(aspect > 0) || w <= 0 || h <= 0) return { w: 0, h: 0 };
+  const byWidth = w / aspect;
+  return byWidth <= h ? { w, h: byWidth } : { w: h * aspect, h };
+}

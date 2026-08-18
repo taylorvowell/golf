@@ -9,30 +9,30 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
-  BRAND,
+  APP_HEADER_BAR,
+  AppHeader,
+  DateTitle,
   HeroBackdrop,
+  ScoreOrb,
   ScoreRing,
   SheetOverBackdrop,
-  WeekStrip,
+  formatDayTitle,
+  useChromeScroll,
 } from "../design/system";
 import { FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
 import { StatusMessage } from "../design/StatusMessage";
 import { LatestSessionCard } from "../features/swings/LatestSessionCard";
-import {
-  heroHeadline,
-  sessionStats,
-  sessionTitle,
-  sessionize,
-  weekMap,
-} from "../features/swings/sessions";
+import { logStats, sessionStats, sessionize } from "../features/swings/sessions";
 import { useSwings } from "../features/swings/useSwings";
 import { useAppNavigation } from "../navigation";
 import { themedStyles, useTheme } from "../theme";
 
 /**
- * §21's swing log, rebuilt as the Ideal Swing reference's hero screen (`log-v2-*`): the
- * performance hero rides behind a sheet that carries the week strip, the LATEST session card
- * and the older-session list. The mockup's layout is law; every value on screen is real.
+ * §21's swing log, built on the Ideal Swing hero-screen scaffold (`log-v2-*`): the
+ * performance hero — the whole log's stat tiles and all-swings average — rides behind a
+ * sheet carrying the LATEST session card and the older-session list. (Taylor 2026-08-17
+ * declutter: the mockup's week strip and "This week" head row are gone — the session dates
+ * below already tell the when.) Every value on screen is real.
  *
  * The invariant that survives every rewrite: a request that never reached the server renders
  * as "cannot reach SwingSage", **never** as an empty log — now inside the sheet, same test.
@@ -43,6 +43,7 @@ export function SwingLogScreen() {
   const insets = useSafeAreaInsets();
   const t = useTheme();
   const styles = useStyles();
+  const onChromeScroll = useChromeScroll();
 
   const sessions = useMemo(
     () => (state.kind === "ok" ? sessionize(state.swings) : []),
@@ -50,73 +51,43 @@ export function SwingLogScreen() {
   );
   const latest = sessions[0];
   const older = sessions.slice(1);
-  const now = Date.now();
-  const week = useMemo(() => weekMap(sessions, now), [sessions, now]);
-  const latestStats = latest ? sessionStats(latest) : null;
-  const weekSwings = useMemo(() => {
-    const weekAgo = now - 7 * 24 * 60 * 60 * 1000;
-    return sessions
-      .filter((s) => s.end >= weekAgo)
-      .reduce((sum, s) => sum + s.swings.length, 0);
-  }, [sessions, now]);
+  const log = useMemo(() => logStats(sessions), [sessions]);
 
   const hero = (
     <HeroBackdrop>
-      <View style={[styles.heroContent, { paddingTop: insets.top + 12 }]}>
-        {/* .log-v2-top — brand + title left, the more-circle (the profile door) right. */}
-        <View style={styles.heroTopRow}>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={styles.heroBrand}>{BRAND}</Text>
-            <Text style={styles.heroTitle}>Swing Log</Text>
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Profile and settings"
-            onPress={() => navigation.navigate("Profile")}
-            hitSlop={8}
-            style={({ pressed }) => [styles.heroMore, pressed && styles.pressed]}
-          >
-            <View style={styles.heroMoreDots}>
-              <View style={styles.heroMoreDot} />
-              <View style={styles.heroMoreDot} />
-              <View style={styles.heroMoreDot} />
-            </View>
-          </Pressable>
-        </View>
-        {/* .log-v2-summary */}
-        {latest && latestStats ? (
+      <View style={[styles.heroContent, { paddingTop: insets.top + APP_HEADER_BAR }]}>
+        {/* The brand + profile door live in the floating AppHeader above; the hero keeps
+            only the screen's own title. */}
+        <Text style={styles.heroTitle}>Swing Log</Text>
+        {/* .log-v2-summary — the whole log's story (Taylor 2026-08-17): session + swing
+            counts left, the all-swings average in the ring. The latest session's own numbers
+            live in the card below; repeating them here was the repetition rule's case. */}
+        {latest ? (
           <View style={styles.heroSummary}>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text style={styles.heroEyebrow}>
-                {new Date(latest.start).toLocaleDateString(undefined, { weekday: "long" })}{" "}
-                · {latest.swings.length}{" "}
-                {latest.swings.length === 1 ? "swing" : "swings"}
-              </Text>
-              <Text style={styles.heroHeadline}>{heroHeadline(sessions, now)}</Text>
-              {latestStats.avg !== null && (
-                <Text style={styles.heroMeta}>
-                  Average {latestStats.avg}
-                  {latestStats.improvement !== null
-                    ? ` · ${latestStats.improvement >= 0 ? "+" : ""}${latestStats.improvement} improvement`
-                    : ""}
-                  {latestStats.best !== null ? ` · ${latestStats.best} best` : ""}
+            {/* Counts as STAT TILES (Taylor 2026-08-17) — the number in a glass square with
+                its label beneath, so the row reads as figures rather than a title. */}
+            <View style={styles.statRow}>
+              <View style={styles.statBox}>
+                <Text style={styles.statValue}>{log.sessions}</Text>
+                <Text style={styles.statLabel}>
+                  {log.sessions === 1 ? "session" : "sessions"}
                 </Text>
-              )}
+              </View>
+              <View style={styles.statBox}>
+                <Text style={styles.statValue}>{log.swings}</Text>
+                <Text style={styles.statLabel}>{log.swings === 1 ? "swing" : "swings"}</Text>
+              </View>
             </View>
-            {latestStats.avg !== null && (
-              <ScoreRing score={latestStats.avg} label="Average" size={88} />
-            )}
+            {log.avg !== null && <ScoreRing score={log.avg} label="Average" size={88} />}
           </View>
         ) : null}
         {/* .log-v2-track */}
-        {latestStats?.avg != null && latestStats.best != null && latestStats.best > 0 ? (
+        {log.avg != null && log.best != null && log.best > 0 ? (
           <View style={styles.heroTrack}>
             <View
               style={[
                 styles.heroTrackFill,
-                {
-                  width: `${Math.min(100, Math.round((latestStats.avg / latestStats.best) * 100))}%`,
-                },
+                { width: `${Math.min(100, Math.round((log.avg / log.best) * 100))}%` },
               ]}
             />
           </View>
@@ -126,13 +97,17 @@ export function SwingLogScreen() {
   );
 
   return (
+    <View style={{ flex: 1 }}>
     <SheetOverBackdrop
       testID="swing-log"
       backdrop={hero}
-      backdropHeight={340 + insets.top}
+      backdropHeight={330 + insets.top}
       parallax={{ factor: 0.22, cap: 72 }}
-      initialOffset={170}
+      // 0 = the sheet rests at the backdrop's edge on first paint. The mockup's 170 rode the
+      // card halfway up the hero, which read as the sheet covering the screen (Taylor 2026-08-17).
+      initialOffset={0}
       overlap={74}
+      onScrollY={onChromeScroll}
       refreshControl={
         <RefreshControl
           testID="swing-log-refresh"
@@ -180,14 +155,6 @@ export function SwingLogScreen() {
 
         {state.kind === "ok" && latest ? (
           <>
-            {/* .log-v2-sheet-head */}
-            <View style={styles.sheetHead}>
-              <Text style={styles.sheetHeadLabel}>This week</Text>
-              <Text style={styles.sheetHeadMeta}>
-                {weekSwings} {weekSwings === 1 ? "swing" : "swings"}
-              </Text>
-            </View>
-            <WeekStrip days={week} style={{ marginTop: 12 }} />
             <LatestSessionCard
               session={latest}
               onOpenSwing={(id) => navigation.navigate("SwingDetail", { id })}
@@ -198,39 +165,27 @@ export function SwingLogScreen() {
                 {older.map((session) => {
                   const stats = sessionStats(session);
                   const openId = session.swings[session.swings.length - 1].id;
+                  const time = new Date(session.start).toLocaleTimeString(undefined, {
+                    hour: "numeric",
+                    minute: "2-digit",
+                  });
                   return (
                     <Pressable
                       key={session.id}
                       testID={`session-${session.id}`}
                       accessibilityRole="button"
-                      accessibilityLabel={`${sessionTitle(session)}, ${session.swings.length} swings${
+                      accessibilityLabel={`${formatDayTitle(session.start)}${
                         stats.avg !== null ? `, average ${stats.avg}` : ""
                       }`}
                       onPress={() => navigation.navigate("SwingDetail", { id: openId })}
                       style={({ pressed }) => [styles.olderRow, pressed && styles.pressed]}
                     >
                       <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text style={styles.olderDate}>
-                          {new Date(session.start).toLocaleDateString(undefined, {
-                            weekday: "long",
-                            month: "short",
-                            day: "numeric",
-                          })}
-                        </Text>
-                        <Text style={styles.olderTitle}>{sessionTitle(session)}</Text>
-                        <Text style={styles.olderMeta}>
-                          {session.swings.length}{" "}
-                          {session.swings.length === 1 ? "swing" : "swings"}
-                          {stats.improvement !== null
-                            ? ` · ${stats.improvement >= 0 ? "+" : ""}${stats.improvement} overall`
-                            : ""}
-                        </Text>
+                        <DateTitle ms={session.start} size={17} />
+                        <Text style={styles.olderMeta}>{time}</Text>
                       </View>
                       {stats.avg !== null ? (
-                        <View style={styles.olderAvgBox}>
-                          <Text style={styles.olderAvgValue}>{stats.avg}</Text>
-                          <Text style={styles.olderAvgLabel}>Avg</Text>
-                        </View>
+                        <ScoreOrb score={stats.avg} size={56} caption="Avg" />
                       ) : (
                         <Text style={styles.olderNotScored}>Not scored</Text>
                       )}
@@ -239,65 +194,29 @@ export function SwingLogScreen() {
                 })}
               </View>
             )}
-            {/* Dev door into the after-swing screen until capture navigates there itself. */}
-            {__DEV__ && (
-              <Pressable
-                testID="open-after-swing"
-                accessibilityRole="button"
-                onPress={() =>
-                  navigation.navigate("SwingDetail", {
-                    id: latest.swings[latest.swings.length - 1].id,
-                    afterSwing: true,
-                  })
-                }
-                style={({ pressed }) => [styles.afterSwingLink, pressed && styles.pressed]}
-              >
-                <Text style={styles.afterSwingLinkText}>Preview the after-swing screen</Text>
-              </Pressable>
-            )}
           </>
         ) : null}
       </View>
     </SheetOverBackdrop>
+
+    <AppHeader
+      hero
+      onProfile={() => navigation.navigate("Profile")}
+      profileTestID="swing-log-profile"
+    />
+    </View>
   );
 }
 
 const useStyles = themedStyles((t) => ({
   heroContent: { paddingHorizontal: 18 },
-  heroTopRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  /* .log-v2-more — 42px cobalt circle, three dots. */
-  heroMore: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: t.cobalt,
-    ...t.shadowCobalt,
-  },
-  heroMoreDots: { flexDirection: "row", gap: 3.5 },
-  heroMoreDot: {
-    width: 3.5,
-    height: 3.5,
-    borderRadius: 2,
-    backgroundColor: t.onDark,
-  },
-  /* .log-v2-brand */
-  heroBrand: {
-    color: "rgba(180,235,238,1)",
-    fontFamily: FONT_DISPLAY.black,
-    fontSize: 9,
-    letterSpacing: 1.62,
-    textTransform: "uppercase",
-  },
-  /* .log-v2-top h3 — 30/900/-5% */
+  /* .log-v2-top h3 — 30 at Sora's -2% */
   heroTitle: {
-    marginTop: 6,
     color: t.onDark,
     fontFamily: FONT_DISPLAY.black,
     fontSize: 30,
-    lineHeight: 30,
-    letterSpacing: -1.5,
+    lineHeight: 32,
+    letterSpacing: -0.6,
   },
   /* .log-v2-summary */
   heroSummary: {
@@ -307,26 +226,31 @@ const useStyles = themedStyles((t) => ({
     gap: 14,
     marginTop: 22,
   },
-  heroEyebrow: {
-    color: "rgba(180,235,238,1)",
-    fontFamily: FONT_DISPLAY.black,
-    fontSize: 8,
-    letterSpacing: 1.12,
-    textTransform: "uppercase",
+  statRow: { flex: 1, minWidth: 0, flexDirection: "row", gap: 10 },
+  /* Hero glass square — the white-10 tile the mockup's hero chips use. */
+  statBox: {
+    minWidth: 68,
+    height: 68,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 3,
+    backgroundColor: "rgba(255,255,255,0.10)",
   },
-  heroHeadline: {
-    marginTop: 8,
+  statValue: {
     color: t.onDark,
     fontFamily: FONT_DISPLAY.black,
-    fontSize: 24,
-    lineHeight: 24.5,
+    fontSize: 26,
+    lineHeight: 27,
+    letterSpacing: -0.52,
   },
-  heroMeta: {
-    marginTop: 9,
-    color: "rgba(255,255,255,0.62)",
-    fontFamily: FONT_BODY.regular,
-    fontSize: 10,
-    lineHeight: 14,
+  statLabel: {
+    color: "rgba(180,235,238,1)",
+    fontFamily: FONT_DISPLAY.black,
+    fontSize: 7,
+    letterSpacing: 0.84,
+    textTransform: "uppercase",
   },
   /* .log-v2-track — fixed white-alpha on the hero, like the ScoreRing's track. */
   heroTrack: {
@@ -339,74 +263,25 @@ const useStyles = themedStyles((t) => ({
   heroTrackFill: { height: "100%", backgroundColor: t.aqua },
 
   sheetContent: { paddingHorizontal: 16 },
-  /* .log-v2-sheet-head */
-  sheetHead: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 10,
-  },
-  sheetHeadLabel: {
-    color: t.text,
-    fontFamily: FONT_DISPLAY.black,
-    fontSize: 12,
-    letterSpacing: 0.96,
-    textTransform: "uppercase",
-  },
-  sheetHeadMeta: { color: t.muted, fontFamily: FONT_BODY.regular, fontSize: 9 },
 
   /* .log-v2-session rows */
-  olderList: { marginTop: 12, gap: 8 },
+  olderList: { marginTop: 14, gap: 10 },
   olderRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    padding: 12,
-    borderRadius: 10,
+    gap: 12,
+    padding: 16,
+    borderRadius: 14,
     backgroundColor: t.surface,
     ...t.shadowSm,
-  },
-  olderDate: {
-    color: t.muted,
-    fontFamily: FONT_DISPLAY.black,
-    fontSize: 7,
-    letterSpacing: 0.7,
-    textTransform: "uppercase",
-  },
-  olderTitle: {
-    marginTop: 5,
-    color: t.text,
-    fontFamily: FONT_DISPLAY.extraBold,
-    fontSize: 15,
   },
   olderMeta: {
     marginTop: 4,
     color: t.textSoft,
     fontFamily: FONT_BODY.regular,
-    fontSize: 8,
+    fontSize: 13,
   },
-  olderAvgBox: {
-    minWidth: 50,
-    padding: 7,
-    borderRadius: 5,
-    backgroundColor: t.surface2,
-    alignItems: "center",
-  },
-  olderAvgValue: {
-    color: t.cobalt,
-    fontFamily: FONT_DISPLAY.black,
-    fontSize: 16,
-    lineHeight: 16,
-  },
-  olderAvgLabel: {
-    marginTop: 3,
-    color: t.muted,
-    fontFamily: FONT_DISPLAY.black,
-    fontSize: 6,
-    letterSpacing: 0.6,
-    textTransform: "uppercase",
-  },
-  olderNotScored: { color: t.muted2, fontFamily: FONT_BODY.bold, fontSize: 9 },
+  olderNotScored: { color: t.muted2, fontFamily: FONT_BODY.bold, fontSize: 12 },
 
   centre: { alignItems: "center", justifyContent: "center", gap: 10, padding: 24, minHeight: 260 },
   emptyTitle: {
@@ -424,12 +299,4 @@ const useStyles = themedStyles((t) => ({
     maxWidth: 300,
   },
   pressed: { opacity: 0.6 },
-  afterSwingLink: {
-    alignItems: "center",
-    paddingVertical: 10,
-    backgroundColor: t.surface2,
-    borderRadius: 12,
-    marginTop: 14,
-  },
-  afterSwingLinkText: { color: t.muted, fontFamily: FONT_BODY.bold, fontSize: 12 },
 }));

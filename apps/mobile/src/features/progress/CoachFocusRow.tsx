@@ -1,6 +1,6 @@
 import { Text, View } from "react-native";
 
-import { ProgressTrack, StickThumb } from "../../design/system";
+import { BrandIconThumb, ProgressTrack, StickThumb } from "../../design/system";
 import { FONT_BODY, FONT_DISPLAY } from "../../design/system/typography";
 import { themedStyles, useTheme } from "../../theme";
 import type { ProgressPriority } from "./viewModel";
@@ -23,7 +23,11 @@ export function CoachFocusRow({ priority }: { priority: ProgressPriority }) {
   return (
     <View style={styles.row}>
       <View style={styles.main}>
-        <StickThumb figure={priority.figure} size={48} />
+        {priority.icon ? (
+          <BrandIconThumb name={priority.icon} size={48} />
+        ) : (
+          <StickThumb figure={priority.figure} size={48} />
+        )}
         <View style={styles.body}>
           <Text style={styles.ordinal}>{priority.ordinal}</Text>
           <Text style={styles.title}>{priority.title}</Text>

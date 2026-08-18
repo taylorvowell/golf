@@ -1409,6 +1409,10 @@ Responses should be:
 
 # 18. Training Drills and Exercises
 
+> **AMENDED 2026-08-17 (D59).** Drills classify as **plain** (content only) or **guided**
+> (carrying a machine-readable check spec so the camera can verify execution — "Check my
+> form"). Guided drills are launch scope and a core function.
+
 SwingSage should recommend training exercises based on detected findings.
 
 The drill library is intended to be **preconfigured**, rather than requiring the AI to invent a new drill each time.
@@ -1430,6 +1434,60 @@ Each drill may include:
 Analysis findings should map to appropriate drills.
 
 The AI Coach may explain or contextualize a drill, but the underlying drill should come from the managed drill library.
+
+## 18.1 Drill classes — plain and guided
+
+Every drill is content first: a short demonstration video playing on repeat, the purpose, and
+the cues to think about while doing it. A drill may additionally be **guided**: it carries a
+machine-readable **check specification**, and the golfer can point the camera at themselves
+and have SwingSage verify the positions the drill trains — the supervision a coach standing
+there would give. Many drills are not swings at all — a shoulder-alignment move, a posture
+hold, an arm stretch, throwing a ball down — so guided drills are evaluated by a dedicated
+**drill analysis mode** (pose only; no swing phases, no club), never by forcing the swing
+pipeline onto non-swing motion.
+
+## 18.2 "Check my form" — the guided loop
+
+Deliberately the same shape as a focus training session (§8.4):
+
+1. **Setup:** the demo video on loop plus the cues — this alone is the plain-drill
+   experience, and a guided drill without the camera behaves exactly like a plain one.
+2. **Check:** the golfer records a rep or a hold; seconds later the verdict comes back with
+   **their own position drawn on their own frame** against the target band, and one
+   correction in coach language ("shoulders open about 15° — feel the trail shoulder pull
+   back"). Explainable per §2.4 — never a bare pass/fail.
+3. **Repeat:** a rep counter, per-rep verdicts, and a session close ("7 of 10 reps hit the
+   position").
+
+Checking is **record → analyze → verdict in seconds** — the same rhythm as the swing loop —
+not a live real-time mirror. CV stays in the analyzer, never the client.
+
+## 18.3 The check specification
+
+Versioned configuration per drill, like the scoring config — never hardcoded:
+
+- **Required view** (face-on / down-the-line / either) with handedness-aware targets. The
+  wrong angle yields "cannot check this from here — film face-on", never a guess.
+- **Checkpoint type:**
+  - **Hold** — the golfer gets into position and holds it; the analyzer finds the stable
+    window and judges it.
+  - **Trigger** — a kinematic event marks the judged moment (the ball-throw drill's release
+    is peak hand speed; shoulder alignment is judged at that frame).
+- **Checks** drawn from the existing measured-angle catalogue (shoulder line, hip line,
+  flex, tilt) with target bands.
+- **Verdicts per rep:** hit / adjust (with the specific correction) / cannot evaluate —
+  confidence and abstention rules apply exactly as in swing scoring.
+
+## 18.4 Coaches, AI, and metric boundaries
+
+- A coach may assign guided drills through practice plans (§25). Checked-rep results roll up
+  for the coach ("three sessions this week, 70% hitting the position") and the coach can
+  comment — supervised practice without being there.
+- Guided-drill reps are practice: **quarantined from every durable swing metric**, exactly
+  as focus-session swings are (§8.4, D56).
+- Deterministic geometry owns every verdict; AI only rewrites the correction into coach
+  prose (D58 layering). Physical limitations in the profile (§5.5) gate which drills are
+  offered.
 
 ---
 

@@ -7,7 +7,7 @@ import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
  *    as "cannot reach", never as an empty home implying the swings are gone.
  * 2. The hero is **aggregated, not copied** — the priority that recurred across the session's
  *    reports leads the screen even when a one-off outranks it inside a single report — and its
- *    door opens the player on the exemplar swing AT the priority's checkpoint.
+ *    door opens the exemplar swing's report.
  * 3. Honest abstention — no scores means no numbers and no hero, never a zero.
  * 4. The session slider's cards actually open their swings.
  */
@@ -96,7 +96,7 @@ beforeEach(() => {
 });
 
 describe("HomeScreen", () => {
-  it("leads with the recurring priority and its door opens the exemplar swing at the checkpoint", async () => {
+  it("leads with the recurring priority and its door opens the exemplar swing's report", async () => {
     const swings = [
       // A bundled reference swing, a day older — the "pro" half of the compare strip. Its
       // session is not the latest, so no report is ever fetched for it.
@@ -136,23 +136,17 @@ describe("HomeScreen", () => {
     expect(await findByTestId("home-tip-tempo")).toBeTruthy();
     expect(await findByText(/Pump drill/)).toBeTruthy();
 
-    // The hero's promise: the player, on the newest swing that ranked it, AT its checkpoint.
+    // The hero's promise: the report, on the newest swing that ranked the priority. (ONE
+    // player by decision, 2026-08-17 — checkpoint parking returns when the report player
+    // learns it.)
     await act(async () => void fireEvent.press(await findByTestId("home-see-it")));
-    expect(mockNavigate).toHaveBeenCalledWith("SwingDetail", {
-      id: "s-3",
-      afterSwing: true,
-      checkpoint: "P4",
-    });
+    expect(mockNavigate).toHaveBeenCalledWith("SwingDetail", { id: "s-3" });
 
     // You-vs-pro renders because a reference swing exists and the tip has a checkpoint, and it
     // opens the same door.
     mockNavigate.mockClear();
     await act(async () => void fireEvent.press(await findByTestId("home-compare")));
-    expect(mockNavigate).toHaveBeenCalledWith("SwingDetail", {
-      id: "s-3",
-      afterSwing: true,
-      checkpoint: "P4",
-    });
+    expect(mockNavigate).toHaveBeenCalledWith("SwingDetail", { id: "s-3" });
 
     // The session slider carries the measured numbers.
     expect(await findByText("74")).toBeTruthy();

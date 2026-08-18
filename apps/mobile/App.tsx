@@ -1,8 +1,8 @@
 import {
-  BarlowSemiCondensed_700Bold,
-  BarlowSemiCondensed_800ExtraBold,
-  BarlowSemiCondensed_900Black,
-} from "@expo-google-fonts/barlow-semi-condensed";
+  Sora_600SemiBold,
+  Sora_700Bold,
+  Sora_800ExtraBold,
+} from "@expo-google-fonts/sora";
 import {
   Inter_400Regular,
   Inter_600SemiBold,
@@ -68,17 +68,8 @@ SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 // The video-facing surfaces are dark in both themes (see src/theme). Module-level wrappers,
 // not inline closures: an inline component in `component=` remounts its screen every render.
-// The REPORT shape of the swing screen (no afterSwing/checkpoint) follows the ambient theme —
-// its sheet is themed like any page; only the video-parked player shapes stay pinned dark.
-function SwingDetailDark(props: Parameters<typeof SwingDetailRoute>[0]) {
-  const pinned = props.route.params.afterSwing || props.route.params.checkpoint;
-  if (!pinned) return <SwingDetailRoute {...props} />;
-  return (
-    <FixedDarkTheme>
-      <SwingDetailRoute {...props} />
-    </FixedDarkTheme>
-  );
-}
+// The swing screen is the REPORT shape only (one player, 2026-08-17) and follows the ambient
+// theme — its sheet is themed like any page; capture stays pinned dark.
 function RecordDark() {
   return (
     <FixedDarkTheme>
@@ -152,7 +143,7 @@ function Root() {
                       a bar above it would spend the most valuable strip of a tall screen twice. */}
                   <Stack.Screen
                     name="SwingDetail"
-                    component={SwingDetailDark}
+                    component={SwingDetailRoute}
                     // Dark ground even in light mode, so the push never flashes light before video.
                     options={{ headerShown: false, contentStyle: { backgroundColor: COLORS.bg } }}
                   />
@@ -210,9 +201,9 @@ export default function App() {
   // The design system's faces (typography.ts). `error` unblocks rather than reports: a
   // corrupt font asset must degrade to the system face, never hold the splash forever.
   const [fontsReady, fontsError] = useFonts({
-    BarlowSemiCondensed_700Bold,
-    BarlowSemiCondensed_800ExtraBold,
-    BarlowSemiCondensed_900Black,
+    Sora_600SemiBold,
+    Sora_700Bold,
+    Sora_800ExtraBold,
     Inter_400Regular,
     Inter_600SemiBold,
     Inter_700Bold,

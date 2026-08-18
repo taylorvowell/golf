@@ -3,22 +3,24 @@ import type { TextStyle } from "react-native";
 /**
  * The Ideal Swing type system (`.claude/ideal-swing-design-system.html` §03).
  *
- * Two faces: a narrow, heavy display face for titles, scores and labels, and a body face for
- * coaching copy and metadata. Bahnschrift (the mockup's face) is Windows-licensed and cannot
- * ship in an app, so Barlow Semi Condensed — the closest OFL DIN-family face — stands in;
- * Inter is the body face (the mockup's own first choice). Both load in `App.tsx` before the
- * first frame.
+ * Two faces: a display face for titles, scores and labels, and a body face for coaching copy
+ * and metadata. The display face is Sora — geometric, wide-set and legible at weight
+ * (Taylor 2026-08-17: the condensed Barlow Black read as bulky and hard to scan, so every
+ * FONT_DISPLAY key maps one weight LIGHTER than its name and tracking sits near -2% instead
+ * of the condensed system's -3.5…-5%). Inter is the body face. Both load in `App.tsx` before
+ * the first frame.
  *
  * RN names a font per weight (the loaded asset's key), so the family constants are weight
- * maps, not a single string. Letter-spacing in RN is absolute px, converted from the mockup's
- * em values against each size (e.g. 32 × -0.035 ≈ -1.12).
+ * maps, not a single string. Letter-spacing in RN is absolute px against each size
+ * (e.g. 32 × -0.02 ≈ -0.64).
  */
 
-/** Display face — narrow, heavy, tightly tracked. Titles, scores, labels, eyebrows. */
+/** Display face — titles, scores, labels, eyebrows. Keys keep the old weight names so call
+ *  sites did not need a sweep; each maps one step lighter on purpose (see above). */
 export const FONT_DISPLAY = {
-  bold: "BarlowSemiCondensed_700Bold",
-  extraBold: "BarlowSemiCondensed_800ExtraBold",
-  black: "BarlowSemiCondensed_900Black",
+  bold: "Sora_600SemiBold",
+  extraBold: "Sora_700Bold",
+  black: "Sora_800ExtraBold",
 } as const;
 
 /** Body face — coaching copy, descriptions, metadata. */
@@ -29,23 +31,23 @@ export const FONT_BODY = {
 } as const;
 
 /**
- * The six-step scale, verbatim from the mockup's specimen rows (`.t32`…`.t10`).
+ * The six-step scale — the mockup's sizes (`.t32`…`.t10`) with Sora's looser tracking.
  * Spread into a style and add colour; never restate sizes inline.
  */
 export const TYPE = {
-  /** Page titles, major scores. 32 / 900 / -3.5%. */
+  /** Page titles, major scores. 32 / -2%. */
   display: {
     fontFamily: FONT_DISPLAY.black,
     fontSize: 32,
-    lineHeight: 32,
-    letterSpacing: -1.12,
+    lineHeight: 34,
+    letterSpacing: -0.64,
   },
-  /** Session headers, card heroes. 24 / 800 / -3%. */
+  /** Session headers, card heroes. 24 / -2%. */
   title: {
     fontFamily: FONT_DISPLAY.extraBold,
     fontSize: 24,
-    lineHeight: 25,
-    letterSpacing: -0.72,
+    lineHeight: 27,
+    letterSpacing: -0.48,
   },
   /** Section and finding headings. 18 / 800. */
   heading: {

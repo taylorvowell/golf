@@ -3,7 +3,14 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { ChevronRight, UserRound } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { Eyebrow, Panel, ScreenHeader, TitleText } from "../design/system";
+import {
+  APP_HEADER_BAR,
+  AppHeader,
+  Eyebrow,
+  Panel,
+  TitleText,
+  useChromeScroll,
+} from "../design/system";
 import { FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
 import { createdAtMs } from "../features/swings/sessions";
 import { useSwings } from "../features/swings/useSwings";
@@ -28,6 +35,7 @@ export function CoachScreen() {
   const { state } = useSwings();
   const t = useTheme();
   const styles = useStyles();
+  const onChromeScroll = useChromeScroll();
 
   // The newest scored swing — the "see it in action" door's target.
   const latestScored = useMemo(() => {
@@ -41,8 +49,15 @@ export function CoachScreen() {
 
   return (
     <View style={styles.root}>
-      <ScreenHeader title="Coach" onProfile={() => navigation.navigate("Profile")} />
-      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: 32 + insets.bottom }]}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: insets.top + APP_HEADER_BAR + 4, paddingBottom: 32 + insets.bottom },
+        ]}
+        onScroll={(e) => onChromeScroll(e.nativeEvent.contentOffset.y)}
+        scrollEventThrottle={16}
+      >
+        <Text style={styles.title}>Coach</Text>
         <Panel radius="feature" style={styles.card}>
           <View style={styles.heroIcon}>
             <UserRound size={24} color={t.lavender} strokeWidth={2} />
@@ -66,9 +81,7 @@ export function CoachScreen() {
               testID="coach-latest-scorecard"
               accessibilityRole="button"
               accessibilityLabel="See your latest scorecard"
-              onPress={() =>
-                navigation.navigate("SwingDetail", { id: latestScored.id, afterSwing: true })
-              }
+              onPress={() => navigation.navigate("SwingDetail", { id: latestScored.id })}
               style={({ pressed }) => [styles.door, pressed && styles.pressed]}
             >
               <Text style={styles.doorText}>See your latest scorecard</Text>
@@ -77,6 +90,8 @@ export function CoachScreen() {
           ) : null}
         </Panel>
       </ScrollView>
+
+      <AppHeader onProfile={() => navigation.navigate("Profile")} />
     </View>
   );
 }
@@ -84,6 +99,15 @@ export function CoachScreen() {
 const useStyles = themedStyles((t) => ({
   root: { flex: 1, backgroundColor: t.bg },
   content: { padding: 16, gap: 12 },
+  /* The screen's display title, in the flow now that the brand header floats above. */
+  title: {
+    color: t.text,
+    fontFamily: FONT_DISPLAY.black,
+    fontSize: 30,
+    lineHeight: 30,
+    letterSpacing: -0.6,
+    paddingHorizontal: 2,
+  },
   card: { padding: 18, gap: 8 },
   heroIcon: {
     width: 46,

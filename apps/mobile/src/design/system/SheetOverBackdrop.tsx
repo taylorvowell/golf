@@ -56,6 +56,7 @@ export function SheetOverBackdrop({
   sheetStyle,
   refreshControl,
   scrollRef,
+  onScrollY,
   testID,
 }: {
   /** The fixed layer (a `HeroBackdrop`, the report's video). Fills the screen. */
@@ -97,6 +98,8 @@ export function SheetOverBackdrop({
   refreshControl?: React.ReactElement<RefreshControlProps>;
   /** Imperative seam: the host scrolls (e.g. a "show video" tap → top = backdrop open). */
   scrollRef?: React.RefObject<{ scrollTo: (opts: { y: number; animated?: boolean }) => void } | null>;
+  /** Raw offset out to the host — the chrome-visibility hook's feed (`useChromeScroll`). */
+  onScrollY?: (y: number) => void;
   testID?: string;
 }) {
   const t = useTheme();
@@ -118,6 +121,7 @@ export function SheetOverBackdrop({
   const onScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const y = event.nativeEvent.contentOffset.y;
+      onScrollY?.(y);
       // Hysteresis: open crossing down through the threshold, close only 12px past it, so
       // a finger resting exactly on the line never strobes the chrome.
       if (!openRef.current && y < openThreshold) {
@@ -128,7 +132,7 @@ export function SheetOverBackdrop({
         setOpen(false);
       }
     },
-    [openThreshold],
+    [openThreshold, onScrollY],
   );
 
   /**

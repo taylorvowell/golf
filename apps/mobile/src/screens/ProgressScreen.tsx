@@ -1,22 +1,18 @@
 import { useMemo } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  RefreshControl,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, RefreshControl, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
-  BRAND,
+  APP_HEADER_BAR,
+  AppHeader,
   Chip,
   HeroBackdrop,
   Panel,
   PanelHead,
   SheetOverBackdrop,
   TrendRing,
+  useChromeScroll,
 } from "../design/system";
 import { FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
 import { StatusMessage } from "../design/StatusMessage";
@@ -49,6 +45,7 @@ export function ProgressScreen() {
   const { state, refreshing, refresh } = useSwings();
   const t = useTheme();
   const styles = useStyles();
+  const onChromeScroll = useChromeScroll();
 
   const vm = useMemo(
     () => (state.kind === "ok" ? progressViewModel(state.swings, Date.now()) : null),
@@ -57,27 +54,10 @@ export function ProgressScreen() {
 
   const hero = (
     <HeroBackdrop>
-      <View style={[styles.heroContent, { paddingTop: insets.top + 12 }]}>
-        {/* .progress-topbar — brand + title left, the more-circle (profile door) right. */}
-        <View style={styles.heroTopRow}>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={styles.heroBrand}>{BRAND}</Text>
-            <Text style={styles.heroTitle}>Progress</Text>
-          </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Profile and settings"
-            onPress={() => navigation.navigate("Profile")}
-            hitSlop={8}
-            style={({ pressed }) => [styles.heroMore, pressed && styles.pressed]}
-          >
-            <View style={styles.heroMoreDots}>
-              <View style={styles.heroMoreDot} />
-              <View style={styles.heroMoreDot} />
-              <View style={styles.heroMoreDot} />
-            </View>
-          </Pressable>
-        </View>
+      <View style={[styles.heroContent, { paddingTop: insets.top + APP_HEADER_BAR }]}>
+        {/* The brand + profile door live in the floating AppHeader above; the hero keeps
+            only the screen's own title. */}
+        <Text style={styles.heroTitle}>Progress</Text>
         {/* .progress-meta-row — the 30-day story left, the trend ring right. */}
         {vm != null && vm.kind !== "empty" ? (
           <>
@@ -128,13 +108,15 @@ export function ProgressScreen() {
   );
 
   return (
+    <View style={{ flex: 1 }}>
     <SheetOverBackdrop
       testID="progress"
       backdrop={hero}
-      backdropHeight={396 + insets.top}
+      backdropHeight={424 + insets.top}
       parallax={{ factor: 0.22, cap: 72 }}
       initialOffset={0}
       overlap={92}
+      onScrollY={onChromeScroll}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -236,40 +218,26 @@ export function ProgressScreen() {
         ) : null}
       </View>
     </SheetOverBackdrop>
+
+    <AppHeader
+      hero
+      onProfile={() => navigation.navigate("Profile")}
+      profileTestID="progress-profile"
+    />
+    </View>
   );
 }
 
 const useStyles = themedStyles((t) => ({
   heroContent: { paddingHorizontal: 18 },
-  heroTopRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
-  /* .progress-brand */
-  heroBrand: {
-    color: "rgba(180,235,238,1)",
-    fontFamily: FONT_DISPLAY.black,
-    fontSize: 9,
-    letterSpacing: 1.62,
-    textTransform: "uppercase",
-  },
   /* .progress-top h3 — 31/900/-5% */
   heroTitle: {
-    marginTop: 6,
     color: t.onDark,
     fontFamily: FONT_DISPLAY.black,
     fontSize: 31,
     lineHeight: 31,
-    letterSpacing: -1.55,
+    letterSpacing: -0.62,
   },
-  /* .progress-more — 42px white-10 glass circle, three dots. */
-  heroMore: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.10)",
-  },
-  heroMoreDots: { flexDirection: "row", gap: 3.5 },
-  heroMoreDot: { width: 3.5, height: 3.5, borderRadius: 2, backgroundColor: t.onDark },
   /* .progress-meta-row — align-items flex-end in the mockup. */
   heroMeta: {
     flexDirection: "row",
@@ -346,5 +314,4 @@ const useStyles = themedStyles((t) => ({
     textAlign: "center",
     maxWidth: 300,
   },
-  pressed: { opacity: 0.6 },
 }));

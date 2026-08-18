@@ -1,6 +1,7 @@
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
-import { ChartNoAxesColumnIncreasing, House, Rows3, Sparkles } from "lucide-react-native";
+import { House } from "lucide-react-native";
 
+import { BrandIcon } from "./system/BrandIcon";
 import { WaveNav, type WaveNavItem } from "./system/WaveNav";
 import { useNavVisibility } from "./system/navVisibility";
 
@@ -22,18 +23,20 @@ const LABELS: Record<string, string> = {
   Coach: "Coach",
 };
 
+/** One knob for the whole row — the tab glyph size (Taylor 2026-08-17: larger). */
+const ICON_SIZE = 26;
+
 function iconFor(route: string): WaveNavItem["icon"] {
   switch (route) {
     case "Home":
-      return (color) => <House size={21} color={color} strokeWidth={2} />;
+      return (color) => <House size={ICON_SIZE} color={color} strokeWidth={2} />;
     case "SwingLog":
-      return (color) => <Rows3 size={21} color={color} strokeWidth={2} />;
+      return (color) => <BrandIcon name="swingLog" size={ICON_SIZE} color={color} />;
     case "Progress":
-      return (color) => (
-        <ChartNoAxesColumnIncreasing size={21} color={color} strokeWidth={2} />
-      );
+      return (color) => <BrandIcon name="progress" size={ICON_SIZE} color={color} />;
     default:
-      return (color) => <Sparkles size={21} color={color} strokeWidth={2} />;
+      // Coach carries the supplied golfer glyph rather than a lucide icon.
+      return (color) => <BrandIcon name="coach" size={ICON_SIZE} color={color} />;
   }
 }
 

@@ -3128,3 +3128,32 @@ track (ai-coach, goal-progression, practice-loop, and mobile-app-shell already o
 piece). New artifact when the surfaces build: an authored, versioned **coach persona spec**
 (name, tone, vocabulary, what it never says) shared by deterministic template copy and the
 L1/L2 prompts, so the coach sounds identical whether AI wrote the sentence or not.
+
+## D59 — Guided drills: the drill library gains camera-verified execution, launch scope
+
+**Date:** 2026-08-17 · **Status:** ACTIVE · **Spec:** PROJECT_MAIN §18 (amended) · **Analysis:** .claude/architecture/guided-drills-architecture-2026-08-17.md
+
+Taylor asked for coach-supplied drills whose execution the camera can verify — including
+movements that are not swings at all (a shoulder-alignment move, a posture hold, a stretch,
+throwing a ball down). Named a core launch function, deliberately parallel to focus training
+sessions (§8.4).
+
+The design: every drill is content (looping demo video, purpose, cues); a **guided** drill
+additionally carries a versioned, machine-readable **check spec** — required view +
+handedness-aware targets, a checkpoint type (**hold**: judge the stable window; **trigger**:
+judge at a kinematic event like peak hand speed on a ball throw), checks drawn from the
+existing measured-angle catalogue, and per-rep verdicts of hit / adjust / cannot-evaluate
+with full confidence + abstention discipline. Evaluation runs in a new pose-only **drill
+analysis mode** in the analyzer — no swing phases, no club — never by forcing the swing
+pipeline onto non-swing motion.
+
+Deliberate boundaries: checking is record → analyze → verdict in seconds, **not a live
+mirror** — a real-time mirror would require client-side pose, violating CV-lives-in-Python
+and the hosted-worker property; rejected for launch. Guided-drill reps are quarantined from
+every durable swing metric (the D56 rule extended). Deterministic geometry owns verdicts; AI
+only rewrites the correction into coach prose (D58). Coach assignment rides practice plans
+(§25) with checked-rep roll-ups visible to the coach.
+
+Sequencing inside the track: hold drills first (zero new event detection), trigger drills
+second. Known cost: a new fixture class — every existing fixture is a full DTL right-handed
+swing, so nothing on disk can test a drill check.

@@ -13,10 +13,13 @@ the register wins.
 
 ## Measure, don't argue
 
-- **The FrameSyncPanel is the oracle for anything touching the player's hot path.** overlayDrift
+- **The frame-sync oracle gates anything touching the player's hot path.** overlayDrift
   p50/p95/max, trace view count, Run-250-seeks — read them on the S25+ before and after. A perf
   claim without those numbers is an opinion. Measured device truth lives in
-  `docs/CURRENT-STATE.md` §11b; update it when you take a new measurement.
+  `docs/CURRENT-STATE.md` §11b; update it when you take a new measurement. **The oracle has no
+  home right now:** `FrameSyncPanel` was deleted with the legacy `SwingPlayer` (2026-08-17, the
+  one-player decision) and must be rebuilt inside the report player's `__DEV__` chrome BEFORE
+  the next hot-path change — until then no hot-path perf claim can be made at all.
 - **Do not memoize, restructure state, or adopt a renderer on inference.** D23 rejected Skia *on a
   measurement* (99.2 % lock with plain Views); reversing it, or reaching for
   `useSyncExternalStore`/transform-based positioning, requires the drift numbers to say so first.

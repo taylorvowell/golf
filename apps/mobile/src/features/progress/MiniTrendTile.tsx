@@ -1,6 +1,6 @@
 import { Text, View, type StyleProp, type ViewStyle } from "react-native";
 
-import { StickThumb } from "../../design/system";
+import { BrandIconThumb, StickThumb } from "../../design/system";
 import { FONT_BODY, FONT_DISPLAY } from "../../design/system/typography";
 import { themedStyles } from "../../theme";
 import type { ProgressTrend } from "./viewModel";
@@ -20,7 +20,11 @@ export function MiniTrendTile({
   const styles = useStyles();
   return (
     <View style={[styles.tile, style]}>
-      <StickThumb figure={trend.figure} size={48} style={styles.thumb} />
+      {trend.icon ? (
+        <BrandIconThumb name={trend.icon} size={48} style={styles.thumb} />
+      ) : (
+        <StickThumb figure={trend.figure} size={48} style={styles.thumb} />
+      )}
       <Text style={styles.group}>{trend.group}</Text>
       <Text style={styles.title}>{trend.title}</Text>
       <Text style={styles.copy}>{trend.copy}</Text>

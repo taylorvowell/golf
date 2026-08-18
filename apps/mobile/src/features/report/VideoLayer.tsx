@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Animated,
+  Pressable,
   StyleSheet,
   Text,
   View,
@@ -8,7 +9,7 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Play } from "lucide-react-native";
+import { Layers2, Play } from "lucide-react-native";
 import type { SwingSummary } from "@swingsage/schema/contract";
 
 import { FrameClockView } from "../../../modules/frame-clock/src";
@@ -20,7 +21,7 @@ import { FONT_DISPLAY } from "../../design/system/typography";
 import { COLORS, FixedDarkTheme } from "../../theme";
 import { ComparePanel } from "../player/ComparePanel";
 import { ReferencePane } from "../player/ReferencePane";
-import { isSeekable, windowBounds, type Bounds } from "../player/frames";
+import { fitBox, isSeekable, windowBounds, type Bounds } from "../player/frames";
 import { phaseBands, scrubMap } from "../player/phaseBands";
 import { OverlayControls } from "../player/overlay/OverlayControls";
 import { SwingOverlay } from "../player/overlay/SwingOverlay";
@@ -31,7 +32,6 @@ import {
   type Toggles,
 } from "../player/overlay/overlays";
 import { playbackWindow } from "../player/overlay/playbackWindow";
-import { fitBox } from "../player/SwingPlayer";
 import { useAnalysis } from "../player/useAnalysis";
 import { useCorrections } from "../player/useCorrections";
 import { useFramePlayer } from "../player/useFramePlayer";
@@ -366,6 +366,24 @@ export function ReportVideoLayer({
       style={[styles.controlsShell, { paddingBottom: insets.bottom + 14 }]}
       pointerEvents="box-none"
     >
+      {/* The layers button — the overlays sheet's opener, top-right over the picture
+          (Taylor 2026-08-17: the "layers" control lives at the top of the player, not in
+          the transport bar). Part of this shell, so it arrives and leaves with video-open. */}
+      <Pressable
+        testID="report-overlays-open"
+        accessibilityRole="button"
+        accessibilityLabel="Overlays"
+        hitSlop={8}
+        onPress={openOverlays}
+        style={({ pressed }) => [
+          styles.layersOrb,
+          { top: insets.top + 10 },
+          pressed && styles.layersOrbPressed,
+        ]}
+      >
+        <Layers2 size={20} color="#FFFFFF" strokeWidth={2} />
+      </Pressable>
+
       {/* .report-v2-score-row / .report-full-score */}
       {typeof score === "number" ? (
         <View style={styles.scoreRow} pointerEvents="none">
@@ -400,7 +418,6 @@ export function ReportVideoLayer({
         disabled={disabled}
         onToggle={player.actions.toggle}
         onSpeed={player.actions.setSpeed}
-        onOverlays={openOverlays}
         onCompare={openCompare}
         comparing={reference != null}
       />
@@ -555,6 +572,19 @@ const styles = StyleSheet.create({
   },
 
   controlsShell: { flex: 1, justifyContent: "flex-end", paddingHorizontal: 16, gap: 10 },
+  /* The FloatingBack orb's glass, mirrored top-right — the two corner controls must match.
+     Dev clients keep clear of the dev bubble's corner (the gated layout accommodation). */
+  layersOrb: {
+    position: "absolute",
+    right: __DEV__ ? 72 : 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(7,16,31,0.56)",
+  },
+  layersOrbPressed: { opacity: 0.7 },
   scoreRow: { flexDirection: "row" },
   scorePill: {
     flexDirection: "row",

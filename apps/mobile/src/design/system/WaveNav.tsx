@@ -80,7 +80,7 @@ export function WaveNav({
           alignSelf: "flex-end",
         }}
       >
-        <View style={{ width: 24, height: 24, alignItems: "center", justifyContent: "center" }}>
+        <View style={{ width: 30, height: 30, alignItems: "center", justifyContent: "center" }}>
           {entry.icon(color)}
         </View>
         <Text

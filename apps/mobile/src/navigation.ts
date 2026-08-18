@@ -24,12 +24,10 @@ export type TabParamList = {
 
 export type RootStackParamList = {
   Tabs: NavigatorScreenParams<TabParamList> | undefined;
-  /** Every swing opens as the same page — video on top, scorecard summary a scroll below.
-   *  `afterSwing` adds the just-recorded session chrome: summary up over the paused picture,
-   *  record/star/delete dock stuck to the bottom. The capture flow will navigate here with it;
-   *  until then the log's test link does. `checkpoint` (a P-code name like `address`) opens
-   *  parked at that moment — Home's "see it on your swing" door. */
-  SwingDetail: { id: string; afterSwing?: boolean; checkpoint?: string };
+  /** Every swing opens as the same page — the swing report over the live player. ONE player
+   *  shape by decision (2026-08-17); the legacy after-swing/checkpoint params died with the
+   *  second player surface. */
+  SwingDetail: { id: string };
   /** The capture surface — a full-screen modal until the capture release fills it in. */
   Record: undefined;
   Profile: undefined;
