@@ -15,7 +15,6 @@ import {
 import { SideDrawer, type DrawerClose } from "../design/system";
 import { FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
 import { Avatar } from "../features/profile/Avatar";
-import { ThemeToggle } from "../features/profile/ThemeToggle";
 import { useConnectedCoach } from "../features/profile/useConnectedCoach";
 import { useAuth } from "../features/auth/AuthProvider";
 import { useAppNavigation } from "../navigation";
@@ -209,8 +208,6 @@ export function ProfileScreen() {
             >
               <Text style={styles.signOutLabel}>{signingOut ? "Signing out…" : "Sign out"}</Text>
             </Pressable>
-
-            <ThemeToggle />
           </ScrollView>
         </>
       )}

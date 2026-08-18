@@ -15,7 +15,11 @@ const CHOICES: Array<{ value: ThemePreference; label: string; Icon: typeof Sun }
 ];
 
 /**
- * The appearance switch — a three-stop pill that lives in the profile's bottom-right corner.
+ * The appearance switch — a three-stop pill that lived in the profile's bottom-right corner.
+ *
+ * **Currently unmounted.** The app is pinned to light (`ThemeProvider`), so there is no choice
+ * to offer; this is kept whole, with its dark styling, as the control to re-mount if the theme
+ * choice comes back.
  *
  * Icons only: sun, moon, and the sun/moon pair for "follow the phone". A cobalt thumb slides
  * under the chosen stop, so the control reads as one switch rather than three buttons — and

@@ -470,7 +470,7 @@ bg-coloured mask ring — none of which read as an outline.
 edge alone leaves an invisible control. `Panel`'s `elevated` prop went with the
 shadows — it only ever chose between two of them, and it had no call sites.
 
-### Light is the default; dark is a choice; the video surfaces ignore both
+### The app is pinned light; the video surfaces are pinned dark
 
 **Decision (Taylor, 2026-08-14):** The app is themed, light-first. `src/theme/` is three layers:
 `palette.ts` (raw ramps — Taylor's blue scale #F0F3FA→#395886 plus one brand green; the only file
@@ -480,11 +480,14 @@ DARK, the `Theme` type forcing every token to exist in both), and `ThemeProvider
 `themedStyles` (how components read them — `themedStyles` caches one built sheet per theme, so a
 themed component keeps a static sheet's render cost). Themed code never imports the palette and
 never hand-mixes an rgba beside a token.
-**Resolution:** a persisted `system | light | dark` preference (Settings → Appearance, default
-`system`), where `system` follows `useColorScheme()` and anything unknown resolves **light** —
-dark renders only when chosen or when the phone itself is dark. `userInterfaceStyle` is
-`automatic` in `app.json` (a native flag: builds made before it need a clean prebuild before
-"match my phone" can see a light OS).
+**Resolution (Taylor, 2026-08-18): there is none — the app is LIGHT, always.** `ThemeProvider`
+consults neither `useColorScheme()` nor the stored preference, the Settings → Appearance control
+is unmounted (`ThemeToggle` kept whole for re-mounting), and `userInterfaceStyle` is `light` in
+`app.json` so the native side agrees (a native flag: it needs a clean prebuild to land on an
+existing build). **The DARK theme and every dark token stay** — un-pinning is the `resolved` line
+in `ThemeProvider` plus re-mounting the control, so nothing about dark may be deleted or allowed
+to rot. `FixedDarkTheme` is unaffected: the video surfaces are dark because of what they are, not
+because of a theme choice.
 **The accent is one green with two exposures:** deep `#2A7F4F` on light surfaces (white text on
 it), the original acid `#A3E635` on dark ones — same brand, contrast-matched to the ground.
 **What stays dark in both themes:** capture (pinned via `FixedDarkTheme`) and the report's

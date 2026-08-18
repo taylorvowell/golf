@@ -10,9 +10,9 @@ import {
 } from "./ThemeProvider";
 
 /**
- * Pins the resolution rules a golfer would notice: **light is the default**, dark appears only
- * by asking for it (Settings) or by running the phone dark, and an explicit choice always beats
- * the phone. Colour values are deliberately not asserted — they are design, not behaviour.
+ * Pins the one resolution rule a golfer would notice: **the app is light, always**. Neither the
+ * phone's dark mode nor a stored preference from an earlier build changes it. Colour values are
+ * deliberately not asserted — they are design, not behaviour.
  */
 
 // The provider reads the OS scheme through `useColorScheme`; the variable is the OS knob.
@@ -53,44 +53,36 @@ beforeEach(async () => {
   await AsyncStorage.clear();
 });
 
-test("defaults to light when the phone reports no scheme", async () => {
+test("is light when the phone reports no scheme", async () => {
   await renderProbe();
   expect(await screen.findByTestId("mode")).toHaveTextContent("light");
 });
 
-test("defaults to light on a light phone", async () => {
+test("is light on a light phone", async () => {
   mockOsScheme = "light";
   await renderProbe();
   expect(await screen.findByTestId("mode")).toHaveTextContent("light");
 });
 
-test("follows a dark phone when nothing was chosen", async () => {
+test("stays light on a dark phone — the phone's scheme is not followed", async () => {
   mockOsScheme = "dark";
   await renderProbe();
-  expect(await screen.findByTestId("mode")).toHaveTextContent("dark");
-});
-
-test("an explicit light choice beats a dark phone", async () => {
-  mockOsScheme = "dark";
-  await renderProbe();
-  fireEvent.press(screen.getByTestId("choose-light"));
   expect(await screen.findByTestId("mode")).toHaveTextContent("light");
 });
 
-test("an explicit dark choice beats a light phone, and persists", async () => {
-  mockOsScheme = "light";
+test("stays light after a dark choice is written, and across a cold start", async () => {
+  mockOsScheme = "dark";
   await renderProbe();
   fireEvent.press(screen.getByTestId("choose-dark"));
-  expect(await screen.findByTestId("mode")).toHaveTextContent("dark");
+  expect(await screen.findByTestId("mode")).toHaveTextContent("light");
 
-  // A fresh mount (a cold start) reads the stored choice back.
   clearThemePreferenceCache();
   await renderProbe();
-  expect(await screen.findByTestId("mode")).toHaveTextContent("dark");
+  expect(await screen.findByTestId("mode")).toHaveTextContent("light");
 });
 
-test("a stored value nobody recognises resolves to the default, not a crash", async () => {
-  await AsyncStorage.setItem("swingsage.theme-preference.v1", "plaid");
+test("a stored dark preference from an earlier build does not un-pin it", async () => {
+  await AsyncStorage.setItem("swingsage.theme-preference.v1", "dark");
   await renderProbe();
   expect(await screen.findByTestId("mode")).toHaveTextContent("light");
 });

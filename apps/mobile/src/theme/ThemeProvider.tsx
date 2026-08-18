@@ -6,7 +6,6 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { useColorScheme } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { DARK, LIGHT, type Theme } from "./themes";
@@ -14,13 +13,17 @@ import { DARK, LIGHT, type Theme } from "./themes";
 /**
  * Which face the app wears, and who decides.
  *
- * **Light is the default.** Dark appears only when the golfer asks for it — explicitly in
- * Settings, or implicitly by running their phone in dark mode (`"system"`, the initial state).
- * A phone that reports no scheme resolves light, never dark.
+ * **The app is pinned to LIGHT** (Taylor, 2026-08-18). There is no theme choice: the phone's
+ * dark mode is not followed, no Settings control changes it, and a stored preference from an
+ * earlier build is ignored. `FixedDarkTheme` still pins the video-facing surfaces dark, which
+ * is a property of those screens rather than a theme choice.
  *
- * The preference is device-local and persisted exactly like the after-swing summary preference
- * (same module-cache idiom, same reasons): screens only ever see `{ preference, set }`, so
- * moving it into account preferences later is a rewire of this file alone.
+ * The DARK theme, every dark token and every `t.mode === "dark"` branch are deliberately kept —
+ * un-pinning is this file's `resolved` line and re-mounting the Settings control, nothing more.
+ *
+ * The preference store below is that seam, left intact and unread. It is device-local and
+ * persisted exactly like the after-swing summary preference (same module-cache idiom, same
+ * reasons), so moving it into account preferences later is a rewire of this file alone.
  */
 export type ThemePreference = "system" | "light" | "dark";
 
@@ -88,19 +91,11 @@ export function useThemePreference(): {
 const ThemeContext = createContext<Theme>(LIGHT);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const { preference } = useThemePreference();
-  const scheme = useColorScheme();
+  // Pinned. Neither the stored preference nor the phone's scheme is consulted — see the note at
+  // the top of this file. Restoring the choice means resolving DARK here again.
+  const resolved = LIGHT;
 
-  // An unloaded preference (a frame or two on cold start) behaves as "system" — following the
-  // phone is the least-wrong guess in both directions while the store answers.
-  const dark =
-    preference === "dark" || (preference !== "light" && scheme === "dark");
-
-  return (
-    <ThemeContext.Provider value={dark ? DARK : LIGHT}>
-      {children}
-    </ThemeContext.Provider>
-  );
+  return <ThemeContext.Provider value={resolved}>{children}</ThemeContext.Provider>;
 }
 
 /** The resolved theme every themed component reads. Semantic tokens only — see `themes.ts`. */
