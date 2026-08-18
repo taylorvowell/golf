@@ -57,6 +57,50 @@ separate coach account, and no role question on the sign-in screen. What differs
 onboarding and directory listing — never authentication.
 **See:** ARCHIVE D32.
 
+### Roles are rows, claiming coach is instant, and admin is not claimable
+
+**Decision:** `user_roles` holds one row per (account, role) — `golfer | coach | admin` — so §3.3's
+"both" is data rather than a schema change and §4.4's "addable later" is an insert. Every account
+gets `golfer` from `app.ensure_profile()`, so "signed in but holds no role" is unreachable.
+Claiming `coach` is **free and instant** and unlocks the workspace with an empty roster; being
+**listed** in the directory is the reviewed application, and that gate belongs to
+`coach-relationships`/`admin-surface`. `user_roles` has **no INSERT policy at all** — grants go
+through `app.claim_role(role)`, SECURITY DEFINER, identity read from `auth.uid()` internally and
+the role checked against a whitelist, so both "grant myself admin" and "grant someone else a role"
+are inexpressible rather than merely rejected. Server-side enforcement is `requireRole()`
+(`lib/roles.ts`), which answers 403 `role_required`; the first route behind it is
+`GET /api/v1/coach/roster`.
+**Gotchas:** The role gate answers "may this account use the coach surface", never "whose data may
+it see" — the relationship is still enforced by RLS on `coach_links`, and conflating the two is how
+a role check ends up standing in for an access-control boundary. Roles are readable only by their
+holder, not by an approved coach: which roles an account holds is not part of what §24 grants.
+**See:** ARCHIVE D32; `PROJECT_MAIN.md` §3, §4.4, §31.
+
+### The profile splits public from private by TABLE, and age is a range
+
+**Decision:** §5.1's "sensitive information is not automatically public" is expressed as shape, not
+as a flag. `public.users` is the public face — display name, avatar, bio, region — and is already
+readable by an approved coach; `golfer_profiles` holds everything §5.2/§5.4/§5.5 collects and is
+owner-or-approved-coach read, owner-only write. A per-column `is_public` boolean would have put the
+answer in application code where every future reader has to remember to ask; two tables make
+putting a field in the wrong one a visible design mistake. §5.3's goals are `golfer_goals` rows
+from the curated eight, ranked, **capped at 3 by a database trigger** (AFTER ROW, so a four-row
+single insert cannot slip past a per-row count). `handedness` and `height_cm` moved off `users` onto
+the profile in migration 0012 — a golfer's handedness is a property of the golfer — while
+`swings.handedness` stays NOT NULL so an old swing keeps the answer it was analysed under.
+
+These are §43's questions, answered: **minimum supported age is 13**, self-attested, matching the
+store baseline; **age is stored as a RANGE, never a birthdate**, because age only feeds tolerance
+framing and mobility expectations and a birthdate would be the most sensitive field in the schema
+for no gain; **the only required answer is handedness** (§5.4), and even it is nullable in the
+schema — "required" is a property of the onboarding flow, because a NOT NULL would make a
+half-finished profile unstorable and therefore unresumable.
+**Gotchas:** The self-reported swing style is stored separately from any measured classification
+(§15.4), because §5.4 requires a disagreement to be surfaced rather than silently overridden — one
+shared column would destroy the evidence at the moment it became interesting. Tier-2 equipment
+specs live in `clubs` (§6) and are linked, never duplicated onto the profile.
+**See:** ARCHIVE D54; `PROJECT_MAIN.md` §5, §34.1, §43.
+
 ### Identity linking is explicit, never inferred from the email address
 
 **Decision:** One person signing in with Google and later with Apple must land on **one** account,

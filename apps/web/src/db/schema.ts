@@ -1,5 +1,6 @@
 import {
   pgTable, text, integer, real, timestamp, date, jsonb, uuid, uniqueIndex, boolean,
+  primaryKey,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
@@ -31,10 +32,195 @@ export const users = pgTable("users", {
    */
   email: text("email").notNull().unique(),
   displayName: text("display_name").notNull(),
-  handedness: text("handedness", { enum: ["right", "left"] }),
-  heightCm: integer("height_cm"),
+  /**
+   * The PUBLIC half of §5.1, and the split is structural rather than a flag.
+   *
+   * §5.1 says sensitive information must not automatically be publicly visible, and §34.1 asks
+   * "what appears publicly" as a question the schema should already answer. An `is_public` boolean
+   * per field answers it in the application, which means every future reader has to remember to
+   * ask. Two tables answer it in the shape: everything on `users` is what a coach directory or a
+   * shared swing may show, and everything on `golfer_profiles` is private to the golfer and the
+   * coaches they have approved. Adding a field to the wrong one is then a visible design mistake
+   * rather than an unnoticed default.
+   */
+  avatarUrl: text("avatar_url"),
+  /** §5.1 — a short bio. Public because a coach directory listing is unusable without one. */
+  bio: text("bio"),
+  /** §5.1 — "location or general region IF the user chooses". Free text, never derived. */
+  region: text("region"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+/** §5.5 Tier 1 — the miss vocabulary, shared by the driver and iron fields. */
+export const MISS_VALUES = [
+  "slice", "hook", "push", "pull", "fat", "thin", "top", "two_way",
+] as const;
+
+/**
+ * §5.3's curated goal set, in the spec's order. **Exactly these eight** — the amendment that
+ * created this list also records what was deliberately cut and why ("shape it on command",
+ * "swing pain-free", "lower my scores"), so adding one back is a product decision, not a typo.
+ */
+export const GOAL_VALUES = [
+  "add_distance", "find_fairways", "fix_big_miss", "strike_flush",
+  "trust_tee_shots", "sharper_irons", "rebuild_mechanics", "smooth_tempo",
+] as const;
+
+/**
+ * §3's roles, as rows rather than a column, because §3.3 is explicit that one account can be both
+ * a golfer and a coach and §4.4 requires a role to be addable later without a new account.
+ *
+ * A `role` column would make holding both a schema change; an array column would make "does this
+ * user hold role X" unindexable and RLS policy over it unpleasant. A row per (user, role) makes
+ * both trivial and gives the grant a timestamp, which is what an audit of "when did this account
+ * become a coach" needs.
+ *
+ * **Holding a role is not being listed** (D32). Claiming `coach` is free and instant and unlocks
+ * the coach workspace with an empty roster; appearing in the directory is a reviewed application
+ * belonging to `coach-relationships`/`admin-surface`. That split exists here from the start
+ * because it is what puts the friction at the point where a stranger's golf video becomes
+ * reachable, and nowhere earlier.
+ *
+ * `admin` is in the vocabulary and is deliberately NOT self-grantable — see `app.claim_role()`.
+ */
+export const userRoles = pgTable("user_roles", {
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  role: text("role", { enum: ["golfer", "coach", "admin"] }).notNull(),
+  grantedAt: timestamp("granted_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.userId, t.role] })]);
+
+/**
+ * §5.2, §5.4 and §5.5 — everything the AI Coach (§17.2) and the priority engine (§16.1) are
+ * documented as needing, PRIVATE by construction (see the note on `users` above).
+ *
+ * One row per golfer, created lazily on first write rather than at signup: §45's success
+ * definition starts with "create an account quickly", so nothing here may stand between a new
+ * account and a swing. Every column is nullable except the identity — **handedness is the only
+ * required onboarding answer (§5.4), and even it is nullable here**, because "required" is a
+ * property of the flow, not a constraint. A NOT NULL would make a half-finished profile
+ * unstorable and therefore unresumable, which is the opposite of what §4.4 asks for.
+ *
+ * `handedness` and `heightCm` MOVED here from `users` (migration 0012). They sat on the identity
+ * table from before profiles existed and had no readers; a golfer's handedness is a property of
+ * the golfer, and every angle in the analyzer threads through it.
+ */
+export const golferProfiles = pgTable("golfer_profiles", {
+  userId: uuid("user_id").primaryKey().references(() => users.id, { onDelete: "cascade" }),
+
+  // ---- §5.4 onboarding personalization -------------------------------------------------
+  /** The one required onboarding answer. A swing's own value still overrides it (§7.2). */
+  handedness: text("handedness", { enum: ["right", "left"] }),
+  /**
+   * The golfer's SELF-REPORT against the §15.4 taxonomy, stored deliberately apart from any
+   * measured classification. §5.4 is explicit that this is a prior, not a verdict: once enough
+   * swings exist the measured value takes over, and a disagreement is surfaced rather than
+   * silently overwritten. Keeping the two separate is what makes "surfaced" possible — one shared
+   * column would destroy the evidence of the disagreement at the moment it became interesting.
+   * (The measured side belongs to the `swing-style-engine` track; this step stores only what the
+   * golfer said.)
+   *
+   * `unsure` is a real answer — "work it out from my swings" — and not a null.
+   */
+  selfReportedStyle: text("self_reported_style", {
+    enum: ["sty_01", "sty_02", "sty_03", "sty_04", "unsure"],
+  }),
+  /** §5.4's skill question — the coarse self-assessment. */
+  skillLevel: text("skill_level", { enum: ["just_starting", "beginner", "advanced"] }),
+  /** §5.4's alternative for golfers who know their number. Independent of `skillLevel`. */
+  handicapRange: text("handicap_range", {
+    enum: ["plus", "scratch_5", "6_10", "11_15", "16_20", "21_28", "29_plus"],
+  }),
+
+  // ---- §5.5 Tier 1 — biggest lift ------------------------------------------------------
+  /** Separate fields on purpose (§5.5): the two misses are frequently not the same fault. */
+  typicalMissDriver: text("typical_miss_driver", { enum: MISS_VALUES }),
+  typicalMissIrons: text("typical_miss_irons", { enum: MISS_VALUES }),
+  averageScore: integer("average_score"),
+  /** Ideals SCALE to this — a 90 mph swinger's optimal driver launch is ~16°, not 10.9°. */
+  driverSwingSpeedMph: real("driver_swing_speed_mph"),
+  /** The fallback for anyone without a launch monitor; either one is enough to scale ideals. */
+  sevenIronCarryYds: real("seven_iron_carry_yds"),
+  fittedStatus: text("fitted_status", { enum: ["never", "static", "dynamic"] }),
+  fittedYear: integer("fitted_year"),
+  gripSize: text("grip_size", {
+    enum: ["undersize", "standard", "midsize", "oversize", "built_up"],
+  }),
+  /**
+   * §5.2/§5.5 — voluntary, and the schema says so by being nullable with no default. It exists
+   * to gate which drills may be prescribed, which is the only reason it is collected at all.
+   */
+  physicalLimitations: jsonb("physical_limitations").$type<string[]>(),
+
+  // ---- §5.5 Tier 2 — meaningful --------------------------------------------------------
+  /**
+   * Which launch-data rows the analysis may actually score versus must skip. Not equipment: the
+   * driver/iron/ball SPECS of Tier 2 live in `clubs` (§6) and are linked, never duplicated here.
+   */
+  launchMonitorAccess: text("launch_monitor_access", {
+    enum: ["trackman", "gcquad", "mevo", "simulator_only", "none"],
+  }),
+  practiceAccess: text("practice_access", {
+    enum: ["range", "simulator", "home_net", "course_only"],
+  }),
+  roundsPerMonth: integer("rounds_per_month"),
+  practiceSessionsPerWeek: integer("practice_sessions_per_week"),
+  /** 5,000 ft adds roughly 6-8% carry; without it, distance feedback is wrong in Denver. */
+  altitudeFt: integer("altitude_ft"),
+  climate: text("climate", { enum: ["temperate", "hot_humid", "hot_dry", "cold", "coastal"] }),
+
+  // ---- §5.5 Tier 3 — useful, lower priority --------------------------------------------
+  heightCm: integer("height_cm"),
+  wingspanCm: integer("wingspan_cm"),
+  wristToFloorCm: integer("wrist_to_floor_cm"),
+  /**
+   * A RANGE, never a birthdate — §43 asks whether age is exact or a range and this is the answer.
+   * Nothing in the product needs the exact number: age feeds tolerance framing and mobility
+   * expectations, both of which a bucket answers. A birthdate would be the most sensitive field
+   * in the schema and would buy nothing.
+   */
+  ageRange: text("age_range", {
+    enum: ["under_18", "18_29", "30_39", "40_49", "50_59", "60_69", "70_plus"],
+  }),
+  yearsPlaying: integer("years_playing"),
+  /** §5.5's 5-6 yes/no self-screen. Sparse by nature, so one document rather than six columns. */
+  mobilityScreen: jsonb("mobility_screen").$type<Record<string, boolean>>(),
+  /** So the AI never contradicts live human instruction (§28.2). */
+  workingWithCoach: boolean("working_with_coach"),
+  swingChangeInProgress: boolean("swing_change_in_progress"),
+  /** So an INTENTIONAL shape is never "fixed". */
+  preferredShotShape: text("preferred_shot_shape", { enum: ["draw", "fade", "straight"] }),
+  /** Same diagnosis, very different delivery — §5.5 calls this the cheapest satisfaction win. */
+  coachingStyle: text("coaching_style", { enum: ["technical", "feel"] }),
+  /** §5.2 — how much detail the golfer wants back. */
+  feedbackDepth: text("feedback_depth", { enum: ["brief", "standard", "detailed"] }),
+
+  /**
+   * When onboarding was finished. Null means it is still resumable, which is what §4.4's
+   * "can be resumed" reduces to once the profile row itself is the draft.
+   */
+  onboardingCompletedAt: timestamp("onboarding_completed_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * §5.3's goals, as rows — structured values, never free text, because they have to drive
+ * recommendation priority, scoring emphasis, drill selection and which professional swing is
+ * offered for comparison. None of that is expressible over a sentence someone typed.
+ *
+ * The 2-3 cap (D54) is enforced in the database, not only in the UI: selecting everything teaches
+ * the product nothing, and that is the whole reason the curated set replaced the open list.
+ * `rank` preserves the golfer's own ordering, which is the tie-breaker when two goals pull in
+ * opposite directions — #1 and #2 genuinely do, and §5.3 requires the coach to SAY so rather than
+ * quietly average them.
+ */
+export const golferGoals = pgTable("golfer_goals", {
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  goal: text("goal", { enum: GOAL_VALUES }).notNull(),
+  /** 1-based, in the golfer's stated order of importance. */
+  rank: integer("rank").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [primaryKey({ columns: [t.userId, t.goal] })]);
 
 /**
  * §6's equipment inventory. A club is a row, not a string typed into a field.
@@ -356,6 +542,17 @@ export const coachLinks = pgTable("coach_links", {
 export type ClubRow = typeof clubs.$inferSelect;
 export type NewClubRow = typeof clubs.$inferInsert;
 export type User = typeof users.$inferSelect;
+export type UserRoleRow = typeof userRoles.$inferSelect;
+export type NewUserRoleRow = typeof userRoles.$inferInsert;
+/** golfer | coach | admin — §3's role vocabulary. */
+export type UserRole = UserRoleRow["role"];
+export type GolferProfileRow = typeof golferProfiles.$inferSelect;
+export type NewGolferProfileRow = typeof golferProfiles.$inferInsert;
+export type GolferGoalRow = typeof golferGoals.$inferSelect;
+export type NewGolferGoalRow = typeof golferGoals.$inferInsert;
+/** One of §5.3's eight curated goals. */
+export type GolferGoal = GolferGoalRow["goal"];
+export type Handedness = NonNullable<GolferProfileRow["handedness"]>;
 export type CoachLinkRow = typeof coachLinks.$inferSelect;
 export type NewCoachLinkRow = typeof coachLinks.$inferInsert;
 export type NewUser = typeof users.$inferInsert;

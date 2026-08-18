@@ -85,6 +85,13 @@
       "when": 1786700000000,
       "tag": "0011_queue_heartbeat",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1786700100000,
+      "tag": "0012_roles_profiles_goals",
+      "breakpoints": true
     }
   ]
 }
