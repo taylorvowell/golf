@@ -2,18 +2,18 @@
   "schemaVersion": 1,
   "northStar": ".claude/ai-instructions/PROJECT_MAIN.md",
   "coverage": "docs/PRODUCT-COVERAGE.md",
-  "note": "Declarations only. Progress is DERIVED from each track's _STATUS.json by scripts/roadmap/derive.mjs — never hand-write status here. The spine flag moves forward one track at a time as phases complete; exactly one active track may carry spine:true.",
+  "note": "Declarations only. Progress is DERIVED from each track's _STATUS.json by scripts/roadmap/derive.mjs \u2014 never hand-write status here. The spine flag moves forward one track at a time as phases complete; exactly one active track may carry spine:true.",
   "auditNote": "Restructured 2026-08-08 after an architecture/production-readiness review. The platform layer gained the pieces a mobile product cannot retrofit: API versioning and a generated shared schema (native clients cannot be force-updated), an entitlement seam ahead of the features it gates, a real media pipeline for 270-330MB phone video, observability and SLOs, and push infrastructure. Sections 22, 31 and 35 gained owning tracks. See docs/PRODUCT-COVERAGE.md for the requirement-by-requirement map.",
   "launch": {
-    "strategy": "ONE full-product launch. There is no staged release, no MVP subset, and no public beta to iterate in. Every track below is launch-blocking except those listed in postLaunch, so phases are ordered by dependency and risk retirement — NOT by value-delivery order, because nothing ships before everything ships.",
+    "strategy": "ONE full-product launch. There is no staged release, no MVP subset, and no public beta to iterate in. Every track below is launch-blocking except those listed in postLaunch, so phases are ordered by dependency and risk retirement \u2014 NOT by value-delivery order, because nothing ships before everything ships.",
     "postLaunch": [
       "swing-isolation"
     ],
-    "firstCutCandidate": "sharing-and-export — PROJECT_MAIN §35 itself says it need not be in the first release. If launch date is at risk, this is the only track to cut, and cutting it is a decision to record, not a silent descope.",
+    "firstCutCandidate": "sharing-and-export \u2014 PROJECT_MAIN \u00a735 itself says it need not be in the first release. If launch date is at risk, this is the only track to cut, and cutting it is a decision to record, not a silent descope.",
     "differentiators": [
-      "Multi-phone synchronized capture (§12) — PROJECT_MAIN's own words: 'one of the major differentiating features'. Highest technical risk in the product, which is why its feasibility spike runs in the capture phase and the build follows immediately rather than being left until last.",
-      "A confidence-honest analysis engine — abstaining checks, view-gated skips, and refusing to fabricate a face-angle degree from video. Competitors state numbers they cannot measure; not doing that is a product position, not a limitation. Never trade it for a fuller-looking scorecard.",
-      "AI coach and human coach in one product, with the AI aware of the human's active plan (§28.2) and guidance from each clearly distinguishable (§26.3)."
+      "Multi-phone synchronized capture (\u00a712) \u2014 PROJECT_MAIN's own words: 'one of the major differentiating features'. Highest technical risk in the product, which is why its feasibility spike runs in the capture phase and the build follows immediately rather than being left until last.",
+      "A confidence-honest analysis engine \u2014 abstaining checks, view-gated skips, and refusing to fabricate a face-angle degree from video. Competitors state numbers they cannot measure; not doing that is a product position, not a limitation. Never trade it for a fuller-looking scorecard.",
+      "AI coach and human coach in one product, with the AI aware of the human's active plan (\u00a728.2) and guidance from each clearly distinguishable (\u00a726.3)."
     ],
     "qualityBar": "Launch is gated on the launch-readiness track, not on a date. Analysis accuracy must be verifiable (analysis-ground-truth) before anyone is charged for it, and the SLOs set in platform-foundation step 01 must be met under load, not just defined."
   },
@@ -22,7 +22,7 @@
       "id": "foundation",
       "label": "Platform Foundation",
       "order": 1,
-      "intent": "Decide the architecture PROJECT_MAIN §44 deliberately left open, then stand up the platform every later track assumes: identity, the real data model, a versioned API with a generated shared schema, an entitlement seam, media transport, a hosted analyzer, telemetry and push. Deliberately large — these are the things that cannot be retrofitted into a native app once it is in users' hands."
+      "intent": "Decide the architecture PROJECT_MAIN \u00a744 deliberately left open, then stand up the platform every later track assumes: identity, the real data model, a versioned API with a generated shared schema, an entitlement seam, media transport, a hosted analyzer, telemetry and push. Deliberately large \u2014 these are the things that cannot be retrofitted into a native app once it is in users' hands."
     },
     {
       "id": "golfer-core",
@@ -34,31 +34,31 @@
       "id": "capture",
       "label": "Capture & Multi-Device",
       "order": 3,
-      "intent": "PROJECT_MAIN §9 and §12. Recording at 60fps inside the app, the manual trim fallback that hands-free recording needs while automatic swing isolation stays deferred, and the multi-phone synchronized capture that is the product's stated differentiator — spiked and then built here, while the team is in the capture domain, rather than left to the end where it would put the launch date at the mercy of the hardest problem."
+      "intent": "PROJECT_MAIN \u00a79 and \u00a712. Recording at 60fps inside the app, the manual trim fallback that hands-free recording needs while automatic swing isolation stays deferred, and the multi-phone synchronized capture that is the product's stated differentiator \u2014 spiked and then built here, while the team is in the capture domain, rather than left to the end where it would put the launch date at the mercy of the hardest problem."
     },
     {
       "id": "coaching",
       "label": "Coaching Intelligence",
       "order": 4,
-      "intent": "PROJECT_MAIN §16-§18, §31. Turn measurements into guidance: a priority model that understands dependencies, a managed drill library, the AI Coach, and the administrative surface that operates all of it."
+      "intent": "PROJECT_MAIN \u00a716-\u00a718, \u00a731. Turn measurements into guidance: a priority model that understands dependencies, a managed drill library, the AI Coach, and the administrative surface that operates all of it."
     },
     {
       "id": "improvement",
       "label": "Improvement Tracking",
       "order": 5,
-      "intent": "PROJECT_MAIN §8, §19-§22, §36. The reason a golfer returns: history, trends, goals, comparison against past and professional swings, and optional launch-monitor context."
+      "intent": "PROJECT_MAIN \u00a78, \u00a719-\u00a722, \u00a736. The reason a golfer returns: history, trends, goals, comparison against past and professional swings, and optional launch-monitor context."
     },
     {
       "id": "coach-platform",
       "label": "Coach Platform",
       "order": 6,
-      "intent": "PROJECT_MAIN §23-§29. The second user type: directory, permissioned relationships, review, annotation, messaging and plans. Ahead of commerce because it is a large surface and part of the product's differentiation, and because billing has fewer unknowns than a whole second persona."
+      "intent": "PROJECT_MAIN \u00a723-\u00a729. The second user type: directory, permissioned relationships, review, annotation, messaging and plans. Ahead of commerce because it is a large surface and part of the product's differentiation, and because billing has fewer unknowns than a whole second persona."
     },
     {
       "id": "commerce",
       "label": "Subscriptions & Data Governance",
       "order": 7,
-      "intent": "PROJECT_MAIN §30, §34, §35, §38. Attach billing to the entitlement engine built in foundation, then the privacy, retention, deletion and scale posture a real product needs. Late because it depends on knowing every feature that gets gated and every kind of data that gets retained."
+      "intent": "PROJECT_MAIN \u00a730, \u00a734, \u00a735, \u00a738. Attach billing to the entitlement engine built in foundation, then the privacy, retention, deletion and scale posture a real product needs. Late because it depends on knowing every feature that gets gated and every kind of data that gets retained."
     },
     {
       "id": "launch",
@@ -70,7 +70,7 @@
       "id": "future",
       "label": "Future Capability",
       "order": 9,
-      "intent": "Accepted product requirements deliberately deferred out of the near-term arc. Not backlog and not cancelled — real tracks with real dependencies, scheduled later. Each carries a DECISIONS entry saying why it was deferred and what has to compensate meanwhile."
+      "intent": "Accepted product requirements deliberately deferred out of the near-term arc. Not backlog and not cancelled \u2014 real tracks with real dependencies, scheduled later. Each carries a DECISIONS entry saying why it was deferred and what has to compensate meanwhile."
     }
   ],
   "tracks": [
@@ -79,7 +79,7 @@
       "spine": false,
       "lifecycle": "active",
       "phase": "foundation",
-      "goal": "Close PROJECT_MAIN §44's open architecture questions, then build identity, the real swing/session/equipment data model, a versioned API with a generated shared schema, the entitlement seam, media addressing, and a deployable release pipeline for web, analyzer and mobile.",
+      "goal": "Close PROJECT_MAIN \u00a744's open architecture questions, then build identity, the real swing/session/equipment data model, a versioned API with a generated shared schema, the entitlement seam, media addressing, and a deployable release pipeline for web, analyzer and mobile.",
       "statusFile": ".claude/feature-tracks/platform-foundation/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#3-user-types-and-roles",
@@ -107,7 +107,7 @@
       "spine": true,
       "lifecycle": "active",
       "phase": "foundation",
-      "goal": "Promote the analyzer from a hand-invoked CLI to a hosted, queue-driven worker reading and writing object storage. FIRST STEP is a measurement, not a deploy: pose inference currently runs on CPU and only the club detector uses GPU, so measure CPU-vs-CUDA pose on this pipeline and let that choose the host (D18 reopened Railway, which has no GPU). Then the capacity and cost model, per-user fair queuing so one workload cannot degrade everyone else's (§38), backpressure, retry/dead-letter handling, and a validated analysis-latency SLO. The job model carries a kind discriminator (swing | drill | demo | lesson_finalize, D59/D60) and priority classes from day one — drill, demo-transcode and lesson-finalize jobs are short and CPU-only and must not queue behind swing club-tracking (.claude/architecture/guided-drills-architecture-2026-08-17.md, .claude/architecture/coach-video-lessons-2026-08-18.md).",
+      "goal": "Promote the analyzer from a hand-invoked CLI to a hosted, queue-driven worker reading and writing object storage. FIRST STEP is a measurement, not a deploy: pose inference currently runs on CPU and only the club detector uses GPU, so measure CPU-vs-CUDA pose on this pipeline and let that choose the host (D18 reopened Railway, which has no GPU). Then the capacity and cost model, per-user fair queuing so one workload cannot degrade everyone else's (\u00a738), backpressure, retry/dead-letter handling, and a validated analysis-latency SLO. The job model carries a kind discriminator (swing | drill | demo | lesson_finalize, D59/D60) and priority classes from day one \u2014 drill, demo-transcode and lesson-finalize jobs are short and CPU-only and must not queue behind swing club-tracking (.claude/architecture/guided-drills-architecture-2026-08-17.md, .claude/architecture/coach-video-lessons-2026-08-18.md).",
       "statusFile": ".claude/feature-tracks/analyzer-service/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#32-analysis-processing-experience",
@@ -123,15 +123,15 @@
           "track": "platform-foundation"
         }
       ],
-      "blockedBy": "docs/decisions/ARCHIVE-numbered.md D18 — worker host undecided",
-      "sequencingNote": "Spine returned here 2026-08-18 when design-system completed. Steps 01-04 are done (measurement, pipeline entry point, reproducible env + worker skeleton, queue loop proven locally); the remaining work — fair queuing, retry/DLQ, orphan detection, backpressure, capacity model — is host-agnostic and provable locally. Only the DEPLOY half waits on the worker-host HANDOFF row."
+      "blockedBy": "docs/decisions/ARCHIVE-numbered.md D18 \u2014 worker host undecided",
+      "sequencingNote": "Spine returned here 2026-08-18 when design-system completed. Steps 01-04 are done (measurement, pipeline entry point, reproducible env + worker skeleton, queue loop proven locally); the remaining work \u2014 fair queuing, retry/DLQ, orphan detection, backpressure, capacity model \u2014 is host-agnostic and provable locally. Only the DEPLOY half waits on the worker-host HANDOFF row. SPEED: per-stage wall clock is measured \u2014 .claude/architecture/swing-analysis-speed-2026-08-18.md. The `variants` stage is 72% of a run and pose only 11%, so the optimisation order is variants-off-in-production first, worker host second; read it before quoting an analysis time or optimising anything."
     },
     {
       "id": "design-system",
       "spine": false,
       "lifecycle": "complete",
       "phase": "golfer-core",
-      "goal": "The Ideal Swing design system: rebuild the app's theme and pages to match .claude/ideal-swing-design-system.html EXACTLY — the Swing Log pixel-perfect, the Swing Report's sheet-over-video scroll behaviour (video-open state, hiding pill nav, sliding player controls) matched precisely, the Progress page built on the same system with placeholder data plumbed for later tracks. Deliverable is a reusable React Native component system (tokens, type, buttons, tags, score marks, cards, wave nav, session pill nav, the SheetOverBackdrop scaffold) so every future page is assembled, not designed. Supersedes mobile-app-shell step 03 (the deferred styling pass) — Deck absorption happens here for the surfaces this track rebuilds.",
+      "goal": "The Ideal Swing design system: rebuild the app's theme and pages to match .claude/ideal-swing-design-system.html EXACTLY \u2014 the Swing Log pixel-perfect, the Swing Report's sheet-over-video scroll behaviour (video-open state, hiding pill nav, sliding player controls) matched precisely, the Progress page built on the same system with placeholder data plumbed for later tracks. Deliverable is a reusable React Native component system (tokens, type, buttons, tags, score marks, cards, wave nav, session pill nav, the SheetOverBackdrop scaffold) so every future page is assembled, not designed. Supersedes mobile-app-shell step 03 (the deferred styling pass) \u2014 Deck absorption happens here for the surfaces this track rebuilds.",
       "statusFile": ".claude/feature-tracks/design-system/_STATUS.json",
       "specRefs": [
         ".claude/ideal-swing-design-system.html",
@@ -180,7 +180,7 @@
       "spine": false,
       "lifecycle": "planned",
       "phase": "foundation",
-      "goal": "Define and instrument the targets that make 'production ready' falsifiable: analysis latency, upload success rate, crash-free sessions, analysis failure rate, and analysis-QUALITY telemetry — because this pipeline fails plausibly, producing wrong-but-healthy-looking output. Error tracking and the §37 product-event funnel land here too, live from the first deployed environment rather than after five phases of features.",
+      "goal": "Define and instrument the targets that make 'production ready' falsifiable: analysis latency, upload success rate, crash-free sessions, analysis failure rate, and analysis-QUALITY telemetry \u2014 because this pipeline fails plausibly, producing wrong-but-healthy-looking output. Error tracking and the \u00a737 product-event funnel land here too, live from the first deployed environment rather than after five phases of features.",
       "statusFile": ".claude/feature-tracks/observability-and-slos/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#37-product-analytics-and-quality-measurement",
@@ -202,7 +202,7 @@
       "spine": false,
       "lifecycle": "planned",
       "phase": "foundation",
-      "goal": "Push and email notification infrastructure with user-manageable preferences. Platform-layer because §29's very first golfer event — 'swing analysis completed' — is needed the moment analysis becomes async, not in the coach phase where the rest of §29's events live. The event taxonomy includes the D60 lesson/conversation events from day one ('coach sent a video lesson' is the coach platform's headline notification), and the design supports GROUPED/digest delivery — conversation messages collapse rather than firing one push per message (§29's 'without becoming noisy').",
+      "goal": "Push and email notification infrastructure with user-manageable preferences. Platform-layer because \u00a729's very first golfer event \u2014 'swing analysis completed' \u2014 is needed the moment analysis becomes async, not in the coach phase where the rest of \u00a729's events live. The event taxonomy includes the D60 lesson/conversation events from day one ('coach sent a video lesson' is the coach platform's headline notification), and the design supports GROUPED/digest delivery \u2014 conversation messages collapse rather than firing one push per message (\u00a729's 'without becoming noisy').",
       "statusFile": ".claude/feature-tracks/notifications/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#29-notifications",
@@ -223,7 +223,7 @@
       "spine": false,
       "lifecycle": "active",
       "phase": "golfer-core",
-      "goal": "Mobile client scaffold for iPhone and Android: navigation, auth flows, onboarding with role selection, profile and goals UI, the shared design system, and §41's real-golf-conditions usability bar (bright sunlight, one-handed, large capture controls) as stated acceptance criteria rather than an aspiration. Navigation owns the COACH SURFACE (D58): the single persona home gathering active focuses + meters, proposals, the Focus page, train-this-focus entry, chat, and summaries — the IA seam the guidance features render into.",
+      "goal": "Mobile client scaffold for iPhone and Android: navigation, auth flows, onboarding with role selection, profile and goals UI, the shared design system, and \u00a741's real-golf-conditions usability bar (bright sunlight, one-handed, large capture controls) as stated acceptance criteria rather than an aspiration. Navigation owns the COACH SURFACE (D58): the single persona home gathering active focuses + meters, proposals, the Focus page, train-this-focus entry, chat, and summaries \u2014 the IA seam the guidance features render into.",
       "statusFile": ".claude/feature-tracks/mobile-app-shell/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#2-core-product-principles",
@@ -242,14 +242,14 @@
           "blocking": false
         }
       ],
-      "sequencingNote": "Step 01 (navigation + the swing log) is complete; steps 02 (onboarding, role, profile) and 03 (design system, §41 usability) remain open and launch-blocking. The spine moved on to mobile-player 2026-08-12 (D49) because neither gates watching a swing, and the player is the largest unproven risk in the product. Step 03 is now EXPLICITLY DEFERRED at Taylor's direction (2026-08-13): 'the look of the app can come later, for now I want to focus on pure features and functionality, then I can come and skin it'. It stays launch-blocking - deferred, not cut - and it is where Deck gets absorbed into a real design system. The spine came back here 2026-08-13 when mobile-player completed all four steps: this is the remaining launch-blocking work in the golfer-core phase, and Deck (the player's control surface) is explicitly waiting on step 03 to absorb it rather than collide with it."
+      "sequencingNote": "Step 01 (navigation + the swing log) is complete; steps 02 (onboarding, role, profile) and 03 (design system, \u00a741 usability) remain open and launch-blocking. The spine moved on to mobile-player 2026-08-12 (D49) because neither gates watching a swing, and the player is the largest unproven risk in the product. Step 03 is now EXPLICITLY DEFERRED at Taylor's direction (2026-08-13): 'the look of the app can come later, for now I want to focus on pure features and functionality, then I can come and skin it'. It stays launch-blocking - deferred, not cut - and it is where Deck gets absorbed into a real design system. The spine came back here 2026-08-13 when mobile-player completed all four steps: this is the remaining launch-blocking work in the golfer-core phase, and Deck (the player's control surface) is explicitly waiting on step 03 to absorb it rather than collide with it."
     },
     {
       "id": "mobile-player",
       "spine": false,
       "lifecycle": "complete",
       "phase": "golfer-core",
-      "goal": "Re-express the frame-accurate player and overlay system on mobile, plus the analysis results surface (scores, findings, priorities) and the swing log. The rendering RULES survive the port even though the React components may not — frame-exact seeking, endpoint-exact trace smoothing, never interpolating a gap.",
+      "goal": "Re-express the frame-accurate player and overlay system on mobile, plus the analysis results surface (scores, findings, priorities) and the swing log. The rendering RULES survive the port even though the React components may not \u2014 frame-exact seeking, endpoint-exact trace smoothing, never interpolating a gap.",
       "statusFile": ".claude/feature-tracks/mobile-player/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#13-swing-video-player",
@@ -266,7 +266,7 @@
           "blocking": false
         }
       ],
-      "sequencingNote": "COMPLETE 2026-08-13, all four steps. Two things it did NOT prove, both named rather than absorbed: the overlay's frame lock with the club-head trace on (declined, D51 — so the Skia question stays open) and the cost of two decoders for side-by-side comparison. Neither is a code gap; both are one device reading. Made the spine 2026-08-12 (D49). Deliberately NOT blocked on swing-ingest — ten analysed swings already exist on disk and are served over the versioned API, so the largest single piece of UI risk in the product can be proven against real artifacts now. The mobile-app-shell dependency is non-blocking: its step 01 delivered the navigation this needs, and its remaining steps do not gate playback. D40 already measured that Android resolves seeks FORWARD, so the web player’s midpoint rule is wrong here — the rules port, the arithmetic does not."
+      "sequencingNote": "COMPLETE 2026-08-13, all four steps. Two things it did NOT prove, both named rather than absorbed: the overlay's frame lock with the club-head trace on (declined, D51 \u2014 so the Skia question stays open) and the cost of two decoders for side-by-side comparison. Neither is a code gap; both are one device reading. Made the spine 2026-08-12 (D49). Deliberately NOT blocked on swing-ingest \u2014 ten analysed swings already exist on disk and are served over the versioned API, so the largest single piece of UI risk in the product can be proven against real artifacts now. The mobile-app-shell dependency is non-blocking: its step 01 delivered the navigation this needs, and its remaining steps do not gate playback. D40 already measured that Android resolves seeks FORWARD, so the web player\u2019s midpoint rule is wrong here \u2014 the rules port, the arithmetic does not."
     },
     {
       "id": "swing-ingest",
@@ -319,7 +319,7 @@
       "spine": false,
       "lifecycle": "planned",
       "phase": "capture",
-      "goal": "Record a swing inside the app at a minimum of 60fps: capability detection with honest messaging when a device cannot comply, a golf-shaped capture flow, review/retake, and hands-free recording. Owns the manual trim/select fallback that hands-free and long recordings need while automatic swing isolation stays deferred (D2) — required, not optional.",
+      "goal": "Record a swing inside the app at a minimum of 60fps: capability detection with honest messaging when a device cannot comply, a golf-shaped capture flow, review/retake, and hands-free recording. Owns the manual trim/select fallback that hands-free and long recordings need while automatic swing isolation stays deferred (D2) \u2014 required, not optional.",
       "statusFile": ".claude/feature-tracks/in-app-capture/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#23-high-frame-rate-capture",
@@ -345,7 +345,7 @@
       "spine": false,
       "lifecycle": "planned",
       "phase": "capture",
-      "goal": "Retire the §12 feasibility risk early: prove two phones can be paired, triggered together, and their recordings aligned closely enough to scrub both to the same swing position. Answers whether the stated differentiator is achievable BEFORE the product is built around it — a throwaway spike whose only deliverable is a measured answer and a decision entry.",
+      "goal": "Retire the \u00a712 feasibility risk early: prove two phones can be paired, triggered together, and their recordings aligned closely enough to scrub both to the same swing position. Answers whether the stated differentiator is achievable BEFORE the product is built around it \u2014 a throwaway spike whose only deliverable is a measured answer and a decision entry.",
       "statusFile": ".claude/feature-tracks/dual-device-spike/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#12-multi-phone-synchronized-recording",
@@ -365,7 +365,7 @@
       "spine": false,
       "lifecycle": "planned",
       "phase": "coaching",
-      "goal": "Style-aware analysis (§15.4): classify each golfer into one of four swing styles — STY-01 Rotator, STY-02 Lifter, STY-03 Slider-Bomber, STY-04 Stacker — from measured video markers plus optional launch data, emitting primary style + confidence + secondary style with an honest hybrid bucket, seeded by the onboarding self-report as a prior. Then gate the scoring config by style: [REL]/[TGT]/[SWP] modifiers on style-dependent rows so a legitimate style trait (a bowed lead wrist, a flat plane, lateral drive) is never flagged as a fault, while the seven universal [U] rows never gate and stay highest-weighted. Style stays constant across the bag — the club dimension gates within it, and a driver/iron pattern disagreement surfaces as an insight, not two labels. Style also selects the default professional reference (§19.2) and shapes AI Coach framing (§17.4).",
+      "goal": "Style-aware analysis (\u00a715.4): classify each golfer into one of four swing styles \u2014 STY-01 Rotator, STY-02 Lifter, STY-03 Slider-Bomber, STY-04 Stacker \u2014 from measured video markers plus optional launch data, emitting primary style + confidence + secondary style with an honest hybrid bucket, seeded by the onboarding self-report as a prior. Then gate the scoring config by style: [REL]/[TGT]/[SWP] modifiers on style-dependent rows so a legitimate style trait (a bowed lead wrist, a flat plane, lateral drive) is never flagged as a fault, while the seven universal [U] rows never gate and stay highest-weighted. Style stays constant across the bag \u2014 the club dimension gates within it, and a driver/iron pattern disagreement surfaces as an insight, not two labels. Style also selects the default professional reference (\u00a719.2) and shapes AI Coach framing (\u00a717.4).",
       "statusFile": ".claude/feature-tracks/swing-style-engine/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#154-swing-styles-and-style-aware-scoring",
@@ -384,14 +384,14 @@
           "track": "platform-foundation"
         }
       ],
-      "sequencingNote": "Ahead of priority-engine deliberately: style gating changes WHICH findings exist, and prioritizing a fault the golfer's style legitimizes is exactly the mis-coaching this feature exists to prevent. The three most mis-flagged categories gate first: lead-wrist condition, shaft plane, lateral movement. Depends on analysis-ground-truth because every classification marker is subject to the standing trap — print raw values across all fixtures and confirm each moves the way the tree assumes before trusting a threshold; a classifier tuned on unvalidated markers is unfalsifiable. All fixtures are DTL and right-handed today, and Step 1 of the tree needs face-on markers — the ground-truth track's face-on fixture is a hard prerequisite, not a nice-to-have."
+      "sequencingNote": "Ahead of priority-engine deliberately: style gating changes WHICH findings exist, and prioritizing a fault the golfer's style legitimizes is exactly the mis-coaching this feature exists to prevent. The three most mis-flagged categories gate first: lead-wrist condition, shaft plane, lateral movement. Depends on analysis-ground-truth because every classification marker is subject to the standing trap \u2014 print raw values across all fixtures and confirm each moves the way the tree assumes before trusting a threshold; a classifier tuned on unvalidated markers is unfalsifiable. All fixtures are DTL and right-handed today, and Step 1 of the tree needs face-on markers \u2014 the ground-truth track's face-on fixture is a hard prerequisite, not a nice-to-have."
     },
     {
       "id": "priority-engine",
       "spine": false,
       "lifecycle": "planned",
       "phase": "coaching",
-      "goal": "Replace weakest-check-first ordering with a real priority model: dependencies between faults, order of operations, severity weighed against confidence, golfer goals, and recurrence across swings. Goals are the curated §5.3 set — each selection re-weights a named group of checks (2–3 goals max, and the distance-vs-fairways tension is surfaced, not averaged away). Findings arrive already style-gated by swing-style-engine, and the active session focus (§8.2) concentrates in-session priority.",
+      "goal": "Replace weakest-check-first ordering with a real priority model: dependencies between faults, order of operations, severity weighed against confidence, golfer goals, and recurrence across swings. Goals are the curated \u00a75.3 set \u2014 each selection re-weights a named group of checks (2\u20133 goals max, and the distance-vs-fairways tension is surfaced, not averaged away). Findings arrive already style-gated by swing-style-engine, and the active session focus (\u00a78.2) concentrates in-session priority.",
       "statusFile": ".claude/feature-tracks/priority-engine/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#16-priority-coaching-system",
@@ -414,7 +414,7 @@
       "spine": false,
       "lifecycle": "planned",
       "phase": "coaching",
-      "goal": "The administrative area §31 describes, as one surface rather than scattered fragments: professional swing management, scoring-criteria and threshold configuration, tier/entitlement configuration, and coach administration (listing approval, visibility, verification, suspension, directory moderation).",
+      "goal": "The administrative area \u00a731 describes, as one surface rather than scattered fragments: professional swing management, scoring-criteria and threshold configuration, tier/entitlement configuration, and coach administration (listing approval, visibility, verification, suspension, directory moderation).",
       "statusFile": ".claude/feature-tracks/admin-surface/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#31-administrative-area",
@@ -437,7 +437,7 @@
       "spine": false,
       "lifecycle": "planned",
       "phase": "coaching",
-      "goal": "A managed, preconfigured drill library with finding-to-drill mappings — explicitly not drills invented per-response by the AI. Content is authored and curated through the admin surface. Drills classify as plain (content only) or guided (D59): a guided drill carries a versioned check spec and a pose-only drill analysis mode in the analyzer verifies execution per rep ('Check my form') — hold drills first, trigger drills second. Launch scope, core function. BINDING DESIGN: the accepted architecture in .claude/architecture/guided-drills-architecture-2026-08-17.md (pipeline profile not a service; repo-versioned drill_config split from DB content; sibling drill_analysis.json/drill_report.json artifacts, analysis.json untouched; structural quarantine via drill_attempts tables, never swings; redrill.py + checkdrill.py built with the first check). FIRST HANDOFF when this track starts: film drill fixture pairs — correct AND wrong execution — no existing fixture can test a drill check. D60 adds an AUTHORSHIP dimension in the FIRST schema migration (author_type system|coach + author_id + RLS — retrofitting an RLS dimension later is the expensive path): coach-authored drills are always plain class, scoped to the coach and students they are shared with, never the public catalog. Plain drills gain a 'marked done' self-report for coach roll-ups — always labelled self-reported, never mingled with camera-verified reps, never touching a durable swing metric.",
+      "goal": "A managed, preconfigured drill library with finding-to-drill mappings \u2014 explicitly not drills invented per-response by the AI. Content is authored and curated through the admin surface. Drills classify as plain (content only) or guided (D59): a guided drill carries a versioned check spec and a pose-only drill analysis mode in the analyzer verifies execution per rep ('Check my form') \u2014 hold drills first, trigger drills second. Launch scope, core function. BINDING DESIGN: the accepted architecture in .claude/architecture/guided-drills-architecture-2026-08-17.md (pipeline profile not a service; repo-versioned drill_config split from DB content; sibling drill_analysis.json/drill_report.json artifacts, analysis.json untouched; structural quarantine via drill_attempts tables, never swings; redrill.py + checkdrill.py built with the first check). FIRST HANDOFF when this track starts: film drill fixture pairs \u2014 correct AND wrong execution \u2014 no existing fixture can test a drill check. D60 adds an AUTHORSHIP dimension in the FIRST schema migration (author_type system|coach + author_id + RLS \u2014 retrofitting an RLS dimension later is the expensive path): coach-authored drills are always plain class, scoped to the coach and students they are shared with, never the public catalog. Plain drills gain a 'marked done' self-report for coach roll-ups \u2014 always labelled self-reported, never mingled with camera-verified reps, never touching a durable swing metric.",
       "statusFile": ".claude/feature-tracks/drill-library/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#18-training-drills-and-exercises",
@@ -463,7 +463,7 @@
       "spine": false,
       "lifecycle": "planned",
       "phase": "coaching",
-      "goal": "A swing-aware AI Coach grounded in the golfer's own analysis, profile, goals, history and active coach plan — with conversation scope, per-tier usage limits and hard cost ceilings, prompt-injection handling for user-authored notes, a stated data-processing position on what golfer data reaches a model vendor, and a provider abstraction so the model is swappable.",
+      "goal": "A swing-aware AI Coach grounded in the golfer's own analysis, profile, goals, history and active coach plan \u2014 with conversation scope, per-tier usage limits and hard cost ceilings, prompt-injection handling for user-authored notes, a stated data-processing position on what golfer data reaches a model vendor, and a provider abstraction so the model is swappable.",
       "statusFile": ".claude/feature-tracks/ai-coach/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#17-ai-coach",
@@ -492,7 +492,7 @@
       "spine": false,
       "lifecycle": "planned",
       "phase": "improvement",
-      "goal": "Practice sessions, equipment inventory, trends over time, and the search/filter/organization that keeps a growing log usable. (Goal tracking is its own system now — the goal-progression track, D55.) Owns the swing log's FOCUS-SESSION rendering (D56): a focus training session is one session entity tied to one focus area, rendered as a labeled coaching-session card ('Focus: steadier posture · 9 swings · trend'), visually distinct from normal sessions because its swings are quarantined from durable metrics; every swing carries its session's focus, and the log gains a filter-by-focus-area facet (§36). The session→focus link is one nullable column on the session model.",
+      "goal": "Practice sessions, equipment inventory, trends over time, and the search/filter/organization that keeps a growing log usable. (Goal tracking is its own system now \u2014 the goal-progression track, D55.) Owns the swing log's FOCUS-SESSION rendering (D56): a focus training session is one session entity tied to one focus area, rendered as a labeled coaching-session card ('Focus: steadier posture \u00b7 9 swings \u00b7 trend'), visually distinct from normal sessions because its swings are quarantined from durable metrics; every swing carries its session's focus, and the log gains a filter-by-focus-area facet (\u00a736). The session\u2192focus link is one nullable column on the session model.",
       "statusFile": ".claude/feature-tracks/history-and-trends/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#8-practice-sessions",
@@ -513,7 +513,7 @@
       "spine": false,
       "lifecycle": "planned",
       "phase": "improvement",
-      "goal": "Comparison that surfaces the differences rather than showing two videos, selection logic (previous, same club, best, favourite), and the golfer-facing professional reference library fed by the admin surface — replacing today's hardcoded two-entry list. The DEFAULT professional reference is matched to the golfer: same swing style (§15.4), handedness, and club where available — pros are tagged with the STY taxonomy in the admin surface. Comparison also accepts an optional FOCUS-AREA SCOPE (§19.4 amended, D56): both videos open at the area's declared phase range, only its overlays draw, and the headline is the one or two measured deltas defining the area — phase range and overlay set come from goal_config.",
+      "goal": "Comparison that surfaces the differences rather than showing two videos, selection logic (previous, same club, best, favourite), and the golfer-facing professional reference library fed by the admin surface \u2014 replacing today's hardcoded two-entry list. The DEFAULT professional reference is matched to the golfer: same swing style (\u00a715.4), handedness, and club where available \u2014 pros are tagged with the STY taxonomy in the admin surface. Comparison also accepts an optional FOCUS-AREA SCOPE (\u00a719.4 amended, D56): both videos open at the area's declared phase range, only its overlays draw, and the headline is the one or two measured deltas defining the area \u2014 phase range and overlay set come from goal_config.",
       "statusFile": ".claude/feature-tracks/comparison-and-reference/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#19-swing-comparison",
@@ -537,7 +537,7 @@
       "spine": false,
       "lifecycle": "planned",
       "phase": "improvement",
-      "goal": "Manually entered launch-monitor and simulator metrics attached to a swing (§22): club/ball speed, carry, spin, path, face angle, smash factor and the rest, every field optional. Built so a future launch-monitor integration is an additional source rather than a rewrite — and note this is the ONLY authoritative source of face-angle degrees, which video never provides.",
+      "goal": "Manually entered launch-monitor and simulator metrics attached to a swing (\u00a722): club/ball speed, carry, spin, path, face angle, smash factor and the rest, every field optional. Built so a future launch-monitor integration is an additional source rather than a rewrite \u2014 and note this is the ONLY authoritative source of face-angle degrees, which video never provides.",
       "statusFile": ".claude/feature-tracks/launch-data/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#22-manually-entered-swing-and-launch-data"
@@ -556,7 +556,7 @@
       "spine": false,
       "lifecycle": "planned",
       "phase": "improvement",
-      "goal": "The assigned, measured correction loop (§16.3, D55): the AI or human coach assigns up to 3 focus goals from the golfer's top faults — each bound to measured scoring-config checks, never a free-text theme. Progress is windowed evidence across analyzed swings ('clean in X of the last Y swings that could judge it', parameters in a versioned goal_config), abstained swings never move it, and the meter shows on the after-swing screen and home. Achievement lands on the exact swing that completes the window — normal swings only, focus-session practice never counts (D56) — is celebrated once, then the goal enters quiet maintenance. Also owns the FOCUS PAGE (§16.3.7, D56): the browsable area catalog (a focus area IS a goal template viewed through measured performance), per-area averages and windowed trend arrows over normal evidencing swings, the area detail page, the 'Train this focus' entry, and the goal_config template fields it needs (phase_range, overlay_set, area_group, feel_cue). Design reference: DESIGN-focus-mode.md in this track's directory.",
+      "goal": "The assigned, measured correction loop (\u00a716.3, D55): the AI or human coach assigns up to 3 focus goals from the golfer's top faults \u2014 each bound to measured scoring-config checks, never a free-text theme. Progress is windowed evidence across analyzed swings ('clean in X of the last Y swings that could judge it', parameters in a versioned goal_config), abstained swings never move it, and the meter shows on the after-swing screen and home. Achievement lands on the exact swing that completes the window \u2014 normal swings only, focus-session practice never counts (D56) \u2014 is celebrated once, then the goal enters quiet maintenance. Also owns the FOCUS PAGE (\u00a716.3.7, D56): the browsable area catalog (a focus area IS a goal template viewed through measured performance), per-area averages and windowed trend arrows over normal evidencing swings, the area detail page, the 'Train this focus' entry, and the goal_config template fields it needs (phase_range, overlay_set, area_group, feel_cue). Design reference: DESIGN-focus-mode.md in this track's directory.",
       "statusFile": ".claude/feature-tracks/goal-progression/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#163-focus-goals-and-progression",
@@ -593,14 +593,14 @@
           "blocking": false
         }
       ],
-      "sequencingNote": "Depends hard on priority-engine because proposals must come from real, style-gated priority output — assigning a fault the golfer's style legitimizes is the mis-coaching D54 exists to prevent — and transitively on analysis-ground-truth: a progress claim over an unvalidated check is unfalsifiable, and 'you fixed it' is the one message the product must never be wrong about. history-and-trends is hard because the evidence history and trend surfaces are its infrastructure. Everything else is a seam: AI-proposed and self-promoted goals with deterministic text work before coach-collaboration (human assignment), ai-coach (narrative), drill-library (linked drills) or notifications (push delivery) land. Goal tracking was carved OUT of history-and-trends' goal by D55, the same way D54 carved practice-loop out of in-app-capture."
+      "sequencingNote": "Depends hard on priority-engine because proposals must come from real, style-gated priority output \u2014 assigning a fault the golfer's style legitimizes is the mis-coaching D54 exists to prevent \u2014 and transitively on analysis-ground-truth: a progress claim over an unvalidated check is unfalsifiable, and 'you fixed it' is the one message the product must never be wrong about. history-and-trends is hard because the evidence history and trend surfaces are its infrastructure. Everything else is a seam: AI-proposed and self-promoted goals with deterministic text work before coach-collaboration (human assignment), ai-coach (narrative), drill-library (linked drills) or notifications (push delivery) land. Goal tracking was carved OUT of history-and-trends' goal by D55, the same way D54 carved practice-loop out of in-app-capture."
     },
     {
       "id": "practice-loop",
       "spine": false,
       "lifecycle": "planned",
       "phase": "improvement",
-      "goal": "The simulator/range session experience (§8.1–8.5, §9.5) — the product's primary usage loop. Start a session and get a proposed session focus with a tip or drill (suggestions, zero required taps), then a rapid capture loop built for a phone on a stand: big record button, configurable countdown, post-swing quick feedback accounting for goals, the session focus, and earlier swings — next recording never more than one tap away. Ends with a session summary; a focus persists across sessions until improvement is sustained. Also owns FOCUS TRAINING SESSIONS (§8.4, D56): the setup→record→check coaching arc, the persistent focus pill + one-tap exit, focus-first after-swing presentation with replay opening on the area's phase range, the practice quarantine (focus-session swings never touch durable metrics), the 'take one real swing' closer, the rep-count nudge, session-to-session continuity — and SPOKEN FEEDBACK (§8.5, D57): the pre-generated Gemini voice bank speaking each verdict, device-TTS fallback, speak-only. Deterministic everywhere; AI narrative is an enhancement.",
+      "goal": "The simulator/range session experience (\u00a78.1\u20138.5, \u00a79.5) \u2014 the product's primary usage loop. Start a session and get a proposed session focus with a tip or drill (suggestions, zero required taps), then a rapid capture loop built for a phone on a stand: big record button, configurable countdown, post-swing quick feedback accounting for goals, the session focus, and earlier swings \u2014 next recording never more than one tap away. Ends with a session summary; a focus persists across sessions until improvement is sustained. Also owns FOCUS TRAINING SESSIONS (\u00a78.4, D56): the setup\u2192record\u2192check coaching arc, the persistent focus pill + one-tap exit, focus-first after-swing presentation with replay opening on the area's phase range, the practice quarantine (focus-session swings never touch durable metrics), the 'take one real swing' closer, the rep-count nudge, session-to-session continuity \u2014 and SPOKEN FEEDBACK (\u00a78.5, D57): the pre-generated Gemini voice bank speaking each verdict, device-TTS fallback, speak-only. Deterministic everywhere; AI narrative is an enhancement.",
       "statusFile": ".claude/feature-tracks/practice-loop/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#8-practice-sessions",
@@ -632,14 +632,14 @@
           "blocking": false
         }
       ],
-      "sequencingNote": "The capture mechanics — countdown, capture-screen controls, review/retake — are in-app-capture's (§9.5 sits in both tracks' specRefs); this track builds the session loop AROUND capture: the focus card, quick feedback, one-tap-next, and the session summary. ai-coach is non-blocking because §8.2 requires focus and feedback to degrade to deterministic priority output — AI narrative is an enhancement, never a hard dependency. The quick-feedback promise also leans on the analysis-latency SLO: 'record another right away' only feels right if analysis keeps up, so the analyzer-service capacity numbers bound what this screen can honestly promise. goal-progression is non-blocking the same way ai-coach is: once it exists, the focus card names the active focus goal and quick feedback leads with the goal readout (§16.3.4), but the session loop works from priority output alone before it."
+      "sequencingNote": "The capture mechanics \u2014 countdown, capture-screen controls, review/retake \u2014 are in-app-capture's (\u00a79.5 sits in both tracks' specRefs); this track builds the session loop AROUND capture: the focus card, quick feedback, one-tap-next, and the session summary. ai-coach is non-blocking because \u00a78.2 requires focus and feedback to degrade to deterministic priority output \u2014 AI narrative is an enhancement, never a hard dependency. The quick-feedback promise also leans on the analysis-latency SLO: 'record another right away' only feels right if analysis keeps up, so the analyzer-service capacity numbers bound what this screen can honestly promise. goal-progression is non-blocking the same way ai-coach is: once it exists, the focus card names the active focus goal and quick feedback leads with the goal readout (\u00a716.3.4), but the session loop works from priority output alone before it."
     },
     {
       "id": "billing-iap",
       "spine": false,
       "lifecycle": "planned",
       "phase": "commerce",
-      "goal": "Attach native in-app purchase to the entitlement engine built in foundation — StoreKit and Google Play Billing, no Stripe (D1) — with server-side receipt validation, restore-purchases as a first-class flow, admin-granted complimentary access without a store transaction, and the full upgrade/downgrade/cancellation/expiry/failed-payment lifecycle.",
+      "goal": "Attach native in-app purchase to the entitlement engine built in foundation \u2014 StoreKit and Google Play Billing, no Stripe (D1) \u2014 with server-side receipt validation, restore-purchases as a first-class flow, admin-granted complimentary access without a store transaction, and the full upgrade/downgrade/cancellation/expiry/failed-payment lifecycle.",
       "statusFile": ".claude/feature-tracks/billing-iap/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#30-subscription-tiers"
@@ -663,7 +663,7 @@
       "spine": false,
       "lifecycle": "planned",
       "phase": "commerce",
-      "goal": "Privacy, retention and deletion made real in code — including the full deletion cascade across object storage, derived artifacts, AI conversation history and coach-visible copies — plus tier-driven storage lifecycle, load testing against the SLOs, and the concurrency and isolation posture §38 requires. Inherits D60's delivered-content deletion semantics as stated requirements: recipient-keyed lessons survive coach account deletion (author tombstones); coach drill demos die with the coach and tombstone in feeds; frozen conversation threads persist read-only for both sides.",
+      "goal": "Privacy, retention and deletion made real in code \u2014 including the full deletion cascade across object storage, derived artifacts, AI conversation history and coach-visible copies \u2014 plus tier-driven storage lifecycle, load testing against the SLOs, and the concurrency and isolation posture \u00a738 requires. Inherits D60's delivered-content deletion semantics as stated requirements: recipient-keyed lessons survive coach account deletion (author tombstones); coach drill demos die with the coach and tombstone in feeds; frozen conversation threads persist read-only for both sides.",
       "statusFile": ".claude/feature-tracks/production-readiness/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#34-privacy-permissions-and-data-control",
@@ -691,7 +691,7 @@
       "spine": false,
       "lifecycle": "planned",
       "phase": "commerce",
-      "goal": "Share a swing with controlled access, export an eligible swing with selected overlays, and share a progress comparison (§35) — tier-restricted, and never making a video public unless the golfer intentionally chose it (§34.4).",
+      "goal": "Share a swing with controlled access, export an eligible swing with selected overlays, and share a progress comparison (\u00a735) \u2014 tier-restricted, and never making a video public unless the golfer intentionally chose it (\u00a734.4).",
       "statusFile": ".claude/feature-tracks/sharing-and-export/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#35-sharing-and-export",
@@ -711,7 +711,7 @@
       "spine": false,
       "lifecycle": "planned",
       "phase": "coach-platform",
-      "goal": "The coach directory, the golfer-initiated request/approve relationship with revocable access boundaries, and the coach workspace roster and golfer detail views — enforced by the row-level policy shape established and tested back in foundation.",
+      "goal": "The coach directory, the golfer-initiated request/approve relationship with revocable access boundaries, and the coach workspace roster and golfer detail views \u2014 enforced by the row-level policy shape established and tested back in foundation.",
       "statusFile": ".claude/feature-tracks/coach-relationships/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#23-coach-directory",
@@ -736,7 +736,7 @@
       "spine": false,
       "lifecycle": "planned",
       "phase": "coach-platform",
-      "goal": "Frame-anchored annotations and comments clearly distinguishable from AI findings, two-way messaging, and coach-created improvement plans the AI Coach is aware of and does not silently contradict. Owns the CONVERSATION SUBSTRATE (D60): conversations/messages/read-state where every coaching artifact — text, lesson, review request, drill assignment, plan update — is a typed IMMUTABLE entry in one feed (referenced objects carry state); creation gated on an approved coach_link, threads frozen read-only on relationship end; report/block (UGC store requirement); push-driven refresh with Supabase Realtime as the designed live seam. Owns the REVIEW-REQUEST loop (golfer submits a swing, coach queue = open-request filter over the feed). Builds packages/annotations as a SHARED toolset (tools, color/width state, normalized-coordinate strokes) consumed by both static annotations and the coach-video-lessons recorder.",
+      "goal": "Frame-anchored annotations and comments clearly distinguishable from AI findings, two-way messaging, and coach-created improvement plans the AI Coach is aware of and does not silently contradict. Owns the CONVERSATION SUBSTRATE (D60): conversations/messages/read-state where every coaching artifact \u2014 text, lesson, review request, drill assignment, plan update \u2014 is a typed IMMUTABLE entry in one feed (referenced objects carry state); creation gated on an approved coach_link, threads frozen read-only on relationship end; report/block (UGC store requirement); push-driven refresh with Supabase Realtime as the designed live seam. Owns the REVIEW-REQUEST loop (golfer submits a swing, coach queue = open-request filter over the feed). Builds packages/annotations as a SHARED toolset (tools, color/width state, normalized-coordinate strokes) consumed by both static annotations and the coach-video-lessons recorder.",
       "statusFile": ".claude/feature-tracks/coach-collaboration/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#26-coach-comments-and-annotations",
@@ -766,7 +766,7 @@
       "lifecycle": "planned",
       "phase": "coach-platform",
       "differentiator": true,
-      "goal": "Coach video lessons (D60, launch-blocking): the coach records a telestration + voiceover lesson over a student's swing — play/pause/scrub while drawing (straight line, freeform pencil, highlight circle, color/thickness, clear, undo) and talking — captured as a lesson.json EVENT LOG + AAC audio and replayed by RE-DRIVING the player, never a screen recording. Recorder (mobile v1) with pause/resume, preview-before-send, entitlement-honest length limits; send-time lesson_finalize job (loudness normalization + transcript); delivery as a conversation entry with notification fan-out; the student's replay player with lesson-scrubbing (state at t is a pure function of events ≤ t); attached notes and drills; coach drill authoring UI (record/upload demo, demo transcode job) over drill-library's authorship dimension; delivered/viewed state. BINDING DESIGN: .claude/architecture/coach-video-lessons-2026-08-18.md (lessons hang off a swing VIEW; recipient-keyed media; immutable conversation entries; replay-fidelity gates). FIRST HANDOFF when this track starts: a second test account (no coach exists in any seeded environment) and a recorded-on-device lesson fixture. PREREQUISITE READING: the D51 Skia measurement — freeform stroke rendering is its second consumer.",
+      "goal": "Coach video lessons (D60, launch-blocking): the coach records a telestration + voiceover lesson over a student's swing \u2014 play/pause/scrub while drawing (straight line, freeform pencil, highlight circle, color/thickness, clear, undo) and talking \u2014 captured as a lesson.json EVENT LOG + AAC audio and replayed by RE-DRIVING the player, never a screen recording. Recorder (mobile v1) with pause/resume, preview-before-send, entitlement-honest length limits; send-time lesson_finalize job (loudness normalization + transcript); delivery as a conversation entry with notification fan-out; the student's replay player with lesson-scrubbing (state at t is a pure function of events \u2264 t); attached notes and drills; coach drill authoring UI (record/upload demo, demo transcode job) over drill-library's authorship dimension; delivered/viewed state. BINDING DESIGN: .claude/architecture/coach-video-lessons-2026-08-18.md (lessons hang off a swing VIEW; recipient-keyed media; immutable conversation entries; replay-fidelity gates). FIRST HANDOFF when this track starts: a second test account (no coach exists in any seeded environment) and a recorded-on-device lesson fixture. PREREQUISITE READING: the D51 Skia measurement \u2014 freeform stroke rendering is its second consumer.",
       "statusFile": ".claude/feature-tracks/coach-video-lessons/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#264-recorded-video-lessons",
@@ -796,7 +796,7 @@
           "track": "mobile-player"
         }
       ],
-      "sequencingNote": "Declared launch-blocking by Taylor 2026-08-18 (D60) — a core piece of the 'AI coach and human coach in one product' differentiator and the feature that justifies Coach tiers. Depends hard on coach-collaboration because that track builds the conversation substrate lessons deliver through and the shared packages/annotations drawing toolset; on drill-library for the authorship dimension and attachment; on notifications for the fan-out. The export-to-MP4 render (server-side burn-in over the same event log) lands with sharing-and-export, not here — but it doubles as this track's replay-fidelity reference gate, so the pure state_at(t) oracle is built here regardless."
+      "sequencingNote": "Declared launch-blocking by Taylor 2026-08-18 (D60) \u2014 a core piece of the 'AI coach and human coach in one product' differentiator and the feature that justifies Coach tiers. Depends hard on coach-collaboration because that track builds the conversation substrate lessons deliver through and the shared packages/annotations drawing toolset; on drill-library for the authorship dimension and attachment; on notifications for the fan-out. The export-to-MP4 render (server-side burn-in over the same event log) lands with sharing-and-export, not here \u2014 but it doubles as this track's replay-fidelity reference gate, so the pure state_at(t) oracle is built here regardless."
     },
     {
       "id": "dual-device-capture",
@@ -804,7 +804,7 @@
       "lifecycle": "planned",
       "phase": "capture",
       "differentiator": true,
-      "goal": "DIFFERENTIATOR (§12). Two logged-in phones capturing one swing: device pairing, coordinated recording, automatic association to a single Swing, synchronized dual-view playback, and partial-capture recovery that never loses the good video. Built here rather than last so the launch date does not hang on the hardest unsolved problem in the product.",
+      "goal": "DIFFERENTIATOR (\u00a712). Two logged-in phones capturing one swing: device pairing, coordinated recording, automatic association to a single Swing, synchronized dual-view playback, and partial-capture recovery that never loses the good video. Built here rather than last so the launch date does not hang on the hardest unsolved problem in the product.",
       "statusFile": ".claude/feature-tracks/dual-device-capture/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#12-multi-phone-synchronized-recording"
@@ -823,7 +823,7 @@
       "spine": false,
       "lifecycle": "planned",
       "phase": "launch",
-      "goal": "The gate between built and shipped. Store submission for both platforms including Apple App Privacy and Google Data Safety declarations — both mandatory, both requiring an exact answer to what data is collected, shared and retained. Plus a security review of the whole surface (media access, coach authorization, service-role isolation, receipt validation), load testing against the SLOs rather than merely defining them, §41 accessibility verification in real outdoor conditions, a closed beta with a feedback and support channel, and the legal surface: privacy policy, terms, and subscription disclosures. Store submission verifies the D60 UGC requirements: report and block mechanisms on the coaching conversation (lessons, coach drills, messages) — a store-rejection risk if absent.",
+      "goal": "The gate between built and shipped. Store submission for both platforms including Apple App Privacy and Google Data Safety declarations \u2014 both mandatory, both requiring an exact answer to what data is collected, shared and retained. Plus a security review of the whole surface (media access, coach authorization, service-role isolation, receipt validation), load testing against the SLOs rather than merely defining them, \u00a741 accessibility verification in real outdoor conditions, a closed beta with a feedback and support channel, and the legal surface: privacy policy, terms, and subscription disclosures. Store submission verifies the D60 UGC requirements: report and block mechanisms on the coaching conversation (lessons, coach drills, messages) \u2014 a store-rejection risk if absent.",
       "statusFile": ".claude/feature-tracks/launch-readiness/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#34-privacy-permissions-and-data-control",
@@ -872,7 +872,7 @@
       "lifecycle": "future",
       "phase": "future",
       "deferredBy": "docs/decisions/ARCHIVE-numbered.md D2",
-      "goal": "FUTURE STATE (D2). Find the actual golf swing inside a long recording — rejecting walking in, setup, practice swings and walking away — and let the golfer choose when several are detected. Not the existing 8-event detection, which assumes a clip already contains exactly one swing. Until this ships, in-app-capture must provide a manual trim/select fallback.",
+      "goal": "FUTURE STATE (D2). Find the actual golf swing inside a long recording \u2014 rejecting walking in, setup, practice swings and walking away \u2014 and let the golfer choose when several are detected. Not the existing 8-event detection, which assumes a clip already contains exactly one swing. Until this ships, in-app-capture must provide a manual trim/select fallback.",
       "statusFile": ".claude/feature-tracks/swing-isolation/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#11-automatic-swing-detection",

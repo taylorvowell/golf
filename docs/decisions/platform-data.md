@@ -152,6 +152,22 @@ needs a faster host class and/or horizontal workers behind per-user flow control
 exactly the sizing question the worker-host HANDOFF decision (spend) must answer.
 **See:** ARCHIVE D9, D18, D26.
 
+### The analysis bottleneck is the club-trace variants, not pose
+
+**Decision:** Per-stage wall clock is measured, not assumed: **273.5s** for a full run, of which
+the `variants` stage — **eight full club re-solves kept so a human can compare club solutions on
+real pixels** — is **72%**, and the two pose passes together are **11%**. `variants` is a
+development instrument (`AnalysisRequest.club_variants`, default `True`); a production job sets it
+`False` and the job drops to ~76s with no new hardware. Pose on CUDA is worth a further ~18s, so
+the ORDER is **variants first, host second**.
+**Gotchas:** This corrects the attribution in the capacity model below — the 4.5-6.8 min/job figure
+was real, but reading it as "pose is slow, therefore buy a GPU" was wrong by roughly a factor of
+six. Never turn `club_variants` off for FIXTURE runs: comparing solutions on real pixels is exactly
+what it exists for, and club quality has been overstated three separate times by trusting a number
+instead of looking at the frame.
+**See:** `.claude/architecture/swing-analysis-speed-2026-08-18.md` — the full per-stage table, the
+end-to-end latency budget and every remaining lever. ARCHIVE D18, D53.
+
 ### Model assets have committed hashes and a stated source; a worker without them refuses to start
 
 **Decision:** Every model file the pipeline loads is declared in
