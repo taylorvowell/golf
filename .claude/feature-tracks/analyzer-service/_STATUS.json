@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "featureName": "analyzer-service",
-  "currentStep": "06",
+  "currentStep": "07",
   "phase": "Platform Foundation",
-  "lastUpdated": "2026-08-18T15:05:05Z",
+  "lastUpdated": "2026-08-18T17:01:32Z",
   "steps": {
     "01": {
       "status": "complete",
@@ -31,8 +31,13 @@
       "note": "Fair queuing, dead letters, orphan detection, backpressure, capacity model - all host-agnostic, all proven live against the QStash dev server. Publish now carries flowControl (key user-<id>, JOBS_FLOW_PARALLELISM, default 1 - keys allow no colon, dev server enforces) and a failureCallback (/api/internal/jobs/<id>/failure) that authenticates via the job token recovered from the dead message's OWN body (sourceBody - the dev server does send it), settles job+view failed, writes jobs.error (its first writer) and logs the dlqId. Events route stamps jobs.last_event_at (migration 0011) on every worker post; reconcile()'s new queue branch settles running rows silent past JOBS_QUEUE_HEARTBEAT_TIMEOUT_S (900) and queued rows past JOBS_QUEUE_PENDING_TIMEOUT_S (3600). Enqueue refuses at JOBS_MAX_ACTIVE_PER_USER (3) active jobs, counted by swing-ownership join not RLS visibility. done events self-report elapsedS into the job log. All policy is pure + unit-tested in lib/jobs/policy.ts (13 tests). PROVEN LIVE: positive e2e PASSED twice (view rev 3->4->5; 'pipeline elapsed 407.3s' in the log), negative path PASSED for real - worker killed, QStash burned 4 deliveries (~35min backoff), failure callback settled the job with dlqId 1787064288255-0. Gates: analyzer 165/2s/1x; web tsc+lint clean, vitest 192 (+13); migration applied. Capacity model in docs/decisions/platform-data.md: ~4.5-6.8min/job CPU pose (269-407s measured), ~10.5 jobs/hr/worker single-flight; CUDA projects ~4.5min - p95<180s SLO needs a faster host class and/or horizontal workers. route-auth meta-test now accepts jobContextForClaims (the shared verifier) alongside requireJobAccess."
     },
     "06": {
+      "status": "complete",
+      "completedAt": "2026-08-18T17:01:32Z",
+      "note": "Every model asset the pipeline loads now has a committed sha256 and a stated source (service/models.py), and a container that cannot get one refuses to start. Four assets: MediaPipe landmarker + RTMW wholebody + RTMPose body from public URLs, and the PRIVATE club-head best.pt from SWINGSAGE_CLUB_WEIGHTS_URL - published through the media store the web app already owns (pnpm --filter web models:publish -> swing-models bucket, CONTENT-ADDRESSED key, prints hash + signed URL), so D26 holds: the worker still has no storage credential. Hash is verified on the temp file BEFORE the atomic rename, so a partial download can never become the loaded model; server.py runs the same check before binding; entrypoint.sh bootstraps then execs (SWINGSAGE_SKIP_MODEL_BOOTSTRAP=1 for the in-image test suite). Closed the step-03 open item (best.pt had no fetch path) and added the worker-side half of the never-default-the-club-detector rule: a stated-but-absent detector is now a SpecError at spec parse, not a failure after five minutes of pose. PROVEN: fresh container exits 1 naming all three assets and their sources; the MediaPipe manifest URL really fetched and hashed to the committed value in-container. Gates: analyzer 189/2s/1x (+24), web tsc+lint clean, vitest 206 (+14). Split from the original step-06 declaration - the deploy half is step 07 and stays BLOCKED on the worker-host HANDOFF row."
+    },
+    "07": {
       "status": "not-started",
-      "note": "Declared, file not yet authored (lazy). The deploy half: choose and provision the worker host (BLOCKED on the OPEN HANDOFF row - spend, Taylor), production QStash credentials, club-head best.pt fetch path for the container (open since step 03), then the deployed loop re-proven end-to-end and the capacity model re-measured on the real host class against the p95<180s SLO."
+      "note": "Declared, file not yet authored (lazy). The deploy half, split out of the original step 06: choose and provision the worker host (BLOCKED on the OPEN HANDOFF row - spend, Taylor), production QStash credentials, then the deployed loop re-proven end-to-end and the capacity model re-measured on the real host class against the p95<180s SLO."
     }
   },
   "blockers": [],

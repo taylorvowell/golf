@@ -1,11 +1,17 @@
 # The analyzer worker image — code + pinned pip deps ONLY.
 #
-# Model assets are volumes, never image layers (they are retrained/overwritten locally and
-# hashed at load time; baking them in would silently version them). Mount at run time:
-#   -v <models>:/app/models         pose_landmarker_heavy.task (MediaPipe)
-#   -v <runs>:/app/runs             fine-tuned club-head weights (best.pt — local-only asset)
-#   -v <cache>:/root/.cache/rtmlib  RTMPose/RTMW onnx files (~410 MB, self-downloading on
-#                                   first use if the mount is empty)
+# Model assets are NEVER image layers (they are retrained/overwritten locally, so a layer
+# would version them silently). They are fetched at container start by the entrypoint, from
+# the checksummed manifest in service/models.py, into these paths — mount them as volumes so
+# a restart is free:
+#   -v <models>:/app/models         pose_landmarker_heavy.task (MediaPipe, public URL)
+#   -v <runs>:/app/runs             fine-tuned club-head weights (best.pt — PRIVATE; set
+#                                   SWINGSAGE_CLUB_WEIGHTS_URL, see `pnpm --filter web
+#                                   models:publish`)
+#   -v <cache>:/root/.cache/rtmlib  RTMW/RTMPose onnx (~430 MB, public MMPose URLs)
+#
+# SWINGSAGE_MODEL_GROUPS (default "pose,club") states which of those this deployment needs.
+# A missing or hash-mismatched asset stops the container before it can serve a job.
 #
 # Python 3.13 matches the dev venv (3.13.7). The torch cu126 wheels install from the extra
 # index pinned in requirements.txt and run on CPU-only hosts too — one faithful image, host
@@ -43,6 +49,13 @@ COPY services/analyzer/scripts/ scripts/
 COPY services/analyzer/service/ service/
 COPY services/analyzer/tests/ tests/
 
-# Default: run one job spec (see service/worker.py). Overridable, e.g.:
-#   docker run --rm swingsage-analyzer:dev python -m pytest tests
+RUN chmod +x service/entrypoint.sh
+
+# Every command goes through the model bootstrap first. The suite needs no model on disk, so
+# it opts out rather than downloading 480 MB:
+#   docker run --rm -e SWINGSAGE_SKIP_MODEL_BOOTSTRAP=1 swingsage-analyzer:dev \
+#       python -m pytest tests
+ENTRYPOINT ["service/entrypoint.sh"]
+
+# Default: run one job spec (see service/worker.py).
 CMD ["python", "-m", "service.worker", "-"]

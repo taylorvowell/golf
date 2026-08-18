@@ -4,6 +4,33 @@ Append-only. One entry per completed step: timestamp, what changed, anything wor
 
 ---
 
+## 06 - Model Assets and Container Bootstrap
+**Completed:** 2026-08-18 17:05 UTC
+**Phase:** Platform Foundation
+**Summary:** Every model file the pipeline loads now has a committed `sha256` and a stated
+source in `service/models.py`, and a container that cannot get one refuses to start.
+`service/fetchmodels.py` verifies (`--check`, never touches the network) or fetches, hashing
+the temp file **before** the atomic rename so a partial download can never become the loaded
+model; `service/entrypoint.sh` bootstraps then `exec`s; `server.py` re-runs the check before
+binding its socket. The private club-head `best.pt` — with no fetch path since step 03 — gets
+one through the media store the web app already owns: `pnpm --filter web models:publish`
+hashes it, uploads it to the new `swing-models` bucket under a content-addressed key, and
+prints the hash (for the manifest) and a signed URL (for `SWINGSAGE_CLUB_WEIGHTS_URL`). D26
+holds — the worker still has no storage credential and knows nothing about buckets. Also
+added the worker-side half of the never-default-the-club-detector rule: a stated-but-absent
+detector is a `SpecError` at spec parse, not a failure after five minutes of pose. Gates:
+analyzer 189/2s/1x (+24), web tsc+lint clean, vitest 206 (+14), fresh container exits 1
+naming all three missing assets and their sources.
+**Notes:** This step is the HOST-AGNOSTIC half of the original step-06 declaration, split out
+so the deploy's prerequisites could land while the host choice sits on Taylor's OPEN handoff
+row; the deploy is now step 07. Two things worth keeping: the MediaPipe URL was verified by
+actually fetching it in-container and matching the committed hash (a manifest URL nobody has
+ever fetched is a deploy-day failure waiting to happen), and the in-image test suite opts out
+of the bootstrap with `SWINGSAGE_SKIP_MODEL_BOOTSTRAP=1` rather than downloading 480 MB —
+step 03's from-scratch reproducibility proof stays cheap.
+
+---
+
 ## 05 - Fair Queuing, Dead Letters, and Orphan Detection
 **Completed:** 2026-08-18 15:05 UTC
 **Phase:** Platform Foundation

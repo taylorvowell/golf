@@ -1,5 +1,5 @@
 import { createClient } from "@supabase/supabase-js";
-import { ARTIFACT_BUCKET, SOURCE_BUCKET } from "../lib/media/keys";
+import { ARTIFACT_BUCKET, MODEL_BUCKET, SOURCE_BUCKET } from "../lib/media/keys";
 
 /**
  * Create the two media buckets in whichever Supabase project the environment points at.
@@ -28,6 +28,15 @@ const BUCKETS = [
     /** Derived artifacts. They live as long as the swing does; no expiry. */
     fileSizeLimit: "1GB",
     allowedMimeTypes: ["application/json", "video/mp4", "image/jpeg"],
+  },
+  {
+    name: MODEL_BUCKET,
+    /**
+     * The analyzer's private weights. Owned by no user and never expiring — an old report has to
+     * stay reproducible, and the weights it was produced by are part of that.
+     */
+    fileSizeLimit: "500MB",
+    allowedMimeTypes: ["application/octet-stream"],
   },
 ];
 

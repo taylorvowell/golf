@@ -83,6 +83,17 @@ def request_from_spec(spec: dict[str, Any]) -> AnalysisRequest:
             value = Path(value)
         kwargs[name] = value
 
+    # A STATED detector that is not on disk is a refusal, never a quiet fall-back to the
+    # classical path — the enqueue side already refuses to default it (WORKER_CLUB_DETECTOR),
+    # and this is that rule's worker-side half. Checked here, at parse time, because the
+    # alternative is discovering it after the two pose passes have burned five minutes.
+    detector = kwargs.get("club_detector")
+    if detector and not Path(detector).is_file():
+        raise SpecError(
+            f"club_detector {detector!r} is not on this worker "
+            "(run `python -m service.fetchmodels` — the weights are a manifest asset)"
+        )
+
     try:
         return AnalysisRequest(**kwargs)
     except TypeError as e:  # wrong types the loop above didn't catch

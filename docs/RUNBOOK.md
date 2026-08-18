@@ -167,20 +167,55 @@ there is no system CUDA toolkit — onnxruntime links against the libraries torc
 
 | Asset | Path | How obtained |
 |---|---|---|
-| MediaPipe pose bundle | `models/pose_landmarker_heavy.task` (30 MB) | manual download from the MediaPipe models page |
-| RTMPose / RTMW onnx | `~/.cache/rtmlib/` (~410 MB) | rtmlib self-downloads on first use (URLs hardcoded in `swingsage/pose_rtm.py`) |
-| Club-head detector | `runs/clubhead/weights/best.pt` (19 MB) | **local-only** — trained via `scripts/fetch_club_dataset.py` + `scripts/train_club.py`; no public fetch path |
+| MediaPipe pose bundle | `models/pose_landmarker_heavy.task` (30 MB) | manifest asset — public Google URL |
+| RTMW wholebody onnx | `~/.cache/rtmlib/hub/checkpoints/` (219 MB) | manifest asset — public MMPose zip, onnx extracted |
+| RTMPose body onnx | `~/.cache/rtmlib/hub/checkpoints/` (191 MB) | manifest asset, group `pose_body` — only a `wholebody=false` job needs it |
+| Club-head detector | `runs/clubhead/weights/best.pt` (19 MB) | manifest asset, **private** — trained via `scripts/fetch_club_dataset.py` + `scripts/train_club.py`, then published (below) |
 | Ultralytics base checkpoints | `yolo11s.pt` etc. in the working dir | auto-dropped by ultralytics on first use |
 
-**Container** (the future worker's image — code + pinned deps only, assets mounted):
+Everything marked *manifest asset* is declared with a `sha256` in
+`services/analyzer/service/models.py`. Verify or fetch them at any time:
+
+```bash
+.venv/Scripts/python.exe -m service.fetchmodels --check     # verify; never downloads
+.venv/Scripts/python.exe -m service.fetchmodels             # fetch what is missing/mismatched
+```
+
+A `mismatch` means the file on disk is not the file the manifest describes. If the model was
+genuinely retrained, update the hash in `models.py` and re-publish in the same commit — never
+loosen the check.
+
+**Publishing retrained club weights** (the only asset with no public source):
+
+```bash
+pnpm --filter web models:publish            # add MEDIA_DRIVER=supabase to get a fetchable URL
+```
+
+It prints the `sha256` (goes in `models.py`) and a signed URL (goes in the worker's
+`SWINGSAGE_CLUB_WEIGHTS_URL`). The key is content-addressed, so a re-publish can never
+overwrite the weights an older report was produced by. The bucket comes from
+`pnpm --filter web media:provision`.
+
+**Container** (the future worker's image — code + pinned deps only; models are fetched at start
+by `service/entrypoint.sh`, never baked into a layer):
 
 ```bash
 # from the REPO ROOT (context must carry packages/schema/schemas — see /.dockerignore)
 docker build -f services/analyzer/Dockerfile -t swingsage-analyzer:dev .
-docker run --rm swingsage-analyzer:dev python -m pytest tests   # reproducibility proof
+
+# the suite needs no model on disk, so it opts out of the bootstrap
+docker run --rm -e SWINGSAGE_SKIP_MODEL_BOOTSTRAP=1 \
+    swingsage-analyzer:dev python -m pytest tests               # reproducibility proof
+
+# what a fresh container sees: exits 1, naming every asset and where it comes from
+docker run --rm --entrypoint python swingsage-analyzer:dev -m service.fetchmodels --check
+
+# run one job with the assets mounted (service/worker.py). Mount the caches so a restart is
+# free — without them the entrypoint re-downloads ~250 MB on every boot.
 docker run --rm -i -v ./services/analyzer/models:/app/models \
     -v ./services/analyzer/runs:/app/runs \
-    swingsage-analyzer:dev < job-spec.json                      # run one job (service/worker.py)
+    -v "$HOME/.cache/rtmlib:/root/.cache/rtmlib" \
+    swingsage-analyzer:dev < job-spec.json
 ```
 
 ### The queue loop — QStash + worker, locally

@@ -20,6 +20,28 @@ export const SOURCE_BUCKET = "swing-source";
 export const ARTIFACT_BUCKET = "swing-artifacts";
 
 /**
+ * The analyzer's private model weights — today just the fine-tuned club-head detector, which has
+ * no public home and therefore no way onto a hosted worker without one.
+ *
+ * A third bucket rather than a folder in the artifact bucket because it is the only media here
+ * that belongs to no user: its keys carry no owner segment, so the ownership policy that makes
+ * the other two safe is meaningless on it, and the retention rules are unrelated again (weights
+ * outlive every swing analysed with them — an old report has to stay reproducible).
+ *
+ * Keys are CONTENT-ADDRESSED (`<asset>/<sha256>.<ext>`): publishing retrained weights can never
+ * overwrite the ones a stored report was produced by, and the URL a worker holds agrees with the
+ * hash in `services/analyzer/service/models.py` by construction.
+ */
+export const MODEL_BUCKET = "swing-models";
+
+export function modelKey(asset: string, sha256: string, extension: string): string {
+  if (!/^[a-z0-9_]+$/.test(asset)) throw new Error(`invalid model asset name: ${asset}`);
+  if (!/^[0-9a-f]{64}$/.test(sha256)) throw new Error(`invalid model sha256: ${sha256}`);
+  if (!/^[a-z0-9]+$/.test(extension)) throw new Error(`invalid model extension: ${extension}`);
+  return `${asset}/${sha256}.${extension}`;
+}
+
+/**
  * Everything needed to address one view's media. Every field is an id the database minted, which
  * is the property that makes a key stable: renaming a file, re-analysing a swing or moving the
  * analyzer to another machine changes none of them.

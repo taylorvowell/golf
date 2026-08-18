@@ -152,6 +152,29 @@ needs a faster host class and/or horizontal workers behind per-user flow control
 exactly the sizing question the worker-host HANDOFF decision (spend) must answer.
 **See:** ARCHIVE D9, D18, D26.
 
+### Model assets have committed hashes and a stated source; a worker without them refuses to start
+
+**Decision:** Every model file the pipeline loads is declared in
+`services/analyzer/service/models.py` with a `sha256`, a size and a source, and is fetched at
+container start by `service/entrypoint.sh` — never baked into an image layer, because these
+files are retrained and overwritten locally and a layer would version them silently. Public
+assets (the MediaPipe landmarker, the MMPose RTMW/RTMPose onnx) carry their URL literally.
+The one private asset, the fine-tuned club-head `best.pt`, carries an env var name instead
+(`SWINGSAGE_CLUB_WEIGHTS_URL`) and is published through the media store the web app already
+owns: `pnpm --filter web models:publish` hashes it, uploads it to the `swing-models` bucket
+under a **content-addressed** key, and prints both the hash and a signed URL. D26 is intact —
+the worker still holds no storage credential and knows nothing about buckets. A hash is
+verified on the temp file **before** the atomic rename, so a partial download can never become
+the file the pipeline loads, and `service/server.py` runs the same check before binding its
+socket: a worker that cannot analyse must never accept a job.
+**Gotchas:** `SWINGSAGE_MODEL_GROUPS` (default `pose,club`) states which assets a deployment
+needs — an asset is never quietly dropped because it happened to be absent. A `club_detector`
+path that is not on disk is now a `SpecError` at spec-parse time rather than a failure after
+the pose passes have burned five minutes, which is the worker-side half of the standing
+never-default-the-club-detector rule. Retraining the detector is deliberately a two-line
+commit: the manifest hash changes in the same commit as the re-publish, or the check fails.
+`SWINGSAGE_SKIP_MODEL_BOOTSTRAP=1` is the opt-out for running the test suite in the image.
+
 ### Three environments, each with its own Supabase project
 
 **Decision:** local / preview / production, each with its own Supabase project, storage buckets

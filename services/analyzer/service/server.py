@@ -15,6 +15,10 @@ Environment (all required):
                         to it, so a reverse proxy rewriting the path breaks verification
     WORKER_PORT         listen port (default 8787)
 
+Model assets are checked before the socket is bound (see service/models.py):
+    SWINGSAGE_MODEL_GROUPS        which asset groups this deployment needs (default pose,club)
+    SWINGSAGE_CLUB_WEIGHTS_URL    where the private club-head weights come from
+
 Status codes speak to QStash's retrier, so they follow the jobrun failure taxonomy:
     200  the job reached a terminal answer (success OR deterministic refusal) — never retry
     401  signature verification failed — not a job at all
@@ -35,6 +39,7 @@ from typing import Any, Callable, Optional
 from qstash import Receiver
 
 from .jobrun import job_from_spec, run_queue_job
+from .models import check as check_models, describe_failures
 from .worker import SpecError
 
 
@@ -124,7 +129,23 @@ def make_server(
     return ThreadingHTTPServer(("0.0.0.0", port), handler)
 
 
+def preflight() -> None:
+    """Refuse to serve without the model assets this deployment declares it needs.
+
+    A worker that cannot analyse must never accept work: without this, a container missing its
+    club weights binds happily, takes a job, spends five minutes on the pose passes and then
+    fails — or, before step 06's spec guard, quietly produced a swing with no club trace. The
+    check is hash-based and costs seconds against a job's minutes.
+    """
+    reports = check_models()
+    failures = describe_failures(reports)
+    if failures:
+        raise SystemExit(failures)
+    print(f"model preflight ok ({len(reports)} asset(s))", file=sys.stderr)
+
+
 def main(argv: Optional[list[str]] = None) -> int:
+    preflight()
     current = _require_env("QSTASH_CURRENT_SIGNING_KEY")
     nxt = _require_env("QSTASH_NEXT_SIGNING_KEY")
     public_url = _require_env("WORKER_PUBLIC_URL")

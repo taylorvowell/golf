@@ -3,6 +3,7 @@ import {
   ARTIFACT_NAMES,
   artifactKey,
   isArtifactName,
+  modelKey,
   revisionPrefix,
   sourceKey,
   viewPrefix,
@@ -86,5 +87,31 @@ describe("artifact addressing", () => {
       expect(isArtifactName(name), `${name} is not in the artifact catalogue`).toBe(true);
     }
     expect(ARTIFACT_NAMES.length).toBeGreaterThanOrEqual(10);
+  });
+});
+
+describe("model addressing", () => {
+  const SHA = "a".repeat(64);
+
+  it("is content-addressed, so retrained weights never overwrite published ones", () => {
+    expect(modelKey("clubhead_best", SHA, "pt")).toBe(`clubhead_best/${SHA}.pt`);
+    expect(modelKey("clubhead_best", "b".repeat(64), "pt")).not.toBe(
+      modelKey("clubhead_best", SHA, "pt"),
+    );
+  });
+
+  it.each(["Clubhead", "club-head", "club/head", "", ".."])("rejects asset name %s", (bad) => {
+    expect(() => modelKey(bad, SHA, "pt")).toThrow();
+  });
+
+  it.each([SHA.toUpperCase(), "a".repeat(63), "", "z".repeat(64)])(
+    "rejects sha256 %s",
+    (bad) => {
+      expect(() => modelKey("clubhead_best", bad, "pt")).toThrow();
+    },
+  );
+
+  it.each(["", ".pt", "p t", "PT"])("rejects extension %s", (bad) => {
+    expect(() => modelKey("clubhead_best", SHA, bad)).toThrow();
   });
 });
