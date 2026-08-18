@@ -37,4 +37,5 @@ export { Skeleton } from "./Skeleton";
 export { SheetOverBackdrop, HERO_PARALLAX, HERO_SHEET_GAP } from "./SheetOverBackdrop";
 export { SideDrawer, type DrawerClose } from "./SideDrawer";
 export { SheetHandle } from "./SheetHandle";
+export { Sheet, type SheetProps } from "./Sheet";
 export { HeroBackdrop } from "./HeroBackdrop";

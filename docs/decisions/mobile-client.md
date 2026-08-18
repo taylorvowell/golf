@@ -122,6 +122,27 @@ must be probed at runtime and never assumed; the S25+ is a flagship and a mid-ra
 differ. 231 vs 240 is 3.6% short and unexplained — check before relying on an exact rate.
 **See:** ARCHIVE D37, D38, D39.
 
+### Session mode is the capture surface, built UI-first behind Taylor's sign-off gate
+
+**Decision (Taylor, 2026-08-18):** The Record door opens **session mode** — the full recording
+experience specced in `.claude/feature-tracks/session-mode/DESIGN-session-mode.md`: live
+capture screen (editable session name, three-way session type, settings pills + honest FPS
+readout, alignment ghost, countdown, red recording treatment) and the post-recording screen
+(the one-shape report player in session chrome with a staged analyzing bar and a session dock).
+Build order is UI-stubbed-first; **wiring starts only after Taylor signs off the UX** — his
+explicit gate, an exception to the no-approval-gates rule. A session row is minted **only when
+the first swing is recorded**; sessions carry a name and a type (Swing Analysis / Practice
+Drills / Video Only — drills quarantine like D56, video-only skips analysis and is the
+entitlement floor). Recording delay defaults to **3 s** (off/3/5/10).
+**Gotchas:** The capture preview must come from extending `modules/high-speed-camera` with a
+preview surface on its Camera2 constrained session — adding `expo-camera` for preview would put
+two stacks on one camera device, and vision-camera silently delivers 60 (D37–D39). The slide-up
+panels are the sanctioned Deck absorption: a `design/system` sheet re-expresses `DeckSheet`; no
+new Deck adoption. The on-screen FPS pill is Taylor's named exception to the
+instruments-stay-in-dev rule. Auto-end-on-impact ships as a disabled "coming soon" toggle —
+detection is iceboxed.
+**See:** ARCHIVE D61; `PROJECT_MAIN.md` §8.1/§8.6/§9.5/§9.6.
+
 ### Measurement is by closed loop, never by self-report
 
 **Decision:** Anything claiming frame-exactness is measured by decoding an artifact, not by asking

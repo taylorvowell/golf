@@ -3224,3 +3224,51 @@ land before the track starts; no coach exists in any seeded environment (first H
 the track); transcript vendor is a track-start strategic decision (voice data reaches a
 vendor). Recorder v1 is mobile; coach-web recording, comparison telestration, tablet, and
 web replay are named deferrals.
+
+## D61 — Session mode: the recording experience, specified and built UI-first
+
+**Date:** 2026-08-18 · **Directed by Taylor** · **Track:** `session-mode`
+
+Taylor specified the core recording experience end to end and set the build order:
+**(1) the whole flow as clickable, stubbed UI → (2) UX iteration with him → (3) his
+explicit sign-off → (4) wiring.** The sign-off gate is a deliberate exception to the
+no-approval-gates rule, at his instruction.
+
+**The experience:** the tab bar's Record button enters session mode directly — live
+camera, top scrim, editable session name (`Session N | date`, only the `Session N` part
+edits), a three-way session type toggle (**Swing Analysis** / **Practice Drills** /
+**Video Only**) with an info sheet, settings pills + an on-screen recording-FPS readout
+(Taylor's explicit exception to the instruments-stay-in-dev rule), an address-pose
+alignment ghost, a help sheet, and a dock of Cancel / delay clock / big red **Record
+Swing** / AI-audio toggle / settings cog. Record → large countdown → stylized red
+recording treatment → stop → the **post-recording screen**: the swing looping under the
+standard transport, a staged analyzing bar, and a session dock (previous swing, end
+session, quick-access session swing list with view/delete/star, **Record New Swing**,
+delete/favorite/cog). Analysis finishing while the golfer is still on that swing shows
+"analysis complete" and slides the report sheet up on its own.
+
+**Key calls made with it:**
+- **A session row exists only once the first swing is recorded** — cancel-before-record
+  stores nothing. Sessions gain a golfer-visible **name** and a **type**; type locks at
+  the first swing. Practice Drills reuses the D56 quarantine semantics; Video Only is the
+  entitlement floor (record/replay is never gated, analysis is).
+- **Recording delay default is 3 seconds** (options off/3/5/10) — supersedes §9.5's
+  5/10/15-default-5.
+- **The post-recording screen is the one-shape report player** in session chrome — the
+  "after-swing session chrome" deferral from the SwingPlayer deletion lands here.
+- **Session mode mints real session rows**, flipping the client's time-inferred
+  sessionization to real `sessionId` (the additive contract change D41 anticipated);
+  `sessions` gains `name` + `session_type` append-only.
+- **The capture camera stays on the direct Camera2 path**: wiring extends
+  `modules/high-speed-camera` with a preview surface sharing its constrained session.
+  UI phase runs on a stubbed camera stage so the flow is clickable with zero native work.
+- **Slide-up panels are the Deck absorption moment**: a `design/system` sheet primitive
+  re-expresses `DeckSheet`; no new Deck adoption.
+- **Auto-end recording** (impact detection) is a settings toggle shipped disabled/"coming
+  soon" — detection itself is iceboxed (`docs/icebox/auto-stop-impact-detection.md`).
+- One device, one camera; multi-phone sync, focus intelligence, spoken feedback, manual
+  trim and upload resilience stay with their owning tracks (`dual-device-capture`,
+  `practice-loop`, `in-app-capture`, `media-pipeline`). The track delivers the capture
+  *surface* those tracks were each promised — their entries note the split.
+
+Full retained detail: `.claude/feature-tracks/session-mode/DESIGN-session-mode.md`.

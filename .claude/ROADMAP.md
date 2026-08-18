@@ -12,8 +12,8 @@ Platform Foundation → Core Golfer Experience → Capture & Multi-Device → Co
 
 | Track | Phase | Goal | Progress | Current | Lifecycle | Blocked on |
 |-------|-------|------|----------|---------|-----------|------------|
-| platform-foundation | Platform Foundation | Close PROJECT_MAIN §44's open architecture questions, then build identity, t… | 6/10 (60%, 1 in-prog) | 04 | active | — |
-| **analyzer-service** (spine) | Platform Foundation | Promote the analyzer from a hand-invoked CLI to a hosted, queue-driven worke… | 4/5 (80%, 1 in-prog) | 05 | active | — |
+| platform-foundation | Platform Foundation | Close PROJECT_MAIN §44's open architecture questions, then build identity, t… | 6/10 (60%, 1 in-prog) | 05 | active | — |
+| **analyzer-service** (spine) | Platform Foundation | Promote the analyzer from a hand-invoked CLI to a hosted, queue-driven worke… | 6/7 (86%) | 07 | active | — |
 | media-pipeline | Platform Foundation | Get 270-330MB phone video off a device on cellular, reliably: on-device trim… | 0/0 (—) | — | planned | — |
 | observability-and-slos | Platform Foundation | Define and instrument the targets that make 'production ready' falsifiable: … | 0/0 (—) | — | planned | — |
 | notifications | Platform Foundation | Push and email notification infrastructure with user-manageable preferences.… | 0/0 (—) | — | planned | — |
@@ -22,6 +22,7 @@ Platform Foundation → Core Golfer Experience → Capture & Multi-Device → Co
 | mobile-player | Core Golfer Experience | Re-express the frame-accurate player and overlay system on mobile, plus the … | 4/4 (100%) | null | complete | — |
 | swing-ingest | Core Golfer Experience | The product flow on top of the media pipeline: turn one or two uploaded vide… | 0/0 (—) | — | planned | — |
 | analysis-ground-truth | Core Golfer Experience | Make the analysis falsifiable before anyone pays for it: hand-labelled event… | 0/0 (—) | — | planned | — |
+| session-mode | Capture & Multi-Device | The core recording experience, specified by Taylor 2026-08-18 (D61) and buil… | 0/7 (0%) | 01 | active | — |
 | in-app-capture | Capture & Multi-Device | Record a swing inside the app at a minimum of 60fps: capability detection wi… | 0/0 (—) | — | planned | — |
 | dual-device-spike | Capture & Multi-Device | Retire the §12 feasibility risk early: prove two phones can be paired, trigg… | 0/0 (—) | — | planned | — |
 | dual-device-capture | Capture & Multi-Device | DIFFERENTIATOR (§12). Two logged-in phones capturing one swing: device pairi… | 0/0 (—) | — | planned | — |
@@ -53,5 +54,5 @@ Platform Foundation → Core Golfer Experience → Capture & Multi-Device → Co
 
 ## Recommended next
 
-Spine: **analyzer-service 05** (`/build`). Then the other unblocked active/planned tracks per phase order. Externally-blocked
+Spine: **analyzer-service 07** (`/build`). Then the other unblocked active/planned tracks per phase order. Externally-blocked
 tracks wait on their `unblockTrigger`.

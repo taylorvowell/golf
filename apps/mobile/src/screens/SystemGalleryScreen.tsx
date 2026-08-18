@@ -37,6 +37,7 @@ import {
   ScoreRing,
   Segmented,
   SessionPillNav,
+  Sheet,
   HERO_PARALLAX,
   SheetOverBackdrop,
   StickThumb,
@@ -61,6 +62,7 @@ export function SystemGalleryScreen() {
   const styles = useStyles();
   const [segment, setSegment] = useState("Week");
   const [chromeHidden, setChromeHidden] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   return (
     <ScrollView
@@ -288,6 +290,24 @@ export function SystemGalleryScreen() {
               },
             ]}
           />
+        </Section>
+
+        <Section title="Sheet — the system bottom sheet">
+          <MetaText>
+            DeckSheet's mechanics on system tokens (the D61 absorption): two detents, drag,
+            fling projection, hardware back. Closed = unmounted.
+          </MetaText>
+          <Button label="Open sheet" variant="secondary" onPress={() => setSheetOpen(true)} />
+          <Sheet
+            visible={sheetOpen}
+            onClose={() => setSheetOpen(false)}
+            title="System sheet"
+            subtitle="Drag between detents; drag down to close"
+          >
+            {Array.from({ length: 14 }, (_, i) => (
+              <LabelText key={i}>Row {i + 1}</LabelText>
+            ))}
+          </Sheet>
         </Section>
 
         <Section title="Sheet over backdrop — the scaffold">

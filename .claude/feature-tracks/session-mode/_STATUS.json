@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "featureName": "session-mode",
+  "currentStep": "03",
+  "phase": "Session Mode — UI",
+  "lastUpdated": "2026-08-18T00:00:00Z",
+  "steps": {
+    "01": { "status": "complete", "completedAt": "2026-08-18T00:00:00Z" },
+    "02": { "status": "complete", "completedAt": "2026-08-18T00:00:00Z" },
+    "03": { "status": "not-started" },
+    "04": { "status": "not-started" },
+    "05": { "status": "not-started" },
+    "06": { "status": "not-started" },
+    "07": { "status": "not-started" }
+  },
+  "blockers": [],
+  "skipped": []
+}

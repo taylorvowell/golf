@@ -531,6 +531,13 @@ This should improve long-term organization beyond a flat list of individual swin
 - Recording never *requires* a session. A swing exists without one and moves freely between
   sessions.
 
+> **AMENDED 2026-08-18 (D61) — session mode.** The tab bar's Record button enters **session
+> mode** directly: a live capture surface that *is* the new-session screen. A session row is
+> **created only when the first swing is recorded** — cancelling before that stores nothing,
+> so empty sessions cannot exist. Sessions are **named**: default `Session N | <date>`, with
+> the `Session N` part editable in place (the date is fixed). Ending the session lands on the
+> swing log.
+
 ## 8.2 Session focus
 
 When a session starts, the coach proposes **what to work on in this session**, with a tip or
@@ -623,6 +630,20 @@ missing-asset fallback; a settings line discloses that the coach voice is AI-gen
 speech recognition and no conversational voice — the coach speaks, it does not listen (a
 future capability, deliberately deferred).
 
+## 8.6 Session types
+
+> **ADDED 2026-08-18 (D61).** Every session has one of three types, chosen on the capture
+> screen before the first swing and fixed once one is recorded.
+
+- **Swing Analysis** (default) — swings are analyzed, scored, and count toward history,
+  trends and goals.
+- **Practice Drills** — deliberate drill work, often coach-assigned: swings are analyzed but
+  **quarantined from every durable metric** (the same quarantine D56 defines for focus
+  sessions — no averages, no trends, no goal evidence, no personal bests).
+- **Video Only** — record and replay only; no analysis, no stats. Also the graceful floor
+  when a golfer's tier or remaining AI-analysis allowance cannot cover analysis: the
+  entitlement seam gates *analysis*, never the ability to record and watch.
+
 ---
 
 # 9. In-App Swing Recording
@@ -688,7 +709,8 @@ The application should still be able to identify the actual golf swing inside a 
 **Delayed start.** Tapping record opens the capture screen with the live camera view and a
 bar at the bottom, and a countdown begins before recording actually starts:
 
-- Delay options: **no delay, 5, 10, or 15 seconds**. Default 5 seconds.
+- Delay options: **off, 3, 5, or 10 seconds**. Default **3 seconds**. *(Amended 2026-08-18,
+  D61 — was 5/10/15 with a 5-second default.)*
 - Configurable in app settings, and changeable in place on the capture screen via a timer
   icon in the bottom bar.
 - The countdown is shown large on screen — readable from the ball, several steps from the
@@ -708,6 +730,23 @@ bar at the bottom, and a countdown begins before recording actually starts:
   swing is saved either way.
 - Quick feedback renders from the deterministic analysis output (top priority findings); AI
   enrichment is additive and its absence never delays or empties the card.
+
+## 9.6 The post-recording screen
+
+> **ADDED 2026-08-18 (D61).** The screen shown immediately after every recorded swing —
+> distinct from opening a swing from the log, but the same underlying player.
+
+- The swing **plays immediately, looping**, with the standard transport (play, speed, scrub)
+  over the video. The scrubber gains its swing-phase markers **only once analysis completes**.
+- While analysis runs, a **staged progress bar with a spinner** sits below the playback area
+  — honest stages from the real pipeline, never a fake percentage. Video-Only swings skip it.
+- The in-session dock: previous-swing thumbnail, end session, a quick-access **session swing
+  list** (slide-up: this session's swings with view / delete / star; the current one shows
+  "analyzing…"), a big **"Record New Swing"** button, and unlabelled delete / favorite /
+  settings icons.
+- If analysis completes while the golfer is still on this swing's screen, an **"analysis
+  complete"** moment shows and the analysis sheet slides up on its own. If they have moved
+  on, the swing simply becomes ready wherever it is listed.
 
 ---
 

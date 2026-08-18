@@ -315,11 +315,46 @@
       "dependsOn": []
     },
     {
+      "id": "session-mode",
+      "spine": false,
+      "lifecycle": "active",
+      "phase": "capture",
+      "goal": "The core recording experience, specified by Taylor 2026-08-18 (D61) and built UI-FIRST: the Record door opens session mode \u2014 live capture screen (editable session name, Swing Analysis / Practice Drills / Video Only type toggle, settings pills + honest FPS readout, alignment ghost, countdown, red recording treatment, Cancel/delay/Record/AI-audio/cog dock) and the post-recording screen (the one-shape report player in session chrome: looping replay, staged analyzing bar, session dock with previous-swing, quick-access swing list, Record New Swing, end session). Steps 01\u201302 are the whole flow as clickable stubbed UI; step 03 is UX iteration to Taylor's EXPLICIT SIGN-OFF (his mandated gate \u2014 wiring may not start before it); steps 04\u201307 wire it: Camera2 preview+record via modules/high-speed-camera, real session rows (sessions gain name + type, the additive sessionId contract change D41 anticipated, drill/video-only quarantine), dev-grade upload + analyzer job + honest progress, and loop completion. One device, one camera.",
+      "statusFile": ".claude/feature-tracks/session-mode/_STATUS.json",
+      "specRefs": [
+        ".claude/ai-instructions/PROJECT_MAIN.md#8-practice-sessions",
+        ".claude/ai-instructions/PROJECT_MAIN.md#9-in-app-swing-recording",
+        ".claude/ai-instructions/PROJECT_MAIN.md#95-rapid-re-recording-and-delayed-start",
+        ".claude/feature-tracks/session-mode/DESIGN-session-mode.md"
+      ],
+      "owns": [
+        "apps/mobile/src/features/session",
+        "apps/mobile/src/design/system/Sheet.tsx"
+      ],
+      "dependsOn": [
+        {
+          "track": "mobile-player"
+        },
+        {
+          "track": "design-system"
+        },
+        {
+          "track": "analyzer-service",
+          "blocking": false
+        },
+        {
+          "track": "media-pipeline",
+          "blocking": false
+        }
+      ],
+      "sequencingNote": "Created 2026-08-18 at Taylor's direction \u2014 session mode is the product's core loop and he wants to walk and iterate the UX now, ahead of the capture phase's dependency order. It delivers the capture-and-loop SURFACE that in-app-capture and practice-loop were each promised; those tracks keep their depth (capability detection + manual trim; focus intelligence + quick feedback + spoken feedback) and land it inside this surface. analyzer-service is non-blocking: the UI phase needs nothing, and step 06 runs on the locally-proven queue loop. media-pipeline is non-blocking: step 06 uploads dev-grade behind a named seam that track replaces. Deck absorption (the design-system deferral) happens here via the system sheet primitive."
+    },
+    {
       "id": "in-app-capture",
       "spine": false,
       "lifecycle": "planned",
       "phase": "capture",
-      "goal": "Record a swing inside the app at a minimum of 60fps: capability detection with honest messaging when a device cannot comply, a golf-shaped capture flow, review/retake, and hands-free recording. Owns the manual trim/select fallback that hands-free and long recordings need while automatic swing isolation stays deferred (D2) \u2014 required, not optional.",
+      "goal": "Record a swing inside the app at a minimum of 60fps: capability detection with honest messaging when a device cannot comply, a golf-shaped capture flow, review/retake, and hands-free recording. Owns the manual trim/select fallback that hands-free and long recordings need while automatic swing isolation stays deferred (D2) \u2014 required, not optional. NOTE (D61): the capture SURFACE itself \u2014 the session-mode screen, countdown, dock, post-recording loop \u2014 is built by the session-mode track; this track lands capability detection, honest degrade messaging, review/retake depth and the manual trim fallback inside that surface.",
       "statusFile": ".claude/feature-tracks/in-app-capture/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#23-high-frame-rate-capture",
@@ -632,7 +667,7 @@
           "blocking": false
         }
       ],
-      "sequencingNote": "The capture mechanics \u2014 countdown, capture-screen controls, review/retake \u2014 are in-app-capture's (\u00a79.5 sits in both tracks' specRefs); this track builds the session loop AROUND capture: the focus card, quick feedback, one-tap-next, and the session summary. ai-coach is non-blocking because \u00a78.2 requires focus and feedback to degrade to deterministic priority output \u2014 AI narrative is an enhancement, never a hard dependency. The quick-feedback promise also leans on the analysis-latency SLO: 'record another right away' only feels right if analysis keeps up, so the analyzer-service capacity numbers bound what this screen can honestly promise. goal-progression is non-blocking the same way ai-coach is: once it exists, the focus card names the active focus goal and quick feedback leads with the goal readout (\u00a716.3.4), but the session loop works from priority output alone before it."
+      "sequencingNote": "AMENDED 2026-08-18 (D61): the session-mode track builds the session SURFACE \u2014 session creation/naming/types, the capture screen, the post-recording loop chrome \u2014 ahead of this track. What remains here is the coaching intelligence inside that surface: the focus card, quick-feedback content, session summary, spoken feedback (D57), and the priority-driven parts that depend on the coaching phase. The capture mechanics \u2014 countdown, capture-screen controls, review/retake \u2014 are in-app-capture's (\u00a79.5 sits in both tracks' specRefs); this track builds the session loop AROUND capture: the focus card, quick feedback, one-tap-next, and the session summary. ai-coach is non-blocking because \u00a78.2 requires focus and feedback to degrade to deterministic priority output \u2014 AI narrative is an enhancement, never a hard dependency. The quick-feedback promise also leans on the analysis-latency SLO: 'record another right away' only feels right if analysis keeps up, so the analyzer-service capacity numbers bound what this screen can honestly promise. goal-progression is non-blocking the same way ai-coach is: once it exists, the focus card names the active focus goal and quick feedback leads with the goal readout (\u00a716.3.4), but the session loop works from priority output alone before it."
     },
     {
       "id": "billing-iap",
