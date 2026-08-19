@@ -251,9 +251,9 @@ export function SessionScreen() {
                 />
               </LinearGradient>
 
-              {/* Camera controls — left edge above the bar: flip on top, zoom stops below. */}
+              {/* Camera controls — left edge, tucked close above the bar (Taylor). */}
               <View
-                style={[styles.leftControls, { bottom: 150 + insets.bottom }]}
+                style={[styles.leftControls, { bottom: 100 + insets.bottom }]}
                 pointerEvents="box-none"
               >
                 <CameraControls
@@ -266,7 +266,7 @@ export function SessionScreen() {
 
               {/* DTL / Front View — right edge, directly above the help orb. */}
               <View
-                style={[styles.rightToggle, { bottom: 150 + 44 + 12 + insets.bottom }]}
+                style={[styles.rightToggle, { bottom: 100 + 44 + 10 + insets.bottom }]}
                 pointerEvents="box-none"
               >
                 <ViewToggle
@@ -282,7 +282,7 @@ export function SessionScreen() {
                 onPress={() => setSheet("help")}
                 style={({ pressed }) => [
                   styles.helpOrb,
-                  { bottom: 150 + insets.bottom },
+                  { bottom: 100 + insets.bottom },
                   pressed && styles.pressed,
                 ]}
                 testID="session-help"

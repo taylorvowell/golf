@@ -62,10 +62,13 @@ Live camera feed, full bleed. Over it, top to bottom:
    settings-summary pills and no FPS pill on the capture screen. Settings live behind the
    cog only. Honest-frame-rate surfacing moves to the capture wiring (step 04) — a degrade
    message when a device cannot meet the requested rate, never a standing readout.
-5. **Alignment guide** — Taylor's supplied outline art (`apps/mobile/assets/capture/
-   overlay_dtl.png` / `overlay_front.png`) rendered full-bleed at ~55% opacity to help
-   position the camera (a hint, not a gate; fades once recording starts). **Pose follows
-   the view toggle**: the DTL outline or the facing-the-camera outline.
+5. **Alignment guide** — Taylor's supplied pose-outline SVGs (art verbatim in
+   `design/system/capturePoses.ts`, rendered by `PoseOutline`) stroked aqua at ~55%
+   opacity (a hint, not a gate; fades once recording starts). **Pose follows the view
+   toggle.** Placement reproduces the original 460×1000 artboard composition — the figure
+   rects were measured off the delivered full-frame PNGs before those were deleted — since
+   the SVG viewBoxes are cropped to the figure. The same art, filled solid, is the view
+   switcher's icon pair.
 6. **Camera controls** (step-03 iteration) — stacked on the LEFT edge above the bar: the
    front/back **camera flip** orb, then the **zoom stops** (stub 0.5×/1×/2×; the wiring
    replaces them with the device's probed range). On the RIGHT edge, directly above the

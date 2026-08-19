@@ -38,4 +38,6 @@ export { SheetOverBackdrop, HERO_PARALLAX, HERO_SHEET_GAP } from "./SheetOverBac
 export { SideDrawer, type DrawerClose } from "./SideDrawer";
 export { SheetHandle } from "./SheetHandle";
 export { Sheet, type SheetProps } from "./Sheet";
+export { PoseOutline } from "./PoseOutline";
+export { CAPTURE_POSES } from "./capturePoses";
 export { HeroBackdrop } from "./HeroBackdrop";

@@ -1,23 +1,24 @@
 import { useEffect, useRef } from "react";
 import { Animated, StyleSheet } from "react-native";
-import { Image } from "expo-image";
+
+import { PoseOutline } from "../../design/system/PoseOutline";
+import { ARTBOARD_ASPECT, CAPTURE_POSES } from "../../design/system/capturePoses";
+import { COLORS } from "../../theme";
 
 /**
- * The camera-alignment guide: Taylor's supplied outline art over the live feed
- * (`assets/capture/overlay_dtl.png` / `overlay_front.png`, 460×1000 RGBA), so the golfer
- * frames themself the way the analyzer wants before recording.
+ * The camera-alignment guide: Taylor's capture-pose outline art (design/system/
+ * capturePoses.ts) stroked over the live feed, so the golfer frames themself the way the
+ * analyzer wants before recording.
  *
  * A hint, never a gate — it does not measure anything and recording never waits on it. It
  * fades out when recording starts (`visible: false`), and its pose follows the DTL/Front
- * view toggle. The art is composed for a full portrait frame (the figure sits low-centre
- * with its own margins), so it renders full-bleed and `contain`-fitted — never cropped,
- * whatever the stage's aspect.
+ * view toggle.
+ *
+ * PLACEMENT: the SVG viewBoxes are cropped to the figure, so drawing them full screen
+ * makes the golfer fill the frame — not where Taylor composed them. The original artboard
+ * (460×1000) is contain-fitted into the stage and each pose is placed at its measured
+ * `frame` rect within it, reproducing the delivered composition at any stage aspect.
  */
-
-const ART = {
-  dtl: require("../../../assets/capture/overlay_dtl.png"),
-  face_on: require("../../../assets/capture/overlay_front.png"),
-} as const;
 
 /** Present but not competing with the picture — the outline reads at just over half. */
 const GHOST_OPACITY = 0.55;
@@ -42,13 +43,31 @@ export function AlignmentGhost({ width, height, visible, view }: AlignmentGhostP
 
   if (width <= 0 || height <= 0) return null;
 
+  // The artboard contain-fitted in the stage, centred; the figure rect lives inside it.
+  const scale = Math.min(width / ARTBOARD_ASPECT, height);
+  const frameW = scale * ARTBOARD_ASPECT;
+  const frameH = scale;
+  const frameX = (width - frameW) / 2;
+  const frameY = (height - frameH) / 2;
+  const rect = CAPTURE_POSES[view].frame;
+
   return (
     <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: fade }]}>
-      <Image source={ART[view]} style={styles.art} contentFit="contain" transition={120} />
+      <Animated.View
+        style={{
+          position: "absolute",
+          left: frameX + rect.x * frameW,
+          top: frameY + rect.y * frameH,
+        }}
+      >
+        <PoseOutline
+          pose={view}
+          width={rect.w * frameW}
+          height={rect.h * frameH}
+          color={COLORS.aqua}
+          strokeWidth={3}
+        />
+      </Animated.View>
     </Animated.View>
   );
 }
-
-const styles = StyleSheet.create({
-  art: { flex: 1 },
-});
