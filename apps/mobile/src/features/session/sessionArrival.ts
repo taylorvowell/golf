@@ -9,11 +9,15 @@
  * exact seam and stages it when the real session row is confirmed.
  */
 
+import type { SessionType } from "./sessionState";
+
 export interface SessionArrival {
   /** The session's display title ("Session 3" or the golfer's rename). */
   title: string;
   swings: number;
   at: number;
+  /** Which mode it was recorded in — the log's session row shows it. */
+  sessionType: SessionType;
 }
 
 let pending: SessionArrival | null = null;

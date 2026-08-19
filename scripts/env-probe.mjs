@@ -57,9 +57,11 @@ const portOpen = (host, port, ms = 700) =>
  * emulator (loopback both via `adb reverse` and via `10.0.2.2`) ends up talking to the wrong
  * server while the phone on the LAN address is fine.
  */
-const metroAt = async (host, ms = 900) => {
+const METRO_PORT = 8082;
+
+const metroAt = async (host, port = METRO_PORT, ms = 900) => {
   try {
-    const res = await fetch(`http://${host}:8081/status`, {
+    const res = await fetch(`http://${host}:${port}/status`, {
       signal: AbortSignal.timeout(ms),
     });
     return (await res.text()).includes("packager-status:running");
@@ -119,6 +121,9 @@ const [devices, docker, lanIp, web, port8081, metroLoopback] = await Promise.all
   portOpen("127.0.0.1", 8081),
   metroAt("127.0.0.1"),
 ]);
+// 8081 is the OLD home, kept only so a Metro started by hand there is still reported rather
+// than silently missed. SwingSage's Metro lives on 8082 (apps/mobile/scripts/dev-device.mjs).
+const metroLegacy = await metroAt("127.0.0.1", 8081);
 
 say("## Running system (scripts/env-probe.mjs)");
 
@@ -152,16 +157,16 @@ const metro =
   metroLoopback && metroLan
     ? "UP"
     : metroLan
-      ? `UP on ${lanIp} ONLY — loopback:8081 is a SQUATTER (qstash log server). The emulator ` +
-        "reaches the host through loopback, so it will show a WHITE SCREEN until the dev client " +
-        `is relaunched on the LAN url: adb -s emulator-5554 shell am start -a ` +
-        `android.intent.action.VIEW -d "swingsage://expo-development-client/?url=http%3A%2F%2F${lanIp}%3A8081"`
+      ? `UP on ${lanIp} ONLY (loopback busy) — the emulator reaches the host through loopback, ` +
+        `so it needs the LAN url: pnpm --filter mobile emu`
       : metroLoopback
         ? "UP on loopback only (no LAN address found)"
-        : port8081
-          ? "DOWN — something else holds :8081 (`netstat -ano | grep :8081`); Metro is NOT running"
-          : "down";
-say(`- next dev :3000 ${web ? "UP" : "down"}   metro :8081 ${metro}`);
+        : metroLegacy
+          ? `DOWN on ${METRO_PORT} — but a Metro IS serving :8081. SwingSage moved off 8081 ` +
+            "(qstash squats it); restart with `pnpm --filter mobile phone`"
+          : "down — `pnpm --filter mobile phone` starts it and launches the app";
+say(`- next dev :3000 ${web ? "UP" : "down"}   metro :${METRO_PORT} ${metro}`);
+if (port8081) say(`  (:8081 is held by another project's qstash dev server — expected, ignore it)`);
 
 const containers = (docker ?? "").split("\n").filter((l) => l.toLowerCase().includes("golf"));
 say(`- docker: ${containers.length ? containers.join("; ") : "no golf containers running (`docker compose up -d`)"}`);

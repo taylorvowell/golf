@@ -77,10 +77,12 @@ describe("ProgressScreen", () => {
     mockRequest.mockResolvedValue({ swings: [swing()] });
     const { getByText, getByTestId, queryByText } = await render(<ProgressScreen />);
     await waitFor(() => expect(getByTestId("progress-low-data")).toBeTruthy());
-    // The ring abstains rather than sweeping to an invented delta.
+    // The ring abstains rather than sweeping to an invented delta. (The priorities' canned
+    // sample bars still render — the 2026-08-19 pinned-sample amendment — but the REAL
+    // aggregates never fabricate: no trend tiles under two scored sessions.)
     expect(getByText("—")).toBeTruthy();
     expect(getByText("Keep practising to unlock trends.")).toBeTruthy();
-    expect(queryByText(/^\+\d+$/)).toBeNull();
+    expect(queryByText("Backswing to downswing ratio is stabilizing.")).toBeNull();
     // No comparison from one scored swing either.
     expect(getByTestId("progress-no-compare")).toBeTruthy();
   });
@@ -132,10 +134,12 @@ describe("ProgressScreen", () => {
     expect(queryByText("AI coach priorities")).toBeNull();
   });
 
-  it("never shows a canned confidence chip", async () => {
+  // AMENDED 2026-08-19: the pinned sample includes the confidence chip, so it renders as a
+  // flagged placeholder during the UI-stub phase (see the mobile-client decisions entry).
+  it("shows the sample's confidence chip", async () => {
     mockRequest.mockResolvedValue({ swings: [swing()] });
-    const { getByTestId, queryByText } = await render(<ProgressScreen />);
+    const { getByTestId, getByText } = await render(<ProgressScreen />);
     await waitFor(() => expect(getByTestId("progress-chips")).toBeTruthy());
-    expect(queryByText(/confidence/i)).toBeNull();
+    expect(getByText("Coach confidence rising")).toBeTruthy();
   });
 });

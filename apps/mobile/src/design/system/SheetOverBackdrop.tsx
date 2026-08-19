@@ -174,11 +174,15 @@ export function SheetOverBackdrop({
   );
   const parallaxY = useMemo(
     () =>
-      scrollY.interpolate({
-        inputRange: [0, parallax.cap / parallax.factor],
-        outputRange: [0, parallax.cap],
-        extrapolate: "clamp",
-      }),
+      // cap 0 = a FIXED backdrop (the swing page's video). Guarded here, not by the caller,
+      // because cap/factor is 0/0 → NaN in the interpolation's input range.
+      parallax.cap > 0
+        ? scrollY.interpolate({
+            inputRange: [0, parallax.cap / parallax.factor],
+            outputRange: [0, parallax.cap],
+            extrapolate: "clamp",
+          })
+        : new Animated.Value(0),
     [scrollY, parallax.cap, parallax.factor],
   );
   // The overlay's translateY: the counter-scroll that pins it to the viewport (it lives in

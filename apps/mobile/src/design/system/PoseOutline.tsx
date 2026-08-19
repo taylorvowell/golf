@@ -29,7 +29,7 @@ export function PoseOutline({
   width,
   height,
   color,
-  strokeWidth = 3,
+  strokeWidth = 1,
   fill = false,
 }: PoseOutlineProps) {
   const art = CAPTURE_POSES[pose];

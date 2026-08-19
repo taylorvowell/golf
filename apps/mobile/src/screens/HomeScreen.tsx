@@ -9,6 +9,7 @@ import {
   View,
 } from "react-native";
 import { Image } from "expo-image";
+import { Film, ScanLine, X } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { SwingSummary } from "@swingsage/schema/contract";
 
@@ -19,6 +20,8 @@ import {
   Chip,
   Delta,
   PerformanceCard,
+  StickThumb,
+  formFigureFor,
   useChromeScroll,
   WAVE_NAV_CLEARANCE,
 } from "../design/system";
@@ -34,6 +37,8 @@ import {
   type SessionStats,
 } from "../features/home/homeModel";
 import { useSessionReports } from "../features/home/useSessionReports";
+import { dismissDeepIntro, useDeepIntro } from "../features/coach/useDeepIntro";
+import { dismissStanceIntro, useStanceIntro } from "../features/coach/useStanceIntro";
 import { createdAtMs, sessionize } from "../features/swings/sessions";
 import { useSwings } from "../features/swings/useSwings";
 import { useAuthenticatedImage } from "../platform/useAuthenticatedImage";
@@ -149,6 +154,8 @@ export function HomeScreen() {
             </View>
           ) : (
             <>
+              <DeepIntroCard navigation={navigation} />
+              <StanceIntroCard navigation={navigation} />
               {lead ? (
                 <FocusHero
                   lead={lead}
@@ -169,6 +176,94 @@ export function HomeScreen() {
       ) : null}
 
       <AppHeader chromePx={chromePx} onProfile={() => navigation.navigate("Profile")} />
+    </View>
+  );
+}
+
+/**
+ * The deep-swing-analysis highlight — the top card of the homepage's guided-session pair
+ * (Taylor, 2026-08-19: deep on top of posture). Same dismissal contract as the stance card:
+ * only the X hides it.
+ */
+function DeepIntroCard({ navigation }: { navigation: Navigation }) {
+  const show = useDeepIntro();
+  const t = useTheme();
+  const styles = useStyles();
+  if (!show) return null;
+
+  return (
+    <View testID="home-deep-intro" style={styles.stanceCard}>
+      <View style={styles.stanceIcon}>
+        <Film size={22} color={t.onDark} strokeWidth={2.1} />
+      </View>
+      <View style={styles.stanceBody}>
+        <Text style={styles.stanceEyebrow}>Guided session</Text>
+        <Text style={styles.stanceTitle}>Deep swing analysis</Text>
+        <Text style={styles.stanceCopy}>
+          Your coach plays your swing, pausing at the moments that matter — drawn on your own
+          video.
+        </Text>
+        <Button
+          label="Start"
+          testID="home-deep-start"
+          onPress={() => navigation.navigate("DeepAnalysis")}
+          style={styles.stanceCta}
+        />
+      </View>
+      <Pressable
+        testID="home-deep-dismiss"
+        accessibilityRole="button"
+        accessibilityLabel="Dismiss deep swing analysis highlight"
+        hitSlop={10}
+        onPress={dismissDeepIntro}
+        style={({ pressed }) => [styles.stanceClose, pressed && styles.pressed]}
+      >
+        <X size={15} color={t.muted} strokeWidth={2.5} />
+      </Pressable>
+    </View>
+  );
+}
+
+/**
+ * The stance-analysis highlight — on home until the golfer hits the card's X, and ONLY the X
+ * (Taylor, 2026-08-19: "do NOT hide until the user hits a dismiss button on the card").
+ * Walking the analysis leaves the card up on purpose — it is the standing door back in.
+ */
+function StanceIntroCard({ navigation }: { navigation: Navigation }) {
+  const show = useStanceIntro();
+  const t = useTheme();
+  const styles = useStyles();
+  if (!show) return null;
+
+  return (
+    <View testID="home-stance-intro" style={styles.stanceCard}>
+      <View style={styles.stanceIcon}>
+        <ScanLine size={22} color={t.onDark} strokeWidth={2.1} />
+      </View>
+      <View style={styles.stanceBody}>
+        <Text style={styles.stanceEyebrow}>Your coach is ready</Text>
+        <Text style={styles.stanceTitle}>Guided stance analysis</Text>
+        <Text style={styles.stanceCopy}>
+          A two-minute walkthrough of your setup, drawn over your own address — your first
+          session with your coach.
+        </Text>
+        <Button
+          label="Start"
+          testID="home-stance-start"
+          onPress={() => navigation.navigate("StanceAnalysis")}
+          style={styles.stanceCta}
+        />
+      </View>
+      <Pressable
+        testID="home-stance-dismiss"
+        accessibilityRole="button"
+        accessibilityLabel="Dismiss stance analysis highlight"
+        hitSlop={10}
+        onPress={dismissStanceIntro}
+        style={({ pressed }) => [styles.stanceClose, pressed && styles.pressed]}
+      >
+        <X size={15} color={t.muted} strokeWidth={2.5} />
+      </Pressable>
     </View>
   );
 }
@@ -205,7 +300,20 @@ function FocusHero({
 
   return (
     <View testID="home-focus" style={styles.heroCardWrap}>
-      <PerformanceCard eyebrow={greeting} title={lead.label} body={lead.cue || undefined}>
+      {/* Title and cue render beside the topic's form thumbnail — every coach statement
+          shows the correct form for the thing it names (Taylor, 2026-08-19). */}
+      <PerformanceCard eyebrow={greeting}>
+        <View style={styles.heroFocusRow}>
+          <StickThumb
+            figure={formFigureFor(`${lead.key} ${lead.label} ${lead.cue}`)}
+            size={56}
+            style={styles.heroThumb}
+          />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.heroFocusTitle}>{lead.label}</Text>
+            {lead.cue ? <Text style={styles.heroFocusCue}>{lead.cue}</Text> : null}
+          </View>
+        </View>
         {lead.reportCount >= 2 && lead.seenIn >= 2 ? (
           <Text style={styles.heroSeen}>
             Seen in {lead.seenIn} of {lead.reportCount} scored swings
@@ -329,7 +437,10 @@ function FocusRail({ items, navigation }: { items: FocusItem[]; navigation: Navi
           onPress={() => openOnSwing(navigation, item)}
           style={({ pressed }) => [styles.tipCard, pressed && styles.pressed]}
         >
-          <Text style={styles.tipRank}>{i + 2}</Text>
+          <View style={styles.tipHead}>
+            <StickThumb figure={formFigureFor(`${item.key} ${item.label} ${item.cue}`)} size={48} />
+            <Text style={styles.tipRank}>{i + 2}</Text>
+          </View>
           <Text style={styles.tipTitle} numberOfLines={2}>
             {item.label}
           </Text>
@@ -492,6 +603,72 @@ const useStyles = themedStyles((t) => ({
   },
 
   heroCardWrap: { marginHorizontal: 16 },
+  /* The focus row inside the performance card — the topic's form thumb beside the words.
+     Type mirrors the card's own title/body scale, one step down to fit beside the thumb. */
+  heroFocusRow: { flexDirection: "row", gap: 14, marginTop: 12, alignItems: "flex-start" },
+  heroThumb: { marginTop: 2 },
+  heroFocusTitle: {
+    color: t.onDark,
+    fontFamily: FONT_DISPLAY.black,
+    fontSize: 24,
+    lineHeight: 25,
+    letterSpacing: -0.48,
+  },
+  heroFocusCue: {
+    marginTop: 8,
+    color: "rgba(255,255,255,0.65)",
+    fontFamily: FONT_BODY.regular,
+    fontSize: 12,
+    lineHeight: 19,
+  },
+  /* The stance-analysis highlight — the coach accent bed (aqua tint), dismissible. */
+  stanceCard: {
+    flexDirection: "row",
+    gap: 12,
+    marginHorizontal: 16,
+    padding: 15,
+    borderRadius: 14,
+    backgroundColor: t.mode === "dark" ? "rgba(67,205,208,0.10)" : "rgba(67,205,208,0.09)",
+  },
+  stanceIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: t.aqua,
+  },
+  stanceBody: { flex: 1, minWidth: 0 },
+  stanceEyebrow: {
+    color: t.mode === "dark" ? t.aqua : "#1D7E86",
+    fontFamily: FONT_DISPLAY.black,
+    fontSize: 8,
+    letterSpacing: 1.12,
+    textTransform: "uppercase",
+  },
+  stanceTitle: {
+    marginTop: 4,
+    color: t.text,
+    fontFamily: FONT_DISPLAY.extraBold,
+    fontSize: 15,
+    lineHeight: 18,
+  },
+  stanceCopy: {
+    marginTop: 4,
+    color: t.textSoft,
+    fontFamily: FONT_BODY.regular,
+    fontSize: 10,
+    lineHeight: 15,
+  },
+  stanceCta: { marginTop: 10, alignSelf: "flex-start" },
+  stanceClose: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: t.surface2,
+  },
   heroSeen: {
     marginTop: 10,
     color: "rgba(255,255,255,0.55)",
@@ -529,6 +706,12 @@ const useStyles = themedStyles((t) => ({
     backgroundColor: t.surface,
     padding: 16,
     gap: 5,
+  },
+  tipHead: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    marginBottom: 6,
   },
   tipRank: { color: t.lavender, fontFamily: FONT_DISPLAY.black, fontSize: 13 },
   tipTitle: {

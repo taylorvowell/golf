@@ -150,15 +150,24 @@ describe("progressViewModel", () => {
 });
 
 describe("placeholder honesty", () => {
-  it("placeholder coaching content never carries numbers", () => {
+  // AMENDED 2026-08-19: the page follows SAMPLE-progress-page.html exactly (Taylor), so the
+  // placeholder block carries the sample's canned numbers for the UI-stub phase — flagged at
+  // the seam, replaced by priority-engine/goal-progression. The pin is now that every canned
+  // entry is FLAGGED and matches the sample, not that it is numberless.
+  it("placeholder coaching content is flagged and matches the pinned sample", () => {
     for (const p of PLACEHOLDER_PRIORITIES) {
       expect(p.placeholder).toBe(true);
-      expect(p.progress).toBeNull();
+      expect(p.progress).not.toBeNull();
     }
+    expect(PLACEHOLDER_PRIORITIES.map((p) => p.progress)).toEqual([
+      { before: 68, now: 79 },
+      { before: 64, now: 74 },
+      { before: 71, now: 82 },
+    ]);
     for (const trend of PLACEHOLDER_TRENDS) {
       expect(trend.placeholder).toBe(true);
-      expect(trend.delta).toBeNull();
     }
+    expect(PLACEHOLDER_TRENDS.map((t) => t.delta)).toEqual([9, 6, 11]);
   });
 
   it("placeholder categories are ones the scoring config scores", () => {

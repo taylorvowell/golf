@@ -22,11 +22,22 @@ export function ReportSheet({
   vm,
   swingId,
   onShowVideo,
+  hideHeader = false,
+  onBoardLayout,
 }: {
   vm: ReportViewModel;
   swingId: string;
+  /**
+   * Drop the sheet's own identity block — for a host that already names the swing on screen.
+   * That block is the title, the brand line AND the score/coverage chip: on the post-swing tab
+   * the golfer opened this to read the ANALYSIS, and the first thing under their thumb being a
+   * restatement of the score they were just shown is the clutter rule's own example (Taylor).
+   */
+  hideHeader?: boolean;
   /** Scrolls the scaffold to the top — the video-open state (live video in step 07). */
   onShowVideo: () => void;
+  /** Reports the swing-profile board's y within this sheet — the score door's scroll target. */
+  onBoardLayout?: (y: number) => void;
 }) {
   const t = useTheme();
   const thumb = useAuthenticatedImage(`swings/${swingId}/thumb?poster=1`);
@@ -59,7 +70,10 @@ export function ReportSheet({
 
   return (
     <View style={{ paddingHorizontal: 16 }}>
-      {/* .report-header */}
+      {/* .report-header — dropped in `hideHeader`: on the post-swing tab the swing's name, the
+          brand and the view are all already on the screen behind this sheet, and repeating them
+          in a strip the golfer pulls up costs the room the analysis itself wants. */}
+      {hideHeader ? null : (
       <View
         style={{
           flexDirection: "row",
@@ -104,8 +118,10 @@ export function ReportSheet({
           </Text>
         </View>
       </View>
+      )}
 
-      {/* .session-indicator — the confidence line. */}
+      {/* .session-indicator — the confidence line. Part of the identity block, so it goes with it. */}
+      {hideHeader ? null : (
       <View
         style={{
           flexDirection: "row",
@@ -137,6 +153,7 @@ export function ReportSheet({
           {vm.indicator.coverage}
         </Text>
       </View>
+      )}
 
       {/* .report-focus — thumb column + the biggest opportunity. */}
       {vm.focus != null && (
@@ -262,18 +279,27 @@ export function ReportSheet({
       )}
 
       {/* .report-board */}
-      <View style={{ marginTop: 20 }}>
-        <Text
-          style={{
-            color: t.aqua,
-            fontFamily: FONT_DISPLAY.black,
-            fontSize: 8,
-            letterSpacing: 1.2,
-            textTransform: "uppercase",
-          }}
-        >
-          Swing profile
-        </Text>
+      <View
+        style={{ marginTop: 20 }}
+        // Where the swing score LIVES, relative to this sheet's root — the score door's scroll
+        // target. Measured, not estimated: the focus block above it varies by report.
+        onLayout={
+          onBoardLayout ? (e) => onBoardLayout(e.nativeEvent.layout.y) : undefined
+        }
+      >
+        {hideHeader ? null : (
+          <Text
+            style={{
+              color: t.aqua,
+              fontFamily: FONT_DISPLAY.black,
+              fontSize: 8,
+              letterSpacing: 1.2,
+              textTransform: "uppercase",
+            }}
+          >
+            Swing profile
+          </Text>
+        )}
         <Text
           style={{
             marginTop: 7,

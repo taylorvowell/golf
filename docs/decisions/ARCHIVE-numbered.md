@@ -3272,3 +3272,32 @@ delete/favorite/cog). Analysis finishing while the golfer is still on that swing
   *surface* those tracks were each promised — their entries note the split.
 
 Full retained detail: `.claude/feature-tracks/session-mode/DESIGN-session-mode.md`.
+
+## D62 — Achievements: SwingSage gamifies progress (amends §16.3.5's "no badge economy")
+
+**Date:** 2026-08-19 · **Directed by Taylor** · **Track:** `achievements`
+
+Taylor wants milestones celebrated and progress gamified: **XP and a rank ladder, one-time
+tiered badges** (firsts, volume, streaks, quality/improvement), and a **toast + confetti
+celebration** — explicitly a top toaster, never the main bottom-slide sheet. PROJECT_MAIN
+§16.3.5 said "not a badge economy"; the amendment recorded there reconciles the two: the
+focus-goal celebration remains a singular full-screen earned moment that outranks any badge,
+while the achievements layer celebrates the journey around it with deliberately smaller
+ceremony. Toasts stay scarce (badges, rank-ups, personal bests); routine XP accrues silently.
+
+Architecture (spec: `.claude/feature-tracks/achievements/DESIGN.md`):
+
+- **Definitions in a versioned `achievement_config`** — the `scoring_config` discipline;
+  earned rows record the awarding version.
+- **Awarding is a deterministic server-side evaluator** at swing-ready and session-close;
+  idempotent, evidence-linked (`evidence_swing_id`), transactional; abstained swings never
+  earn quality badges; no AI in the award path.
+- **Delivery piggybacks `newly_earned` on payloads the client already fetches**, acked into a
+  server-recorded `seen_at` — the same once-ness rule as goal celebration. Rank derives from
+  XP + config, never stored.
+- **Client celebration surface is one app-wide queue** (`CelebrationProvider`,
+  `apps/mobile/src/features/achievements/`) — the single mouth for toast-level celebrations;
+  built step 01 with a debug-sheet trigger, on core `Animated` (no reanimated — APK-weight
+  rule).
+- **Free-tier** — engagement layer, never entitlement-gated. No streak shaming, no decay, no
+  stranger leaderboards.

@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import { Animated, StyleSheet } from "react-native";
 
 import { PoseOutline } from "../../design/system/PoseOutline";
-import { ARTBOARD_ASPECT, CAPTURE_POSES } from "../../design/system/capturePoses";
+import { posePlacement } from "../../design/system/capturePoses";
 import { COLORS } from "../../theme";
 
 /**
@@ -44,28 +44,26 @@ export function AlignmentGhost({ width, height, visible, view }: AlignmentGhostP
   if (width <= 0 || height <= 0) return null;
 
   // The artboard contain-fitted in the stage, centred; the figure rect lives inside it.
-  const scale = Math.min(width / ARTBOARD_ASPECT, height);
-  const frameW = scale * ARTBOARD_ASPECT;
-  const frameH = scale;
-  const frameX = (width - frameW) / 2;
-  const frameY = (height - frameH) / 2;
-  const rect = CAPTURE_POSES[view].frame;
+  const place = posePlacement(view, width, height);
 
   return (
     <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: fade }]}>
       <Animated.View
         style={{
           position: "absolute",
-          left: frameX + rect.x * frameW,
-          top: frameY + rect.y * frameH,
+          left: place.left,
+          top: place.top,
         }}
       >
         <PoseOutline
           pose={view}
-          width={rect.w * frameW}
-          height={rect.h * frameH}
+          width={place.width}
+          height={place.height}
           color={COLORS.aqua}
-          strokeWidth={3}
+          // Really thin (Taylor, step-03 iteration): the ghost is a guide to line a body up
+          // against, so it has to sit ON the golfer without hiding them. 3 read as a drawing
+          // over the footage rather than a reference laid across it.
+          strokeWidth={1}
         />
       </Animated.View>
     </Animated.View>

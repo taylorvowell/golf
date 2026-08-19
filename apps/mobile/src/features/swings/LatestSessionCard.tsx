@@ -1,17 +1,13 @@
 import { Text, View } from "react-native";
-import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 
-import {
-  DateTitle,
-  ScoreOrb,
-  SwingTimelineList,
-  type SwingTimelineItem,
-} from "../../design/system";
+import { DateTitle, ScoreOrb, SwingTimelineList } from "../../design/system";
 import { FONT_BODY } from "../../design/system/typography";
-import { useAuthenticatedImage } from "../../platform/useAuthenticatedImage";
 import { useTheme } from "../../theme";
-import { createdAtMs, sessionStats, type SwingSession } from "./sessions";
+import { SessionTags } from "./SessionTags";
+import { SessionThumb } from "./SessionThumb";
+import { sessionSwingItems } from "./sessionTimeline";
+import { sessionStats, type SwingSession } from "./sessions";
 
 /**
  * The newest session as the log's featured card. Taylor 2026-08-17: the mockup's tinted
@@ -29,9 +25,6 @@ export function LatestSessionCard({
 }) {
   const t = useTheme();
   const stats = sessionStats(session);
-  const newest = session.swings[session.swings.length - 1];
-  // `?poster=1` = one frame, not the contact sheet — noise at thumb size.
-  const thumb = useAuthenticatedImage(`swings/${newest.id}/thumb?poster=1`);
 
   // The title IS the date now, so the meta line keeps only what the title doesn't say.
   const timeLine = new Date(session.start).toLocaleTimeString(undefined, {
@@ -39,29 +32,7 @@ export function LatestSessionCard({
     minute: "2-digit",
   });
 
-  // Newest first, the whole session — numbered the way they were hit.
-  const items: SwingTimelineItem[] = [...session.swings]
-    .map((swing, i) => ({ swing, number: i + 1 }))
-    .reverse()
-    .map(({ swing, number }) => {
-      const at = new Date(createdAtMs(swing));
-      const stamp = `${at.toLocaleDateString(undefined, { month: "short", day: "numeric" })} · ${at.toLocaleTimeString(
-        undefined,
-        { hour: "numeric", minute: "2-digit" },
-      )}`;
-      return {
-        key: swing.id,
-        title: `Swing ${number}`,
-        subtitle:
-          typeof swing.overallScore === "number" ? stamp : `${stamp} · Not scored`,
-        score:
-          typeof swing.overallScore === "number"
-            ? Math.round(swing.overallScore)
-            : undefined,
-        onPress: () => onOpenSwing(swing.id),
-        testID: `swing-card-${swing.id}`,
-      };
-    });
+  const items = sessionSwingItems(session, onOpenSwing);
 
   return (
     <View
@@ -81,18 +52,24 @@ export function LatestSessionCard({
           gap: 12,
         }}
       >
+        <SessionThumb session={session} />
         <View style={{ flex: 1, minWidth: 0 }}>
           <DateTitle ms={session.start} size={19} />
-          <Text
-            style={{
-              marginTop: 4,
-              color: t.muted,
-              fontFamily: FONT_BODY.regular,
-              fontSize: 13,
-            }}
+          {/* How it was filmed, then when — one line under the date. */}
+          <View
+            style={{ flexDirection: "row", alignItems: "center", gap: 7, marginTop: 5 }}
           >
-            {timeLine}
-          </Text>
+            <SessionTags session={session} />
+            <Text
+              style={{
+                color: t.muted,
+                fontFamily: FONT_BODY.regular,
+                fontSize: 13,
+              }}
+            >
+              {timeLine}
+            </Text>
+          </View>
         </View>
         {/* The session's average, in the same circle face as every other average. */}
         {stats.avg !== null && <ScoreOrb score={stats.avg} size={56} caption="Avg" />}
@@ -107,23 +84,6 @@ export function LatestSessionCard({
             marginTop: 14,
           }}
         >
-          {thumb ? (
-            <Image
-              source={thumb}
-              style={{ width: 56, height: 56, borderRadius: 10 }}
-              contentFit="cover"
-              cachePolicy="disk"
-            />
-          ) : (
-            <View
-              style={{
-                width: 56,
-                height: 56,
-                borderRadius: 10,
-                backgroundColor: t.surface2,
-              }}
-            />
-          )}
           <View style={{ flex: 1 }}>
             <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
               <Text style={{ color: t.muted, fontFamily: FONT_BODY.bold, fontSize: 11 }}>

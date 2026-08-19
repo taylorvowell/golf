@@ -33,6 +33,8 @@ class HighSpeedCameraModule : Module() {
 
     /** The live capture preview (D61 step 04) — facing + zoom as props. */
     View(HighSpeedCameraView::class) {
+      // The lens's real zoom range, so the UI never renders a slider against a guess.
+      Events("onZoomRange")
       Prop("facing") { view: HighSpeedCameraView, facing: String -> view.setFacing(facing) }
       Prop("zoom") { view: HighSpeedCameraView, zoom: Double -> view.setZoom(zoom.toFloat()) }
     }

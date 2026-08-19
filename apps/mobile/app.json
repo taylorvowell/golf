@@ -13,7 +13,9 @@
     "android": {
       "package": "com.swingsage.spike",
       "allowBackup": false,
-      "blockedPermissions": ["android.permission.SYSTEM_ALERT_WINDOW"],
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#080a0d",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -31,7 +33,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#080a0d",
+          "backgroundColor": "#FFFFFF",
           "image": "./assets/splash-icon.png",
           "imageWidth": 150
         }
@@ -44,7 +46,8 @@
             "enableShrinkResourcesInReleaseBuilds": true
           }
         }
-      ]
+      ],
+      "./plugins/withTransparentNavBar"
     ],
     "experiments": {
       "reactCompiler": true

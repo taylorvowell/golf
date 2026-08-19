@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Animated, Pressable, View } from "react-native";
+import { Menu } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { BrandLogo } from "./BrandLogo";
@@ -77,7 +78,12 @@ export function AppHeader({
    *  context: screens keep their own scroll positions, and a shared offset drew a returning
    *  screen's header over its own content. */
   chromePx: Animated.Value;
-  onProfile: () => void;
+  /**
+   * The profile door. OMIT it to seal the header — session mode does that while a session is
+   * running, because leaving mid-session is what "End session" is for and a door that silently
+   * does nothing is worse than no door.
+   */
+  onProfile?: () => void;
   profileTestID?: string;
 }) {
   const insets = useSafeAreaInsets();
@@ -144,6 +150,7 @@ export function AppHeader({
         }}
       >
         <BrandLogo height={26} color={hero ? "#FFFFFF" : undefined} />
+        {onProfile ? (
         <Pressable
           testID={profileTestID}
           accessibilityRole="button"
@@ -152,21 +159,19 @@ export function AppHeader({
           hitSlop={8}
           style={({ pressed }) => [
             {
-              width: 42,
-              height: 42,
-              borderRadius: 21,
+              width: 34,
+              height: 34,
               alignItems: "center",
               justifyContent: "center",
-              backgroundColor: pressed ? t.cobaltPressed : t.cobalt,
             },
+            pressed && { opacity: 0.6 },
           ]}
         >
-          <View style={{ flexDirection: "row", gap: 3.5 }}>
-            <View style={{ width: 3.5, height: 3.5, borderRadius: 2, backgroundColor: t.onDark }} />
-            <View style={{ width: 3.5, height: 3.5, borderRadius: 2, backgroundColor: t.onDark }} />
-            <View style={{ width: 3.5, height: 3.5, borderRadius: 2, backgroundColor: t.onDark }} />
-          </View>
+          {/* Bare glyph, no bed (Taylor, 2026-08-19) — ink matches the wordmark beside it:
+              white on the hero screens, the text ink elsewhere. */}
+          <Menu size={22} color={hero ? "#FFFFFF" : t.text} strokeWidth={2.4} />
         </Pressable>
+        ) : null}
       </View>
     </Animated.View>
   );

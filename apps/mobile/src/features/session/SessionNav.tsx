@@ -3,8 +3,9 @@ import { Animated, Pressable, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { navBarBottomInset } from "../../design/system/WaveNav";
 import { FONT_DISPLAY } from "../../design/system/typography";
-import { useTheme } from "../../theme";
+import { useAppTheme } from "../../theme";
 
 /**
  * Session mode's sticky bar (Taylor, step-03 iteration): the SAME construction as the main
@@ -29,14 +30,21 @@ export interface SessionNavItem {
   icon: (color: string) => ReactNode;
   active?: boolean;
   disabled?: boolean;
+  /** A value that rides ON the glyph rather than replacing the label — the delay's seconds.
+   * The label then says what the control IS, which is what a golfer scans the bar for. */
+  badge?: string;
+  /** Replaces the glyph with a word in a pill — for a control whose VALUE is the icon, like
+   * the session mode. `icon` is still required (and ignored) so the item type stays one shape. */
+  pill?: string;
   onPress: () => void;
   testID?: string;
 }
 
 const BAR_HEIGHT = 67;
-const RISE = { diameter: 140, aboveBar: 38 };
-const BLEND = { width: 172, height: 26, belowBarTop: 8 };
-const RECORD_SLOT = 100;
+const RISE = { diameter: 126, aboveBar: 31 };
+const BLEND = { width: 158, height: 26, belowBarTop: 8 };
+const RECORD_SLOT = 86;
+const RECORD_LIFT = 8;
 const ROW_PAD = 10;
 const FADE_ABOVE = 76;
 /** The tab bar's dark ramp, verbatim — this bar must read as the same family. */
@@ -47,17 +55,28 @@ export function SessionNav({
   rightItems,
   center,
   sidesHidden = false,
+  hidden = false,
 }: {
   leftItems: SessionNavItem[];
   rightItems: SessionNavItem[];
   /** The raised centre — the session record/stop button. */
   center: ReactNode;
   sidesHidden?: boolean;
+  /**
+   * Slides the WHOLE bar away, exactly as `WaveNav` does on a tab screen — same transform, same
+   * 280ms, same rule that it may only ever be driven from scroll state (`navVisibility.ts`).
+   * `sidesHidden` is a different thing: that fades the side ITEMS while the bar stays, which is
+   * what a countdown wants.
+   */
+  hidden?: boolean;
 }) {
   const insets = useSafeAreaInsets();
-  const t = useTheme();
-  // Session mode is pinned dark, so this resolves the tab bar's dark fill.
-  const fill = t.mode === "dark" ? t.bgElevated : "rgba(255,255,255,0.98)";
+  // The APP's theme, not the ambient one: session mode is pinned dark, but every sticky bar in
+  // the app is the same bar (Taylor, 2026-08-18) — this one wears the home tab bar's light fill
+  // over footage rather than a second, darker nav. The fade above it is the same dark ramp in
+  // both themes already, so only the bar itself changes.
+  const t = useAppTheme();
+  const fill = t.mode === "dark" ? t.bgElevated : "#FFFFFF";
   const activeColor = t.mode === "dark" ? t.aqua : t.cobalt;
 
   const fade = useRef(new Animated.Value(sidesHidden ? 0 : 1)).current;
@@ -69,7 +88,17 @@ export function SessionNav({
     }).start();
   }, [fade, sidesHidden]);
 
-  const totalHeight = BAR_HEIGHT + insets.bottom;
+  const slide = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(slide, {
+      toValue: hidden ? 1 : 0,
+      duration: 280,
+      useNativeDriver: true,
+    }).start();
+  }, [hidden, slide]);
+
+  // Capped, not the raw inset — the same rule as `WaveNav`, so the two bars stay one bar.
+  const totalHeight = BAR_HEIGHT + navBarBottomInset(insets.bottom);
 
   const item = (entry: SessionNavItem) => {
     const color = entry.active ? activeColor : t.muted;
@@ -94,8 +123,72 @@ export function SessionNav({
         }}
       >
         {/* A 28px box holding a ~24px glyph — bigger than the tab bar's, per Taylor. */}
-        <View style={{ width: 28, height: 28, alignItems: "center", justifyContent: "center" }}>
-          {entry.icon(color)}
+        <View
+          style={{
+            height: 28,
+            minWidth: 28,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {entry.pill ? (
+            <View
+              style={{
+                paddingHorizontal: 9,
+                height: 21,
+                borderRadius: 999,
+                alignItems: "center",
+                justifyContent: "center",
+                // The item's own ink, exactly like the delay badge — so the pill goes cobalt
+                // with the rest of the item when it is open instead of being a third colour.
+                backgroundColor: color,
+              }}
+            >
+              <Text
+                style={{
+                  // Fixed white, not a token: this text always sits on a filled pill, the same
+                  // reason `COLORS.onAqua` is fixed.
+                  color: "#FFFFFF",
+                  fontFamily: FONT_DISPLAY.black,
+                  fontSize: 8,
+                  lineHeight: 10,
+                  letterSpacing: 0.4,
+                  textTransform: "uppercase",
+                }}
+              >
+                {entry.pill}
+              </Text>
+            </View>
+          ) : (
+            entry.icon(color)
+          )}
+          {entry.badge ? (
+            <View
+              style={{
+                position: "absolute",
+                bottom: -3,
+                right: -8,
+                minWidth: 16,
+                height: 16,
+                borderRadius: 8,
+                paddingHorizontal: 4,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: color,
+              }}
+            >
+              <Text
+                style={{
+                  color: t.bg,
+                  fontFamily: FONT_DISPLAY.black,
+                  fontSize: 9,
+                  lineHeight: 11,
+                }}
+              >
+                {entry.badge}
+              </Text>
+            </View>
+          ) : null}
         </View>
         <Text
           numberOfLines={1}
@@ -114,8 +207,8 @@ export function SessionNav({
   };
 
   return (
-    <View
-      pointerEvents="box-none"
+    <Animated.View
+      pointerEvents={hidden ? "none" : "box-none"}
       style={{
         position: "absolute",
         left: 0,
@@ -124,6 +217,17 @@ export function SessionNav({
         // The fade lives INSIDE the box — Android does not reliably honour overflow: visible.
         height: totalHeight + FADE_ABOVE,
         justifyContent: "flex-end",
+        transform: [
+          {
+            // The full box, so none of the fade is left banded across the bottom edge on the
+            // way out — WaveNav's own outputRange.
+            translateY: slide.interpolate({
+              inputRange: [0, 1],
+              outputRange: [0, totalHeight + FADE_ABOVE],
+            }),
+          },
+        ],
+        opacity: slide.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
       }}
     >
       {/* The bar's whole GROUND — fade, surface, bump, blend — fades out while armed
@@ -185,7 +289,7 @@ export function SessionNav({
           position: "absolute",
           left: ROW_PAD,
           right: ROW_PAD,
-          bottom: insets.bottom + ROW_PAD,
+          bottom: navBarBottomInset(insets.bottom) + ROW_PAD,
           flexDirection: "row",
           alignItems: "flex-end",
         }}
@@ -197,7 +301,7 @@ export function SessionNav({
         >
           {leftItems.map(item)}
         </Animated.View>
-        <View style={{ width: RECORD_SLOT, alignItems: "center", marginBottom: 6 }}>
+        <View style={{ width: RECORD_SLOT, alignItems: "center", marginBottom: RECORD_LIFT }}>
           {center}
         </View>
         <Animated.View
@@ -207,7 +311,7 @@ export function SessionNav({
           {rightItems.map(item)}
         </Animated.View>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 

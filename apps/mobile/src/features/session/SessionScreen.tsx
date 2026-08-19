@@ -10,7 +10,6 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { CircleHelp } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppHeader, APP_HEADER_BAR, useNavVisibility } from "../../design/system";
@@ -22,13 +21,15 @@ import { useSwings } from "../swings/useSwings";
 import { STUB_ANALYSIS_MS } from "./AnalyzingBar";
 import { CameraControls } from "./CameraControls";
 import { CameraStage } from "./CameraStage";
+import { DualSyncButton } from "./DualSyncButton";
+import { DualSyncPip } from "./DualSyncPip";
 import { PostSwingView } from "./PostSwingView";
 import { CountdownOverlay } from "./CountdownOverlay";
 import { ViewToggle } from "./ViewToggle";
 import { RecordingFrame } from "./RecordingFrame";
 import { SessionDock } from "./SessionDock";
 import { SessionTitle } from "./SessionTitle";
-import { SessionTypeToggle } from "./SessionTypeToggle";
+import { SwingExitSheet } from "./sheets/SwingExitSheet";
 import { stageSessionArrival } from "./sessionArrival";
 import { loadSessionDefaults } from "./sessionDefaults";
 import {
@@ -36,7 +37,7 @@ import {
   initialSessionState,
   sessionReducer,
 } from "./sessionState";
-import { HelpSheet } from "./sheets/HelpSheet";
+import { DualSyncSheet } from "./sheets/DualSyncSheet";
 import { SessionSettingsSheet } from "./sheets/SessionSettingsSheet";
 import { SessionTypeInfoSheet } from "./sheets/SessionTypeInfoSheet";
 
@@ -59,13 +60,19 @@ import { SessionTypeInfoSheet } from "./sheets/SessionTypeInfoSheet";
  * button and the countdown/recording treatment remain.
  */
 
-type SheetName = "settings" | "info" | "help" | null;
+type SheetName = "settings" | "info" | "sync" | null;
 
 export function SessionScreen() {
   const navigation = useAppNavigation();
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const { setHidden } = useNavVisibility();
+  // Stub seam for Dual Sync: no pairing exists yet, so the connected state is client-only
+  // and reachable from the sheet's __DEV__ control (dual-device-capture replaces this).
+  const [paired, setPaired] = useState(false);
+  /** Hardware back on the post-swing screen asks instead of guessing — see `SwingExitSheet`. */
+  const [exitOpen, setExitOpen] = useState(false);
+
   const swingData = useSwings();
 
   const [state, dispatch] = useReducer(
@@ -73,6 +80,18 @@ export function SessionScreen() {
     undefined,
     () => initialSessionState(1, new Date(), DEFAULT_SESSION_SETTINGS),
   );
+  /**
+   * A session EXISTS once a swing is in it, and from that moment the golfer is in the loop
+   * until they end it (Taylor, step-03 iteration). Refs because the back handler is registered
+   * once and must read the live values, never the ones captured when it was installed.
+   */
+  const locked = state.swings.length > 0;
+  const lockedRef = useRef(locked);
+  const swingsRef = useRef(state.swings);
+  useEffect(() => {
+    lockedRef.current = locked;
+    swingsRef.current = state.swings;
+  }, [locked, state.swings]);
   const [sheet, setSheet] = useState<SheetName>(null);
 
   // ---- Entrance / exit ------------------------------------------------------------------
@@ -164,7 +183,16 @@ export function SessionScreen() {
   useEffect(() => {
     const sub = BackHandler.addEventListener("hardwareBackPress", () => {
       if (reviewingRef.current !== null) {
-        dispatch({ type: "back-to-capture" });
+        // Back is ambiguous on the post-swing screen — "another swing" and "end the session"
+        // are both plausible and both destructive of the other. Ask.
+        setExitOpen(true);
+      } else if (lockedRef.current) {
+        // A session with swings in it is a LOOP, and the only way out of it is End (Taylor,
+        // step-03 iteration). Back therefore returns to the swing that is already recorded
+        // rather than dropping out of a session the golfer has not finished.
+        const last = swingsRef.current[0];
+        if (last) dispatch({ type: "review", swingId: last.id });
+        else leave(() => navigation.goBack());
       } else {
         leave(() => navigation.goBack());
       }
@@ -173,14 +201,28 @@ export function SessionScreen() {
     return () => sub.remove();
   }, [leave, navigation]);
 
-  const endSession = useCallback(() => {
-    // Stage the arrival moment for the log, then slide out. The nested navigate form on
-    // purpose — a bare navigate("SwingLog") searches upward and fails at runtime.
-    if (state.swings.length > 0) {
-      stageSessionArrival({ title: state.title, swings: state.swings.length, at: Date.now() });
-    }
-    leave(() => navigation.navigate("Tabs", { screen: "SwingLog" }));
-  }, [leave, navigation, state.swings.length, state.title]);
+  /**
+   * @param stage Whether to announce the session on the log. Pass `false` when the caller has
+   *   just emptied the session in the same tick — `state` here is the render's snapshot, so a
+   *   delete dispatched a moment ago still reads as a swing and would stage a session that no
+   *   longer has one. A session with no swings must leave NOTHING behind (Taylor).
+   */
+  const endSession = useCallback(
+    ({ stage = true }: { stage?: boolean } = {}) => {
+      // Stage the arrival moment for the log, then slide out. The nested navigate form on
+      // purpose — a bare navigate("SwingLog") searches upward and fails at runtime.
+      if (stage && state.swings.length > 0) {
+        stageSessionArrival({
+          title: state.title,
+          swings: state.swings.length,
+          at: Date.now(),
+          sessionType: state.sessionType,
+        });
+      }
+      leave(() => navigation.navigate("Tabs", { screen: "SwingLog" }));
+    },
+    [leave, navigation, state.sessionType, state.swings.length, state.title],
+  );
 
   const idle = state.mode === "idle";
 
@@ -220,6 +262,7 @@ export function SessionScreen() {
             view={state.view}
             facing={state.facing}
             zoom={state.zoom}
+            onZoomRange={(range) => dispatch({ type: "set-zoom-range", range })}
           >
             {state.mode === "recording" ? <RecordingFrame /> : null}
 
@@ -248,12 +291,6 @@ export function SessionScreen() {
                     />
                   </View>
                 </View>
-                <SessionTypeToggle
-                  value={state.sessionType}
-                  locked={state.swings.length > 0}
-                  onChange={(sessionType) => dispatch({ type: "set-type", sessionType })}
-                  onInfo={() => setSheet("info")}
-                />
               </LinearGradient>
 
               {/* Camera controls — left edge, tucked close above the bar (Taylor). */}
@@ -264,36 +301,36 @@ export function SessionScreen() {
                 <CameraControls
                   facing={state.facing}
                   zoom={state.zoom}
+                  zoomRange={state.zoomRange}
                   onFlip={() => dispatch({ type: "flip-camera" })}
                   onZoom={(zoom) => dispatch({ type: "set-zoom", zoom })}
                 />
               </View>
 
-              {/* DTL / Front View — right edge, directly above the help orb. */}
+              {/* Right rail — the angle controls as one stack: DTL/Front on top, Dual Sync
+                  directly under it (Taylor), the help orb unmoved below both. */}
               <View
-                style={[styles.rightToggle, { bottom: 100 + 44 + 10 + insets.bottom }]}
+                style={[styles.rightRail, { bottom: 100 + insets.bottom }]}
                 pointerEvents="box-none"
               >
                 <ViewToggle
                   value={state.view}
                   onChange={(view) => dispatch({ type: "set-view", view })}
                 />
+                {/* One slot, two states (Taylor): the button is the door IN, and once a camera
+                    is paired the second angle itself takes its place — the preview is what you
+                    want under your thumb while framing, and a button that says "connected" is
+                    a worse version of a picture that shows it. Tapping either opens the sheet. */}
+                {paired ? (
+                  <DualSyncPip
+                    view={state.view === "dtl" ? "face_on" : "dtl"}
+                    onPress={() => setSheet("sync")}
+                  />
+                ) : (
+                  <DualSyncButton paired={paired} onPress={() => setSheet("sync")} />
+                )}
               </View>
 
-              {/* Help orb — bottom right, above the bar. */}
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Filming help"
-                onPress={() => setSheet("help")}
-                style={({ pressed }) => [
-                  styles.helpOrb,
-                  { bottom: 100 + insets.bottom },
-                  pressed && styles.pressed,
-                ]}
-                testID="session-help"
-              >
-                <CircleHelp size={22} color="rgba(255,255,255,0.85)" strokeWidth={2.2} />
-              </Pressable>
             </Animated.View>
 
             {state.mode === "countdown" ? (
@@ -306,7 +343,8 @@ export function SessionScreen() {
             <SessionDock
               mode={state.mode}
               delaySeconds={state.settings.delaySeconds}
-              aiAudio={state.settings.aiCoachVoice}
+              sessionType={state.sessionType}
+              typeLocked={state.swings.length > 0}
               hasSwings={state.swings.length > 0}
               // With no swings recorded nothing exists to keep — plain exit. With swings,
               // the same slot ends the session, landing on the log like the post-swing door.
@@ -318,16 +356,20 @@ export function SessionScreen() {
                 dispatch({ type: "arm" });
               }}
               onStop={() => dispatch({ type: "stop" })}
+              onDisarm={() => dispatch({ type: "disarm" })}
+              // Backing out of a held countdown lands where the golfer came FROM: the swing
+              // they were reviewing mid-session, or the plain capture screen on a fresh one.
+              onAbort={() => {
+                const last = state.swings[0];
+                if (last) dispatch({ type: "review", swingId: last.id });
+              }}
               onDelayChange={(delaySeconds) => {
                 touched.current = true;
                 dispatch({ type: "set-settings", settings: { delaySeconds } });
               }}
-              onToggleAiAudio={() => {
+              onTypeChange={(sessionType) => {
                 touched.current = true;
-                dispatch({
-                  type: "set-settings",
-                  settings: { aiCoachVoice: !state.settings.aiCoachVoice },
-                });
+                dispatch({ type: "set-type", sessionType });
               }}
               onOpenSettings={() => setSheet("settings")}
             />
@@ -345,7 +387,9 @@ export function SessionScreen() {
           <AppHeader
             hero
             chromePx={headerScroll}
-            onProfile={() => navigation.navigate("Profile")}
+            // The one door off this screen that is not End. Sealed while a session is
+            // running — leaving mid-session is what "End session" is for.
+            onProfile={locked ? undefined : () => navigation.navigate("Profile")}
           />
         </Animated.View>
       ) : null}
@@ -360,7 +404,25 @@ export function SessionScreen() {
         }}
       />
       <SessionTypeInfoSheet visible={sheet === "info"} onClose={() => setSheet(null)} />
-      <HelpSheet visible={sheet === "help"} onClose={() => setSheet(null)} />
+      <SwingExitSheet
+        visible={exitOpen}
+        onClose={() => setExitOpen(false)}
+        onRecordAnother={() => {
+          setExitOpen(false);
+          dispatch({ type: "back-to-capture" });
+        }}
+        onEndSession={() => {
+          setExitOpen(false);
+          endSession();
+        }}
+      />
+      <DualSyncSheet
+        visible={sheet === "sync"}
+        onClose={() => setSheet(null)}
+        view={state.view}
+        paired={paired}
+        onPairedChange={setPaired}
+      />
     </View>
   );
 }
@@ -394,16 +456,6 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
   },
   leftControls: { position: "absolute", left: 16 },
-  rightToggle: { position: "absolute", right: 16 },
-  helpOrb: {
-    position: "absolute",
-    right: 16,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(11,16,28,0.66)",
-  },
+  rightRail: { position: "absolute", right: 16, alignItems: "flex-end", gap: 8 },
   pressed: { opacity: 0.6 },
 });

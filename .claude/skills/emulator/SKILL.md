@@ -12,12 +12,26 @@ One job: the emulator running with the app on screen, plus the phone if it happe
 Run from anywhere (the script resolves the repo root itself):
 
 ```bash
-bash .claude/skills/emulator/scripts/launch.sh
+bash .claude/skills/emulator/scripts/launch.sh            # JS-only
+bash .claude/skills/emulator/scripts/launch.sh --native   # Kotlin / app.json changed
 ```
 
-Cold boot takes ~30–60 s; already-running takes ~10 s. The script prints exactly three summary lines — `METRO: …`, `EMULATOR: …` and `PHONE: …`.
+Cold boot takes ~30–60 s; already-running takes ~10 s. The script prints a summary line per device — `EMULATOR: …` and `PHONE: …`.
 
-`METRO:` comes first because it is the one that used to be missing: the script now verifies Metro is genuinely serving (asking `/status` for `packager-status:running`, not just that :8081 is open), starts it if it is not, and launches the dev client **at that exact server**. A line reading `UP on http://10.0.1.107:8081 — loopback :8081 is squatted` is normal and healthy — it means the QStash dev server holds loopback and the app was pointed at the LAN address instead.
+**This script only boots the AVD.** Everything else is `apps/mobile/scripts/dev-device.mjs`, the single code path for putting the app on a device, which the script calls once per target. That is deliberate: a second copy of the Metro/install/launch logic lived here, hardcoded :8081, and drifted the moment Metro moved to :8082 — which is how "it lost connection again" kept coming back. Never reintroduce it.
+
+## Putting the app on a device — ALWAYS this one command
+
+For anything that is not "boot the emulator too", skip this skill and use the command directly:
+
+```bash
+pnpm --filter mobile phone          # JS/TS work — the normal case
+pnpm --filter mobile phone:native   # after a Kotlin or app.json change
+pnpm --filter mobile emu            # the AVD instead
+pnpm --filter mobile emu:native
+```
+
+**Never `adb install` an APK by hand, and never `npx expo run:android`.** A raw `adb install` leaves the dev client with no server URL, so it sits on `DevLauncherActivity` — the white screen — and that has cost time in this project more than once. The script instead: builds (only with `--native`), restarts Metro **after** a native build (a `prebuild --clean` plus a gradle run wedges Metro's watcher — it keeps listening and stops answering), health-checks Metro by the **body** of `/status`, launches at the LAN URL, and fails loudly if the app is still on `DevLauncherActivity` rather than claiming success.
 
 ## Then reply
 

@@ -33,6 +33,15 @@ export type RootStackParamList = {
   Profile: undefined;
   Settings: undefined;
   Goals: undefined;
+  /** The human professional's pages — placeholders until the instructor platform lands.
+   *  One route serves connected and not-connected states (the store decides). */
+  Instructor: undefined;
+  InstructorChat: undefined;
+  /** The guided stance analysis — the first AI coaching act, scripted UI (coach-surface). */
+  StanceAnalysis: undefined;
+  /** The deep swing analysis — the coach drives the video, pausing at checkpoints to
+   *  annotate; the golfer scrubs the ANALYSIS, never the video (coach-surface step 06). */
+  DeepAnalysis: undefined;
   DeleteAccount: undefined;
   /** Dev-only: the design-system living spec (registered under `__DEV__` in App.tsx). */
   SystemGallery: undefined;

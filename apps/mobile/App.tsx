@@ -26,7 +26,11 @@ import { CoachScreen } from "./src/screens/CoachScreen";
 import { DeleteAccountRoute } from "./src/screens/DeleteAccountRoute";
 import { GoalsScreen } from "./src/screens/GoalsScreen";
 import { HomeScreen } from "./src/screens/HomeScreen";
+import { InstructorChatScreen } from "./src/screens/InstructorChatScreen";
+import { InstructorScreen } from "./src/screens/InstructorScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
+import { DeepAnalysisScreen } from "./src/screens/DeepAnalysisScreen";
+import { StanceAnalysisScreen } from "./src/screens/StanceAnalysisScreen";
 import { ProgressScreen } from "./src/screens/ProgressScreen";
 import { RecordScreen } from "./src/screens/RecordScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
@@ -36,6 +40,11 @@ import { SystemGalleryScreen } from "./src/screens/SystemGalleryScreen";
 import type { RootStackParamList, TabParamList } from "./src/navigation";
 import { NavVisibilityProvider } from "./src/design/system/navVisibility";
 import { COLORS, FixedDarkTheme, ThemeProvider, useTheme } from "./src/theme";
+import { DebugProvider } from "./src/features/debug/DebugOverlay";
+import { CelebrationProvider } from "./src/features/achievements/CelebrationProvider";
+import { InstructorDebug } from "./src/features/instructor/InstructorDebug";
+import { CoachDebug } from "./src/features/coach/CoachDebug";
+import { SubjectDebug } from "./src/features/coach/subjectSwing";
 
 /**
  * Entry point and the whole navigation tree.
@@ -74,6 +83,24 @@ function RecordDark() {
   return (
     <FixedDarkTheme>
       <RecordScreen />
+    </FixedDarkTheme>
+  );
+}
+
+// The stance walkthrough draws over stance imagery, so it is pinned dark like capture.
+function StanceDark() {
+  return (
+    <FixedDarkTheme>
+      <StanceAnalysisScreen />
+    </FixedDarkTheme>
+  );
+}
+
+// The deep analysis is live footage end to end — pinned dark like the player.
+function DeepAnalysisDark() {
+  return (
+    <FixedDarkTheme>
+      <DeepAnalysisScreen />
     </FixedDarkTheme>
   );
 }
@@ -127,6 +154,8 @@ function Root() {
         <VersionGate>
           <AuthProvider>
             <AuthGate>
+              {/* Debug-only registrar; needs the swing list, hence inside the gate. */}
+              <SubjectDebug />
               <NavVisibilityProvider>
                 <NavigationContainer theme={navTheme}>
                   <Stack.Navigator
@@ -145,7 +174,15 @@ function Root() {
                     name="SwingDetail"
                     component={SwingDetailRoute}
                     // Dark ground even in light mode, so the push never flashes light before video.
-                    options={{ headerShown: false, contentStyle: { backgroundColor: COLORS.bg } }}
+                    // FADE, not a push (Taylor, 2026-08-19): this page wears the same main menu
+                    // as the tab shell, and a lateral slide would visibly drag "the" bar
+                    // sideways — a crossfade keeps it reading as one static bar under a page
+                    // that changes above it.
+                    options={{
+                      headerShown: false,
+                      animation: "fade",
+                      contentStyle: { backgroundColor: COLORS.bg },
+                    }}
                   />
                   {/* Capture comes up over everything, like a camera should. A TRANSPARENT
                       modal with no stack animation (the Profile drawer's pattern): the
@@ -184,6 +221,27 @@ function Root() {
                     name="Goals"
                     component={GoalsScreen}
                     options={{ title: "Goals" }}
+                  />
+                  <Stack.Screen
+                    name="Instructor"
+                    component={InstructorScreen}
+                    options={{ title: "Instructor" }}
+                  />
+                  <Stack.Screen
+                    name="InstructorChat"
+                    component={InstructorChatScreen}
+                    options={{ title: "Instructor chat" }}
+                  />
+                  {/* Full-bleed guided walkthroughs — each draws its own close control. */}
+                  <Stack.Screen
+                    name="StanceAnalysis"
+                    component={StanceDark}
+                    options={{ headerShown: false, contentStyle: { backgroundColor: COLORS.bg } }}
+                  />
+                  <Stack.Screen
+                    name="DeepAnalysis"
+                    component={DeepAnalysisDark}
+                    options={{ headerShown: false, contentStyle: { backgroundColor: COLORS.bg } }}
                   />
                   <Stack.Screen
                     name="DeleteAccount"
@@ -231,7 +289,15 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <Root />
+        <DebugProvider>
+          <InstructorDebug />
+          <CoachDebug />
+          {/* Below the debug registry (it contributes the Celebrations group), above the
+              navigator (a toast must land on whatever screen is up). */}
+          <CelebrationProvider>
+            <Root />
+          </CelebrationProvider>
+        </DebugProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );

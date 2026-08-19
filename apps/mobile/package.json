@@ -42,6 +42,12 @@
   },
   "scripts": {
     "start": "expo start",
+    "phone": "node scripts/dev-device.mjs",
+    "phone:restart": "node scripts/dev-device.mjs --restart",
+    "phone:native": "node scripts/dev-device.mjs --native",
+    "emu": "node scripts/dev-device.mjs --emulator",
+    "emu:restart": "node scripts/dev-device.mjs --emulator --restart",
+    "emu:native": "node scripts/dev-device.mjs --emulator --native",
     "android": "expo run:android",
     "ios": "expo run:ios",
     "test": "jest --ci",

@@ -1,8 +1,8 @@
-import { StyleSheet, Text, View } from "react-native";
+import { Text, View } from "react-native";
 
 import { Sheet } from "../../../design/system/Sheet";
 import { FONT_BODY, FONT_DISPLAY } from "../../../design/system/typography";
-import { COLORS } from "../../../theme";
+import { COLORS, appStyles, useAppTheme } from "../../../theme";
 
 /**
  * The info door beside the session-type toggle (D61): what each mode does, in a golfer's
@@ -34,6 +34,7 @@ export interface SessionTypeInfoSheetProps {
 }
 
 export function SessionTypeInfoSheet({ visible, onClose }: SessionTypeInfoSheetProps) {
+  const styles = useStyles();
   return (
     <Sheet
       visible={visible}
@@ -52,8 +53,8 @@ export function SessionTypeInfoSheet({ visible, onClose }: SessionTypeInfoSheetP
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = appStyles((t) => ({
   block: { gap: 3 },
-  title: { color: COLORS.text, fontFamily: FONT_DISPLAY.extraBold, fontSize: 14 },
-  detail: { color: COLORS.muted, fontFamily: FONT_BODY.regular, fontSize: 12.5, lineHeight: 18 },
-});
+  title: { color: t.text, fontFamily: FONT_DISPLAY.extraBold, fontSize: 14 },
+  detail: { color: t.muted, fontFamily: FONT_BODY.regular, fontSize: 12.5, lineHeight: 18 },
+}));

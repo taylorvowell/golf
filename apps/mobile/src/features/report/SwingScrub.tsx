@@ -1,5 +1,5 @@
-import { memo } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { memo, useEffect, useRef } from "react";
+import { Animated, Easing, StyleSheet, Text, View } from "react-native";
 
 import { FONT_DISPLAY } from "../../design/system/typography";
 import { stepFrame, type Extent } from "../player/frames";
@@ -8,8 +8,13 @@ import { useSeekSurface } from "../player/useSeekSurface";
 
 /**
  * `.report-v2-swing-map` — the report's phase-labelled scrub: five phase blocks with the
- * mockup's fills, a white dot indicator with an aqua halo and a stem below it, and one
- * full-width touch surface over the lot.
+ * mockup's fills, under a full-width playback line whose filled portion reads the position, a
+ * white dot indicator with an aqua halo riding that line, and one touch surface over the lot.
+ *
+ * The line is always there; the PHASES are not. While a swing analyses there is nothing to name,
+ * so the control is just its line, and the phase row grows in underneath it once detection
+ * finishes (Taylor, step-03 iteration) — the pill gets taller rather than the blocks appearing
+ * between two frames.
  *
  * Segment widths come from `map.weights` — the transport's ONE x↔frame mapping (`scrubMap`),
  * shared with the touch surface and the indicator. The mockup's 14/30/18/10/18 columns are
@@ -57,6 +62,28 @@ export const SwingScrub = memo(function SwingScrub({
   disabled = false,
 }: SwingScrubProps) {
   const surface = useSeekSurface(map.toFrame, onSeek, disabled, onScrubbingChange);
+
+  /**
+   * The phases ARRIVE — they do not appear (Taylor, step-03 iteration). While a swing analyses
+   * the row is a single placeholder; the moment the artifact lands, five labelled blocks would
+   * otherwise replace it between two frames, which reads as a glitch rather than as a result.
+   * One native-driven value on the row: nothing per-band, nothing on the 60 Hz path.
+   */
+  const arrive = useRef(new Animated.Value(bands.length ? 1 : 0)).current;
+  const arrived = useRef(bands.length > 0);
+  useEffect(() => {
+    if (!bands.length || arrived.current) return;
+    arrived.current = true;
+    Animated.timing(arrive, {
+      toValue: 1,
+      duration: 420,
+      easing: Easing.out(Easing.cubic),
+      // Height cannot go through the native driver. This runs ONCE per swing, off the 60 Hz
+      // path, and the alternative (a fixed-height row that fakes growth with translate) leaves
+      // the pill the wrong size before the artifact lands.
+      useNativeDriver: false,
+    }).start();
+  }, [arrive, bands.length]);
   const fraction = map.toFraction(frame);
 
   const spoken =
@@ -80,9 +107,39 @@ export const SwingScrub = memo(function SwingScrub({
       }}
       {...surface.panHandlers}
     >
-      <View style={styles.mapRow}>
-        {bands.length ? (
-          bands.map((band, i) => {
+      {/* Before the artifact lands there is nothing to name, so the control is a plain line with
+          everything left of the handle filled. It does not sit ABOVE the phases — it BECOMES
+          them: as the phase row grows in from below, the line collapses into it, so the golfer
+          sees one control get taller rather than a second one appear.
+
+          EVERY child is `pointerEvents="none"`: the seek surface derives its origin from the
+          grant's `locationX`, which is relative to the DEEPEST view touched — a tap landing on
+          a phase block measured against that block, and every tap seeked to the start of the
+          bar (Taylor, 2026-08-19). The surface itself must be the only touch target. */}
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.track,
+          {
+            height: arrive.interpolate({ inputRange: [0, 1], outputRange: [LINE_HEIGHT, 0] }),
+            opacity: arrive.interpolate({ inputRange: [0, 0.55, 1], outputRange: [1, 0, 0] }),
+          },
+        ]}
+      >
+        <View style={[styles.trackFill, { width: `${Math.max(0, Math.min(1, fraction)) * 100}%` }]} />
+      </Animated.View>
+
+      {/* The phases arrive FROM BELOW and push the control taller (Taylor, step-03 iteration). */}
+      <Animated.View
+        pointerEvents="none"
+        style={{
+          height: arrive.interpolate({ inputRange: [0, 1], outputRange: [0, MAP_HEIGHT] }),
+          opacity: arrive,
+          overflow: "hidden",
+        }}
+      >
+        <View style={styles.mapRow}>
+          {bands.map((band, i) => {
             const skin = PHASE_SKIN[band.key];
             const weight = map.weights[i] ?? band.to - band.from;
             return (
@@ -100,16 +157,11 @@ export const SwingScrub = memo(function SwingScrub({
                 </View>
               </View>
             );
-          })
-        ) : (
-          /* No artifact → no phases to name. One honest neutral block; the scrub still works. */
-          <View style={{ flex: 1 }}>
-            <View style={[styles.phase, { backgroundColor: PHASE_SKIN.setup.fill }]} />
-          </View>
-        )}
-      </View>
+          })}
+        </View>
+      </Animated.View>
 
-      {/* .report-v2-swing-indicator — white dot in an aqua halo, stem to the map's foot. */}
+      {/* .report-v2-swing-indicator — white dot in an aqua halo, riding the playback line. */}
       {!disabled ? (
         <View
           testID="swing-scrub-indicator"
@@ -119,7 +171,20 @@ export const SwingScrub = memo(function SwingScrub({
           <View style={styles.halo}>
             <View style={styles.dot} />
           </View>
-          <View style={styles.stem} />
+          {/* Once the stages are up the handle is a LINE through them with the ball at its head
+              (Taylor, step-03 iteration). The column is centred, so growing the stem to the
+              stage row's height lifts the ball to exactly the row's top edge — the handle
+              re-shapes itself with no second animation to keep in step. */}
+          <Animated.View
+            style={[
+              styles.stem,
+              {
+                height: arrive.interpolate({ inputRange: [0, 1], outputRange: [0, MAP_HEIGHT] }),
+                opacity: arrive,
+              },
+            ]}
+          />
+
         </View>
       ) : null}
     </View>
@@ -128,14 +193,20 @@ export const SwingScrub = memo(function SwingScrub({
 
 const ADJUST_ACTIONS = [{ name: "increment" }, { name: "decrement" }] as const;
 
-/** Map height per the mockup; the touch surface adds the mockup's -6px range inset per side. */
-const MAP_HEIGHT = 34;
-const TOUCH_PAD = 6;
+/**
+ * Map height. The mockup's 34 was drawn for a card of its own; inside the shared transport pill
+ * (Taylor, step-03 iteration) the scrub is one band of a control, not a panel, so it comes down
+ * to 26 — still tall enough for the phase labels to sit under the quiet top strip.
+ */
+const MAP_HEIGHT = 26;
+/** The pre-analysis line. It collapses to nothing as the phase row takes its place. */
+const LINE_HEIGHT = 5;
+const TOUCH_PAD = 4;
 const DOT = 14;
 const HALO = 22;
 
 const styles = StyleSheet.create({
-  touch: { paddingVertical: TOUCH_PAD, justifyContent: "center" },
+  touch: { paddingVertical: TOUCH_PAD, justifyContent: "center", overflow: "visible" },
   dim: { opacity: 0.5 },
   mapRow: { flexDirection: "row", height: MAP_HEIGHT },
   phase: {
@@ -146,14 +217,14 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
     alignItems: "center",
     paddingHorizontal: 4,
-    paddingBottom: 6,
+    paddingBottom: 3,
   },
   phaseTop: {
     position: "absolute",
     left: 0,
     right: 0,
     top: 0,
-    height: 8,
+    height: 6,
     backgroundColor: "rgba(255,255,255,0.12)",
   },
   phaseLabel: {
@@ -162,15 +233,27 @@ const styles = StyleSheet.create({
     letterSpacing: 0.48,
     textTransform: "uppercase",
   },
+  // The line, and how far through the swing the playhead is. Short on purpose — it is a
+  // position readout, not a surface.
+  track: {
+    borderRadius: 3,
+    overflow: "hidden",
+    backgroundColor: "rgba(255,255,255,0.18)",
+  },
+  trackFill: { height: LINE_HEIGHT, borderRadius: 3, backgroundColor: "#43CDD0" },
+  // Centred on WHATEVER the control currently is — the thin line before the artifact lands, the
+  // phase row after. Spanning the full height and centring both ways means the handle needs no
+  // animation of its own to follow the growth.
   indicator: {
     position: "absolute",
-    top: TOUCH_PAD - 4,
-    bottom: TOUCH_PAD - 4,
+    top: 0,
+    bottom: 0,
     width: 0,
     alignItems: "center",
+    justifyContent: "center",
   },
   // The indicator column is a zero-width line at the playhead's x; `alignItems: "center"`
-  // centres the halo and the stem on it, the mockup's `translateX(-50%)`.
+  // centres the halo on it, the mockup's `translateX(-50%)`.
   halo: {
     width: HALO,
     height: HALO,
@@ -185,14 +268,5 @@ const styles = StyleSheet.create({
     borderRadius: DOT / 2,
     backgroundColor: "#FFFFFF",
   },
-  stem: {
-    position: "absolute",
-    top: HALO - 4,
-    bottom: 0,
-    width: 2,
-    marginLeft: -1,
-    left: "50%",
-    borderRadius: 99,
-    backgroundColor: "#FFFFFF",
-  },
+  stem: { width: 2, borderRadius: 1, backgroundColor: "#FFFFFF" },
 });

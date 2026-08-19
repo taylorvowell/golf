@@ -1,0 +1,1733 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SwingSage Progress</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <script>
+        tailwind.config = {
+            darkMode: ["class", '[data-theme="dark"]'],
+            theme: {
+                extend: {
+                    colors: {
+                        navy: "#14244F",
+                        cobalt: "#2F46CF",
+                        aqua: "#42CBCE",
+                        green: "#28A86B",
+                        red: "#E55764",
+                        lavender: "#858DC2",
+                    },
+                    fontFamily: {
+                        display: [
+                            "Bahnschrift",
+                            '"Arial Narrow"',
+                            '"Segoe UI"',
+                            "sans-serif"
+                        ],
+                        body: [
+                            "Inter",
+                            "system-ui",
+                            "sans-serif"
+                        ]
+                    }
+                }
+            }
+        };
+    </script>
+
+    <style>
+        :root {
+            --bg: #f4f7fb;
+            --bg-elevated: #f7f9fc;
+
+            --surface: #ffffff;
+            --surface-2: #f2f5f9;
+            --surface-3: #e8edf4;
+
+            --text: #14244f;
+            --text-soft: #59657b;
+            --muted: #8790a2;
+
+            --cobalt: #2f46cf;
+            --navy: #14244f;
+            --aqua: #42cbce;
+            --green: #28a86b;
+            --red: #e55764;
+            --lavender: #858dc2;
+
+            --nav-surface: #ffffff;
+
+            --font-display:
+                Bahnschrift,
+                "Arial Narrow",
+                "Segoe UI",
+                sans-serif;
+
+            --font-body:
+                Inter,
+                system-ui,
+                sans-serif;
+        }
+
+        html[data-theme="dark"] {
+            --bg: #07101f;
+            --bg-elevated: #0b1528;
+
+            --surface: #101c32;
+            --surface-2: #15223a;
+            --surface-3: #1b2a44;
+
+            --text: #f6f9ff;
+            --text-soft: #c4cbda;
+            --muted: #929cb0;
+
+            --nav-surface: #0b1528;
+        }
+
+        * {
+            box-sizing: border-box;
+            border: 0 !important;
+        }
+
+        html,
+        body {
+            margin: 0;
+            min-height: 100%;
+            background: var(--bg);
+            color: var(--text);
+        }
+
+        body {
+            font-family: var(--font-body);
+        }
+
+        button {
+            font: inherit;
+            cursor: pointer;
+        }
+
+        .app {
+            position: relative;
+            width: 100%;
+            min-height: 100vh;
+            overflow-x: hidden;
+            background: var(--bg-elevated);
+        }
+
+        /* =========================================================
+       HERO
+       ========================================================= */
+
+        .progress-top {
+            position: relative;
+            overflow: hidden;
+
+            padding:
+                max(22px, env(safe-area-inset-top)) 18px 142px;
+
+            color: #fff;
+
+            background:
+                linear-gradient(160deg,
+                    #07101f 0%,
+                    #102a63 54%,
+                    #2f46cf 120%);
+        }
+
+        .progress-top::before {
+            content: "";
+
+            position: absolute;
+            width: 280px;
+            height: 280px;
+
+            right: -100px;
+            top: -92px;
+
+            border-radius: 50%;
+
+            background:
+                radial-gradient(circle,
+                    rgba(66, 203, 206, 0.24),
+                    transparent 66%);
+        }
+
+        .progress-top::after {
+            content: "";
+
+            position: absolute;
+            width: 220px;
+            height: 220px;
+
+            left: -92px;
+            bottom: -120px;
+
+            border-radius: 50%;
+
+            box-shadow:
+                inset 0 0 0 24px rgba(255, 255, 255, 0.03);
+        }
+
+        .progress-top-content {
+            position: relative;
+            z-index: 2;
+            max-width: 520px;
+            margin: 0 auto;
+        }
+
+        .progress-brand {
+            color: #83e5e3;
+
+            font-family: var(--font-display);
+            font-size: 9px;
+            font-weight: 900;
+            line-height: 1;
+
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+        }
+
+        .progress-title {
+            margin-top: 6px;
+
+            font-family: var(--font-display);
+            font-size: 31px;
+            font-weight: 900;
+            line-height: 1;
+
+            letter-spacing: -0.05em;
+        }
+
+        .progress-more {
+            display: grid;
+
+            width: 42px;
+            height: 42px;
+
+            place-items: center;
+
+            border-radius: 50%;
+
+            background: rgba(255, 255, 255, 0.10);
+            color: #fff;
+
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        .progress-meta {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 92px;
+
+            align-items: end;
+
+            gap: 14px;
+            margin-top: 18px;
+        }
+
+        .progress-period {
+            display: block;
+
+            color: rgba(255, 255, 255, 0.74);
+
+            font-family: var(--font-display);
+            font-size: 8px;
+            font-weight: 900;
+
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+        }
+
+        .progress-headline {
+            max-width: 285px;
+            margin-top: 8px;
+
+            font-family: var(--font-display);
+            font-size: 25px;
+            font-weight: 900;
+            line-height: 1.03;
+
+            letter-spacing: -0.04em;
+        }
+
+        .progress-description {
+            max-width: 275px;
+            margin-top: 8px;
+
+            color: rgba(255, 255, 255, 0.66);
+
+            font-size: 10px;
+            line-height: 1.45;
+        }
+
+        .trend-ring {
+            display: grid;
+
+            width: 92px;
+            height: 92px;
+
+            place-items: center;
+            align-content: center;
+
+            border-radius: 50%;
+
+            background:
+                conic-gradient(#42cbce 0 82%,
+                    rgba(255, 255, 255, 0.12) 82%);
+
+            box-shadow:
+                inset 0 0 0 10px rgba(255, 255, 255, 0.05);
+        }
+
+        .trend-ring strong {
+            color: #fff;
+
+            font-family: var(--font-display);
+            font-size: 31px;
+            font-weight: 900;
+            line-height: 0.9;
+        }
+
+        .trend-ring span {
+            margin-top: 6px;
+
+            color: #83e5e3;
+
+            font-family: var(--font-display);
+            font-size: 7px;
+            font-weight: 900;
+
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .progress-chips {
+            display: flex;
+            flex-wrap: wrap;
+
+            gap: 8px;
+            margin-top: 18px;
+        }
+
+        .progress-chip {
+            display: inline-flex;
+
+            min-height: 28px;
+
+            align-items: center;
+
+            padding: 0 10px;
+
+            border-radius: 999px;
+
+            background: rgba(7, 16, 31, 0.48);
+            color: #fff;
+
+            font-family: var(--font-display);
+            font-size: 8px;
+            font-weight: 900;
+
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        /* =========================================================
+       MAIN SHEET
+       ========================================================= */
+
+        .progress-sheet {
+            position: relative;
+            z-index: 3;
+
+            max-width: 520px;
+
+            margin: -112px auto 0;
+
+            padding:
+                12px 14px calc(132px + env(safe-area-inset-bottom));
+
+            border-radius: 30px 30px 0 0;
+
+            background: var(--bg-elevated);
+
+            box-shadow:
+                0 -22px 44px rgba(7, 16, 31, 0.20);
+        }
+
+        .sheet-handle {
+            width: 72px;
+            height: 6px;
+
+            margin: 0 auto 14px;
+
+            border-radius: 999px;
+
+            background:
+                color-mix(in srgb,
+                    var(--muted) 30%,
+                    transparent);
+        }
+
+        .progress-block {
+            padding: 14px;
+
+            border-radius: 14px;
+
+            background: var(--surface);
+
+            box-shadow:
+                0 4px 12px rgba(20, 36, 79, 0.055);
+        }
+
+        .progress-block+.progress-block {
+            margin-top: 12px;
+        }
+
+        .block-head {
+            display: flex;
+
+            align-items: center;
+            justify-content: space-between;
+
+            gap: 10px;
+
+            margin-bottom: 12px;
+        }
+
+        .block-head strong {
+            font-family: var(--font-display);
+            font-size: 10px;
+            font-weight: 900;
+            line-height: 1;
+
+            letter-spacing: 0.10em;
+            text-transform: uppercase;
+        }
+
+        .block-head span {
+            color: var(--text-soft);
+            font-size: 11px;
+        }
+
+        /* =========================================================
+       COACH PRIORITIES
+       ========================================================= */
+
+        .coach-list {
+            display: grid;
+            gap: 10px;
+        }
+
+        .coach-focus {
+            display: grid;
+
+            grid-template-columns:
+                56px minmax(0, 1fr) auto;
+
+            align-items: center;
+
+            gap: 10px;
+
+            padding: 12px;
+
+            border-radius: 12px;
+
+            background: var(--surface-2);
+        }
+
+        .coach-focus small,
+        .mini-trend small,
+        .compare-swing small {
+            display: block;
+
+            color: var(--muted);
+
+            font-family: var(--font-display);
+            font-size: 7px;
+            font-weight: 900;
+            line-height: 1;
+
+            letter-spacing: 0.10em;
+            text-transform: uppercase;
+        }
+
+        .coach-focus strong,
+        .mini-trend strong,
+        .compare-swing strong {
+            display: block;
+
+            margin-top: 4px;
+
+            font-family: var(--font-display);
+            font-size: 14px;
+            font-weight: 900;
+            line-height: 1.1;
+        }
+
+        .coach-focus p,
+        .mini-trend p,
+        .compare-swing p {
+            margin: 4px 0 0;
+
+            color: var(--text-soft);
+
+            font-size: 9px;
+            line-height: 1.45;
+        }
+
+        .priority {
+            display: inline-flex;
+
+            min-height: 24px;
+
+            align-items: center;
+            justify-content: center;
+
+            padding: 0 9px;
+
+            border-radius: 999px;
+
+            background:
+                color-mix(in srgb,
+                    var(--red) 14%,
+                    transparent);
+
+            color: var(--red);
+
+            font-family: var(--font-display);
+            font-size: 7px;
+            font-weight: 900;
+
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .priority.medium {
+            background:
+                color-mix(in srgb,
+                    var(--cobalt) 12%,
+                    transparent);
+
+            color: var(--cobalt);
+        }
+
+        .priority.low {
+            background:
+                color-mix(in srgb,
+                    var(--green) 14%,
+                    transparent);
+
+            color: var(--green);
+        }
+
+        .focus-progress {
+            grid-column: 1 / -1;
+
+            display: grid;
+            gap: 5px;
+        }
+
+        .focus-values {
+            display: flex;
+
+            align-items: center;
+            justify-content: space-between;
+
+            gap: 8px;
+
+            color: var(--text-soft);
+
+            font-size: 9px;
+        }
+
+        .focus-track {
+            height: 8px;
+
+            overflow: hidden;
+
+            border-radius: 999px;
+
+            background: var(--surface-3);
+        }
+
+        .focus-track span {
+            display: block;
+
+            height: 100%;
+
+            border-radius: inherit;
+
+            background:
+                linear-gradient(90deg,
+                    #2f46cf,
+                    #42cbce);
+        }
+
+        /* =========================================================
+       STICK FIGURE THUMBNAILS
+       ========================================================= */
+
+        .stick-thumb {
+            position: relative;
+
+            display: grid;
+
+            width: 56px;
+            height: 56px;
+
+            place-items: center;
+
+            border-radius: 12px;
+
+            background:
+                linear-gradient(145deg,
+                    color-mix(in srgb,
+                        #2f46cf 16%,
+                        transparent),
+                    color-mix(in srgb,
+                        #42cbce 10%,
+                        transparent));
+        }
+
+        .stick-thumb svg {
+            width: 42px;
+            height: 42px;
+            overflow: visible;
+        }
+
+        .stick-thumb .joint {
+            fill: #f7c948;
+        }
+
+        .stick-thumb .bone {
+            fill: none;
+
+            stroke: #34d1e7;
+            stroke-width: 2.6;
+
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .stick-thumb .accent {
+            fill: none;
+
+            stroke: #67e08a;
+            stroke-width: 2.3;
+
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .stick-thumb .trace {
+            fill: none;
+
+            stroke: #7a68ff;
+            stroke-width: 2.1;
+
+            stroke-linecap: round;
+            stroke-dasharray: 2 4;
+
+            opacity: 0.95;
+        }
+
+        .stick-thumb .trace2 {
+            fill: none;
+
+            stroke: #31d6e4;
+            stroke-width: 2.2;
+
+            stroke-linecap: round;
+
+            opacity: 0.95;
+        }
+
+        .stick-thumb .ground {
+            fill: none;
+
+            stroke:
+                color-mix(in srgb,
+                    var(--text) 15%,
+                    transparent);
+
+            stroke-width: 1.4;
+            stroke-linecap: round;
+        }
+
+        /* =========================================================
+       IMPROVEMENT CARDS
+       ========================================================= */
+
+        .mini-trend-grid {
+            display: grid;
+
+            grid-template-columns:
+                repeat(3, minmax(0, 1fr));
+
+            gap: 10px;
+        }
+
+        .mini-trend {
+            padding: 12px;
+
+            border-radius: 12px;
+
+            background: var(--surface-2);
+        }
+
+        .delta-good {
+            margin-top: 10px;
+
+            color: var(--green);
+
+            font-family: var(--font-display);
+            font-size: 12px;
+            font-weight: 900;
+        }
+
+        .coach-note {
+            margin-top: 10px;
+
+            padding: 10px 12px;
+
+            border-radius: 12px;
+
+            background:
+                linear-gradient(135deg,
+                    color-mix(in srgb,
+                        #42cbce 16%,
+                        transparent),
+                    color-mix(in srgb,
+                        #2f46cf 10%,
+                        transparent));
+
+            color: var(--text);
+
+            font-size: 10px;
+            line-height: 1.55;
+        }
+
+        .coach-note strong {
+            display: block;
+
+            margin-bottom: 4px;
+
+            font-family: var(--font-display);
+            font-size: 8px;
+            font-weight: 900;
+
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        /* =========================================================
+       THEN / NOW
+       ========================================================= */
+
+        .compare-grid {
+            display: grid;
+
+            grid-template-columns:
+                repeat(2, minmax(0, 1fr));
+
+            gap: 10px;
+        }
+
+        .compare-swing {
+            padding: 12px;
+
+            border-radius: 12px;
+
+            background: var(--surface-2);
+        }
+
+        .compare-score-row {
+            display: flex;
+
+            align-items: center;
+            justify-content: space-between;
+
+            gap: 8px;
+
+            margin-bottom: 8px;
+        }
+
+        .compare-person {
+            display: flex;
+
+            align-items: center;
+
+            gap: 10px;
+        }
+
+        .compare-score {
+            display: inline-flex;
+
+            min-width: 46px;
+            min-height: 46px;
+
+            align-items: center;
+            justify-content: center;
+
+            border-radius: 50%;
+
+            background:
+                conic-gradient(#42cbce 0 86%,
+                    var(--surface-3) 86%);
+
+            font-family: var(--font-display);
+            font-size: 15px;
+            font-weight: 900;
+        }
+
+        .compare-score.old {
+            background:
+                conic-gradient(#858dc2 0 72%,
+                    var(--surface-3) 72%);
+        }
+
+        .compare-tags {
+            display: flex;
+            flex-wrap: wrap;
+
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .compare-tag {
+            display: inline-flex;
+
+            min-height: 22px;
+
+            align-items: center;
+
+            padding: 0 8px;
+
+            border-radius: 999px;
+
+            background: var(--surface-3);
+            color: var(--text-soft);
+
+            font-family: var(--font-display);
+            font-size: 7px;
+            font-weight: 900;
+
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        /* =========================================================
+       BOTTOM NAV
+       ========================================================= */
+
+        .nav-fade {
+            position: fixed;
+            z-index: 40;
+
+            left: 0;
+            right: 0;
+            bottom: 0;
+
+            height: 145px;
+
+            pointer-events: none;
+
+            background:
+                linear-gradient(to bottom,
+                    transparent,
+                    color-mix(in srgb,
+                        var(--bg-elevated) 72%,
+                        transparent) 48%,
+                    var(--bg-elevated) 76%);
+        }
+
+        .wave-nav {
+            position: fixed;
+            z-index: 50;
+
+            left: 0;
+            right: 0;
+            bottom: 0;
+
+            height: 104px;
+
+            filter:
+                drop-shadow(0 -9px 22px rgba(20, 36, 79, 0.09));
+        }
+
+        .wave-nav .base {
+            position: absolute;
+
+            left: 0;
+            right: 0;
+            bottom: 0;
+
+            height: 67px;
+
+            background: var(--nav-surface);
+
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+        }
+
+        .wave-nav .base::before {
+            content: "";
+
+            position: absolute;
+
+            left: 50%;
+            top: -40px;
+
+            width: 96px;
+            height: 96px;
+
+            transform: translateX(-50%);
+
+            border-radius: 50%;
+
+            background: var(--nav-surface);
+        }
+
+        .wave-nav .base::after {
+            content: "";
+
+            position: absolute;
+
+            left: 50%;
+            top: 8px;
+
+            width: 122px;
+            height: 24px;
+
+            transform: translateX(-50%);
+
+            border-radius: 50%;
+
+            background: var(--nav-surface);
+        }
+
+        .wave-items {
+            position: relative;
+            z-index: 2;
+
+            display: grid;
+
+            grid-template-columns:
+                1fr 1fr 78px 1fr 1fr;
+
+            align-items: end;
+
+            height: 100%;
+
+            padding:
+                0 10px calc(10px + env(safe-area-inset-bottom));
+        }
+
+        .wave-item {
+            display: flex;
+
+            height: 60px;
+
+            flex-direction: column;
+
+            align-items: center;
+            justify-content: center;
+
+            gap: 5px;
+
+            color: var(--muted);
+
+            font-family: var(--font-display);
+            font-size: 7px;
+            font-weight: 900;
+            line-height: 1;
+
+            letter-spacing: 0.025em;
+        }
+
+        .wave-item.active {
+            color: #2f46cf;
+        }
+
+        html[data-theme="dark"] .wave-item.active {
+            color: #42cbce;
+        }
+
+        .wave-icon {
+            display: grid;
+
+            width: 24px;
+            height: 24px;
+
+            place-items: center;
+        }
+
+        .wave-icon svg {
+            width: 21px;
+            height: 21px;
+
+            fill: none;
+
+            stroke: currentColor;
+            stroke-width: 2;
+
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .new-swing {
+            position: relative;
+
+            isolation: isolate;
+
+            display: grid;
+
+            width: 58px;
+            height: 58px;
+
+            align-self: start;
+            justify-self: center;
+            place-items: center;
+
+            margin-top: 2px;
+
+            border-radius: 50%;
+
+            background: transparent;
+            color: #fff;
+        }
+
+        .new-swing::before {
+            content: "";
+
+            position: absolute;
+
+            inset: -6px;
+
+            z-index: -1;
+
+            border-radius: 50%;
+
+            background:
+                color-mix(in srgb,
+                    var(--nav-surface) 88%,
+                    transparent);
+
+            box-shadow:
+                0 8px 18px rgba(20, 36, 79, 0.10),
+                inset 0 1px 0 rgba(255, 255, 255, 0.72);
+
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+        }
+
+        .new-swing::after {
+            content: "";
+
+            position: absolute;
+
+            inset: 0;
+
+            z-index: 0;
+
+            border-radius: 50%;
+
+            background:
+                linear-gradient(180deg,
+                    #1b3262 0%,
+                    #14244f 54%,
+                    #09162f 100%);
+
+            box-shadow:
+                0 5px 14px rgba(7, 16, 31, 0.28),
+                inset 0 1px 0 rgba(255, 255, 255, 0.08);
+        }
+
+        .new-swing svg {
+            position: relative;
+            z-index: 2;
+
+            width: 19px;
+            height: 19px;
+
+            fill: none;
+
+            stroke: currentColor;
+            stroke-width: 2.35;
+
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        html[data-theme="dark"] .new-swing {
+            color: #14244f;
+        }
+
+        html[data-theme="dark"] .new-swing::after {
+            background: #42cbce;
+
+            box-shadow:
+                0 5px 14px rgba(7, 16, 31, 0.32),
+                inset 0 1px 0 rgba(255, 255, 255, 0.20);
+        }
+
+        @media (max-width: 440px) {
+            .progress-meta {
+                grid-template-columns: minmax(0, 1fr) 82px;
+            }
+
+            .trend-ring {
+                width: 82px;
+                height: 82px;
+            }
+
+            .trend-ring strong {
+                font-size: 28px;
+            }
+
+            .coach-focus {
+                grid-template-columns:
+                    48px minmax(0, 1fr);
+            }
+
+            .coach-focus .priority {
+                grid-column: 2;
+                justify-self: start;
+            }
+
+            .stick-thumb {
+                width: 48px;
+                height: 48px;
+            }
+
+            .mini-trend-grid,
+            .compare-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="app">
+
+        <!-- HERO -->
+        <header class="progress-top">
+            <div class="progress-top-content">
+
+                <div class="flex items-center justify-between gap-3">
+                    <div>
+                        <div class="progress-brand">SwingSage</div>
+                        <h1 class="progress-title">Progress</h1>
+                    </div>
+
+                    <button class="progress-more" type="button" aria-label="More options">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                            <circle cx="5" cy="12" r="1.7"></circle>
+                            <circle cx="12" cy="12" r="1.7"></circle>
+                            <circle cx="19" cy="12" r="1.7"></circle>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="progress-meta">
+
+                    <div>
+                        <span class="progress-period">
+                            Last 30 days
+                        </span>
+
+                        <h2 class="progress-headline">
+                            Sharper impact. Better posture. More repeatable tempo.
+                        </h2>
+
+                        <p class="progress-description">
+                            Coach focus is shifting from setup stability toward
+                            impact sequencing and release control.
+                        </p>
+                    </div>
+
+                    <div class="trend-ring">
+                        <strong>+8</strong>
+                        <span>Net gain</span>
+                    </div>
+
+                </div>
+
+                <div class="progress-chips">
+                    <span class="progress-chip">9 sessions</span>
+                    <span class="progress-chip">132 swings</span>
+                    <span class="progress-chip">Best score 91</span>
+                    <span class="progress-chip">
+                        Coach confidence rising
+                    </span>
+                </div>
+
+            </div>
+        </header>
+
+
+        <!-- CONTENT SHEET -->
+        <main class="progress-sheet">
+
+            <div class="sheet-handle"></div>
+
+
+            <!-- AI COACH PRIORITIES -->
+            <section class="progress-block">
+
+                <div class="block-head">
+                    <strong>AI coach priorities</strong>
+                    <span>Ordered by impact</span>
+                </div>
+
+                <div class="coach-list">
+
+                    <!-- Priority 1 -->
+                    <article class="coach-focus">
+
+                        <div class="stick-thumb">
+                            <svg viewBox="0 0 40 40">
+                                <path class="ground" d="M7 33.5h26"></path>
+
+                                <circle class="joint" cx="21" cy="8" r="3.2"></circle>
+
+                                <path class="bone" d="M21 11.5 18.5 17.5 17.5 23.5"></path>
+
+                                <path class="bone" d="M18.5 17.5 24.5 17"></path>
+
+                                <path class="bone" d="M24.5 17 28 13"></path>
+
+                                <path class="accent" d="M18.2 17.8 24.5 24"></path>
+
+                                <path class="bone" d="M17.5 23.5 16 31"></path>
+
+                                <path class="accent" d="M24.5 24 25 31"></path>
+
+                                <path class="trace" d="M8 12c3 1 5 2 8 6"></path>
+                            </svg>
+                        </div>
+
+                        <div>
+                            <small>Priority 01</small>
+                            <strong>Hip depth at address</strong>
+
+                            <p>
+                                Better setup depth is unlocking cleaner transition
+                                and more centered contact.
+                            </p>
+                        </div>
+
+                        <span class="priority">
+                            High
+                        </span>
+
+                        <div class="focus-progress">
+
+                            <div class="focus-values">
+                                <span>Before 68</span>
+                                <span>Now 79</span>
+                                <span>+11</span>
+                            </div>
+
+                            <div class="focus-track">
+                                <span style="width:79%"></span>
+                            </div>
+
+                        </div>
+                    </article>
+
+
+                    <!-- Priority 2 -->
+                    <article class="coach-focus">
+
+                        <div class="stick-thumb">
+                            <svg viewBox="0 0 40 40">
+
+                                <path class="ground" d="M7 33.5h26"></path>
+
+                                <circle class="joint" cx="19" cy="8" r="3.2"></circle>
+
+                                <path class="bone" d="M19 11.5 18 18 16.5 24"></path>
+
+                                <path class="bone" d="M18 18 25.5 17"></path>
+
+                                <path class="accent" d="M25.5 17 31 14"></path>
+
+                                <path class="accent" d="M18 18 23 25"></path>
+
+                                <path class="bone" d="M16.5 24 14.5 31"></path>
+
+                                <path class="accent" d="M23 25 25.5 31"></path>
+
+                                <path class="trace2" d="M22 16c4-1 7-4 11-6"></path>
+
+                            </svg>
+                        </div>
+
+                        <div>
+                            <small>Priority 02</small>
+                            <strong>Chest open at impact</strong>
+
+                            <p>
+                                Rotation is improving, but impact is still the biggest
+                                scoring opportunity.
+                            </p>
+                        </div>
+
+                        <span class="priority medium">
+                            Medium
+                        </span>
+
+                        <div class="focus-progress">
+
+                            <div class="focus-values">
+                                <span>Before 64</span>
+                                <span>Now 74</span>
+                                <span>+10</span>
+                            </div>
+
+                            <div class="focus-track">
+                                <span style="width:74%"></span>
+                            </div>
+
+                        </div>
+                    </article>
+
+
+                    <!-- Priority 3 -->
+                    <article class="coach-focus">
+
+                        <div class="stick-thumb">
+                            <svg viewBox="0 0 40 40">
+
+                                <path class="ground" d="M7 33.5h26"></path>
+
+                                <circle class="joint" cx="20" cy="8" r="3.2"></circle>
+
+                                <path class="bone" d="M20 11.5 19 18 18 24"></path>
+
+                                <path class="bone" d="M19 18 25 19"></path>
+
+                                <path class="accent" d="M25 19 29 16"></path>
+
+                                <path class="accent" d="M19 18 23.5 23.5"></path>
+
+                                <path class="bone" d="M18 24 16 31"></path>
+
+                                <path class="accent" d="M23.5 23.5 24.5 31"></path>
+
+                                <path class="trace" d="M9 13c4-1 7 0 10 3"></path>
+
+                                <path class="trace2" d="M21 18c3 2 6 2 10 0"></path>
+
+                            </svg>
+                        </div>
+
+                        <div>
+                            <small>Priority 03</small>
+                            <strong>Tempo consistency</strong>
+
+                            <p>
+                                The motion is more repeatable. Continue tempo work to
+                                stabilize path and face.
+                            </p>
+                        </div>
+
+                        <span class="priority low">
+                            On track
+                        </span>
+
+                        <div class="focus-progress">
+
+                            <div class="focus-values">
+                                <span>Before 71</span>
+                                <span>Now 82</span>
+                                <span>+11</span>
+                            </div>
+
+                            <div class="focus-track">
+                                <span style="width:82%"></span>
+                            </div>
+
+                        </div>
+                    </article>
+
+                </div>
+            </section>
+
+
+            <!-- IMPROVEMENT -->
+            <section class="progress-block">
+
+                <div class="block-head">
+                    <strong>Where you improved</strong>
+                    <span>Category trend</span>
+                </div>
+
+                <div class="mini-trend-grid">
+
+                    <!-- Posture -->
+                    <article class="mini-trend">
+
+                        <div class="stick-thumb mb-[10px]">
+                            <svg viewBox="0 0 40 40">
+
+                                <path class="ground" d="M7 33.5h26"></path>
+
+                                <circle class="joint" cx="21" cy="8" r="3.2"></circle>
+
+                                <path class="bone" d="M21 11.5 18.5 17.5 17.5 23.5"></path>
+
+                                <path class="bone" d="M18.5 17.5 24.5 17"></path>
+
+                                <path class="accent" d="M24.5 17 29 14"></path>
+
+                                <path class="accent" d="M18 18 23.8 24"></path>
+
+                                <path class="bone" d="M17.5 23.5 16 31"></path>
+
+                                <path class="accent" d="M23.8 24 24.6 31"></path>
+
+                            </svg>
+                        </div>
+
+                        <small>Setup</small>
+                        <strong>Posture</strong>
+
+                        <p>
+                            Shoulders and hip hinge are cleaner.
+                        </p>
+
+                        <div class="delta-good">
+                            +9
+                        </div>
+                    </article>
+
+
+                    <!-- Tempo -->
+                    <article class="mini-trend">
+
+                        <div class="stick-thumb mb-[10px]">
+                            <svg viewBox="0 0 40 40">
+
+                                <path class="ground" d="M7 33.5h26"></path>
+
+                                <circle class="joint" cx="20" cy="8" r="3.2"></circle>
+
+                                <path class="bone" d="M20 11.5 19 18 18 24"></path>
+
+                                <path class="bone" d="M19 18 25 19"></path>
+
+                                <path class="accent" d="M25 19 29 16"></path>
+
+                                <path class="accent" d="M19 18 23.5 23.5"></path>
+
+                                <path class="bone" d="M18 24 16 31"></path>
+
+                                <path class="accent" d="M23.5 23.5 24.5 31"></path>
+
+                                <path class="trace" d="M10 11c4 0 7 1 10 4"></path>
+
+                                <path class="trace2" d="M20.5 18c3 1 6 1 10-1"></path>
+
+                            </svg>
+                        </div>
+
+                        <small>Motion</small>
+                        <strong>Tempo</strong>
+
+                        <p>
+                            Backswing to downswing ratio is stabilizing.
+                        </p>
+
+                        <div class="delta-good">
+                            +6
+                        </div>
+                    </article>
+
+
+                    <!-- Impact -->
+                    <article class="mini-trend">
+
+                        <div class="stick-thumb mb-[10px]">
+                            <svg viewBox="0 0 40 40">
+
+                                <path class="ground" d="M7 33.5h26"></path>
+
+                                <circle class="joint" cx="18.5" cy="8" r="3.2"></circle>
+
+                                <path class="bone" d="M18.5 11.5 17.8 17.2 16.5 23.5"></path>
+
+                                <path class="bone" d="M17.8 17.2 25.5 16.8"></path>
+
+                                <path class="accent" d="M25.5 16.8 31 13"></path>
+
+                                <path class="accent" d="M17.8 17.2 23 24.2"></path>
+
+                                <path class="bone" d="M16.5 23.5 14.8 31"></path>
+
+                                <path class="accent" d="M23 24.2 25.2 31"></path>
+
+                                <path class="trace2" d="M22 17c4-1 8-3 12-6"></path>
+
+                            </svg>
+                        </div>
+
+                        <small>Strike</small>
+                        <strong>Impact</strong>
+
+                        <p>
+                            Club delivery and strike quality are trending up.
+                        </p>
+
+                        <div class="delta-good">
+                            +11
+                        </div>
+                    </article>
+
+                </div>
+
+                <div class="coach-note">
+                    <strong>Coach note</strong>
+
+                    Stay focused on the first two priorities until impact scores
+                    move above 80 consistently. Once that stabilizes, the coach
+                    can shift more attention toward face control and shot-shaping
+                    goals.
+                </div>
+            </section>
+
+
+            <!-- THEN VS NOW -->
+            <section class="progress-block">
+
+                <div class="block-head">
+                    <strong>Compare then vs now</strong>
+                    <span>Old swing vs new swing</span>
+                </div>
+
+                <div class="compare-grid">
+
+                    <!-- THEN -->
+                    <article class="compare-swing">
+
+                        <div class="compare-score-row">
+
+                            <div class="compare-person">
+
+                                <div class="stick-thumb" style="width:48px;height:48px;">
+                                    <svg viewBox="0 0 40 40">
+
+                                        <path class="ground" d="M7 33.5h26"></path>
+
+                                        <circle class="joint" cx="21" cy="8" r="3.2"></circle>
+
+                                        <path class="bone" d="M21 11.5 19.5 18 18.5 24"></path>
+
+                                        <path class="bone" d="M19.5 18 25.2 17"></path>
+
+                                        <path class="accent" d="M25.2 17 29.5 14"></path>
+
+                                        <path class="accent" d="M19.5 18 24 25"></path>
+
+                                        <path class="bone" d="M18.5 24 16.2 31"></path>
+
+                                        <path class="accent" d="M24 25 25.8 31"></path>
+
+                                    </svg>
+                                </div>
+
+                                <div>
+                                    <small>Then</small>
+                                    <strong>Swing 06</strong>
+                                </div>
+
+                            </div>
+
+                            <div class="compare-score old">
+                                72
+                            </div>
+
+                        </div>
+
+                        <p>
+                            Earlier swing had a more upright setup and less space
+                            through impact.
+                        </p>
+
+                        <div class="compare-tags">
+                            <span class="compare-tag">Closed chest</span>
+                            <span class="compare-tag">Early extension</span>
+                            <span class="compare-tag">Tempo fast</span>
+                        </div>
+
+                    </article>
+
+
+                    <!-- NOW -->
+                    <article class="compare-swing">
+
+                        <div class="compare-score-row">
+
+                            <div class="compare-person">
+
+                                <div class="stick-thumb" style="width:48px;height:48px;">
+                                    <svg viewBox="0 0 40 40">
+
+                                        <path class="ground" d="M7 33.5h26"></path>
+
+                                        <circle class="joint" cx="18.5" cy="8" r="3.2"></circle>
+
+                                        <path class="bone" d="M18.5 11.5 17.8 17.2 16.5 23.5"></path>
+
+                                        <path class="bone" d="M17.8 17.2 25.5 16.8"></path>
+
+                                        <path class="accent" d="M25.5 16.8 31 13"></path>
+
+                                        <path class="accent" d="M17.8 17.2 23 24.2"></path>
+
+                                        <path class="bone" d="M16.5 23.5 14.8 31"></path>
+
+                                        <path class="accent" d="M23 24.2 25.2 31"></path>
+
+                                        <path class="trace2" d="M22 17c4-1 8-3 12-6"></path>
+
+                                    </svg>
+                                </div>
+
+                                <div>
+                                    <small>Now</small>
+                                    <strong>Swing 18</strong>
+                                </div>
+
+                            </div>
+
+                            <div class="compare-score">
+                                86
+                            </div>
+
+                        </div>
+
+                        <p>
+                            Current swing holds posture longer and stays more centered
+                            in transition.
+                        </p>
+
+                        <div class="compare-tags">
+                            <span class="compare-tag">Better depth</span>
+                            <span class="compare-tag">Centered strike</span>
+                            <span class="compare-tag">Tempo stable</span>
+                        </div>
+
+                    </article>
+
+                </div>
+            </section>
+
+        </main>
+
+
+        <!-- BOTTOM FADE -->
+        <div class="nav-fade"></div>
+
+
+        <!-- MAIN STICKY NAV -->
+        <nav class="wave-nav" aria-label="Main navigation">
+
+            <div class="base"></div>
+
+            <div class="wave-items">
+
+                <!-- HOME -->
+                <button class="wave-item" type="button">
+                    <span class="wave-icon">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"></path>
+
+                            <path
+                                d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z">
+                            </path>
+                        </svg>
+                    </span>
+
+                    <span>Home</span>
+                </button>
+
+
+                <!-- SWINGS -->
+                <button class="wave-item" type="button">
+                    <span class="wave-icon">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M3 6h.01"></path>
+                            <path d="M3 12h.01"></path>
+                            <path d="M3 18h.01"></path>
+                            <path d="M8 6h13"></path>
+                            <path d="M8 12h13"></path>
+                            <path d="M8 18h13"></path>
+                        </svg>
+                    </span>
+
+                    <span>Swings</span>
+                </button>
+
+
+                <!-- NEW SWING -->
+                <button class="new-swing" type="button" aria-label="New swing">
+                    <svg viewBox="0 0 24 24">
+                        <path d="M12 5v14"></path>
+                        <path d="M5 12h14"></path>
+                    </svg>
+                </button>
+
+
+                <!-- PROGRESS -->
+                <button class="wave-item active" type="button">
+                    <span class="wave-icon">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M5 21v-6"></path>
+                            <path d="M12 21V9"></path>
+                            <path d="M19 21V3"></path>
+                        </svg>
+                    </span>
+
+                    <span>Progress</span>
+                </button>
+
+
+                <!-- COACH -->
+                <button class="wave-item" type="button">
+                    <span class="wave-icon">
+                        <svg viewBox="0 0 24 24">
+
+                            <path
+                                d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3Z">
+                            </path>
+
+                            <path d="M5 3v4"></path>
+                            <path d="M19 17v4"></path>
+                            <path d="M3 5h4"></path>
+                            <path d="M17 19h4"></path>
+
+                        </svg>
+                    </span>
+
+                    <span>Coach</span>
+                </button>
+
+            </div>
+        </nav>
+
+    </div>
+
+</body>
+
+</html>

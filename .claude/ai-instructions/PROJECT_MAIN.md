@@ -114,6 +114,14 @@ The product should help answer:
 
 A single account may have one or more roles.
 
+> **Terminology (2026-08-19, binding for user-facing copy):** in the product, **"Coach" is the
+> AI coach** — the Coach tab and all coach-voiced guidance are the AI persona. The human
+> professional this spec historically calls a "coach" is an **"Instructor"** in everything a
+> user reads ("find a local instructor", "your instructor"). This document's §23–§29 and other
+> human-coach sections keep their original wording; read "coach" there as "instructor".
+> Internal identifiers (`coach_links`, the `coach` role, track names) do not rename — see
+> `docs/decisions/mobile-client.md`.
+
 ## 3.1 Golfer
 
 A golfer can:
@@ -1323,6 +1331,14 @@ that resets punishes exactly the golfer who is 90% of the way to a habit.
   reflects it, the golfer is notified (§29), and an assigning coach is notified.
 - Celebration is a real moment, once — not a badge economy. One goal, earned, celebrated,
   archived into the improvement record (§21).
+
+> **AMENDED 2026-08-19 (D62) — the achievements layer.** Taylor's direction: SwingSage
+> gamifies progress — XP, a rank ladder, and one-time badges celebrating firsts, volume,
+> streaks and personal bests, delivered as a small toast + confetti moment (a top toaster,
+> never the main bottom sheet). This does not soften the rule above: the focus-goal
+> celebration remains a singular full-screen earned moment that outranks any badge, and badge
+> toasts queue behind it when both fire. Routine XP accrues silently — celebration stays
+> scarce. Track: `achievements` (its `DESIGN.md` is the spec).
 - An achieved goal enters **maintenance**: monitoring continues quietly, with no meter on
   screen. If the fault returns and stays returned, the goal is re-proposed carrying its
   history ("this has crept back") — never silently, and never disguised as a new goal.

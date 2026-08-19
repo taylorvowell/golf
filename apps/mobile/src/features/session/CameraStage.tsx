@@ -14,7 +14,7 @@ import HighSpeedCameraView from "../../../modules/high-speed-camera/src/HighSpee
 import { FONT_BODY, FONT_DISPLAY } from "../../design/system/typography";
 import { COLORS } from "../../theme";
 import { AlignmentGhost } from "./AlignmentGhost";
-import type { CameraFacing, CameraZoom } from "./sessionState";
+import type { CameraFacing, CameraZoom, ZoomRange } from "./sessionState";
 
 /**
  * The capture screen's picture layer: the live Camera2 preview
@@ -34,12 +34,21 @@ export interface CameraStageProps {
   view: "dtl" | "face_on";
   facing: CameraFacing;
   zoom: CameraZoom;
+  /** The open lens's real zoom range, straight from Camera2 — the zoom slider's bounds. */
+  onZoomRange?: (range: ZoomRange) => void;
   children?: ReactNode;
 }
 
 type Permission = "checking" | "granted" | "denied";
 
-export function CameraStage({ ghostVisible, view, facing, zoom, children }: CameraStageProps) {
+export function CameraStage({
+  ghostVisible,
+  view,
+  facing,
+  zoom,
+  onZoomRange,
+  children,
+}: CameraStageProps) {
   const [box, setBox] = useState({ width: 0, height: 0 });
   const [permission, setPermission] = useState<Permission>("checking");
 
@@ -65,7 +74,12 @@ export function CameraStage({ ghostVisible, view, facing, zoom, children }: Came
   return (
     <View style={styles.root} onLayout={onLayout} testID="camera-stage">
       {permission === "granted" ? (
-        <HighSpeedCameraView facing={facing} zoom={zoom} style={StyleSheet.absoluteFill} />
+        <HighSpeedCameraView
+          facing={facing}
+          zoom={zoom}
+          onZoomRange={(e) => onZoomRange?.({ min: e.nativeEvent.min, max: e.nativeEvent.max })}
+          style={StyleSheet.absoluteFill}
+        />
       ) : (
         <View style={styles.feed}>
           {permission === "denied" ? (

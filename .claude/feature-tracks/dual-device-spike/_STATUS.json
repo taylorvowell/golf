@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "featureName": "dual-device-spike",
+  "currentStep": "01",
+  "phase": "Dual-Device Spike",
+  "lastUpdated": "2026-08-18T00:00:00Z",
+  "steps": {
+    "01": { "status": "not-started" },
+    "02": { "status": "not-started" },
+    "03": { "status": "not-started" },
+    "04": { "status": "not-started" }
+  },
+  "blockers": [],
+  "skipped": []
+}

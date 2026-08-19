@@ -1,8 +1,7 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, Text, View } from "react-native";
 import type { AngleField, Analysis } from "@swingsage/schema/contract";
 
-import { DECK } from "../../../design/deck";
-import { COLORS } from "../../../theme";
+import { COLORS, appStyles } from "../../../theme";
 import { ANGLE_COLORS } from "./geometry";
 import { OverlayPreview } from "./OverlayPreview";
 import { availableGroups, drawableAngles, type ToggleKey, type Toggles } from "./overlays";
@@ -24,6 +23,10 @@ import { availableGroups, drawableAngles, type ToggleKey, type Toggles } from ".
  * Angles stay a chip row rather than becoming tiles: there are dozens of fields, every one of them
  * draws the same *kind* of mark, and forty previews of an arc would be forty identical pictures.
  * The row has one tile of its own to say what an angle looks like, and the chips choose which.
+ *
+ * Themed (app tokens), because this lives in the system `Sheet`, which renders its content on the
+ * APP theme — the deck's fixed dark glass painted white-on-white the moment the panel went light.
+ * The preview windows alone stay on the fixed dark palette: they are pictures of footage.
  */
 
 export interface OverlayControlsProps {
@@ -42,6 +45,7 @@ export function OverlayControls({
   angles,
   onAngles,
 }: OverlayControlsProps) {
+  const styles = useStyles();
   const groups = availableGroups(analysis);
   const fields = drawableAngles(analysis);
 
@@ -138,6 +142,7 @@ function Tile({
   onPress: () => void;
   children: React.ReactNode;
 }) {
+  const styles = useStyles();
   return (
     <Pressable
       testID={testID}
@@ -152,7 +157,7 @@ function Tile({
         {label}
       </Text>
       {/* A lit pip in the corner. The one piece of state that survives being read at arm's
-          length in sunlight, where the border tint alone does not. */}
+          length in sunlight, where the background tint alone does not. */}
       <View style={[styles.pip, on && styles.pipOn]} />
     </Pressable>
   );
@@ -169,6 +174,7 @@ function Chip({
   colour?: string;
   onPress: () => void;
 }) {
+  const styles = useStyles();
   return (
     <Pressable
       accessibilityRole="switch"
@@ -193,10 +199,10 @@ function Chip({
 
 const TILE = 104;
 
-const styles = StyleSheet.create({
+const useStyles = appStyles((t) => ({
   wrap: { gap: 18 },
   group: { gap: 9 },
-  groupTitle: { color: DECK.label.caption, fontSize: 9, fontWeight: "700", letterSpacing: 1.6, textTransform: "uppercase" },
+  groupTitle: { color: t.muted, fontSize: 9, fontWeight: "700", letterSpacing: 1.6, textTransform: "uppercase" },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
 
   tile: {
@@ -207,22 +213,24 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     alignItems: "center",
     gap: 8,
-    backgroundColor: DECK.glass.key,
+    backgroundColor: t.surface,
   },
-  tileOn: { backgroundColor: "rgba(87,215,216,0.07)" },
+  tileOn: { backgroundColor: t.aquaSoft },
   tilePressed: { opacity: 0.6 },
-  // A window onto the swing, not a paint chip: the darker inner square is what makes the
-  // miniature read as a picture of the video rather than as an icon.
+  // A window onto the swing, not a paint chip: the dark inner square is what makes the
+  // miniature read as a picture of the video rather than as an icon. Fixed dark in BOTH
+  // themes — the previews' strokes are the overlay's own footage colours (near-white skin,
+  // web-parity data colours) and vanish on a light ground.
   tileArt: {
     width: 60,
     height: 54,
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(0,0,0,0.35)",
+    backgroundColor: COLORS.bg,
   },
-  tileLabel: { color: COLORS.muted, fontSize: 11, fontWeight: "600", textAlign: "center", lineHeight: 14 },
-  tileLabelOn: { color: COLORS.text },
+  tileLabel: { color: t.muted, fontSize: 11, fontWeight: "600", textAlign: "center", lineHeight: 14 },
+  tileLabelOn: { color: t.text },
   pip: {
     position: "absolute",
     top: 9,
@@ -230,12 +238,12 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: "rgba(255,255,255,0.14)",
+    backgroundColor: t.surface3,
   },
-  pipOn: { backgroundColor: DECK.accent },
+  pipOn: { backgroundColor: t.aqua },
 
   anglesHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  clear: { color: DECK.accent, fontSize: 11, fontWeight: "700" },
+  clear: { color: t.aqua, fontSize: 11, fontWeight: "700" },
   anglesRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   anglesSample: {
     width: 60,
@@ -243,7 +251,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(0,0,0,0.35)",
+    backgroundColor: COLORS.bg,
   },
   chips: { flexDirection: "row", gap: 8, paddingRight: 4 },
   chip: {
@@ -251,10 +259,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 12,
     borderRadius: 17,
-    backgroundColor: DECK.glass.key,
+    backgroundColor: t.surface,
   },
-  chipOn: { backgroundColor: "rgba(87,215,216,0.1)" },
+  chipOn: { backgroundColor: t.aquaSoft },
   chipPressed: { opacity: 0.6 },
-  chipText: { color: COLORS.muted, fontSize: 12, fontWeight: "600" },
-  chipTextOn: { color: DECK.accent },
-});
+  chipText: { color: t.muted, fontSize: 12, fontWeight: "600" },
+  chipTextOn: { color: t.aqua },
+}));

@@ -497,9 +497,45 @@ debugging screen is the persistent one. Pairing survives reboots — normally yo
 USB works too (plug in, enable USB debugging, accept the RSA prompt) but is never *required*.
 
 That compiles the APK, installs it, and starts Metro. **After the first install nothing needs a
-cable or a rebuild**: `pnpm --filter mobile start`, edit a file, Metro pushes it over wifi and the
-phone reloads. Only a change to a module's **native** code (`modules/*/android/**.kt`,
-`modules/*/ios/**.swift`) needs `npx expo run:android` again — JS and TS changes never do.
+cable or a rebuild**: edit a file, Metro pushes it over wifi and the phone reloads. Only a change
+to a module's **native** code (`modules/*/android/**.kt`, `modules/*/ios/**.swift`) or to
+`app.json` needs a rebuild — JS and TS changes never do.
+
+### The everyday command
+
+```bash
+pnpm --filter mobile phone          # JS/TS work — the normal case
+pnpm --filter mobile phone:native   # after a Kotlin or app.json change
+pnpm --filter mobile emu            # the swingsage AVD instead
+pnpm --filter mobile emu:native
+
+pnpm --filter mobile phone:restart  # "it stopped hot refreshing" — bounce Metro, relaunch
+pnpm --filter mobile emu:restart
+```
+
+`:restart` is the cure for a **live** Metro that has stopped pushing changes. `/status` still
+answers, so the health check is satisfied and the normal command does nothing; what is actually
+dead is the client's HMR socket. `--restart` kills the bundler regardless and relaunches the app
+against the fresh one.
+
+`apps/mobile/scripts/dev-device.mjs` exists because "white screen, won't connect" has **three**
+unrelated causes here and telling them apart by hand cost time twice on 2026-08-18:
+
+1. **Metro hangs** while still listening and still accepting connections, so every port check
+   says "up" and the device says `ECONNREFUSED`. The only truthful probe is the *body* of
+   `/status` (`packager-status:running`). The script restarts a Metro that listens without
+   answering.
+2. **A freshly `adb install`ed dev client has no server URL** and sits on `DevLauncherActivity`
+   — that IS the white screen. It has to be launched with the dev-client deep link naming the
+   LAN address, which nothing on the device can guess. The script fires it and then verifies the
+   app actually reached `MainActivity`.
+3. **Port 8081 is squatted** by another project's `qstash dev` log server, bound specifically to
+   `127.0.0.1`, which beats Metro's wildcard bind for loopback traffic and so poisons the
+   emulator. **SwingSage's Metro therefore runs on :8082** (ENVIRONMENT.md). Change the port in
+   `dev-device.mjs` and `scripts/env-probe.mjs` together or the session probe reports a lie.
+
+Do not go back to a raw `adb install` — that is exactly the step that leaves the dev client with
+no server URL.
 
 **Two machine-level faults were found and fixed while getting this to build** — both were
 pre-existing, both broke *every* Android build on this PC, and one is still only worked around:
@@ -929,3 +965,23 @@ corner for it (the `__DEV__` 56px offset on the profile control went 2026-08-18,
 sits flush to the page gutter). With the bubble back on, the two overlap. The build-time default is the manifest meta-data
 `EXDevMenuShowFloatingActionButton`, which would need an `app.json` config change and a
 `prebuild --clean` + rebuild — not worth it for a preference that is one command.
+
+## 14. Regenerating the app icons
+
+All five launcher/splash assets come from `apps/mobile/assets/brand/swingsage-logo.svg` — the
+mark only, no wordmark. Never hand-edit the PNGs; edit the SVG (or the script) and re-run:
+
+```
+cd apps/mobile
+node scripts/make-icons.mjs        # rewrites the five PNGs in assets/, 1024x1024 each
+npx expo prebuild -p android --clean   # regenerates android/ mipmaps from them
+```
+
+It writes `icon.png` (opaque white, iOS + Android legacy), `android-icon-background.png`
+(flat white plate), `android-icon-foreground.png` and `android-icon-monochrome.png` (transparent,
+inside Android's safe zone) and `splash-icon.png` (transparent, drawn at `imageWidth` 150).
+`sharp` does the rasterizing and is already a transitive dependency of `apps/mobile`.
+
+**Gotcha:** `expo run:android` does NOT regenerate an existing `android/`, so an icon change
+without `prebuild --clean` never reaches the device. The launcher also caches aggressively —
+uninstall before reinstalling if the old icon persists.

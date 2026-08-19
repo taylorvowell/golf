@@ -91,6 +91,27 @@ along.
   accumulator, and guard cross-thread state with locks — the module's own
   `scheduleLock`/`pendingLock` pattern is the house style.
 
+## Getting the app onto a device
+
+- **`pnpm --filter mobile phone` is the ONLY way to install and launch.** Add `:restart` when it
+  stops hot refreshing (Metro still answers `/status`; the HMR socket is what died). Add `:native` after a
+  Kotlin or `app.json` change; `emu` / `emu:native` for the AVD. It is
+  `apps/mobile/scripts/dev-device.mjs`, and it is the single code path — a second copy of this
+  logic lived in the `/emulator` skill, hardcoded the old port, and drifted.
+- **Never `adb install` an APK by hand, and never `npx expo run:android`.** A raw install leaves
+  the dev client with no server URL, so it opens `DevLauncherActivity` — the white screen. This
+  has cost time more than once.
+- **Metro is on :8082, not :8081** (another project's `qstash dev` binds `127.0.0.1:8081`, and a
+  specific-address bind beats Metro's wildcard for loopback, which poisons the emulator). The
+  port is written in `dev-device.mjs` and `scripts/env-probe.mjs`; change both or the session
+  probe reports a lie.
+- **Metro must be restarted after any native build.** `expo prebuild --clean` regenerates the
+  whole `android/` tree and gradle writes thousands more files under it; that watcher storm wedges
+  Metro, which then keeps listening and stops answering. The script forces the restart for you,
+  which is why the build runs BEFORE the Metro check, not after.
+- **"Up" means it answered, not that the port is open.** Only `packager-status:running` in the
+  body of `/status` proves Metro is alive; an open socket proves nothing here.
+
 ## Native config (CNG)
 
 - **Never hand-edit `apps/mobile/android/` or `ios/`.** They are prebuild output. Config changes
@@ -157,6 +178,14 @@ along.
   legacy deck glyphs stay drawn until their surfaces are rebuilt.
 - **Nothing dev-only leaks into release**: `__DEV__`-gate instruments *and their layout
   accommodations* (padding reserved for the dev-client bubble counts).
+- **A feature with forceable states ships with debug-menu toggles for them** (Taylor,
+  2026-08-19). While building, any state worth testing that is expensive or impossible to
+  reach on demand — connected/empty/error variants, a flag the server will own later — gets a
+  toggle or action contributed to the app-wide debug menu (`useDebugGroups` in
+  `features/debug/DebugOverlay.tsx`) in the same change, so Taylor can force each state on
+  glass. The sheet is deliberately dense: `detail` strings are code documentation and never
+  render; all toggles collect into one untitled block at the top, and only action groups get
+  a title (chip rows via `inline: true`).
 
 ## Data & state
 

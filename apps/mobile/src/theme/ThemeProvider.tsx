@@ -90,12 +90,15 @@ export function useThemePreference(): {
  */
 const ThemeContext = createContext<Theme>(LIGHT);
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
-  // Pinned. Neither the stored preference nor the phone's scheme is consulted — see the note at
-  // the top of this file. Restoring the choice means resolving DARK here again.
-  const resolved = LIGHT;
+/**
+ * The app's own surface, resolved once. Pinned. Neither the stored preference nor the phone's
+ * scheme is consulted — see the note at the top of this file. Restoring the choice means
+ * resolving DARK here, and both `ThemeProvider` and `useAppTheme` pick it up.
+ */
+const APP_THEME = LIGHT;
 
-  return <ThemeContext.Provider value={resolved}>{children}</ThemeContext.Provider>;
+export function ThemeProvider({ children }: { children: ReactNode }) {
+  return <ThemeContext.Provider value={APP_THEME}>{children}</ThemeContext.Provider>;
 }
 
 /** The resolved theme every themed component reads. Semantic tokens only — see `themes.ts`. */
@@ -113,4 +116,27 @@ export function useTheme(): Theme {
  */
 export function FixedDarkTheme({ children }: { children: ReactNode }) {
   return <ThemeContext.Provider value={DARK}>{children}</ThemeContext.Provider>;
+}
+
+/**
+ * The app's surface, ignoring any `FixedDarkTheme` pin above.
+ *
+ * For the **sticky navigation bars only** (Taylor, 2026-08-18): every bar in the app is the
+ * same bar, so the capture screen's `SessionNav` wears the home tab bar's light fill even
+ * though the surface it floats over is pinned dark. Nothing else escapes the pin — content
+ * drawn over footage still uses the fixed dark palette, which is the whole point of the pin.
+ */
+export function useAppTheme(): Theme {
+  return APP_THEME;
+}
+
+/**
+ * Restores the app's surface for a subtree inside a `FixedDarkTheme` pin.
+ *
+ * `Sheet` applies it to every panel's content (Taylor, 2026-08-18): a slide-in is an app
+ * surface, not a control over footage, so a sheet opened from the capture screen reads like the
+ * swing log's sheet. Applied by the primitive so a sheet author cannot forget it.
+ */
+export function AppTheme({ children }: { children: ReactNode }) {
+  return <ThemeContext.Provider value={APP_THEME}>{children}</ThemeContext.Provider>;
 }

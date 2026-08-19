@@ -37,10 +37,22 @@ export type CaptureView = "dtl" | "face_on";
 
 export type CameraFacing = "back" | "front";
 
-/** Stub zoom stops; step 04 replaces them with the device's probed zoom range. */
-export type CameraZoom = 0.5 | 1 | 2;
+/** A continuous CONTROL_ZOOM_RATIO, not a stop — the slider spans the device's real range. */
+export type CameraZoom = number;
 
-export const CAMERA_ZOOMS: CameraZoom[] = [0.5, 1, 2];
+/** What the lens can actually do, reported by the native preview when it opens. Until then
+ * it is the no-zoom identity, which renders no slider rather than a fake one. */
+export interface ZoomRange {
+  min: number;
+  max: number;
+}
+
+export const NO_ZOOM: ZoomRange = { min: 1, max: 1 };
+
+/** Whether there is anything to control. A front camera commonly reports min === max. */
+export function zoomIsAdjustable(range: ZoomRange): boolean {
+  return range.max > range.min + 0.01;
+}
 
 /** Stub-grade swing record — the wiring replaces `id` with the server's and drives `status`
  * from the real job. Newest first. */
@@ -65,6 +77,8 @@ export interface SessionState {
   view: CaptureView;
   facing: CameraFacing;
   zoom: CameraZoom;
+  /** Probed per lens — a flip re-reports it, so the slider never outlives its camera. */
+  zoomRange: ZoomRange;
   swings: SessionSwing[];
   /**
    * The swing on the post-recording screen, or null on the capture screen. A view of the
@@ -81,9 +95,14 @@ export type SessionAction =
   | { type: "set-view"; view: CaptureView }
   | { type: "flip-camera" }
   | { type: "set-zoom"; zoom: CameraZoom }
+  /** The native preview reporting CONTROL_ZOOM_RATIO_RANGE for the lens it just opened. */
+  | { type: "set-zoom-range"; range: ZoomRange }
   /** Record pressed: idle → countdown, or straight to recording when the delay is 0. */
   | { type: "arm" }
   | { type: "countdown-done" }
+  /** Abort a countdown WITHOUT leaving the capture screen — the delay control's exit, as
+   * opposed to `stop`, which is "I did not mean to start this" and navigates accordingly. */
+  | { type: "disarm" }
   /** Stop pressed: countdown aborts to idle with nothing minted; recording mints a swing. */
   | { type: "stop"; swingId?: string; at?: number }
   /** A swing's analysis stub/job finished. */
@@ -118,6 +137,7 @@ export function initialSessionState(
     view: "dtl",
     facing: "back",
     zoom: 1,
+    zoomRange: NO_ZOOM,
     swings: [],
     reviewing: null,
   };
@@ -142,19 +162,43 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
     case "set-view":
       return state.mode === "idle" ? { ...state, view: action.view } : state;
     case "flip-camera":
+      // The new lens has its own range and its own 1x — reset both rather than carry a
+      // ratio the other camera cannot reach.
       return state.mode === "idle"
-        ? { ...state, facing: state.facing === "back" ? "front" : "back" }
+        ? {
+            ...state,
+            facing: state.facing === "back" ? "front" : "back",
+            zoom: 1,
+            zoomRange: NO_ZOOM,
+          }
         : state;
-    case "set-zoom":
-      return state.mode === "idle" ? { ...state, zoom: action.zoom } : state;
+    case "set-zoom": {
+      if (state.mode !== "idle") return state;
+      const { min, max } = state.zoomRange;
+      return { ...state, zoom: Math.min(max, Math.max(min, action.zoom)) };
+    }
+    case "set-zoom-range": {
+      const { min, max } = action.range;
+      if (!(min > 0) || !(max >= min)) return state;
+      return { ...state, zoomRange: { min, max }, zoom: Math.min(max, Math.max(min, state.zoom)) };
+    }
     case "arm": {
       if (state.mode !== "idle") return state;
       return { ...state, mode: state.settings.delaySeconds === 0 ? "recording" : "countdown" };
     }
+    case "disarm":
+      return state.mode === "countdown" ? { ...state, mode: "idle" } : state;
     case "countdown-done":
       return state.mode === "countdown" ? { ...state, mode: "recording" } : state;
     case "stop": {
-      if (state.mode === "countdown") return { ...state, mode: "idle" };
+      if (state.mode === "countdown") {
+        // Aborting a countdown returns you to WHERE YOU CAME FROM. Mid-session that is the
+        // swing you were just looking at, not the empty capture screen — the capture screen with
+        // no swing on it is the START of a session, and a session already underway must never
+        // present it (Taylor, step-03 iteration).
+        const last = state.swings[0];
+        return { ...state, mode: "idle", reviewing: last ? last.id : null };
+      }
       if (state.mode !== "recording") return state;
       const number = state.swings.length + 1;
       // Video-only sessions (and AI-off swings) never analyze — they are born ready.

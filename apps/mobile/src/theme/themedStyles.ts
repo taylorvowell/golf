@@ -1,6 +1,6 @@
 import { StyleSheet } from "react-native";
 
-import { useTheme } from "./ThemeProvider";
+import { useAppTheme, useTheme } from "./ThemeProvider";
 import type { Theme } from "./themes";
 
 /**
@@ -29,6 +29,33 @@ export function themedStyles<T extends StyleSheet.NamedStyles<T>>(
   const cache = new Map<Theme, T>();
   return function useStyles(): T {
     const t = useTheme();
+    let sheet = cache.get(t);
+    if (!sheet) {
+      sheet = StyleSheet.create(factory(t));
+      cache.set(t, sheet);
+    }
+    return sheet;
+  };
+}
+
+/**
+ * `themedStyles` against the APP's surface, ignoring any `FixedDarkTheme` pin above.
+ *
+ * Sheet content needs this and `themedStyles` cannot give it. `Sheet` wraps its children in an
+ * `AppTheme` provider, but a sheet component calls its style hook in **its own body** — which
+ * runs where the sheet is *used* (inside the pinned-dark capture screen), not where its children
+ * are *rendered* (inside the provider). Context flows down the tree, and the parent is not below
+ * its own child. The symptom is precise and easy to misread: the panel paints white correctly,
+ * and the text on it stays dark-theme white, so the content looks blank rather than mis-themed.
+ *
+ * Same caching contract as `themedStyles` — one built sheet per theme, for the whole process.
+ */
+export function appStyles<T extends StyleSheet.NamedStyles<T>>(
+  factory: (t: Theme) => T,
+): () => T {
+  const cache = new Map<Theme, T>();
+  return function useStyles(): T {
+    const t = useAppTheme();
     let sheet = cache.get(t);
     if (!sheet) {
       sheet = StyleSheet.create(factory(t));

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Animated,
+  Easing,
   Pressable,
   StyleSheet,
   Text,
@@ -9,14 +10,14 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Layers2, Play } from "lucide-react-native";
+import { ArrowLeftRight, Layers2, Pause, Play } from "lucide-react-native";
 import type { SwingSummary } from "@swingsage/schema/contract";
 
 import { FrameClockView } from "../../../modules/frame-clock/src";
 import { ErrorBoundary } from "../../platform/ErrorBoundary";
 import { useAuthenticatedImage } from "../../platform/useAuthenticatedImage";
 import { DeckSheet } from "../../design/deck";
-import { FloatingBack, SheetOverBackdrop } from "../../design/system";
+import { FloatingBack, Sheet, SheetOverBackdrop, navBarBottomInset } from "../../design/system";
 import { FONT_DISPLAY } from "../../design/system/typography";
 import { COLORS, FixedDarkTheme } from "../../theme";
 import { ComparePanel } from "../player/ComparePanel";
@@ -73,7 +74,8 @@ export interface ReportVideoLayerProps {
   /** Backswing:downswing for the compare panel. Null when the analyzer would not stand by it. */
   tempoRatio?: number | null;
   /** The `.report-full-pill` line — view name and swing label ("Down the line · Swing #12"). */
-  viewPill: string;
+  /** A label over the picture. OMIT it for a host that already names the swing elsewhere. */
+  viewPill?: string;
   /** The page's way out — the floating back orb pinned over everything, in every scroll state. */
   onBack?: () => void;
   /**
@@ -91,10 +93,154 @@ export interface ReportVideoLayerProps {
    * sibling, so the controls must lift above it or the scrub lands under the bar.
    */
   controlsBottomInset?: number;
+  /**
+   * Land in video-open, playing, instead of with the sheet up.
+   *
+   * The report opens on the scorecard because the golfer asked for a report. The post-swing
+   * screen is the opposite ask: they just hit a ball and want to watch it, so it arrives
+   * scrolled to the top with the transport visible and the swing already looping.
+   */
+  startOpen?: boolean;
+  /**
+   * How far the sheet drops in video-open. The report hides its peek entirely; a screen that
+   * wants the golfer to KNOW there is a scorecard under there passes a smaller number so a tab
+   * stays on screen.
+   */
+  openSheetDrop?: number;
+  /** Drawn over the picture, bottom right, above the controls — the score door. */
+  cornerOverlay?: ReactNode;
+  /** Host actions joining the top-right orb stack (under overlays/compare) — `CornerOrb`s, so
+   * the added chrome is the same glass as the chrome it stands beside. Video-open only, like
+   * the rest of the stack. */
+  topRightExtras?: ReactNode;
+  /** Extra top clearance for the corner chrome (orbs, back) — a host whose header overlays the
+   * picture (the standalone swing page's `AppHeader`) pushes them below it. */
+  topChromeInset?: number;
+  /** Raw scroll offset, for chrome that follows scroll DIRECTION rather than position. */
+  onScrollY?: (y: number) => void;
+  /** Fires when the layer crosses into or out of video-open — the host's cue for chrome that
+   * only belongs over the picture (the sheet's own "scroll up" hint). */
+  onVideoOpenChange?: (open: boolean) => void;
   /** The host's imperative seam (the sheet's "show video" tap scrolls to open). */
   scrollRef?: React.RefObject<{ scrollTo: (opts: { y: number; animated?: boolean }) => void } | null>;
   sheetStyle?: object;
   testID?: string;
+}
+
+/**
+ * Tap acknowledgement: one big glass disc with the state the tap produced, gone in ~600ms.
+ *
+ * Not a persistent control — the picture is already the button, and a play cap parked over the
+ * footage forever is the thing this replaces. It exists only to answer "did that register",
+ * which a video that simply stops cannot do on its own if the golfer tapped during a still frame.
+ */
+function TapFeedback({ playing, nonce }: { playing: boolean; nonce: number }) {
+  const flash = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (nonce === 0) return undefined;
+    flash.setValue(1);
+    const run = Animated.timing(flash, {
+      toValue: 0,
+      duration: 620,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: true,
+    });
+    run.start();
+    return () => run.stop();
+  }, [flash, nonce]);
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        StyleSheet.absoluteFill,
+        {
+          alignItems: "center",
+          justifyContent: "center",
+          opacity: flash,
+          transform: [
+            { scale: flash.interpolate({ inputRange: [0, 1], outputRange: [1.35, 1] }) },
+          ],
+        },
+      ]}
+    >
+      <View style={styles.tapDisc}>
+        {playing ? (
+          <Play size={30} color="#FFFFFF" fill="#FFFFFF" strokeWidth={0} />
+        ) : (
+          <Pause size={30} color="#FFFFFF" fill="#FFFFFF" strokeWidth={0} />
+        )}
+      </View>
+    </Animated.View>
+  );
+}
+
+/**
+ * A corner orb arriving.
+ *
+ * Both orbs are gated on the artifact, so they mount MID-VIEW — a control that blinks into
+ * existence beside a video the golfer is already watching reads as a glitch. On mount only:
+ * there is nothing to animate back out, because the artifact never un-loads.
+ */
+function OrbIn({ children }: { children: ReactNode }) {
+  const enter = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(enter, {
+      toValue: 1,
+      duration: 320,
+      easing: Easing.out(Easing.back(1.6)),
+      useNativeDriver: true,
+    }).start();
+  }, [enter]);
+  return (
+    <Animated.View
+      style={{
+        opacity: enter,
+        transform: [
+          { scale: enter.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1] }) },
+          { translateX: enter.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) },
+        ],
+      }}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
+/**
+ * A host action for the top-right orb stack (`topRightExtras`) — the layers orb's exact glass,
+ * exported so added chrome cannot drift from the chrome it stands beside.
+ */
+export function CornerOrb({
+  label,
+  active = false,
+  onPress,
+  testID,
+  children,
+}: {
+  label: string;
+  active?: boolean;
+  onPress: () => void;
+  testID?: string;
+  children: ReactNode;
+}) {
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: active }}
+      hitSlop={8}
+      onPress={onPress}
+      style={({ pressed }) => [
+        styles.layersOrb,
+        active && styles.layersOrbOn,
+        pressed && styles.layersOrbPressed,
+      ]}
+    >
+      {children}
+    </Pressable>
+  );
 }
 
 /** Which tool sheet is up. One at a time — two stacked sheets have no way back to the picture. */
@@ -110,6 +256,13 @@ export function ReportVideoLayer({
   viewPill,
   onBack,
   sheetPresented = true,
+  startOpen = false,
+  openSheetDrop = 132,
+  cornerOverlay,
+  topRightExtras,
+  topChromeInset = 0,
+  onVideoOpenChange,
+  onScrollY,
   children,
   stickyFooter,
   controlsBottomInset = 0,
@@ -125,10 +278,7 @@ export function ReportVideoLayer({
     scrollTo: (opts: { y: number; animated?: boolean }) => void;
   } | null>(null);
   const scroll = scrollRef ?? localScrollRef;
-  /** Tap on the picture = the same ask as the sheet's play tile: scroll open (which plays). */
-  const onBackdropTap = useCallback(() => {
-    scroll.current?.scrollTo({ y: 0, animated: true });
-  }, [scroll]);
+
 
   const source = useAuthenticatedImage(`swings/${swingId}/video`);
   /** The exact first frame, full resolution — the placeholder and the video are one picture. */
@@ -144,9 +294,29 @@ export function ReportVideoLayer({
   const player = useFramePlayer(bounds);
   const seekable = isSeekable(bounds, fps);
   const { ready, error, painted } = player.state;
-  const { seekTo, play, pause } = player.actions;
+  const { seekTo, play, pause, toggle } = player.actions;
 
-  const [open, setOpen] = useState(false);
+  /**
+   * Tap on the picture.
+   *
+   * From the sheet it is the same ask as the play tile: scroll open, which plays. But once the
+   * video already fills the screen the golfer is watching it, and the whole picture is the
+   * obvious pause target (Taylor) — scrolling somewhere it already is would do nothing visible,
+   * which reads as the tap being ignored.
+   *
+   * The play state is read through a ref: this callback is handed to the scaffold once, and a
+   * version of it that closes over a stale `playing` would toggle the wrong way.
+   */
+  const openRef = useRef(startOpen);
+  const onBackdropTap = useCallback(() => {
+    if (openRef.current) {
+      toggle();
+      return;
+    }
+    scroll.current?.scrollTo({ y: 0, animated: true });
+  }, [scroll, toggle]);
+
+  const [open, setOpen] = useState(startOpen);
   const [panel, setPanel] = useState<Panel>(null);
   const [toggles, setToggles] = useState<Toggles>(DEFAULT_TOGGLES);
   const [angles, setAngles] = useState<string[]>([]);
@@ -167,10 +337,74 @@ export function ReportVideoLayer({
     seekTo(bounds.first);
   }, [analysisState.kind, bounds.first, error, ready, seekable, seekTo]);
 
+  /**
+   * `startOpen` autoplay, on its own effect and deliberately NOT gated on the artifact.
+   *
+   * The park effect above waits for the analysis to settle because the playback WINDOW comes
+   * from it. Playback does not: on the post-swing screen the analysis is still running for ~12s
+   * and the golfer wants to watch the swing they just hit immediately. Sharing the artifact gate
+   * is what made this look like autoplay was broken — it was merely twelve seconds late.
+   * Looping is the transport's default, so this is all "on repeat" takes.
+   */
+  const autoplayed = useRef(false);
+  useEffect(() => {
+    if (!startOpen || autoplayed.current || !ready || error) return;
+    autoplayed.current = true;
+    play();
+  }, [error, play, ready, startOpen]);
+
+  /**
+   * The transport's bottom clearance, ANIMATED.
+   *
+   * The host raises it when the scorecard's tab appears, and a step change made the whole
+   * transport jump while the tab slid — two motions describing one event, out of step. Easing it
+   * over the same 320ms means the tab looks like it is PUSHING the controls up, which is what is
+   * actually happening. Layout padding cannot use the native driver; this runs on a state
+   * change, not per frame.
+   */
+  // CAPPED inset, same as the bars (Taylor, 2026-08-19): the raw system inset here parked the
+  // transport ~40px above everything else on a phone with on-screen buttons — the one band of
+  // dead space in the whole stack.
+  const controlsPad = useRef(
+    new Animated.Value(navBarBottomInset(insets.bottom) + 14 + controlsBottomInset),
+  ).current;
+  useEffect(() => {
+    Animated.timing(controlsPad, {
+      toValue: navBarBottomInset(insets.bottom) + 14 + controlsBottomInset,
+      duration: 320,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [controlsBottomInset, controlsPad, insets.bottom]);
+
+  /**
+   * Tapping the picture toggles playback and flashes what it did.
+   *
+   * `nonce` rather than a boolean: two pauses in a row are two separate acknowledgements, and a
+   * flag that is already true has nothing to change. The flash reads the play state AFTER the
+   * toggle, so it shows the state the tap produced.
+   */
+  const [tapNonce, setTapNonce] = useState(0);
+  const onPictureTap = useCallback(() => {
+    // Before the transport is ready there is nothing to toggle, and asking anyway reaches the
+    // native view with no clock behind it. The picture is simply not a button yet.
+    if (!ready || error) return;
+    toggle();
+    setTapNonce((n) => n + 1);
+  }, [error, ready, toggle]);
+
+  /** Back to the top of the swing window and run — the "watch it again" half of the transport. */
+  const onRestart = useCallback(() => {
+    seekTo(bounds.first);
+    play();
+  }, [bounds.first, play, seekTo]);
+
   /** The scaffold's crossing → the playback policy. See the component comment. */
   const onOpenChange = useCallback(
     (next: boolean) => {
       setOpen(next);
+      openRef.current = next;
+      onVideoOpenChange?.(next);
       if (next) {
         started.current = true;
         play();
@@ -178,7 +412,7 @@ export function ReportVideoLayer({
         pause();
       }
     },
-    [play, pause],
+    [play, pause, onVideoOpenChange],
   );
 
   /** `.report-v2-center-play` fades out as the controls shell fades in — one scroll state. */
@@ -213,11 +447,39 @@ export function ReportVideoLayer({
   const map = useMemo(() => scrubMap(bands, bounds), [bands, bounds]);
 
   const disabled = !seekable || !!error;
-  const onSeek = useCallback((f: number) => seekTo(f), [seekTo]);
+  /**
+   * Touching the scrub takes the wheel: it lands on that frame and PAUSES (Taylor, step-03
+   * iteration). A tap that jumps the playhead while the clip keeps running slides straight off
+   * the frame the golfer was aiming for, which reads as the scrub being inaccurate rather than
+   * as playback continuing. `pause` before `seekTo` so no frame event lands between them and
+   * carries the picture past the target.
+   */
+  const onSeek = useCallback(
+    (f: number) => {
+      // A degenerate window (no artifact yet, a zero frame count) makes the scrub's
+      // fraction→frame arithmetic non-finite, and handing that to the native clock throws
+      // rather than being ignored. Guard at the ONE place every seek goes through.
+      if (!Number.isFinite(f)) return;
+      pause();
+      seekTo(f);
+    },
+    [pause, seekTo],
+  );
+  /**
+   * `endScrub` restores whatever the transport was doing before the touch — which quietly undid
+   * the pause the seek had just applied, so a tap landed on the frame and then ran off it. The
+   * pause therefore belongs HERE, after the restore, not only in `onSeek`.
+   */
   const onScrubbingChange = useCallback(
-    (scrubbing: boolean) =>
-      scrubbing ? player.actions.beginScrub() : player.actions.endScrub(),
-    [player.actions],
+    (scrubbing: boolean) => {
+      if (scrubbing) {
+        player.actions.beginScrub();
+        return;
+      }
+      player.actions.endScrub();
+      pause();
+    },
+    [pause, player.actions],
   );
 
   const closePanel = useCallback(() => setPanel(null), []);
@@ -345,11 +607,13 @@ export function ReportVideoLayer({
         style={[styles.topRow, { top: insets.top + 16, left: onBack ? 68 : 16 }]}
         pointerEvents="none"
       >
-        <View style={styles.viewPill}>
-          <Text style={styles.viewPillText} numberOfLines={1}>
-            {viewPill}
-          </Text>
-        </View>
+        {viewPill ? (
+          <View style={styles.viewPill}>
+            <Text style={styles.viewPillText} numberOfLines={1}>
+              {viewPill}
+            </Text>
+          </View>
+        ) : null}
       </View>
 
       {/* .report-v2-center-play — the invitation. Decorative (the mockup wires no handler);
@@ -369,44 +633,78 @@ export function ReportVideoLayer({
    * the phase scrub, then the player bar, bottom-anchored above the gesture inset.
    */
   const controls = (
-    <View
-      style={[styles.controlsShell, { paddingBottom: insets.bottom + 14 + controlsBottomInset }]}
+    <Animated.View
+      style={[styles.controlsShell, { paddingBottom: controlsPad }]}
       pointerEvents="box-none"
     >
+      {/* The whole picture pauses. FIRST so every control paints over it, and inside the shell
+          because the scaffold's own backdrop tap is only live while the sheet is up — which is
+          exactly when this is not wanted. */}
+      <Pressable
+        testID="report-picture-tap"
+        accessibilityRole="button"
+        accessibilityLabel={player.state.playing ? "Pause" : "Play"}
+        onPress={onPictureTap}
+        style={StyleSheet.absoluteFill}
+      />
+      <TapFeedback playing={player.state.playing} nonce={tapNonce} />
       {/* The layers button — the overlays sheet's opener, top-right over the picture
           (Taylor 2026-08-17: the "layers" control lives at the top of the player, not in
           the transport bar). Part of this shell, so it arrives and leaves with video-open. */}
-      <Pressable
-        testID="report-overlays-open"
-        accessibilityRole="button"
-        accessibilityLabel="Overlays"
-        hitSlop={8}
-        onPress={openOverlays}
-        style={({ pressed }) => [
-          styles.layersOrb,
-          { top: insets.top + 10 },
-          pressed && styles.layersOrbPressed,
-        ]}
+      <View
+        // The SAME top as `FloatingBack` on the left — the two corners are one line of chrome.
+        style={[styles.cornerOrbs, { top: insets.top + 10 + topChromeInset }]}
+        pointerEvents="box-none"
       >
-        <Layers2 size={20} color="#FFFFFF" strokeWidth={2} />
-      </Pressable>
+        {/* Each orb appears only once the thing it opens can actually do anything (Taylor,
+            step-03 iteration). Overlays need the artifact's keypoints; Compare needs the swing's
+            phases, which is the last thing detection produces — so an empty sheet is
+            unreachable rather than merely disappointing. */}
+        {analysis ? (
+          <OrbIn>
+          <Pressable
+            testID="report-overlays-open"
+            accessibilityRole="button"
+            accessibilityLabel="Overlays"
+            hitSlop={8}
+            onPress={openOverlays}
+            style={({ pressed }) => [styles.layersOrb, pressed && styles.layersOrbPressed]}
+          >
+            <Layers2 size={20} color="#FFFFFF" strokeWidth={2} />
+          </Pressable>
+          </OrbIn>
+        ) : null}
+        {bands.length ? (
+          <OrbIn>
+          <Pressable
+            testID="report-compare-open"
+            accessibilityRole="button"
+            accessibilityLabel="Compare with another swing"
+            accessibilityState={{ selected: reference != null }}
+            hitSlop={8}
+            onPress={openCompare}
+            style={({ pressed }) => [
+              styles.layersOrb,
+              reference != null && styles.layersOrbOn,
+              pressed && styles.layersOrbPressed,
+            ]}
+          >
+            <ArrowLeftRight size={19} color="#FFFFFF" strokeWidth={2.2} />
+          </Pressable>
+          </OrbIn>
+        ) : null}
+        {topRightExtras}
+      </View>
 
-      {/* .report-v2-score-row / .report-full-score */}
-      {typeof score === "number" ? (
-        <View style={styles.scoreRow} pointerEvents="none">
-          <View style={styles.scorePill}>
-            <Text style={styles.scoreValue}>{Math.round(score)}</Text>
-            <Text style={styles.scoreCaption}>Score</Text>
-          </View>
-        </View>
-      ) : null}
+      {/* The score door, ABOVE the scrub and right-aligned — laid out by the shell rather than
+          absolutely positioned, so it cannot overlap the transport at any screen height and it
+          arrives and leaves with video-open like every other control here. */}
+      {cornerOverlay ? <View style={styles.cornerRow}>{cornerOverlay}</View> : null}
 
-      {/* .report-v2-stage-scrub */}
-      <View style={styles.scrubCard}>
-        <View style={styles.scrubHead}>
-          <Text style={styles.scrubTitle}>Swing scrub</Text>
-          <Text style={styles.scrubHint}>Drag through the motion</Text>
-        </View>
+      {/* .report-v2-stage-scrub — no heading: the phase labels say what it is, and a title plus
+          a "drag through the motion" hint over a control the golfer is already dragging is the
+          clutter rule's own example. */}
+      <View style={styles.transportPill}>
         <SwingScrub
           bands={bands}
           map={map}
@@ -417,18 +715,17 @@ export function ReportVideoLayer({
           onScrubbingChange={onScrubbingChange}
           disabled={disabled}
         />
+        <ReportPlayerBar
+          bare
+          onRestart={onRestart}
+          playing={player.state.playing}
+          speed={player.state.speed}
+          disabled={disabled}
+          onToggle={player.actions.toggle}
+          onSpeed={player.actions.setSpeed}
+        />
       </View>
-
-      <ReportPlayerBar
-        playing={player.state.playing}
-        speed={player.state.speed}
-        disabled={disabled}
-        onToggle={player.actions.toggle}
-        onSpeed={player.actions.setSpeed}
-        onCompare={openCompare}
-        comparing={reference != null}
-      />
-    </View>
+    </Animated.View>
   );
 
   return (
@@ -440,15 +737,17 @@ export function ReportVideoLayer({
         // own colour for the strip the parallax uncovers above it.
         overscan={COLORS.bg}
         backdropHeight={height}
-        // The report's parallax and threshold, straight from the mockup script (k=.18 cap=64,
-        // video-open at scrollTop < 60, initial offset ~520 of a 940 canvas).
-        parallax={{ factor: 0.18, cap: 64 }}
-        initialOffset={Math.round(height * 0.55)}
+        // NO parallax (Taylor, 2026-08-19, superseding the mockup's k=.18 cap=64): the video
+        // stays fixed to the top and the sheet does all the moving. The threshold and initial
+        // offset keep the mockup's values (video-open at scrollTop < 60, ~520 of a 940 canvas).
+        parallax={{ factor: 0, cap: 0 }}
+        initialOffset={startOpen ? 0 : Math.round(height * 0.55)}
         overlap={92}
         // Video-open drops the sheet a further 132 so its peek clears the screen entirely
         // (.report-v2-scroll.video-open .report-v2-sheet).
-        openSheetDrop={132}
+        openSheetDrop={openSheetDrop}
         scrollRef={scroll}
+        onScrollY={onScrollY}
         sheetStyle={sheetStyle}
         onOpenChange={onOpenChange}
         backdropOverlay={controls}
@@ -467,19 +766,21 @@ export function ReportVideoLayer({
         <FloatingBack
           testID="report-back"
           onPress={onBack}
-          style={{ position: "absolute", top: insets.top + 10, left: 16 }}
+          style={{ position: "absolute", top: insets.top + 10 + topChromeInset, left: 16 }}
         />
       ) : null}
 
-      <DeckSheet
+      {/* The system sheet, not DeckSheet — a slide-in is an app surface (Taylor, 2026-08-19),
+          and the system Sheet already themes its content, so no FixedDarkTheme pin here. */}
+      <Sheet
         testID="report-overlays-sheet"
         visible={panel === "overlays"}
         onClose={closePanel}
         title="Overlays"
         subtitle="What is drawn on the swing"
       >
-        <FixedDarkTheme>{overlaysContent}</FixedDarkTheme>
-      </DeckSheet>
+        {overlaysContent}
+      </Sheet>
 
       <DeckSheet
         testID="report-compare-sheet"
@@ -584,9 +885,12 @@ const styles = StyleSheet.create({
   controlsShell: { flex: 1, justifyContent: "flex-end", paddingHorizontal: 16, gap: 10 },
   /* The FloatingBack orb's glass, mirrored top-right — the two corner controls must match.
      Dev clients keep clear of the dev bubble's corner (the gated layout accommodation). */
+  // The corner stack: overlays on top, compare under it, both mirroring FloatingBack's glass.
+  // Flush right in BOTH builds — the dev bubble is cleared by dropping the stack down instead
+  // (see the `top` the shell passes), because nudging it left changes the layout being designed.
+  cornerOrbs: { position: "absolute", right: 16, alignItems: "flex-end", gap: 8 },
+  layersOrbOn: { backgroundColor: "rgba(67,205,208,0.28)" },
   layersOrb: {
-    position: "absolute",
-    right: __DEV__ ? 72 : 16,
     width: 40,
     height: 40,
     borderRadius: 20,
@@ -595,48 +899,30 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(7,16,31,0.56)",
   },
   layersOrbPressed: { opacity: 0.7 },
-  scoreRow: { flexDirection: "row" },
-  scorePill: {
-    flexDirection: "row",
+  // `SwingProfile` has a fixed height and NO intrinsic width — give it both or it collapses.
+  cornerRow: { alignItems: "flex-end", height: 118 },
+  tapDisc: {
+    width: 78,
+    height: 78,
+    borderRadius: 39,
     alignItems: "center",
-    gap: 8,
-    minHeight: 36,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    backgroundColor: "rgba(7,16,31,0.58)", // .report-full-score
+    justifyContent: "center",
+    backgroundColor: "rgba(7,16,31,0.62)",
   },
-  scoreValue: { color: "#FFFFFF", fontFamily: FONT_DISPLAY.black, fontSize: 12 },
   // Mockup: color-mix(aqua-500 70%, white) — pre-mixed here, RN has no color-mix.
-  scoreCaption: {
-    color: "#7BDCDE",
-    fontFamily: FONT_DISPLAY.black,
-    fontSize: 7,
-    letterSpacing: 0.7,
-    textTransform: "uppercase",
-  },
 
-  scrubCard: {
-    gap: 8,
+  /** ONE transport: the scrub and the player row share a single pill (Taylor, step-03
+   * iteration). Two stacked cards read as two controls when they are two halves of one. */
+  transportPill: {
+    gap: 2,
     paddingHorizontal: 10,
-    paddingTop: 10,
-    paddingBottom: 12,
-    borderRadius: 16,
-    backgroundColor: "rgba(7,16,31,0.58)", // .report-v2-stage-scrub
+    paddingTop: 6,
+    paddingBottom: 6,
+    borderRadius: 20,
+    // Lighter glass (Taylor, 2026-08-19, was 0.66): the controls should sit ON the footage,
+    // not curtain it.
+    backgroundColor: "rgba(7,16,31,0.38)",
   },
-  scrubHead: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 8,
-  },
-  scrubTitle: {
-    color: "#FFFFFF",
-    fontFamily: FONT_DISPLAY.black,
-    fontSize: 8,
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
-  },
-  scrubHint: { color: "rgba(255,255,255,0.66)", fontSize: 10 },
 
   overlayFailed: { justifyContent: "flex-end", padding: 14 },
   overlayFailedText: {

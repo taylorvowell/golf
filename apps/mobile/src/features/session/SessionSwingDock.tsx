@@ -16,6 +16,8 @@ export interface SessionSwingDockProps {
   onEndSession: () => void;
   onSwingList: () => void;
   onRecordNew: () => void;
+  /** Slides the bar away on scroll, exactly as the tab bar does on a tab screen. */
+  hidden?: boolean;
   onDelete: () => void;
   onToggleFavorite: () => void;
 }
@@ -25,11 +27,13 @@ export function SessionSwingDock({
   onEndSession,
   onSwingList,
   onRecordNew,
+  hidden = false,
   onDelete,
   onToggleFavorite,
 }: SessionSwingDockProps) {
   return (
     <SessionNav
+      hidden={hidden}
       leftItems={[
         {
           key: "end",

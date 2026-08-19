@@ -15,8 +15,7 @@ import {
 import { ChevronDown, X } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { useTheme, type Theme } from "../../theme";
-import { themedStyles } from "../../theme/themedStyles";
+import { AppTheme, useAppTheme, type Theme } from "../../theme";
 import { FONT_BODY, FONT_DISPLAY } from "./typography";
 
 /**
@@ -79,12 +78,12 @@ export function Sheet({
   accessory,
   children,
   maxHeightFraction = 0.88,
-  restHeightFraction = 0.52,
+  restHeightFraction,
   scrolls = true,
   testID,
 }: SheetProps) {
-  const t = useTheme();
-  const styles = useStyles();
+  const t = useAppTheme();
+  const styles = stylesFor(t);
   const insets = useSafeAreaInsets();
 
   // Mounted outlives `visible` — the panel has to still exist while it slides away, so the
@@ -97,8 +96,18 @@ export function Sheet({
   /** The panel has finished coming up at least once — layout must not re-trigger the entrance. */
   const opened = useRef(false);
 
-  /** Rest offsets for `translateY`: `0` is full height; the last entry is where it opens. */
+  /**
+   * Rest offsets for `translateY`: `0` is full height; the last entry is where it opens.
+   *
+   * **Sheets open FULLY unless a caller asks for a lower rest** (Taylor, 2026-08-18). A second
+   * detent parks the panel translated DOWN by `height - rest`, which puts its bottom padding —
+   * and its last control — off the bottom of the screen. That is why "add padding at the bottom"
+   * kept appearing to do nothing: the padding was there, below the screen edge. The panel is
+   * already capped at `maxHeightFraction` and scrolls inside, so opening at its natural height
+   * is the honest default; `restHeightFraction` is now opt-in for a genuinely long list.
+   */
   const detents = useMemo(() => {
+    if (restHeightFraction === undefined) return [0];
     const rest = screenHeight * restHeightFraction;
     // The 32pt margin is what stops a "drag up to reveal 20 more points" detent existing.
     return height > rest + 32 ? [0, height - rest] : [0];
@@ -160,6 +169,10 @@ export function Sheet({
       // Parked at its own height first, so the entrance travels exactly the panel's height —
       // starting from the screen's height makes a short sheet arrive late and fast.
       translate.setValue(h);
+      if (restHeightFraction === undefined) {
+        settle(0);
+        return;
+      }
       const rest = screenHeight * restHeightFraction;
       settle(h > rest + 32 ? h - rest : 0);
     },
@@ -219,6 +232,12 @@ export function Sheet({
       // We own the motion — `slide` cannot be interrupted or coupled to the backdrop.
       animationType="none"
       statusBarTranslucent
+      // Both, or neither works: a Modal opens its OWN window, and without these it is laid out
+      // inside the system bars rather than edge to edge — so the navigation-bar strip under the
+      // panel paints the platform default (white) instead of the sheet, and the app looks like
+      // it stops short of the bottom of the screen. `navigationBarTranslucent` is ignored unless
+      // `statusBarTranslucent` is also set (RN).
+      navigationBarTranslucent
       onRequestClose={onClose}
     >
       <View style={styles.fill}>
@@ -289,24 +308,44 @@ export function Sheet({
             ) : null}
           </View>
 
-          {scrolls ? (
-            <ScrollView
-              style={styles.scroll}
-              contentContainerStyle={styles.scrollContent}
-              showsVerticalScrollIndicator={false}
-            >
-              {children}
-            </ScrollView>
-          ) : (
-            <View style={[styles.scroll, styles.scrollContent]}>{children}</View>
-          )}
+          {/* The content reads the APP's theme even when the host screen is pinned dark — a
+              slide-in is an app surface, not a control over footage (Taylor, 2026-08-18). */}
+          <AppTheme>
+            {scrolls ? (
+              <ScrollView
+                style={styles.scroll}
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+              >
+                {children}
+              </ScrollView>
+            ) : (
+              <View style={[styles.scroll, styles.scrollContent]}>{children}</View>
+            )}
+          </AppTheme>
         </Animated.View>
       </View>
     </Modal>
   );
 }
 
-const useStyles = themedStyles((t: Theme) =>
+/**
+ * Built from the APP theme, not the ambient one — `themedStyles` reads context, so inside a
+ * `FixedDarkTheme` pin it would paint the panel dark. Cached on theme identity for the same
+ * reason `themedStyles` is: there are only ever two `Theme` objects.
+ */
+const STYLE_CACHE = new Map<Theme, ReturnType<typeof makeStyles>>();
+
+function stylesFor(t: Theme) {
+  let sheet = STYLE_CACHE.get(t);
+  if (!sheet) {
+    sheet = makeStyles(t);
+    STYLE_CACHE.set(t, sheet);
+  }
+  return sheet;
+}
+
+const makeStyles = (t: Theme) =>
   StyleSheet.create({
     fill: { flex: 1 },
     backdropFill: {
@@ -356,6 +395,10 @@ const useStyles = themedStyles((t: Theme) =>
     pressed: { opacity: 0.6 },
     // `flexShrink` so the content gives way to `maxHeight` rather than pushing the panel past it.
     scroll: { flexShrink: 1 },
-    scrollContent: { paddingTop: 14, paddingBottom: 4, gap: 14 },
-  }),
-);
+    // Room under the last row (Taylor, 2026-08-18). Modest on purpose: the panel's own
+    // `16 + insets.bottom` does the real work of clearing the gesture bar, and that only
+    // started reporting a true inset once the Modal was made edge-to-edge above — before
+    // that `insets.bottom` was 0 inside the sheet's window, which is what put the last
+    // control on the gesture bar in the first place.
+    scrollContent: { paddingTop: 14, paddingBottom: 24, gap: 14 },
+  });

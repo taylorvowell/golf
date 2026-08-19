@@ -6,6 +6,9 @@ export interface HighSpeedCameraViewProps {
   facing: "back" | "front";
   /** CONTROL_ZOOM_RATIO, clamped natively to the device's real range. */
   zoom: number;
+  /** Fires once per camera open with that lens's real zoom range — drive the UI from this,
+   * never from a hardcoded set of stops. `min === max` means the lens cannot zoom. */
+  onZoomRange?: (event: { nativeEvent: { min: number; max: number } }) => void;
   style?: StyleProp<ViewStyle>;
 }
 

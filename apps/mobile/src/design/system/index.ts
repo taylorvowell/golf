@@ -25,11 +25,14 @@ export { SwingProfile, type ProfileCallout } from "./SwingProfile";
 export { SwingTimelineList, type SwingTimelineItem } from "./SwingTimelineList";
 export { CoachCard } from "./CoachCard";
 export { StickThumb, STICK, type StickFigure } from "./StickThumb";
+export { FORM_FIGURES, formFigureFor, type FormFigureName } from "./formArt";
+export { CoachLoader } from "./CoachLoader";
+export { GlowBackdrop } from "./GlowBackdrop";
 export { WeekStrip, type WeekDay } from "./WeekStrip";
 export { BrandLogo, BrandMark } from "./BrandLogo";
 export { BrandIcon, BrandIconThumb } from "./BrandIcon";
 export { BRAND_ICONS, type BrandIconName } from "./brandIconPaths";
-export { WaveNav, WAVE_NAV_CLEARANCE, type WaveNavItem } from "./WaveNav";
+export { WaveNav, WAVE_NAV_CLEARANCE, navBarBottomInset, type WaveNavItem } from "./WaveNav";
 export { SessionPillNav, type SessionPillItem } from "./SessionPillNav";
 export { NavVisibilityProvider, useNavVisibility, useChromeScroll } from "./navVisibility";
 export { FloatingBack } from "./FloatingBack";
@@ -40,4 +43,11 @@ export { SheetHandle } from "./SheetHandle";
 export { Sheet, type SheetProps } from "./Sheet";
 export { PoseOutline } from "./PoseOutline";
 export { CAPTURE_POSES } from "./capturePoses";
+export {
+  StanceStage,
+  STANCE_DRAW_MS,
+  STANCE_STAGGER_MS,
+  type StanceAnnotation,
+  type StanceTone,
+} from "./StanceStage";
 export { HeroBackdrop } from "./HeroBackdrop";

@@ -88,6 +88,17 @@ const FADE_STOPS = ["#0B152800", "#0B152859", "#0B152880"] as const;
  */
 export const WAVE_NAV_CLEARANCE = BAR_HEIGHT;
 
+/**
+ * A sticky bar's share of the bottom inset — CAPPED (Taylor, 2026-08-19): stacking the full
+ * system inset under the row made the bar an enormous blank band over phones with on-screen
+ * nav buttons. The row keeps at most this sliver above the screen's edge; the bar's fill still
+ * runs all the way down behind the system bar. One function so every bottom bar (this one,
+ * `SessionNav`) shrinks together, and so does everything that must clear them.
+ */
+export function navBarBottomInset(bottomInset: number): number {
+  return Math.min(bottomInset, 10);
+}
+
 export function WaveNav({
   items,
   onRecord,
@@ -102,8 +113,10 @@ export function WaveNav({
 }) {
   const insets = useSafeAreaInsets();
   const t = useTheme();
-  // The mockup's dark override paints every nav surface bgElevated; light keeps near-opaque white.
-  const fill = t.mode === "dark" ? t.bgElevated : "rgba(255,255,255,0.98)";
+  // The mockup's dark override paints every nav surface bgElevated. Light is PURE white,
+  // not near-opaque (Taylor, 2026-08-18): at 0.98 the footage and the page underneath ghosted
+  // through the bar and the two bars read as slightly different whites over different grounds.
+  const fill = t.mode === "dark" ? t.bgElevated : "#FFFFFF";
   // Active tab: cobalt on light, AQUA on dark — the mockup's own dark override, and the one
   // place the nav's active voice is not the app's primary.
   const activeColor = t.mode === "dark" ? t.aqua : t.cobalt;
@@ -117,7 +130,7 @@ export function WaveNav({
     }).start();
   }, [hidden, slide]);
 
-  const totalHeight = BAR_HEIGHT + insets.bottom;
+  const totalHeight = BAR_HEIGHT + navBarBottomInset(insets.bottom);
 
   const item = (entry: WaveNavItem) => {
     const color = entry.active ? activeColor : t.muted;
@@ -240,7 +253,7 @@ export function WaveNav({
           position: "absolute",
           left: ROW_PAD,
           right: ROW_PAD,
-          bottom: insets.bottom + ROW_PAD,
+          bottom: navBarBottomInset(insets.bottom) + ROW_PAD,
           flexDirection: "row",
           alignItems: "flex-end",
         }}

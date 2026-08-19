@@ -15,20 +15,23 @@ import {
 import { SideDrawer, type DrawerClose } from "../design/system";
 import { FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
 import { Avatar } from "../features/profile/Avatar";
-import { useConnectedCoach } from "../features/profile/useConnectedCoach";
+import { useInstructor } from "../features/instructor/useInstructor";
 import { useAuth } from "../features/auth/AuthProvider";
 import { useAppNavigation } from "../navigation";
 import { themedStyles, useTheme } from "../theme";
 
 /**
  * The profile surface — a drawer that slides in from the right over whatever tab opened it,
- * built to Taylor's design (2026-08-18): identity, the coach block, the menu, and the way out.
+ * built to Taylor's design (2026-08-18): identity, the instructor block, the menu, and the way
+ * out. ("Coach" is the AI; the human professional is an "Instructor" — see
+ * `docs/decisions/mobile-client.md`.)
  *
  * **Only Settings has a screen behind it today.** My profile, Lesson history, Notifications,
  * Privacy and Help are the design's rows and are drawn exactly as designed, but they are inert
  * until those screens exist — a row is `MenuRow`'s `onPress`, so wiring one later is a single
- * line. The coach block's connected state comes from `useConnectedCoach`, which is sample data
- * under `__DEV__` and null in release until the coach platform lands.
+ * line. The instructor block shows ONE of two states from `useInstructor` (the debug flag until
+ * the platform lands): the connected card, or the find-a-local-instructor directory door —
+ * never both, because "do I have an instructor" has one answer.
  *
  * A row closes the drawer *before* it navigates, so coming back from Settings returns to the
  * tab rather than to a drawer left hanging open over it.
@@ -43,7 +46,7 @@ const DANGER_BED = "rgba(229,87,100,0.12)";
 export function ProfileScreen() {
   const navigation = useAppNavigation();
   const { email, firstName, signOut } = useAuth();
-  const coach = useConnectedCoach();
+  const instructor = useInstructor();
   const t = useTheme();
   const styles = useStyles();
   const [signingOut, setSigningOut] = useState(false);
@@ -93,70 +96,79 @@ export function ProfileScreen() {
               </View>
             </View>
 
-            <Text style={styles.section}>Coach</Text>
+            <Text style={styles.section}>Instructor</Text>
 
-            {coach ? (
+            {instructor ? (
               <LinearGradient
                 colors={[t.aquaSoft, t.surfaceBlue]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
-                style={styles.coachCard}
+                style={styles.instructorCard}
               >
-                <View style={styles.coachHead}>
-                  <View style={styles.coachDisc}>
-                    <Text style={styles.coachInitials}>{coach.initials}</Text>
+                <View style={styles.instructorHead}>
+                  <View style={styles.instructorDisc}>
+                    <Text style={styles.instructorInitials}>{instructor.initials}</Text>
                   </View>
                   <View style={styles.accountText}>
-                    <Text style={styles.microLabel}>Your coach</Text>
-                    <Text style={styles.coachName}>{coach.name}</Text>
+                    <Text style={styles.microLabel}>Your instructor</Text>
+                    <Text style={styles.instructorName}>{instructor.name}</Text>
                   </View>
                 </View>
-                <Text style={styles.coachBlurb}>{coach.blurb}</Text>
-                <View style={styles.coachActions}>
+                <Text style={styles.instructorBlurb}>{instructor.blurb}</Text>
+                <View style={styles.instructorActions}>
                   <Pressable
-                    testID="profile-coach-message"
+                    testID="profile-instructor-message"
                     accessibilityRole="button"
-                    accessibilityLabel={`Message ${coach.name}`}
-                    style={({ pressed }) => [styles.coachPrimary, pressed && styles.pressedFade]}
+                    accessibilityLabel={`Message ${instructor.name}`}
+                    onPress={() => close(() => navigation.navigate("InstructorChat"))}
+                    style={({ pressed }) => [
+                      styles.instructorPrimary,
+                      pressed && styles.pressedFade,
+                    ]}
                   >
-                    <Text style={styles.coachPrimaryLabel}>Message coach</Text>
+                    <Text style={styles.instructorPrimaryLabel}>Message instructor</Text>
                   </Pressable>
                   <Pressable
-                    testID="profile-coach-view"
+                    testID="profile-instructor-view"
                     accessibilityRole="button"
-                    accessibilityLabel={`View ${coach.name}'s profile`}
-                    style={({ pressed }) => [styles.coachSecondary, pressed && styles.pressedFade]}
+                    accessibilityLabel={`View ${instructor.name}'s profile`}
+                    onPress={() => close(() => navigation.navigate("Instructor"))}
+                    style={({ pressed }) => [
+                      styles.instructorSecondary,
+                      pressed && styles.pressedFade,
+                    ]}
                   >
-                    <Text style={styles.coachSecondaryLabel}>View profile</Text>
+                    <Text style={styles.instructorSecondaryLabel}>View profile</Text>
                   </Pressable>
                 </View>
               </LinearGradient>
-            ) : null}
-
-            {/* The directory. Its door is the Coach tab, which is the honest version of "browse
-                instructors" until a marketplace exists behind it. */}
-            <View style={styles.directory}>
-              <Text style={styles.microLabel}>Local coach directory</Text>
-              <Text style={styles.directoryTitle}>Find coaches near you</Text>
-              <Text style={styles.directoryCopy}>
-                Browse verified instructors by location and connect one to your account for
-                in-person lessons and app-based feedback.
-              </Text>
-              <View style={styles.directoryFoot}>
-                <View style={styles.chip}>
-                  <Text style={styles.chipLabel}>Near you</Text>
+            ) : (
+              /* No instructor → the directory door instead (one state at a time — "do I have
+                 an instructor" has one answer). The door opens the placeholder Instructor page
+                 until a marketplace exists behind it. */
+              <View style={styles.directory}>
+                <Text style={styles.microLabel}>Local instructor directory</Text>
+                <Text style={styles.directoryTitle}>Find instructors near you</Text>
+                <Text style={styles.directoryCopy}>
+                  Browse verified instructors by location and connect one to your account for
+                  in-person lessons and app-based feedback.
+                </Text>
+                <View style={styles.directoryFoot}>
+                  <View style={styles.chip}>
+                    <Text style={styles.chipLabel}>Near you</Text>
+                  </View>
+                  <Pressable
+                    testID="profile-instructor"
+                    accessibilityRole="button"
+                    accessibilityLabel="Find an instructor"
+                    onPress={() => close(() => navigation.navigate("Instructor"))}
+                    style={({ pressed }) => [styles.directoryCta, pressed && styles.pressedFade]}
+                  >
+                    <Text style={styles.directoryCtaLabel}>Find instructor</Text>
+                  </Pressable>
                 </View>
-                <Pressable
-                  testID="profile-coach"
-                  accessibilityRole="button"
-                  accessibilityLabel="Find a coach"
-                  onPress={() => close(() => navigation.navigate("Tabs", { screen: "Coach" }))}
-                  style={({ pressed }) => [styles.directoryCta, pressed && styles.pressedFade]}
-                >
-                  <Text style={styles.directoryCtaLabel}>Find coach</Text>
-                </Pressable>
               </View>
-            </View>
+            )}
 
             <Text style={styles.section}>Menu</Text>
             <View style={styles.group}>
@@ -170,7 +182,7 @@ export function ProfileScreen() {
                 testID="profile-lesson-history"
                 icon={Clock}
                 title="Lesson history"
-                subtitle="Sessions, notes, and coach activity"
+                subtitle="Sessions, notes, and instructor activity"
               />
               <MenuRow
                 testID="profile-notifications"
@@ -345,9 +357,9 @@ const useStyles = themedStyles((t) => ({
     marginBottom: 8,
   },
 
-  coachCard: { padding: 16, borderRadius: 16 },
-  coachHead: { flexDirection: "row", alignItems: "center", gap: 12 },
-  coachDisc: {
+  instructorCard: { padding: 16, borderRadius: 16 },
+  instructorHead: { flexDirection: "row", alignItems: "center", gap: 12 },
+  instructorDisc: {
     width: 48,
     height: 48,
     borderRadius: 24,
@@ -355,28 +367,28 @@ const useStyles = themedStyles((t) => ({
     justifyContent: "center",
     backgroundColor: t.cobalt,
   },
-  coachInitials: {
+  instructorInitials: {
     color: t.onDark,
     fontFamily: FONT_DISPLAY.black,
     fontSize: 16,
     letterSpacing: 0.5,
   },
-  coachName: {
+  instructorName: {
     color: t.text,
     fontFamily: FONT_DISPLAY.black,
     fontSize: 16,
     lineHeight: 19,
     marginTop: 4,
   },
-  coachBlurb: {
+  instructorBlurb: {
     color: t.textSoft,
     fontFamily: FONT_BODY.regular,
     fontSize: 10,
     lineHeight: 16,
     marginTop: 10,
   },
-  coachActions: { flexDirection: "row", gap: 8, marginTop: 16 },
-  coachPrimary: {
+  instructorActions: { flexDirection: "row", gap: 8, marginTop: 16 },
+  instructorPrimary: {
     flex: 1,
     height: 40,
     borderRadius: 12,
@@ -384,14 +396,14 @@ const useStyles = themedStyles((t) => ({
     justifyContent: "center",
     backgroundColor: t.cobalt,
   },
-  coachPrimaryLabel: {
+  instructorPrimaryLabel: {
     color: t.onDark,
     fontFamily: FONT_DISPLAY.black,
     fontSize: 9,
     letterSpacing: 0.72,
     textTransform: "uppercase",
   },
-  coachSecondary: {
+  instructorSecondary: {
     flex: 1,
     height: 40,
     borderRadius: 12,
@@ -399,7 +411,7 @@ const useStyles = themedStyles((t) => ({
     justifyContent: "center",
     backgroundColor: t.surface,
   },
-  coachSecondaryLabel: {
+  instructorSecondaryLabel: {
     color: t.text,
     fontFamily: FONT_DISPLAY.black,
     fontSize: 9,
@@ -410,7 +422,6 @@ const useStyles = themedStyles((t) => ({
   directory: {
     padding: 16,
     borderRadius: 16,
-    marginTop: 12,
     backgroundColor: t.surface,
   },
   directoryTitle: {

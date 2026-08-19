@@ -123,8 +123,12 @@ it("navigates between session swings and deletes back to capture", () => {
 it("holds camera choices between recordings and stamps the view on the swing", () => {
   let s = sessionReducer(base(), { type: "set-view", view: "face_on" });
   s = sessionReducer(s, { type: "flip-camera" });
+  // Zoom is clamped to the lens the preview actually opened — a ratio the camera cannot
+  // reach would render a slider position the picture never matches.
+  s = sessionReducer(s, { type: "set-zoom-range", range: { min: 1, max: 8 } });
   s = sessionReducer(s, { type: "set-zoom", zoom: 2 });
   expect([s.view, s.facing, s.zoom]).toEqual(["face_on", "front", 2]);
+  expect(sessionReducer(s, { type: "set-zoom", zoom: 99 }).zoom).toBe(8);
 
   s = sessionReducer(s, { type: "arm" });
   // Mid-capture camera changes are ignored — they would change what the clip IS.

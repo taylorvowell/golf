@@ -17,6 +17,7 @@ import android.util.Size
 import android.view.Surface
 import android.view.TextureView
 import expo.modules.kotlin.AppContext
+import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
 
 /**
@@ -48,6 +49,15 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
   private var previewSize: Size? = null
   private var facing: String = "back"
   private var zoom: Float = 1f
+  /** The open lens's CONTROL_ZOOM_RATIO_RANGE, read once per open and reused by every
+   * zoom apply — re-reading characteristics on each slider tick is a syscall per frame. */
+  private var zoomRange: Pair<Float, Float> = 1f to 1f
+  /**
+   * Reports that range to JS so the slider spans what the lens can actually do. Declared
+   * with the rest of the state, above the init block (see the class comment) — a delegated
+   * property used before its initializer runs fails as a cast error somewhere healthy.
+   */
+  private val onZoomRange by EventDispatcher()
   /** Generation counter: a callback from a superseded open must not resurrect a session. */
   private var generation = 0
 
@@ -107,9 +117,21 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
     thread = t
     handler = Handler(t.looper)
 
+    val chars = manager.getCameraCharacteristics(id)
+
+    // What this lens can do, published before the first frame so the slider never renders
+    // against a guessed range. Pre-31 devices have no zoom-ratio control at all; their
+    // digital-zoom ceiling is the honest upper bound.
+    zoomRange = if (Build.VERSION.SDK_INT >= 30) {
+      val r = chars.get(CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE)
+      (r?.lower ?: 1f) to (r?.upper ?: 1f)
+    } else {
+      1f to (chars.get(CameraCharacteristics.SCALER_AVAILABLE_MAX_DIGITAL_ZOOM) ?: 1f)
+    }
+    onZoomRange(mapOf("min" to zoomRange.first.toDouble(), "max" to zoomRange.second.toDouble()))
+
     // 16:9 preview buffer, largest at or under 1080p — plenty for a viewfinder, cheap to draw.
-    val map = manager.getCameraCharacteristics(id)
-      .get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+    val map = chars.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
     previewSize = map?.getOutputSizes(SurfaceTexture::class.java)
       ?.filter { it.width * 9 == it.height * 16 && it.height <= 1080 }
       ?.maxByOrNull { it.width * it.height }
@@ -165,10 +187,7 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
       val request = cam.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply {
         addTarget(Surface(texture.surfaceTexture ?: return))
         if (Build.VERSION.SDK_INT >= 30) {
-          val range = manager.getCameraCharacteristics(cam.id)
-            .get(CameraCharacteristics.CONTROL_ZOOM_RATIO_RANGE)
-          val clamped = zoom.coerceIn(range?.lower ?: 1f, range?.upper ?: 1f)
-          set(CaptureRequest.CONTROL_ZOOM_RATIO, clamped)
+          set(CaptureRequest.CONTROL_ZOOM_RATIO, zoom.coerceIn(zoomRange.first, zoomRange.second))
         }
       }.build()
       s.setRepeatingRequest(request, null, handler)

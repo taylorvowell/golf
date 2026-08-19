@@ -60,7 +60,10 @@ describe("ProfileScreen", () => {
   });
 
   it.each([
-    ["profile-coach", ["Tabs", { screen: "Coach" }]],
+    // No instructor connected (the store's default) → the directory door, to the placeholder
+    // Instructor page. The connected card's doors are covered by their own testIDs when the
+    // debug flag is on; the default state is what release ships.
+    ["profile-instructor", ["Instructor"]],
     ["profile-settings", ["Settings"]],
   ])("routes %s where it claims, once the drawer is shut", async (testID, args) => {
     const { getByTestId } = await render(<ProfileScreen />);

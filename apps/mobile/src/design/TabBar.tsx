@@ -16,27 +16,41 @@ import { useNavVisibility } from "./system/navVisibility";
  * function of its scroll position (the amended chrome rule; the report screen is the user).
  */
 
-const LABELS: Record<string, string> = {
+/** Exported with `tabIcon` so a screen ABOVE the tab navigator (the swing page) can wear the
+ * same main menu without re-drawing it — one glyph/label mapping, two hosts. */
+export const TAB_LABELS: Record<string, string> = {
   Home: "Home",
   SwingLog: "Swings",
   Progress: "Progress",
   Coach: "Coach",
 };
 
-/** One knob for the whole row — the tab glyph, 21px inside `WaveNav`'s 24px icon box. */
+/**
+ * One knob for the whole row — the tab glyph, 21px inside `WaveNav`'s 24px icon box. Sized
+ * by HEIGHT so the mixed-aspect glyphs read as one row; the wide coach art would otherwise
+ * shrink to a sliver next to its square neighbours.
+ */
 const ICON_SIZE = 21;
 
-function iconFor(route: string): WaveNavItem["icon"] {
+export function tabIcon(route: string): WaveNavItem["icon"] {
   switch (route) {
     case "Home":
-      return (color) => <BrandIcon name="home" size={ICON_SIZE} color={color} />;
+      return (color) => (
+        <BrandIcon name="home" size={ICON_SIZE} sizeBy="height" color={color} />
+      );
     case "SwingLog":
-      return (color) => <BrandIcon name="swingLog" size={ICON_SIZE} color={color} />;
+      return (color) => (
+        <BrandIcon name="swingLog" size={ICON_SIZE} sizeBy="height" color={color} />
+      );
     case "Progress":
-      return (color) => <BrandIcon name="progress" size={ICON_SIZE} color={color} />;
+      return (color) => (
+        <BrandIcon name="progress" size={ICON_SIZE} sizeBy="height" color={color} />
+      );
     default:
       // Coach carries the supplied golfer glyph rather than a lucide icon.
-      return (color) => <BrandIcon name="coach" size={ICON_SIZE} color={color} />;
+      return (color) => (
+        <BrandIcon name="coach" size={ICON_SIZE} sizeBy="height" color={color} />
+      );
   }
 }
 
@@ -45,8 +59,8 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
 
   const items: WaveNavItem[] = state.routes.map((route, index) => ({
     key: route.key,
-    label: LABELS[route.name] ?? route.name,
-    icon: iconFor(route.name),
+    label: TAB_LABELS[route.name] ?? route.name,
+    icon: tabIcon(route.name),
     active: state.index === index,
     testID: `tab-${route.name}`,
     onPress: () => {

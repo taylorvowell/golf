@@ -1,5 +1,7 @@
 import type { SwingSummary } from "@swingsage/schema/contract";
 
+import type { SessionType } from "../session/sessionState";
+
 /**
  * The log's grouping: a practice **session**, inferred from time.
  *
@@ -20,6 +22,16 @@ export interface SwingSession {
   swings: SwingSummary[];
   /** The best overall score in the session, or null when nothing scored. */
   best: number | null;
+  /**
+   * Which mode it was recorded in — Analysis, Drills or Video.
+   *
+   * NULL for every session on the log today, and that is not an oversight: no capture flow
+   * persists a session row yet (`sessions` is empty and the contract carries no session id),
+   * so a mode on an older session would be a made-up claim about the golfer's own data. The
+   * one session that DOES know is the one just ended, which carries it on the arrival seam.
+   * Session-mode step 05 persists the row and this stops being null.
+   */
+  sessionType: SessionType | null;
 }
 
 /** Two hours. A lunch break splits a day into two sessions; a slow range visit does not. */
@@ -106,8 +118,49 @@ export function sessionize(swings: SwingSummary[]): SwingSession[] {
         end: at,
         swings: [swing],
         best: typeof swing.overallScore === "number" ? swing.overallScore : null,
+        sessionType: null,
       });
     }
   }
   return sessions.reverse();
+}
+
+/**
+ * How a session was filmed — the camera setup, per swing, collapsed to what the log needs.
+ *
+ * `dual` is not a third camera angle; it is a swing that carries BOTH, and it earns its own
+ * label because filming from two angles at once is the thing that makes a session's numbers
+ * more trustworthy than a single view's. A session that mixed setups reports each one it used
+ * rather than picking a winner.
+ *
+ * Reads `views` and falls back to the swing's rolled-up `view` string, because a swing written
+ * before per-view rows existed still has to say something truthful.
+ */
+export type CaptureAngle = "dtl" | "face_on" | "dual";
+
+/** Fixed order, so the row does not reshuffle between sessions. */
+const ANGLE_ORDER: CaptureAngle[] = ["dual", "dtl", "face_on"];
+
+/** The capture modes, as the log names them — the dock's own short labels. */
+export const MODE_LABEL: Record<SessionType, string> = {
+  swing_analysis: "Analysis",
+  practice_drills: "Drills",
+  video_only: "Video",
+};
+
+export const ANGLE_LABEL: Record<CaptureAngle, string> = {
+  dtl: "DTL",
+  face_on: "Front",
+  dual: "Dual",
+};
+
+export function sessionAngles(session: SwingSession): CaptureAngle[] {
+  const found = new Set<CaptureAngle>();
+  for (const swing of session.swings) {
+    const views = new Set(swing.views.map((v) => v.view));
+    if (views.size >= 2) found.add("dual");
+    else if (views.size === 1) found.add([...views][0]);
+    else if (swing.view === "dtl" || swing.view === "face_on") found.add(swing.view);
+  }
+  return ANGLE_ORDER.filter((a) => found.has(a));
 }

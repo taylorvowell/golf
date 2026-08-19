@@ -1,6 +1,7 @@
 import type { SwingSummary } from "@swingsage/schema/contract";
 
 import type { BrandIconName, StickFigure } from "../../design/system";
+import { FORM_FIGURES } from "../../design/system";
 import {
   createdAtMs,
   sessionStats,
@@ -175,42 +176,13 @@ export interface ProgressTrend {
   placeholder: boolean;
 }
 
-/* The mockup's stick figures, path data verbatim (`.stick-thumb` svgs, Progress reference). */
-const FIGURE_SETUP: StickFigure = {
-  ground: "M7 33.5h26",
-  joints: [{ x: 21, y: 8 }],
-  bones: ["M21 11.5 18.5 17.5 17.5 23.5", "M18.5 17.5 24.5 17", "M24.5 17 28 13", "M17.5 23.5 16 31"],
-  accents: ["M18.2 17.8 24.5 24", "M24.5 24 25 31"],
-  traces: ["M8 12c3 1 5 2 8 6"],
-};
-const FIGURE_IMPACT: StickFigure = {
-  ground: "M7 33.5h26",
-  joints: [{ x: 19, y: 8 }],
-  bones: ["M19 11.5 18 18 16.5 24", "M18 18 25.5 17", "M16.5 24 14.5 31"],
-  accents: ["M25.5 17 31 14", "M18 18 23 25", "M23 25 25.5 31"],
-  traces2: ["M22 16c4-1 7-4 11-6"],
-};
-const FIGURE_TEMPO: StickFigure = {
-  ground: "M7 33.5h26",
-  joints: [{ x: 20, y: 8 }],
-  bones: ["M20 11.5 19 18 18 24", "M19 18 25 19", "M18 24 16 31"],
-  accents: ["M25 19 29 16", "M19 18 23.5 23.5", "M23.5 23.5 24.5 31"],
-  traces: ["M9 13c4-1 7 0 10 3"],
-  traces2: ["M21 18c3 2 6 2 10 0"],
-};
-const FIGURE_POSTURE: StickFigure = {
-  ground: "M7 33.5h26",
-  joints: [{ x: 21, y: 8 }],
-  bones: ["M21 11.5 18.5 17.5 17.5 23.5", "M18.5 17.5 24.5 17", "M17.5 23.5 16 31"],
-  accents: ["M24.5 17 29 14", "M18 18 23.8 24", "M23.8 24 24.6 31"],
-};
-const FIGURE_STRIKE: StickFigure = {
-  ground: "M7 33.5h26",
-  joints: [{ x: 18.5, y: 8 }],
-  bones: ["M18.5 11.5 17.8 17.2 16.5 23.5", "M17.8 17.2 25.5 16.8", "M16.5 23.5 14.8 31"],
-  accents: ["M25.5 16.8 31 13", "M17.8 17.2 23 24.2", "M23 24.2 25.2 31"],
-  traces2: ["M22 17c4-1 8-3 12-6"],
-};
+/* The mockup's stick figures now live in the design system's form-art library (`formArt.ts`)
+ * so every coach-voiced surface shows the same picture for the same topic. */
+const FIGURE_SETUP = FORM_FIGURES.setup;
+const FIGURE_IMPACT = FORM_FIGURES.impact;
+const FIGURE_TEMPO = FORM_FIGURES.tempo;
+const FIGURE_POSTURE = FORM_FIGURES.posture;
+const FIGURE_STRIKE = FORM_FIGURES.strike;
 const FIGURE_THEN: StickFigure = {
   ground: "M7 33.5h26",
   joints: [{ x: 21, y: 8 }],
@@ -221,39 +193,55 @@ const FIGURE_THEN: StickFigure = {
 /** Compare-card figures — the mockup's then/now poses (real scores render beside them). */
 export const COMPARE_FIGURES = { then: FIGURE_THEN, now: FIGURE_STRIKE } as const;
 
+/** The mockup's figures by name, shared with the Coach page's stubs so both surfaces draw a
+ *  category with the same pose. */
+export const CATEGORY_FIGURES = {
+  setup: FIGURE_SETUP,
+  impact: FIGURE_IMPACT,
+  tempo: FIGURE_TEMPO,
+  posture: FIGURE_POSTURE,
+  strike: FIGURE_STRIKE,
+} as const;
+
+/* Content below is the PINNED SAMPLE's, verbatim (`.claude/SAMPLE-progress-page.html`,
+ * Taylor 2026-08-19: "I want this followed exactly") — including the Before/Now numbers,
+ * which are canned during the UI-stub phase. That amendment is recorded in
+ * `docs/decisions/mobile-client.md` ("Progress renders the pinned sample…"); the engines
+ * replace these constants and the honesty bar returns with them. */
+
 export const PLACEHOLDER_PRIORITIES: readonly ProgressPriority[] = [
   {
     category: "setup_posture",
     ordinal: "Priority 01",
-    title: "Setup posture",
-    copy: "A stable, repeatable setup unlocks a cleaner transition and more centered contact.",
+    title: "Hip depth at address",
+    copy: "Better setup depth is unlocking cleaner transition and more centered contact.",
     level: "high",
     levelLabel: "High",
     figure: FIGURE_SETUP,
-    progress: null,
+    progress: { before: 68, now: 79 },
     placeholder: true,
   },
   {
     category: "impact",
     ordinal: "Priority 02",
-    title: "Impact position",
-    copy: "Impact is where a swing becomes a shot — delivery is the biggest scoring opportunity.",
+    title: "Chest open at impact",
+    copy: "Rotation is improving, but impact is still the biggest scoring opportunity.",
     level: "med",
     levelLabel: "Medium",
     figure: FIGURE_IMPACT,
-    progress: null,
+    progress: { before: 64, now: 74 },
     placeholder: true,
   },
   {
     category: "transition_tempo",
     ordinal: "Priority 03",
-    title: "Transition tempo",
-    copy: "A repeatable tempo stabilises path and face from the top down.",
+    title: "Tempo consistency",
+    copy: "The motion is more repeatable. Continue tempo work to stabilize path and face.",
     level: "low",
     levelLabel: "On track",
     figure: FIGURE_TEMPO,
     icon: "tempo",
-    progress: null,
+    progress: { before: 71, now: 82 },
     placeholder: true,
   },
 ];
@@ -263,33 +251,39 @@ export const PLACEHOLDER_TRENDS: readonly ProgressTrend[] = [
     category: "setup_posture",
     group: "Setup",
     title: "Posture",
-    copy: "Shoulder tilt and hip hinge at address.",
+    copy: "Shoulders and hip hinge are cleaner.",
     figure: FIGURE_POSTURE,
-    delta: null,
+    delta: 9,
     placeholder: true,
   },
   {
     category: "transition_tempo",
     group: "Motion",
     title: "Tempo",
-    copy: "Backswing-to-downswing ratio.",
+    copy: "Backswing to downswing ratio is stabilizing.",
     figure: FIGURE_TEMPO,
     icon: "tempo",
-    delta: null,
+    delta: 6,
     placeholder: true,
   },
   {
     category: "impact",
     group: "Strike",
     title: "Impact",
-    copy: "Club delivery and strike quality.",
+    copy: "Club delivery and strike quality are trending up.",
     figure: FIGURE_STRIKE,
-    delta: null,
+    delta: 11,
     placeholder: true,
   },
 ];
 
-/** Canned coach narrative — replaced by ai-coach/goal-progression. No numbers on purpose. */
+/** Canned coach narrative — the sample's, verbatim; replaced by ai-coach/goal-progression. */
 export const PLACEHOLDER_COACH_NOTE =
-  "Work the priorities in order — setup steadies everything after it, and impact is where " +
-  "the scorecard notices. Trends here sharpen as your swing history grows.";
+  "Stay focused on the first two priorities until impact scores move above 80 consistently. " +
+  "Once that stabilizes, the coach can shift more attention toward face control and " +
+  "shot-shaping goals.";
+
+/** The hero's description line and fourth chip — the sample's coach-voice copy, canned. */
+export const PLACEHOLDER_HERO_DESCRIPTION =
+  "Coach focus is shifting from setup stability toward impact sequencing and release control.";
+export const PLACEHOLDER_CONFIDENCE_CHIP = "Coach confidence rising";

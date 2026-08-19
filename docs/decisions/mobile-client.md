@@ -416,14 +416,33 @@ is not intent, so an incidental touch never moves the chrome.
 `useChromeScroll` (in `navVisibility.ts`) is the one sanctioned driver; its pure step function
 carries a reversal anchor so finger jitter never strobes the bars. The `hidden` flag is global
 — a tab switch requires a visible bar, so the next screen inherits shown chrome by
-construction. The swing screen's own chrome (`SessionPillNav`, the report controls) keeps its
-separate open/closed scroll rule and does not ride this flag.
+construction. The swing screen's own chrome (its `SessionNav` bar, the report controls) keeps
+its separate scroll rule and does not ride this flag.
 **The swing screen's ONE shape (Taylor 2026-08-17 — the legacy `SwingPlayer` surface and its
-`afterSwing`/`checkpoint` route params are DELETED; two player types was tech debt):** every
-door — log row, Home's focus cards and you-vs-pro strip, Coach's scorecard link, and the
-future capture flow — opens the **report sheet** on the `SheetOverBackdrop` scaffold, ambient
-theme. The report's dock ships Back / Delete / Favorite / Latest — "End session" waits for
-practice-loop's session entity.
+`afterSwing`/`checkpoint` route params are DELETED; two player types was tech debt. Extended
+2026-08-19 — the standalone swing screen and the session's post-recording screen are ONE
+component):** every door — log row, Home's focus cards and you-vs-pro strip, Coach's scorecard
+link, and the session's post-recording state — renders the shared **`SwingPage`**
+(`features/report/SwingPage.tsx`): the swing looping under the transport (lighter glass —
+rgba 0.38, the controls sit ON the footage), the sheet's TAB — drag handle plus the first
+sliver of scorecard, 96px above the bar, with a tiny muted "SWING ANALYSIS" nameplate in its
+top-right corner and NO swipe-up hint — peeking over the bar, the score circle as the door.
+The tab is the sheet's **floor** — scrolled fully to the top the card never sinks below it.
+The entrance differs by host: standalone the sheet is simply THERE at page load
+(`staticSheet`); the after-swing keeps the slide-up, where the card arriving IS the analysis
+finishing. The transport's bottom pad uses the same capped inset as the bars
+(`navBarBottomInset`). **Chrome is the only per-host variance**, through
+`SwingPage`'s `menu` / `topRight` / `extras` slots (the bar renders as a sibling over the layer,
+never `stickyFooter`): in session the bar is `SessionSwingDock`; standalone the page dresses as
+an INTERIOR page (Taylor 2026-08-19) — the app's MAIN menu (`WaveNav`, no tab active, Record as
+its standing centre door) worn STATICALLY (no scroll-hide; the route crossfades rather than
+pushes so the bar reads as one static bar between pages), the standard `AppHeader` (hero ink,
+pinned, hamburger → Profile) over the picture, star/delete as `CornerOrb`s in the video's
+top-right orb stack pushed below the header, and NO back orb — the menu and header are the
+navigation. **The video never parallaxes** — the report layer passes `cap: 0`; the picture is
+fixed to the top and the sheet does all the moving. Session-only chrome (analyzing bar,
+completion moment, error/list sheets) arrives through `extras`. A change to how a swing plays
+or reads is made once, in `SwingPage`.
 **Report stacking and doors:** the layer order is fixed at video < controls shell < sheet card —
 the scaffold hosts `backdropOverlay` **inside** the scroll surface (counter-translated to stay
 screen-fixed) so the card always paints over the chrome and the controls still take touches.
@@ -519,6 +538,15 @@ it), the original acid `#A3E635` on dark ones — same brand, contrast-matched t
 video-open chrome, plus anything drawn **over a photograph or video frame** (Home's hero and
 swing slides, compare chips, thumbnail grounds) — footage is its own dark surface, and those
 layers use the fixed `COLORS` palette and the accent's acid exposure deliberately.
+**The sticky navigation bars are the ONE exception, and they escape the pin on purpose** (Taylor,
+2026-08-18): every bar in the app is the same bar, so session mode's `SessionNav` wears the home
+tab bar's light fill over footage rather than being a second, darker nav. `useAppTheme()` is the
+only sanctioned escape hatch — it returns the app's surface ignoring any `FixedDarkTheme` above,
+and `SessionNav` and `SessionRecordButton` are its only callers. The light fill is **pure
+`#FFFFFF`, not the old near-opaque 0.98** — at 0.98 the footage and the page underneath ghosted
+through, so the two bars read as slightly different whites over different grounds. Nothing else escapes the pin;
+content over footage still uses the fixed palette, which is what the pin is for. The fade ABOVE
+each bar was already the same dark ramp in both themes, so only the bar itself changed.
 **Gotchas:** shared themed components rendered inside the player (the trend line) get their dark
 tokens from the pin, not from luck — an unpinned video surface would paint light panels over the
 picture the moment the app went light.
@@ -557,6 +585,37 @@ quarter of the swing while calling it slow motion.
 drag on `PanResponder`. It has **two detents**: it opens half-height, drags up to full, drags back
 down to half, and drags down again to close. **Closed means unmounted** — the caller passes plain
 boolean state and the sheet outlives `visible` only long enough to slide away.
+**Slide-ins are app surfaces, and they open FULLY** (Taylor, 2026-08-18). Every `Sheet` — including
+one opened from the pinned-dark capture screen — paints the app theme and reads like the swing
+log's sheet, never the dark glass of a control over footage. The primitive enforces it: its own
+chrome is built from `useAppTheme()` (which ignores any pin above it) and its children are wrapped
+in `AppTheme`, so a sheet author cannot get it wrong by forgetting. Sheet CONTENT therefore uses
+**`appStyles`/`useAppTheme`, NOT `themedStyles`/`useTheme`** — the provider is not enough on its
+own, because a sheet component calls its style hook in *its own body*, which runs where the sheet
+is **used** (inside the pinned-dark capture screen), not where its children are **rendered**
+(inside the provider). Context flows down the tree and a parent is not below its own child. The
+symptom reads as something else entirely: the panel paints white correctly while its text stays
+dark-theme white, so the content looks blank rather than mis-themed. `appStyles` resolves the app
+surface directly and cannot be defeated by where it is called. The fixed `COLORS` palette is never
+right in a sheet; the only exceptions are colours that
+are **functional rather than a surface** — `COLORS.onAqua` for text on an aqua fill, and the QR
+card's white, which is white in both themes because a QR does not scan on anything else.
+**`restHeightFraction` is now opt-in, and that is what fixed "there is no padding at the bottom".**
+A second detent parks the panel translated DOWN by `height - rest`, which puts its bottom padding
+— and its last control — below the screen edge. Adding padding therefore appeared to do nothing
+three times running: the padding existed, off screen. The panel is already capped at
+`maxHeightFraction` and scrolls inside, so opening at its natural height is the honest default and
+a low rest detent is something a genuinely long list asks for by name.
+
+**A Modal opens its own window, and that window is not edge-to-edge unless you say so.** The sheet
+sets **both** `statusBarTranslucent` and `navigationBarTranslucent` — `navigationBarTranslucent`
+is ignored unless the status-bar one is also set. Without them Android lays the sheet's window out
+*inside* the system bars, with two visible symptoms that look unrelated: the navigation-bar strip
+under the panel paints the platform default (white) instead of the sheet, so the app appears to
+stop short of the bottom of the screen; and `useSafeAreaInsets()` inside the sheet reports
+`bottom: 0`, so the panel's `16 + insets.bottom` pad collapses and the last control sits on the
+gesture bar. Found 2026-08-18 by Taylor, once as "why is the bottom white" and once as "it
+interferes with the phone's native interface" — the same missing prop both times.
 **Gotchas:** `Modal` rather than an absolutely-positioned view for three things that are each
 annoying by hand: the Android **hardware back button** (`onRequestClose` is the only supported
 hook), escaping the player's stack of absolutely-positioned chrome layers, and covering the status
@@ -784,12 +843,37 @@ trend); Coach and Goals are honest placeholders with real doors, not dead button
 is deleted; sign-out lives in Profile.
 The wave bar **floats over the content rather than taking layout space**, with a gradient fade above it, so content dissolves behind it instead of stopping at a hard edge (Taylor, 2026-08-18). The fade is **the same dark ramp in both themes** (`#0B1528`, 0 -> full), not a theme-following one: a white fade over the light theme's near-white `bg` is invisible, and only the transparent end is ever on screen anyway — the solid end sits behind the bar. That is not decoration: `BottomTabView` lays its tabBar out as the last flex child of a column, so a bar that hides by translating away leaves its reserved height behind as a blank strip. `TabBar` hosts it in a zero-height view, `WaveNav`'s root is absolutely positioned, and the fade rides inside the animated group so it leaves with the bar. The root box is sized to include the fade rather than letting it overflow upward — Android does not honour `overflow: visible` reliably, and a gradient drawn past the container's edge simply did not render — which also makes the root `pointerEvents="box-none"`, or the transparent band would eat every touch in it. Tab screens clear `WAVE_NAV_CLEARANCE` at the bottom of their own scroll, because nothing reserves it for them any more.
 Each tab is a **21px glyph in a 24px box over a drawn 7/900 label** (Taylor, 2026-08-18 — the labels used to exist only on `accessibilityLabel`), the centre slot is 86px wide, and the raised section under Record is 126x96 with a 158x26 blend back into the bar. The active colour is cobalt on light and **aqua on dark**, which is the one place the nav's active voice is not the app's primary.
+**The bottom inset under a sticky bar is CAPPED at 10px** (`navBarBottomInset` in `WaveNav`, Taylor 2026-08-19): padding the full system inset under the item row made the bar an enormous blank band on phones with on-screen nav buttons. The row sits at most 10px + `ROW_PAD` above the screen's edge and the fill still runs to the bottom behind the system bar. `WaveNav`, `SessionNav`, and everything that clears them (the swing page's tip lift, the analyzing pill) all go through the one function.
+**Session mode's bar is the same bar, down to the geometry** (Taylor, 2026-08-18). `SessionNav`
+had a deliberately larger bump and record control — "the one control that must dominate the
+screen" — and it read as a different navigation system. Its `RISE`, `BLEND`, `RECORD_SLOT` and
+record lift are now `WaveNav`'s numbers verbatim, and `SessionRecordButton` is `RecordButton`'s
+compact 58px geometry in red with a label. Changing one bar's constants without the other is what
+makes them stop matching, so they are written to be compared side by side.
 **Gotchas:** Tab glyphs are drawn `View`s in `design/deck/Glyphs.tsx` — no icon font, no SVG
 outside `design/gauges`. From a root-stack screen a tab is reached as
 `navigate("Tabs", { screen })`; a bare `navigate("Progress")` searches upward and fails at
 runtime while typechecking fine — the profile tests pin the nested form. The `Navigation` type
 is a composite of both param lists for exactly this reason. The dev-client bubble owns the
 top-right corner in development builds, so the avatar steps 56 px left under `__DEV__` only.
+
+### Celebrations are one app-wide queue behind a top toaster — never the bottom sheet
+
+**Decision:** All toast-level celebration moments (badge earned, rank-up, personal best — the
+achievements layer, D62) flow through `CelebrationProvider`
+(`apps/mobile/src/features/achievements/`), mounted in `App.tsx` above the navigator so a
+celebration lands on whatever screen the golfer is on. It renders a **top toaster** that slides
+down under the top inset with a one-shot confetti burst, queue-serialised: one at a time,
+extras wait, duplicate ids dropped. `useCelebrate()` is the only way to show one. Animation is
+core `Animated` on the native driver — reanimated is not a dependency and a toast does not
+justify the APK weight. The toaster floats on the `glass` token (flat — no border, no shadow);
+confetti pieces are the theme's accent tokens only.
+**Gotchas:** The provider sits *below* `DebugProvider` (it contributes the debug sheet's
+"Celebrations" group) and *above* `Root` (the toast must cover navigation). The focus-goal
+celebration (§16.3.5) is a bigger, separate moment owned by `goal-progression` — it outranks
+badge toasts and they queue behind it. Award logic and persistence are server-side (track
+steps 02–03); nothing on the phone decides that something was earned.
+**See:** ARCHIVE D62; `.claude/feature-tracks/achievements/DESIGN.md`.
 
 ## Data and networking
 
@@ -869,3 +953,49 @@ Skia question — take that reading before the track starts. Audio-session confi
 mic while playing video) is known platform work, flagged for the track's first step.
 **See:** ARCHIVE D60; `PROJECT_MAIN.md` §26.4;
 `.claude/architecture/coach-video-lessons-2026-08-18.md`.
+
+### "Coach" means the AI; the human professional is an "Instructor"
+
+**Decision:** In all user-facing copy, product-wide, **Coach** refers exclusively to the AI
+coach — the Coach tab, coach notes, coach priorities are all the AI persona. The human
+professional is an **Instructor**: "find a local instructor", "your instructor", instructor
+chat. The Coach tab is strictly the AI coach while the instructor system is designed.
+**Scope:** user-facing strings only — mobile today, web when its golfer/instructor surfaces
+are built. Internal identifiers do not rename: `coach_links`, the `coach` role, `coach_report`,
+`/api/v1/coach/*`, and the coach-platform track/phase names all keep their spelling; renaming a
+live RLS-bearing schema for vocabulary is churn without user value. PROJECT_MAIN still says
+"coach" for the human role in its §23–§29 sections — read those as "instructor".
+
+### Instructor presence is one flag driving three surfaces
+
+**Decision:** whether the golfer has a connected instructor is a single store
+(`features/instructor/useInstructor.ts`), and it drives all instructor presence: the
+instructor bubble (a face disc floating bottom-right above the wave nav on the Coach tab,
+with a notification dot when there is something new), the profile drawer's instructor block
+(connected card vs "find a local instructor" directory card), and the placeholder
+Instructor/InstructorChat stack routes. Until the instructor platform lands the flag is a
+`__DEV__` debug toggle (DebugOverlay group "Instructor"), persisted across reloads; release
+resolves to no instructor.
+**See:** `.claude/feature-tracks/coach-surface/DESIGN-coach-surface.md` §2.
+
+### The guided stance analysis is the first AI coaching act
+
+**Decision:** the first AI-coach interaction after a golfer's first recorded swing is the
+guided stance analysis: a standardized draw→hold→clear beat sequence over two still frames
+(DTL, then face-on when supplied) with a voice track — shaft-line-to-belt-buckle first, then
+spine/knee angles, arm drape, a free observation, then the face-on beats. It is highlighted
+on home until dismissed. The UI ships first as a scripted stub (narration text, pose art
+stand-ins); the analysis itself stays deterministic-CV-first when wired — the AI narrates
+what the geometry found, never invents the geometry.
+**See:** `.claude/feature-tracks/coach-surface/DESIGN-coach-surface.md` §3.
+
+### Progress renders the pinned sample, placeholder numbers flagged at the seam
+
+**Decision:** the Progress page follows `.claude/SAMPLE-progress-page.html` exactly,
+including the Before/Now focus bars, per-category deltas, hero description and confidence
+chip. During the UI-stub phase those coaching numbers are canned values living only in the
+flagged placeholder block of `features/progress/viewModel.ts` — the single swap point
+`priority-engine`/`goal-progression` replace. Real aggregates (session counts, best, net
+gain) stay real and absent-when-unmeasured.
+**Scope:** amends the earlier no-canned-numbers rendering on this screen — Taylor chose the
+pixel-exact sample for the stub phase (2026-08-19); honesty returns with the engines.

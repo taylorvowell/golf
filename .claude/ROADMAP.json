@@ -384,12 +384,17 @@
       "statusFile": ".claude/feature-tracks/dual-device-spike/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#12-multi-phone-synchronized-recording",
-        ".claude/ai-instructions/PROJECT_MAIN.md#125-synchronized-playback"
+        ".claude/ai-instructions/PROJECT_MAIN.md#125-synchronized-playback",
+        ".claude/feature-tracks/dual-device-spike/DESIGN-dual-device.md"
       ],
       "owns": [
-        "spikes/dual-device"
+        "spikes/dual-device",
+        "apps/mobile/src/features/spike"
       ],
       "dependsOn": [
+        {
+          "track": "session-mode"
+        },
         {
           "track": "in-app-capture"
         }
@@ -420,6 +425,47 @@
         }
       ],
       "sequencingNote": "Ahead of priority-engine deliberately: style gating changes WHICH findings exist, and prioritizing a fault the golfer's style legitimizes is exactly the mis-coaching this feature exists to prevent. The three most mis-flagged categories gate first: lead-wrist condition, shaft plane, lateral movement. Depends on analysis-ground-truth because every classification marker is subject to the standing trap \u2014 print raw values across all fixtures and confirm each moves the way the tree assumes before trusting a threshold; a classifier tuned on unvalidated markers is unfalsifiable. All fixtures are DTL and right-handed today, and Step 1 of the tree needs face-on markers \u2014 the ground-truth track's face-on fixture is a hard prerequisite, not a nice-to-have."
+    },
+    {
+      "id": "coach-surface",
+      "spine": false,
+      "lifecycle": "active",
+      "phase": "coaching",
+      "goal": "The golfer-facing coaching surface, built UI-FIRST at Taylor's direction (2026-08-19) the way session-mode was: the Coach tab rebuilt as the AI COACH (top tip, focus areas ranked by impact with personal scores and swing imagery, ~4 matched drills), the human role renamed INSTRUCTOR in all user-facing copy (bubble overlay with face + notification dot when connected, debug-flag-driven until the instructor platform lands, placeholder instructor/chat pages), the GUIDED STANCE ANALYSIS as the first AI coaching act (standardized draw→hold→clear beat sequence over DTL then face-on stance frames, voice track stubbed as narration, highlighted on home until dismissed), and Progress brought exactly to .claude/SAMPLE-progress-page.html. Steps 01–04 are stubbed UI with flagged placeholder view-models at named swap seams; step 05 is Taylor's explicit sign-off gate — wiring may not start before it. priority-engine, drill-library and ai-coach later fill the seams this track leaves; they are non-blocking for the UI phase.",
+      "statusFile": ".claude/feature-tracks/coach-surface/_STATUS.json",
+      "specRefs": [
+        ".claude/feature-tracks/coach-surface/DESIGN-coach-surface.md",
+        ".claude/ai-instructions/PROJECT_MAIN.md#16-priority-coaching-system",
+        ".claude/ai-instructions/PROJECT_MAIN.md#17-ai-coach",
+        ".claude/architecture/coach-and-focus-2026-08-14.md",
+        ".claude/SAMPLE-progress-page.html"
+      ],
+      "owns": [
+        "apps/mobile/src/features/coach",
+        "apps/mobile/src/features/instructor",
+        "apps/mobile/src/features/progress"
+      ],
+      "dependsOn": [
+        {
+          "track": "design-system"
+        },
+        {
+          "track": "mobile-player"
+        },
+        {
+          "track": "priority-engine",
+          "blocking": false
+        },
+        {
+          "track": "drill-library",
+          "blocking": false
+        },
+        {
+          "track": "ai-coach",
+          "blocking": false
+        }
+      ],
+      "sequencingNote": "Created 2026-08-19 at Taylor's direction — he wants to walk and iterate the coaching UX now, ahead of the coaching phase's engine order, exactly as D61 did for session mode. The track owns the SURFACE; the engines keep their depth and land inside it. The D58 coach-surface note on mobile-app-shell is superseded by this track for the Coach tab itself."
     },
     {
       "id": "priority-engine",
@@ -629,6 +675,38 @@
         }
       ],
       "sequencingNote": "Depends hard on priority-engine because proposals must come from real, style-gated priority output \u2014 assigning a fault the golfer's style legitimizes is the mis-coaching D54 exists to prevent \u2014 and transitively on analysis-ground-truth: a progress claim over an unvalidated check is unfalsifiable, and 'you fixed it' is the one message the product must never be wrong about. history-and-trends is hard because the evidence history and trend surfaces are its infrastructure. Everything else is a seam: AI-proposed and self-promoted goals with deterministic text work before coach-collaboration (human assignment), ai-coach (narrative), drill-library (linked drills) or notifications (push delivery) land. Goal tracking was carved OUT of history-and-trends' goal by D55, the same way D54 carved practice-loop out of in-app-capture."
+    },
+    {
+      "id": "achievements",
+      "spine": false,
+      "lifecycle": "active",
+      "phase": "improvement",
+      "goal": "The gamification layer (D62, \u00a716.3.5 amendment): XP and a config-defined rank ladder, one-time tiered badges for firsts/volume/streaks/quality, and a toast+confetti celebration surface for badge earns, rank-ups and personal bests \u2014 deliberately smaller ceremony than the focus-goal moment, which outranks it. Definitions live in a versioned achievement_config; awarding is a deterministic server-side evaluator at swing-ready and session-close (idempotent, evidence-linked, no AI in the award path); delivery piggybacks newly_earned rows on payloads the client already fetches with server-recorded seen_at acks; the trophy room (rank, XP meter, badge grid with how-to-earn copy) lives on Profile. Routine XP accrues silently \u2014 toasts are scarce by design. Design reference: DESIGN.md in this track's directory.",
+      "statusFile": ".claude/feature-tracks/achievements/_STATUS.json",
+      "specRefs": [
+        ".claude/ai-instructions/PROJECT_MAIN.md#1635-completion-celebration-and-afterwards"
+      ],
+      "owns": [
+        "apps/web/src/lib/achievements",
+        "apps/mobile/src/features/achievements"
+      ],
+      "dependsOn": [
+        {
+          "track": "platform-foundation"
+        },
+        {
+          "track": "swing-ingest"
+        },
+        {
+          "track": "goal-progression",
+          "blocking": false
+        },
+        {
+          "track": "notifications",
+          "blocking": false
+        }
+      ],
+      "sequencingNote": "Step 01 (the client celebration surface + debug trigger) landed 2026-08-19 with no dependencies \u2014 it is pure UI fed by a queue. The award engine (02+) needs platform-foundation's schema/API seam and swing-ingest's server-side swing lifecycle to hang the evaluator on. goal-progression is a soft seam: its \u00a716.3.5 full-screen moment outranks and queues ahead of badge toasts when both fire, but neither track blocks the other. notifications later delivers earned-while-away pushes (\u00a729)."
     },
     {
       "id": "practice-loop",
@@ -842,7 +920,8 @@
       "goal": "DIFFERENTIATOR (\u00a712). Two logged-in phones capturing one swing: device pairing, coordinated recording, automatic association to a single Swing, synchronized dual-view playback, and partial-capture recovery that never loses the good video. Built here rather than last so the launch date does not hang on the hardest unsolved problem in the product.",
       "statusFile": ".claude/feature-tracks/dual-device-capture/_STATUS.json",
       "specRefs": [
-        ".claude/ai-instructions/PROJECT_MAIN.md#12-multi-phone-synchronized-recording"
+        ".claude/ai-instructions/PROJECT_MAIN.md#12-multi-phone-synchronized-recording",
+        ".claude/feature-tracks/dual-device-spike/DESIGN-dual-device.md"
       ],
       "owns": [
         "apps/mobile/src/features/pairing"

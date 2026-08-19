@@ -7,8 +7,10 @@ import { useTheme } from "../../theme";
 /**
  * The renderer for the supplied icon set (`brandIconPaths.ts`) — every path painted in ONE
  * caller-given colour, which is what lets the same art serve a tab (tab colour), a label
- * (text colour) or a tile. `size` is the width; height follows the art's own aspect, so a
- * glyph is never squashed to fit a square.
+ * (text colour) or a tile. `size` is one edge — width by default, or height with
+ * `sizeBy="height"` — and the other edge follows the art's own aspect, so a glyph is never
+ * squashed to fit a square. Rows of mixed-aspect glyphs (the tab bar) size by height, or a
+ * wide glyph reads smaller than its square neighbours.
  *
  * `BrandIcon` is the bare glyph. `BrandIconThumb` is the glyph on the Progress tiles' bed
  * (StickThumb's exact tint), for the category tiles whose supplied icon has replaced the
@@ -17,11 +19,14 @@ import { useTheme } from "../../theme";
 export function BrandIcon({
   name,
   size = 21,
+  sizeBy = "width",
   color,
   style,
 }: {
   name: BrandIconName;
   size?: number;
+  /** Which edge `size` fixes; the other follows the art's aspect. */
+  sizeBy?: "width" | "height";
   color: string;
   style?: StyleProp<ViewStyle>;
 }) {
@@ -30,8 +35,8 @@ export function BrandIcon({
   const art: BrandIconArt = BRAND_ICONS[name];
   return (
     <Svg
-      width={size}
-      height={size * (art.h / art.w)}
+      width={sizeBy === "width" ? size : size * (art.w / art.h)}
+      height={sizeBy === "width" ? size * (art.h / art.w) : size}
       viewBox={`0 0 ${art.w} ${art.h}`}
       style={style}
     >

@@ -18,14 +18,16 @@ export { AQUA, COBALT, LAVENDER, NAVY, SEMANTIC } from "./palette";
 export { DARK, LIGHT, type Theme } from "./themes";
 import { AQUA, DARK_SURFACES, LAVENDER, NAVY, SEMANTIC, VIDEO_AMBER } from "./palette";
 export {
+  AppTheme,
   FixedDarkTheme,
   ThemeProvider,
   clearThemePreferenceCache,
+  useAppTheme,
   useTheme,
   useThemePreference,
   type ThemePreference,
 } from "./ThemeProvider";
-export { themedStyles } from "./themedStyles";
+export { appStyles, themedStyles } from "./themedStyles";
 
 /**
  * The fixed dark palette of the video-facing surfaces (player, capture, deck) — since step 09

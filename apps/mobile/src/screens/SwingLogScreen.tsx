@@ -1,11 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import {
-  ActivityIndicator,
-  Pressable,
-  RefreshControl,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, RefreshControl, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CountUp } from "../features/session/CountUp";
@@ -15,20 +9,18 @@ import { takeSessionArrival } from "../features/session/sessionArrival";
 import {
   APP_HEADER_BAR,
   AppHeader,
-  DateTitle,
   HeroBackdrop,
-  ScoreOrb,
   ScoreRing,
   HERO_PARALLAX,
   HERO_SHEET_GAP,
   SheetOverBackdrop,
-  formatDayTitle,
   useChromeScroll,
   WAVE_NAV_CLEARANCE,
 } from "../design/system";
 import { FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
 import { StatusMessage } from "../design/StatusMessage";
 import { LatestSessionCard } from "../features/swings/LatestSessionCard";
+import { SessionRow } from "../features/swings/SessionRow";
 import { logStats, sessionStats, sessionize } from "../features/swings/sessions";
 import { useSwings } from "../features/swings/useSwings";
 import { useAppNavigation } from "../navigation";
@@ -61,7 +53,6 @@ export function SwingLogScreen() {
     () => (state.kind === "ok" ? sessionize(state.swings) : []),
     [state],
   );
-  const latest = sessions[0];
   const older = sessions.slice(1);
   const log = useMemo(() => logStats(sessions), [sessions]);
 
@@ -70,6 +61,20 @@ export function SwingLogScreen() {
   // UI phase: the counts and card are the arrival's own numbers layered over the real stats
   // until the session rows persist (session-mode step 05).
   const [arrival] = useState(takeSessionArrival);
+  /**
+   * The mode of the session just ended, onto the newest row.
+   *
+   * It is the ONE session whose mode is known — the golfer picked it minutes ago and it came
+   * through the arrival seam. Every older session stays null rather than being assigned a
+   * plausible default, which would be a made-up claim about their own practice.
+   */
+  const latest = useMemo(
+    () =>
+      sessions[0] && arrival
+        ? { ...sessions[0], sessionType: arrival.sessionType }
+        : sessions[0],
+    [arrival, sessions],
+  );
   const [arrivalPhase, setArrivalPhase] = useState<"saving" | "landed" | null>(
     arrival ? "saving" : null,
   );
@@ -204,39 +209,16 @@ export function SwingLogScreen() {
               session={latest}
               onOpenSwing={(id) => navigation.navigate("SwingDetail", { id })}
             />
-            {/* .log-v2-session-list */}
+            {/* .log-v2-session-list — every row expands to the swings inside it. */}
             {older.length > 0 && (
               <View style={styles.olderList}>
-                {older.map((session) => {
-                  const stats = sessionStats(session);
-                  const openId = session.swings[session.swings.length - 1].id;
-                  const time = new Date(session.start).toLocaleTimeString(undefined, {
-                    hour: "numeric",
-                    minute: "2-digit",
-                  });
-                  return (
-                    <Pressable
-                      key={session.id}
-                      testID={`session-${session.id}`}
-                      accessibilityRole="button"
-                      accessibilityLabel={`${formatDayTitle(session.start)}${
-                        stats.avg !== null ? `, average ${stats.avg}` : ""
-                      }`}
-                      onPress={() => navigation.navigate("SwingDetail", { id: openId })}
-                      style={({ pressed }) => [styles.olderRow, pressed && styles.pressed]}
-                    >
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <DateTitle ms={session.start} size={17} />
-                        <Text style={styles.olderMeta}>{time}</Text>
-                      </View>
-                      {stats.avg !== null ? (
-                        <ScoreOrb score={stats.avg} size={56} caption="Avg" />
-                      ) : (
-                        <Text style={styles.olderNotScored}>Not scored</Text>
-                      )}
-                    </Pressable>
-                  );
-                })}
+                {older.map((session) => (
+                  <SessionRow
+                    key={session.id}
+                    session={session}
+                    onOpenSwing={(id) => navigation.navigate("SwingDetail", { id })}
+                  />
+                ))}
               </View>
             )}
           </>
@@ -312,21 +294,6 @@ const useStyles = themedStyles((t) => ({
 
   /* .log-v2-session rows */
   olderList: { marginTop: 14, gap: 10 },
-  olderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    padding: 16,
-    borderRadius: 14,
-    backgroundColor: t.surface,
-  },
-  olderMeta: {
-    marginTop: 4,
-    color: t.textSoft,
-    fontFamily: FONT_BODY.regular,
-    fontSize: 13,
-  },
-  olderNotScored: { color: t.muted2, fontFamily: FONT_BODY.bold, fontSize: 12 },
 
   centre: { alignItems: "center", justifyContent: "center", gap: 10, padding: 24, minHeight: 260 },
   emptyTitle: {
@@ -343,5 +310,4 @@ const useStyles = themedStyles((t) => ({
     textAlign: "center",
     maxWidth: 300,
   },
-  pressed: { opacity: 0.6 },
 }));

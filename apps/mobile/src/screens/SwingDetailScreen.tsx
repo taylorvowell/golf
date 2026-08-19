@@ -1,28 +1,24 @@
-import { useCallback, useMemo, useRef } from "react";
-import { ActivityIndicator, Alert, StyleSheet, Text, View } from "react-native";
-import {
-  ArrowDownToLine,
-  ArrowLeft,
-  Star,
-  Trash2,
-} from "lucide-react-native";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, Animated, StyleSheet, Text, View } from "react-native";
+import { Star, Trash2 } from "lucide-react-native";
+import type { SwingSummary } from "@swingsage/schema/contract";
 
-import { SessionPillNav, Skeleton } from "../design/system";
-import { ReportSheet } from "../features/report/ReportSheet";
-import { ReportVideoLayer } from "../features/report/VideoLayer";
-import { buildReportViewModel } from "../features/report/selectors";
-import { useReport } from "../features/player/useReport";
-import { createdAtMs } from "../features/swings/sessions";
+import { TAB_LABELS, tabIcon } from "../design/TabBar";
+import { APP_HEADER_BAR, AppHeader, WaveNav, type WaveNavItem } from "../design/system";
+import { CornerOrb } from "../features/report/VideoLayer";
+import { SwingPage } from "../features/report/SwingPage";
+import { SwingDeleteSheet } from "../features/session/sheets/SwingDeleteSheet";
 import { useStarred } from "../features/swings/useStarred";
-import { deleteSwing, useSwing, useSwings } from "../features/swings/useSwings";
-import { useAppNavigation } from "../navigation";
-import { COLORS, useTheme } from "../theme";
+import { deleteSwing, useSwing } from "../features/swings/useSwings";
+import { useAppNavigation, type TabParamList } from "../navigation";
+import { COLORS } from "../theme";
 
 /**
- * One swing, ONE shape (Taylor 2026-08-17: the legacy `SwingPlayer` surface is deleted — two
- * player types was tech debt): the Ideal Swing report — the sheet from the reference mockup
- * over the LIVE frame-accurate player (`ReportVideoLayer`). Scrolling the sheet away enters
- * the mockup's video-open state: pill nav out, full player controls in. Every door (log row,
+ * One swing, ONE page (Taylor 2026-08-17 killed the second player surface; 2026-08-19 killed the
+ * second swing PAGE): outside a session, this route renders the SAME `SwingPage` the post-swing
+ * screen shows. The differences are chrome only (Taylor, 2026-08-19): the bar is the MAIN menu —
+ * no session controls, no "record new swing" of its own beyond the menu's standing Record door —
+ * and star/delete ride the video's top-right orb stack instead of a bar. Every door (log row,
  * Home's focus cards, Coach's scorecard link) lands here.
  */
 
@@ -32,12 +28,6 @@ export interface SwingDetailScreenProps {
 
 export function SwingDetailScreen({ id }: SwingDetailScreenProps) {
   const { state, swing } = useSwing(id);
-  const navigation = useAppNavigation();
-
-  const onDelete = useCallback(async () => {
-    await deleteSwing(id);
-    if (navigation.canGoBack()) navigation.goBack();
-  }, [id, navigation]);
 
   if (state.kind === "loading") {
     return (
@@ -60,197 +50,110 @@ export function SwingDetailScreen({ id }: SwingDetailScreenProps) {
     );
   }
 
-  return <ReportScreen swing={swing} onDelete={onDelete} />;
+  return <StandaloneSwingPage swing={swing} />;
 }
 
-/** The review shape: the report sheet over the live player layer (the mockup's video-open). */
-function ReportScreen({
-  swing,
-  onDelete,
-}: {
-  swing: NonNullable<ReturnType<typeof useSwing>["swing"]>;
-  onDelete: () => Promise<void>;
-}) {
+const MAIN_TABS: (keyof TabParamList)[] = ["Home", "SwingLog", "Progress", "Coach"];
+
+/** The shared page dressed as an INTERIOR page (Taylor, 2026-08-19): the app's main menu worn
+ * statically at the bottom (no scroll-hide — it must read as the same bar as every other page),
+ * and the standard header — logo + hamburger — overlaying the top, since navigating off a swing
+ * is fine outside a session. This route sits ABOVE the tab navigator, so the real tab bar is
+ * covered by construction; the same `WaveNav` is worn here directly and a tab press navigates
+ * back down into the shell. No back orb — the menu and header ARE the navigation. */
+function StandaloneSwingPage({ swing }: { swing: SwingSummary }) {
   const navigation = useAppNavigation();
-  const t = useTheme();
-  const report = useReport(swing.id, null, true);
   const { starred, toggle } = useStarred(swing.id);
-  const { state: listState } = useSwings();
-  const scrollRef = useRef<{ scrollTo: (opts: { y: number; animated?: boolean }) => void }>(
-    null,
-  );
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  // Frozen at 0: the header never slides here — the page's scroll belongs to the sheet, and
+  // chrome that stays put is the whole point of dressing this as an interior page.
+  const headerPin = useRef(new Animated.Value(0)).current;
 
-  const newestId = useMemo(() => {
-    if (listState.kind !== "ok" || !listState.swings.length) return null;
-    return [...listState.swings].sort((a, b) => createdAtMs(b) - createdAtMs(a))[0].id;
-  }, [listState]);
+  const onDelete = useCallback(async () => {
+    setDeleteOpen(false);
+    await deleteSwing(swing.id);
+    if (navigation.canGoBack()) navigation.goBack();
+  }, [swing.id, navigation]);
 
-  const vm = useMemo(
-    () => (report.kind === "ok" ? buildReportViewModel(report.report, swing) : null),
-    [report, swing],
-  );
-
-  const confirmDelete = useCallback(() => {
-    Alert.alert("Delete this swing?", "Removes the video and its analysis, permanently.", [
-      { text: "Cancel", style: "cancel" },
-      { text: "Delete", style: "destructive", onPress: () => void onDelete() },
-    ]);
-  }, [onDelete]);
-
-  /** The analysed frame's shape off the LIST, so the stage is right on the first paint. */
-  const sized =
-    swing.views.find((v) => v.id === swing.primaryViewId && v.width && v.height) ??
-    swing.views.find((v) => v.width && v.height);
-  const aspectRatio = sized?.width && sized?.height ? sized.width / sized.height : null;
-
-  const primaryView =
-    swing.views.find((v) => v.id === swing.primaryViewId) ?? swing.views[0] ?? null;
-  const viewPill = primaryView ? `${viewName(primaryView)} · ${swing.label}` : swing.label;
-
-  /**
-   * The sheet and the pill nav as stable elements: the video layer under them re-renders per
-   * presented frame, and React must bail on this whole subtree by identity — a report screen
-   * reconciling its scorecard at frame rate is exactly the churn the player rules forbid.
-   */
-  const stickyFooter = useMemo(
-    () => (
-      <SessionPillNav
-        onNew={() => navigation.navigate("Record")}
-        items={[
-          {
-            key: "back",
-            label: "Back",
-            tone: "end",
-            onPress: () => navigation.goBack(),
-            icon: (c) => <ArrowLeft size={18} color={c} strokeWidth={1.9} />,
-          },
-          {
-            key: "delete",
-            label: "Delete",
-            tone: "danger",
-            onPress: confirmDelete,
-            testID: "report-delete",
-            icon: (c) => <Trash2 size={18} color={c} strokeWidth={1.9} />,
-          },
-          {
-            key: "favorite",
-            label: "Favorite",
-            active: starred,
-            onPress: toggle,
-            testID: "report-favorite",
-            icon: (c) => (
-              <Star size={18} color={c} strokeWidth={1.9} fill={starred ? c : "none"} />
-            ),
-          },
-          {
-            key: "latest",
-            label: "Latest",
-            tone: "latest",
-            active: newestId === swing.id,
-            onPress: () => {
-              if (newestId && newestId !== swing.id) {
-                navigation.navigate("SwingDetail", { id: newestId });
-              }
-            },
-            icon: (c) => <ArrowDownToLine size={18} color={c} strokeWidth={1.9} />,
-          },
-        ]}
-      />
-    ),
-    [navigation, confirmDelete, starred, toggle, newestId, swing.id],
-  );
-
-  const sheetContent = useMemo(
-    () => (
-      <View style={{ paddingBottom: 140 }}>
-        {report.kind === "loading" || report.kind === "idle" ? (
-          <ReportSkeleton />
-        ) : null}
-        {report.kind === "unreachable" ? (
-          <View style={styles.sheetCentre}>
-            <Text style={[styles.title, { color: t.text }]}>Cannot reach SwingSage</Text>
-            <Text style={[styles.detail, { color: t.muted }]}>
-              The report is safe — this device just could not connect.
-            </Text>
-          </View>
-        ) : null}
-        {report.kind === "not-scored" ? (
-          <View style={styles.sheetCentre}>
-            <Text style={[styles.title, { color: t.text }]}>Not scored</Text>
-            <Text style={[styles.detail, { color: t.muted }]}>
-              This swing was analysed without scoring, so there is no report to show — the
-              picture above is still real.
-            </Text>
-          </View>
-        ) : null}
-        {vm != null && (
-          <ReportSheet
-            vm={vm}
-            swingId={swing.id}
-            onShowVideo={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
-          />
-        )}
-      </View>
-    ),
-    [report.kind, vm, swing.id, navigation, t],
+  // None active: the golfer is on a swing, not on a tab — an active glyph would claim a place
+  // this screen does not hold.
+  const tabs = useMemo<WaveNavItem[]>(
+    () =>
+      MAIN_TABS.map((name) => ({
+        key: name,
+        label: TAB_LABELS[name],
+        icon: tabIcon(name),
+        testID: `swing-tab-${name}`,
+        onPress: () => navigation.navigate("Tabs", { screen: name }),
+      })),
+    [navigation],
   );
 
   return (
-    <ReportVideoLayer
+    <SwingPage
+      swing={swing}
       testID="report"
-      swingId={swing.id}
-      frameCount={swing.frameCount}
-      fps={swing.fps}
-      aspectRatio={aspectRatio}
-      score={typeof swing.overallScore === "number" ? swing.overallScore : null}
-      tempoRatio={swing.tempoRatio}
-      viewPill={viewPill}
-      onBack={() => navigation.goBack()}
-      sheetPresented={report.kind !== "loading" && report.kind !== "idle"}
-      scrollRef={scrollRef}
-      sheetStyle={{ backgroundColor: t.bgElevated }}
-      stickyFooter={stickyFooter}
-    >
-      {sheetContent}
-    </ReportVideoLayer>
+      // Static on purpose — `hidden` from the page's scroll latch is ignored: this is the main
+      // menu, and the main menu does not leave (Taylor, 2026-08-19).
+      menu={() => (
+        <WaveNav
+          items={tabs}
+          recordTestID="swing-tab-record"
+          onRecord={() => navigation.navigate("Record")}
+        />
+      )}
+      chromeTopInset={APP_HEADER_BAR}
+      // The tab is there at page load, no slide-in — the entrance theatre belongs to the
+      // after-swing screen, where the card arriving is the analysis finishing.
+      staticSheet
+      topRight={
+        <>
+          <CornerOrb
+            label={starred ? "Remove from favorites" : "Add to favorites"}
+            active={starred}
+            onPress={toggle}
+            testID="report-favorite"
+          >
+            <Star
+              size={19}
+              color={starred ? COLORS.aqua : "#FFFFFF"}
+              strokeWidth={2.2}
+              fill={starred ? COLORS.aqua : "none"}
+            />
+          </CornerOrb>
+          <CornerOrb
+            label="Delete this swing"
+            onPress={() => setDeleteOpen(true)}
+            testID="report-delete"
+          >
+            <Trash2 size={19} color="#FFFFFF" strokeWidth={2} />
+          </CornerOrb>
+        </>
+      }
+      extras={
+        <>
+          {/* The interior-page header, over the picture — hero ink (white) on the fixed dark
+              player ground, exactly as on Swing Log's dark hero. */}
+          <AppHeader
+            hero
+            chromePx={headerPin}
+            onProfile={() => navigation.navigate("Profile")}
+            profileTestID="swing-profile"
+          />
+          <SwingDeleteSheet
+            visible={deleteOpen}
+            onClose={() => setDeleteOpen(false)}
+            isOnlySwing={false}
+            onDelete={() => void onDelete()}
+          />
+        </>
+      }
+    />
   );
-}
-
-/**
- * The report's shape before the report: the header, indicator and focus rows as breathing
- * blocks, so the waiting card promises the layout it will keep. Shown in the sheet's peek
- * while it waits low, and never beside a spinner — one loading language per surface.
- */
-function ReportSkeleton() {
-  return (
-    <View testID="report-skeleton" style={styles.skeleton}>
-      <Skeleton style={{ width: 84, height: 10 }} />
-      <Skeleton style={{ width: 190, height: 26, marginTop: 10 }} />
-      <Skeleton style={{ width: 140, height: 12, marginTop: 8 }} />
-      <Skeleton style={{ width: 220, height: 34, borderRadius: 17, marginTop: 16 }} />
-      <View style={styles.skeletonRow}>
-        <Skeleton style={{ width: 108, height: 128, borderRadius: 18 }} />
-        <View style={{ flex: 1, gap: 8 }}>
-          <Skeleton style={{ width: "58%", height: 10 }} />
-          <Skeleton style={{ width: "100%", height: 16 }} />
-          <Skeleton style={{ width: "92%", height: 16 }} />
-          <Skeleton style={{ width: "70%", height: 16 }} />
-        </View>
-      </View>
-      <Skeleton style={{ width: 210, height: 210, borderRadius: 105, alignSelf: "center", marginTop: 26 }} />
-    </View>
-  );
-}
-
-function viewName(v: { view: string }): string {
-  return v.view === "face_on" ? "Face-on" : "Down the line";
 }
 
 const styles = StyleSheet.create({
   centre: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10, padding: 24 },
-  sheetCentre: { alignItems: "center", justifyContent: "center", gap: 10, padding: 24, minHeight: 220 },
-  skeleton: { paddingHorizontal: 16, paddingTop: 6 },
-  skeletonRow: { flexDirection: "row", gap: 14, marginTop: 22 },
   title: { color: COLORS.text, fontSize: 17, fontWeight: "600", textAlign: "center" },
   detail: {
     color: COLORS.muted,

@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import { Pressable, Switch, Text, View } from "react-native";
 import { Check } from "lucide-react-native";
 
 import { Sheet } from "../../../design/system/Sheet";
 import { FONT_BODY, FONT_DISPLAY } from "../../../design/system/typography";
-import { COLORS } from "../../../theme";
+import { COLORS, appStyles, useAppTheme } from "../../../theme";
 import { saveSessionDefaults } from "../sessionDefaults";
 import {
   RECORDING_DELAYS,
@@ -34,6 +34,8 @@ export function SessionSettingsSheet({
   settings,
   onChange,
 }: SessionSettingsSheetProps) {
+  const t = useAppTheme();
+  const styles = useStyles();
   const [savedAsDefault, setSavedAsDefault] = useState(false);
 
   const toggleDefault = () => {
@@ -63,7 +65,7 @@ export function SessionSettingsSheet({
             onChange({ [key]: v } as Partial<SessionSettings>);
             setSavedAsDefault(false);
           }}
-          trackColor={{ false: COLORS.panel, true: COLORS.aqua }}
+          trackColor={{ false: t.surface, true: t.aqua }}
           thumbColor="#FFFFFF"
           accessibilityLabel={title}
           testID={`setting-${key}`}
@@ -137,12 +139,12 @@ export function SessionSettingsSheet({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = appStyles((t) => ({
   row: { flexDirection: "row", alignItems: "center", gap: 12 },
   rowDisabled: { opacity: 0.45 },
   rowText: { flex: 1, gap: 1 },
-  rowTitle: { color: COLORS.text, fontFamily: FONT_DISPLAY.extraBold, fontSize: 14 },
-  rowDetail: { color: COLORS.muted, fontFamily: FONT_BODY.regular, fontSize: 12, lineHeight: 16 },
+  rowTitle: { color: t.text, fontFamily: FONT_DISPLAY.extraBold, fontSize: 14 },
+  rowDetail: { color: t.muted, fontFamily: FONT_BODY.regular, fontSize: 12, lineHeight: 16 },
   delayChips: { flexDirection: "row", gap: 5 },
   chip: {
     minWidth: 38,
@@ -151,10 +153,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 8,
-    backgroundColor: COLORS.panel,
+    backgroundColor: t.surface,
   },
-  chipActive: { backgroundColor: COLORS.aqua },
-  chipText: { color: COLORS.muted, fontFamily: FONT_DISPLAY.black, fontSize: 11 },
+  chipActive: { backgroundColor: t.aqua },
+  chipText: { color: t.muted, fontFamily: FONT_DISPLAY.black, fontSize: 11 },
   chipTextActive: { color: COLORS.onAqua },
   defaultRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingTop: 4 },
   checkbox: {
@@ -163,8 +165,8 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: COLORS.panel,
+    backgroundColor: t.surface,
   },
-  checkboxOn: { backgroundColor: COLORS.aqua },
+  checkboxOn: { backgroundColor: t.aqua },
   pressed: { opacity: 0.7 },
-});
+}));
