@@ -92,6 +92,13 @@
       "when": 1786700100000,
       "tag": "0012_roles_profiles_goals",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1786700200000,
+      "tag": "0013_notifications",
+      "breakpoints": true
     }
   ]
 }

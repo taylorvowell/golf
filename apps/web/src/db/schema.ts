@@ -539,6 +539,46 @@ export const coachLinks = pgTable("coach_links", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex("coach_links_pair").on(t.golferId, t.coachId)]);
 
+/**
+ * §29's inbox rows — the source of truth every delivery channel (push, email, the bell) fans
+ * out from. Two design points live in migration 0013 rather than here: emission is ONLY
+ * `app.notify()` (a SECURITY DEFINER function, because a coach action notifies a golfer and
+ * an insert policy cannot express that safely), and grouped delivery is the partial unique
+ * index on (user_id, group_key) where read_at is null — an unread group folds, `count` grows,
+ * reading it closes the group. The `kind` enum mirrors
+ * `packages/schema/schemas/api.schema.json#/definitions/notification`; the two grow together,
+ * additively, always.
+ */
+export const notifications = pgTable("notifications", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  kind: text("kind", {
+    enum: [
+      // golfer (§29 + D55 + D60 + D62)
+      "analysis_ready", "coach_request_approved", "coach_request_declined",
+      "swing_reviewed", "coach_comment", "coach_annotation", "coach_message",
+      "coach_plan", "subscription_event", "goal_assigned", "goal_achieved",
+      "goal_regressed", "lesson_sent", "conversation_reply", "review_answered",
+      "achievement_earned",
+      // coach
+      "golfer_request", "golfer_swing", "golfer_reply", "plan_progress",
+      "review_requested", "student_message", "lesson_viewed", "drill_done",
+      "student_goal_achieved",
+    ],
+  }).notNull(),
+  title: text("title").notNull(),
+  body: text("body"),
+  /** The deep-link payload (swingId / goalId / conversationId …) — open by design. */
+  data: jsonb("data").$type<Record<string, unknown>>().notNull().default({}),
+  /** Rows sharing this key collapse while unread. Null = the event never groups. */
+  groupKey: text("group_key"),
+  /** How many events this row stands for. 1 unless grouped. */
+  count: integer("count").notNull().default(1),
+  /** On a grouped row, the LATEST folded event's time — the inbox sorts by newest member. */
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  readAt: timestamp("read_at", { withTimezone: true }),
+});
+
 export type ClubRow = typeof clubs.$inferSelect;
 export type NewClubRow = typeof clubs.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -570,3 +610,6 @@ export type HeadMarkerRow = typeof headMarkers.$inferSelect;
 export type NewHeadMarkerRow = typeof headMarkers.$inferInsert;
 export type SwingStageRow = typeof swingStages.$inferSelect;
 export type NewSwingStageRow = typeof swingStages.$inferInsert;
+export type NotificationRow = typeof notifications.$inferSelect;
+/** The §29 event taxonomy — one vocabulary for emitters, the table, and the API schema. */
+export type NotificationKind = NotificationRow["kind"];

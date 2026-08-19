@@ -300,3 +300,103 @@ export interface SwingDeletion {
    */
   mediaObjects: number;
 }
+/**
+ * One inbox row (§29 + D55 + D60). Grouped delivery is a property of the ROW, not of a delivery channel: rows sharing an open groupKey collapse server-side into one row whose `count` says how many events it stands for, which is how conversation messages avoid one entry per message.
+ *
+ * This interface was referenced by `Api`'s JSON-Schema
+ * via the `definition` "notification".
+ */
+export interface Notification {
+  id: string;
+  /**
+   * The §29 taxonomy (+ D55 focus-goal events, + D60 lesson/conversation events). An enum so no client or emitter can mint a free-text kind; growing it is additive and shape-lock-legal.
+   */
+  kind:
+    | "analysis_ready"
+    | "coach_request_approved"
+    | "coach_request_declined"
+    | "swing_reviewed"
+    | "coach_comment"
+    | "coach_annotation"
+    | "coach_message"
+    | "coach_plan"
+    | "subscription_event"
+    | "goal_assigned"
+    | "goal_achieved"
+    | "goal_regressed"
+    | "lesson_sent"
+    | "conversation_reply"
+    | "review_answered"
+    | "achievement_earned"
+    | "golfer_request"
+    | "golfer_swing"
+    | "golfer_reply"
+    | "plan_progress"
+    | "review_requested"
+    | "student_message"
+    | "lesson_viewed"
+    | "drill_done"
+    | "student_goal_achieved";
+  title: string;
+  body: string | null;
+  /**
+   * The deep-link payload — swingId / sessionId / goalId / conversationId, whatever the kind's screen needs. Kept open on purpose: each kind's emitter and screen agree on its shape, and a new key must never be a schema break.
+   */
+  data: {};
+  /**
+   * Rows sharing this key collapse while unread (e.g. `conversation:<id>`). Null means the event never groups.
+   */
+  groupKey: string | null;
+  /**
+   * How many events this row stands for. 1 unless grouped.
+   */
+  count: number;
+  /**
+   * Epoch ms of the LATEST folded event — a grouped row surfaces at its newest member's time.
+   */
+  createdAt: number;
+  /**
+   * Epoch ms when acked. Null = unread. Set only by the owner via the read route.
+   */
+  readAt: number | null;
+}
+/**
+ * List and unread count travel together — the bell and the inbox are one fetch, never two.
+ *
+ * This interface was referenced by `Api`'s JSON-Schema
+ * via the `definition` "notificationListResponse".
+ */
+export interface NotificationListResponse {
+  notifications: Notification[];
+  unreadCount: number;
+}
+/**
+ * Mark notifications read. Ids in the BODY rather than an /:id route on purpose: acks arrive in batches (opening the inbox acks everything visible), and route-auth's [id] rule is swing-shaped.
+ *
+ * This interface was referenced by `Api`'s JSON-Schema
+ * via the `definition` "notificationAckRequest".
+ */
+export interface NotificationAckRequest {
+  /**
+   * The rows to ack. Omit (with all=true) to ack everything unread.
+   */
+  ids?: string[];
+  /**
+   * Ack every unread row the caller owns.
+   */
+  all?: boolean;
+}
+/**
+ * This interface was referenced by `Api`'s JSON-Schema
+ * via the `definition` "notificationAckResponse".
+ */
+export interface NotificationAckResponse {
+  /**
+   * Rows actually transitioned unread → read. Re-acking is 0, not an error.
+   */
+  acked: number;
+  /**
+   * The count AFTER the ack, so the bell never needs a second round trip.
+   */
+  unreadCount: number;
+}

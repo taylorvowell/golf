@@ -220,6 +220,27 @@ hosted worker is an explicit `analyzer-service` deliverable; these numbers get r
 measurements rather than quietly missed. Overlay drift is the one target with no tolerance.
 **See:** ARCHIVE D13.
 
+### Notifications are one table every channel fans out from; emission has one door
+
+**Decision:** §29's backbone is `public.notifications` (migration 0013) — the source of truth
+push, email and the in-app bell all project from. Emission is ONLY `app.notify()`, a
+`SECURITY DEFINER` function, because emission crosses users (a coach action notifies a golfer)
+and an insert policy cannot express that safely; the table has no INSERT policy at all.
+Grouped delivery (D60's collapsing conversation messages) is a data-model property: a partial
+unique index on `(user_id, group_key) where read_at is null` folds repeat events into one open
+row whose `count` grows; reading closes the group. The inbox is PERSONAL — owner-only RLS, no
+`has_coach_access` — and the client's only write is `read_at`, enforced by a column-level
+grant. The kind list is one enum, mirrored between the table check and
+`api.schema.json#/definitions/notification`, grown additively and always together. API:
+`GET /api/v1/notifications` returns list + unread count in one answer;
+`POST /api/v1/notifications/read` acks by ids or all (body, never an `/:id` route).
+**Gotchas:** 0008's default privileges hand `authenticated` full write on every new table —
+0013 must revoke back down (the RLS suite caught the ack policy exposing every column).
+`app.notify` is safe only while the `app` schema stays out of PostgREST's exposed list.
+Delivery channels (steps 03/05) fan out FROM rows, never mint their own.
+**See:** `.claude/feature-tracks/notifications/01 - The Notification Backbone.md`;
+`apps/web/src/db/notificationsRls.test.ts`.
+
 ### Coaching conversations are one feed; messages are immutable, referenced objects carry state
 
 **Decision:** Coach↔golfer communication is a **conversation substrate**: `conversations` +

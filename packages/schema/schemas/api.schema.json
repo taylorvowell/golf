@@ -605,6 +605,149 @@
           "description": "Objects removed across the source and artifact buckets for this swing."
         }
       }
+    },
+    "notification": {
+      "title": "Notification",
+      "type": "object",
+      "description": "One inbox row (§29 + D55 + D60). Grouped delivery is a property of the ROW, not of a delivery channel: rows sharing an open groupKey collapse server-side into one row whose `count` says how many events it stands for, which is how conversation messages avoid one entry per message.",
+      "required": [
+        "id",
+        "kind",
+        "title",
+        "body",
+        "data",
+        "groupKey",
+        "count",
+        "createdAt",
+        "readAt"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "description": "The §29 taxonomy (+ D55 focus-goal events, + D60 lesson/conversation events). An enum so no client or emitter can mint a free-text kind; growing it is additive and shape-lock-legal.",
+          "enum": [
+            "analysis_ready",
+            "coach_request_approved",
+            "coach_request_declined",
+            "swing_reviewed",
+            "coach_comment",
+            "coach_annotation",
+            "coach_message",
+            "coach_plan",
+            "subscription_event",
+            "goal_assigned",
+            "goal_achieved",
+            "goal_regressed",
+            "lesson_sent",
+            "conversation_reply",
+            "review_answered",
+            "achievement_earned",
+            "golfer_request",
+            "golfer_swing",
+            "golfer_reply",
+            "plan_progress",
+            "review_requested",
+            "student_message",
+            "lesson_viewed",
+            "drill_done",
+            "student_goal_achieved"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "body": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "data": {
+          "type": "object",
+          "description": "The deep-link payload — swingId / sessionId / goalId / conversationId, whatever the kind's screen needs. Kept open on purpose: each kind's emitter and screen agree on its shape, and a new key must never be a schema break."
+        },
+        "groupKey": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Rows sharing this key collapse while unread (e.g. `conversation:<id>`). Null means the event never groups."
+        },
+        "count": {
+          "type": "integer",
+          "description": "How many events this row stands for. 1 unless grouped."
+        },
+        "createdAt": {
+          "type": "integer",
+          "description": "Epoch ms of the LATEST folded event — a grouped row surfaces at its newest member's time."
+        },
+        "readAt": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Epoch ms when acked. Null = unread. Set only by the owner via the read route."
+        }
+      }
+    },
+    "notificationListResponse": {
+      "title": "NotificationListResponse",
+      "type": "object",
+      "description": "List and unread count travel together — the bell and the inbox are one fetch, never two.",
+      "required": [
+        "notifications",
+        "unreadCount"
+      ],
+      "properties": {
+        "notifications": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/notification"
+          }
+        },
+        "unreadCount": {
+          "type": "integer"
+        }
+      }
+    },
+    "notificationAckRequest": {
+      "title": "NotificationAckRequest",
+      "type": "object",
+      "description": "Mark notifications read. Ids in the BODY rather than an /:id route on purpose: acks arrive in batches (opening the inbox acks everything visible), and route-auth's [id] rule is swing-shaped.",
+      "properties": {
+        "ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The rows to ack. Omit (with all=true) to ack everything unread."
+        },
+        "all": {
+          "type": "boolean",
+          "description": "Ack every unread row the caller owns."
+        }
+      }
+    },
+    "notificationAckResponse": {
+      "title": "NotificationAckResponse",
+      "type": "object",
+      "required": [
+        "acked",
+        "unreadCount"
+      ],
+      "properties": {
+        "acked": {
+          "type": "integer",
+          "description": "Rows actually transitioned unread → read. Re-acking is 0, not an error."
+        },
+        "unreadCount": {
+          "type": "integer",
+          "description": "The count AFTER the ack, so the bell never needs a second round trip."
+        }
+      }
     }
   }
 }

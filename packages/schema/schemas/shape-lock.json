@@ -1456,6 +1456,115 @@
   "api#/definitions/markerSaveResponse/properties/saved": {
     "type": "integer"
   },
+  "api#/definitions/notification": {
+    "type": "object",
+    "required": [
+      "body",
+      "count",
+      "createdAt",
+      "data",
+      "groupKey",
+      "id",
+      "kind",
+      "readAt",
+      "title"
+    ]
+  },
+  "api#/definitions/notification/properties/body": {
+    "type": "null|string"
+  },
+  "api#/definitions/notification/properties/count": {
+    "type": "integer"
+  },
+  "api#/definitions/notification/properties/createdAt": {
+    "type": "integer"
+  },
+  "api#/definitions/notification/properties/data": {
+    "type": "object"
+  },
+  "api#/definitions/notification/properties/groupKey": {
+    "type": "null|string"
+  },
+  "api#/definitions/notification/properties/id": {
+    "type": "string"
+  },
+  "api#/definitions/notification/properties/kind": {
+    "type": "string",
+    "enum": [
+      "\"achievement_earned\"",
+      "\"analysis_ready\"",
+      "\"coach_annotation\"",
+      "\"coach_comment\"",
+      "\"coach_message\"",
+      "\"coach_plan\"",
+      "\"coach_request_approved\"",
+      "\"coach_request_declined\"",
+      "\"conversation_reply\"",
+      "\"drill_done\"",
+      "\"goal_achieved\"",
+      "\"goal_assigned\"",
+      "\"goal_regressed\"",
+      "\"golfer_reply\"",
+      "\"golfer_request\"",
+      "\"golfer_swing\"",
+      "\"lesson_sent\"",
+      "\"lesson_viewed\"",
+      "\"plan_progress\"",
+      "\"review_answered\"",
+      "\"review_requested\"",
+      "\"student_goal_achieved\"",
+      "\"student_message\"",
+      "\"subscription_event\"",
+      "\"swing_reviewed\""
+    ]
+  },
+  "api#/definitions/notification/properties/readAt": {
+    "type": "integer|null"
+  },
+  "api#/definitions/notification/properties/title": {
+    "type": "string"
+  },
+  "api#/definitions/notificationAckRequest": {
+    "type": "object"
+  },
+  "api#/definitions/notificationAckRequest/properties/all": {
+    "type": "boolean"
+  },
+  "api#/definitions/notificationAckRequest/properties/ids": {
+    "type": "array"
+  },
+  "api#/definitions/notificationAckRequest/properties/ids/items": {
+    "type": "string"
+  },
+  "api#/definitions/notificationAckResponse": {
+    "type": "object",
+    "required": [
+      "acked",
+      "unreadCount"
+    ]
+  },
+  "api#/definitions/notificationAckResponse/properties/acked": {
+    "type": "integer"
+  },
+  "api#/definitions/notificationAckResponse/properties/unreadCount": {
+    "type": "integer"
+  },
+  "api#/definitions/notificationListResponse": {
+    "type": "object",
+    "required": [
+      "notifications",
+      "unreadCount"
+    ]
+  },
+  "api#/definitions/notificationListResponse/properties/notifications": {
+    "type": "array"
+  },
+  "api#/definitions/notificationListResponse/properties/notifications/items": {
+    "ref": "#/definitions/notification"
+  },
+  "api#/definitions/notificationListResponse/properties/unreadCount": {
+    "type": "integer"
+  },
   "api#/definitions/stageListResponse": {
     "type": "object",
     "required": [

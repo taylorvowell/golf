@@ -653,7 +653,11 @@ Stated as fact, with no implied ordering or plan. See
   identity at the auth vendor, in that order (D45) — verified end to end by `pnpm --filter web
   verify:account`. AI conversation history, coach-visible copies, analytics and backups are still
   designed-only; none of them exists yet to delete from.
-- **No roles, no coach features, no messaging, no notifications.**
+- **No roles UI, no coach features, no messaging.** The notification BACKBONE exists
+  (migration 0013: `notifications` table, `app.notify()` emitter with grouped delivery,
+  `GET /api/v1/notifications` + `POST /api/v1/notifications/read`, RLS-proven by
+  `notificationsRls.test.ts`) — but nothing emits into it yet and no client surface reads it;
+  push and email do not exist.
 - **No subscriptions, entitlements, or payments.**
 - **No drill library, no trends/history views, no goals, no equipment inventory.**
 - **No simulator/launch-monitor data** of any kind, manual or parsed — consequently no
