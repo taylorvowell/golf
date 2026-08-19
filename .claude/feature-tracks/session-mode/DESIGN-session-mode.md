@@ -62,9 +62,10 @@ Live camera feed, full bleed. Over it, top to bottom:
    settings-summary pills and no FPS pill on the capture screen. Settings live behind the
    cog only. Honest-frame-rate surfacing moves to the capture wiring (step 04) — a degrade
    message when a device cannot meet the requested rate, never a standing readout.
-5. **Alignment guide** — a faint address-pose silhouette overlay to help position the camera
-   (a hint, not a gate; fades once recording starts). **Pose follows the view toggle**: a
-   down-the-line figure for DTL, a facing-the-camera figure for Front View.
+5. **Alignment guide** — Taylor's supplied outline art (`apps/mobile/assets/capture/
+   overlay_dtl.png` / `overlay_front.png`) rendered full-bleed at ~55% opacity to help
+   position the camera (a hint, not a gate; fades once recording starts). **Pose follows
+   the view toggle**: the DTL outline or the facing-the-camera outline.
 6. **Camera controls** (step-03 iteration) — stacked on the LEFT edge above the bar: the
    front/back **camera flip** orb, then the **zoom stops** (stub 0.5×/1×/2×; the wiring
    replaces them with the device's probed range). On the RIGHT edge, directly above the
