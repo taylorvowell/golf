@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Alert, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Skeleton } from "../../design/system";
 import { FONT_BODY, FONT_DISPLAY } from "../../design/system/typography";
+import { useAuthenticatedImage } from "../../platform/useAuthenticatedImage";
 import { ReportSheet } from "../report/ReportSheet";
 import { ReportVideoLayer } from "../report/VideoLayer";
 import { buildReportViewModel } from "../report/selectors";
@@ -14,41 +16,34 @@ import { COLORS, useTheme } from "../../theme";
 import { AnalysisCompleteOverlay } from "./AnalysisCompleteOverlay";
 import { AnalyzingBar } from "./AnalyzingBar";
 import { SessionSwingDock } from "./SessionSwingDock";
-import {
-  previousSwing,
-  type SessionAction,
-  type SessionState,
-  type SessionSwing,
-} from "./sessionState";
+import type { SessionAction, SessionState, SessionSwing } from "./sessionState";
 import { SessionSwingListSheet } from "./sheets/SessionSwingListSheet";
 
 /**
  * The post-recording screen (§9.6, D61): the one-shape report player wearing session
  * chrome — the swing looping under the standard transport, the analyzing bar while the
- * pipeline runs, and the session dock whose centre is the next recording.
+ * pipeline runs, and the session bar whose centre is the next recording.
  *
  * UI phase: the recorded clip does not exist yet, so the newest REAL swing stands in for
  * playback and the report (`__DEV__`-grade stubbing — the wiring swaps who mints the swing
- * id and nothing about this screen moves). The analyzing progression is the stub driver's;
- * completion fires the overlay and then the report sheet's own `presented` entrance.
+ * id and nothing about this screen moves).
+ *
+ * Two placement rules learned in step-03 iteration (Taylor): the session bar renders as a
+ * SIBLING over the layer, not through the `stickyFooter` slot — it must stay put when the
+ * report sheet opens — and the analyzing bar FLOATS over the video above the session bar,
+ * because content inside the low-held sheet sits behind the bar and was invisible.
  */
 
 export interface PostSwingViewProps {
   state: SessionState;
   dispatch: (action: SessionAction) => void;
   swing: SessionSwing;
-  onOpenSettings: () => void;
   onEndSession: () => void;
 }
 
-export function PostSwingView({
-  state,
-  dispatch,
-  swing,
-  onOpenSettings,
-  onEndSession,
-}: PostSwingViewProps) {
+export function PostSwingView({ state, dispatch, swing, onEndSession }: PostSwingViewProps) {
   const t = useTheme();
+  const insets = useSafeAreaInsets();
   const { state: listState } = useSwings();
   const [listOpen, setListOpen] = useState(false);
   const { starred, toggle } = useStarred(swing.id);
@@ -60,22 +55,22 @@ export function PostSwingView({
   }, [listState]);
 
   const report = useReport(standIn?.id, null, standIn != null);
+  /** One shared poster stands in for per-swing thumbnails until capture media exists. */
+  const thumb = useAuthenticatedImage(standIn ? `swings/${standIn.id}/thumb?poster=1` : null);
 
-  // The completion moment shows only on the transition, and only while the golfer is still
-  // here — arriving at an already-ready swing must not replay the flourish.
+  // The completion moment shows only on the analyzing → ready transition, and only while
+  // the golfer is still here — arriving at an already-ready swing must not replay it.
   const [celebrating, setCelebrating] = useState(false);
   const lastStatus = useRef(swing.status);
   useEffect(() => {
-    if (lastStatus.current === "analyzing" && swing.status === "ready") {
+    const was = lastStatus.current;
+    lastStatus.current = swing.status;
+    if (was === "analyzing" && swing.status === "ready") {
       setCelebrating(true);
-      const done = setTimeout(() => setCelebrating(false), 1500);
+      const done = setTimeout(() => setCelebrating(false), 1600);
       return () => clearTimeout(done);
     }
-    lastStatus.current = swing.status;
     return undefined;
-  }, [swing.status]);
-  useEffect(() => {
-    lastStatus.current = swing.status;
   }, [swing.status]);
 
   const confirmDelete = useCallback(() => {
@@ -89,23 +84,32 @@ export function PostSwingView({
     ]);
   }, [dispatch, swing.id]);
 
-  const prev = previousSwing(state, swing.id);
+  const analyzed = swing.status === "ready";
 
-  const stickyFooter = useMemo(
-    () => (
-      <SessionSwingDock
-        hasPrevious={prev != null}
-        starred={starred}
-        onPrevious={() => prev && dispatch({ type: "review", swingId: prev.id })}
-        onEndSession={onEndSession}
-        onSwingList={() => setListOpen(true)}
-        onRecordNew={() => dispatch({ type: "back-to-capture" })}
-        onDelete={confirmDelete}
-        onToggleFavorite={toggle}
-        onOpenSettings={onOpenSettings}
-      />
-    ),
-    [prev, starred, dispatch, onEndSession, confirmDelete, toggle, onOpenSettings],
+  const dock = (
+    <SessionSwingDock
+      starred={starred}
+      onEndSession={onEndSession}
+      onSwingList={() => setListOpen(true)}
+      onRecordNew={() => dispatch({ type: "back-to-capture" })}
+      onDelete={confirmDelete}
+      onToggleFavorite={toggle}
+    />
+  );
+
+  const swingListSheet = (
+    <SessionSwingListSheet
+      visible={listOpen}
+      onClose={() => setListOpen(false)}
+      swings={state.swings}
+      currentId={swing.id}
+      thumb={thumb}
+      onView={(swingId) => {
+        setListOpen(false);
+        dispatch({ type: "review", swingId });
+      }}
+      onDelete={(swingId) => dispatch({ type: "delete-swing", swingId })}
+    />
   );
 
   const vm = useMemo(
@@ -116,47 +120,36 @@ export function PostSwingView({
     [report, standIn],
   );
 
-  const analyzed = swing.status === "ready";
-
   const sheetContent = useMemo(
     () => (
       <View style={{ paddingBottom: 140 }}>
-        {!analyzed ? (
-          <View style={styles.analyzingSlot}>
-            <AnalyzingBar recordedAt={swing.recordedAt} />
-            <SheetSkeleton />
-          </View>
-        ) : vm != null && standIn != null ? (
+        {analyzed && vm != null && standIn != null ? (
           <ReportSheet vm={vm} swingId={standIn.id} onShowVideo={() => {}} />
         ) : (
           <SheetSkeleton />
         )}
       </View>
     ),
-    [analyzed, swing.recordedAt, vm, standIn],
+    [analyzed, vm, standIn],
   );
 
   if (standIn == null) {
     // No real swing exists to stand in (fresh install / unreachable): the loop must still
-    // work, so the dock renders over a quiet stage instead of the player.
+    // work, so the bar renders over a quiet stage instead of the player.
     return (
       <View style={styles.fallback}>
         <Text style={styles.fallbackTitle}>{`Swing ${swing.number} saved`}</Text>
         <Text style={styles.fallbackDetail}>
           Playback lands with the capture wiring — recording flow continues.
         </Text>
-        <View style={styles.fallbackDock}>{stickyFooter}</View>
-        <SessionSwingListSheet
-          visible={listOpen}
-          onClose={() => setListOpen(false)}
-          swings={state.swings}
-          currentId={swing.id}
-          onView={(swingId) => {
-            setListOpen(false);
-            dispatch({ type: "review", swingId });
-          }}
-          onDelete={(swingId) => dispatch({ type: "delete-swing", swingId })}
-        />
+        {!analyzed ? (
+          <View style={[styles.floatingBar, { bottom: insets.bottom + 128 }]}>
+            <AnalyzingBar recordedAt={swing.recordedAt} />
+          </View>
+        ) : null}
+        {dock}
+        {celebrating ? <AnalysisCompleteOverlay /> : null}
+        {swingListSheet}
       </View>
     );
   }
@@ -180,24 +173,25 @@ export function PostSwingView({
         onBack={() => dispatch({ type: "back-to-capture" })}
         sheetPresented={analyzed && !celebrating}
         sheetStyle={{ backgroundColor: t.bgElevated }}
-        stickyFooter={stickyFooter}
+        // The session bar renders over this layer; the video-open scrub + player bar must
+        // clear it AND the raised record button (bar 67 + button rise ~31 + breathing room).
+        controlsBottomInset={104}
       >
         {sheetContent}
       </ReportVideoLayer>
 
+      {/* Floats over the video, just above the session bar, while analysis runs. */}
+      {!analyzed ? (
+        <View style={[styles.floatingBar, { bottom: insets.bottom + 128 }]} pointerEvents="none">
+          <AnalyzingBar recordedAt={swing.recordedAt} />
+        </View>
+      ) : null}
+
+      {dock}
+
       {celebrating ? <AnalysisCompleteOverlay /> : null}
 
-      <SessionSwingListSheet
-        visible={listOpen}
-        onClose={() => setListOpen(false)}
-        swings={state.swings}
-        currentId={swing.id}
-        onView={(swingId) => {
-          setListOpen(false);
-          dispatch({ type: "review", swingId });
-        }}
-        onDelete={(swingId) => dispatch({ type: "delete-swing", swingId })}
-      />
+      {swingListSheet}
     </View>
   );
 }
@@ -216,7 +210,7 @@ function SheetSkeleton() {
 
 const styles = StyleSheet.create({
   fill: { flex: 1 },
-  analyzingSlot: { paddingHorizontal: 16, paddingTop: 10, gap: 18 },
+  floatingBar: { position: "absolute", left: 16, right: 16 },
   skeleton: { paddingHorizontal: 16, paddingTop: 6 },
   fallback: { flex: 1, backgroundColor: COLORS.bg, justifyContent: "center", padding: 24, gap: 8 },
   fallbackTitle: {
@@ -232,5 +226,4 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     textAlign: "center",
   },
-  fallbackDock: { position: "absolute", left: 0, right: 0, bottom: 40 },
 });

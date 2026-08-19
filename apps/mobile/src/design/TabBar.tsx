@@ -41,7 +41,7 @@ function iconFor(route: string): WaveNavItem["icon"] {
 }
 
 export function TabBar({ state, navigation }: BottomTabBarProps) {
-  const { hidden } = useNavVisibility();
+  const { hidden, setHidden } = useNavVisibility();
 
   const items: WaveNavItem[] = state.routes.map((route, index) => ({
     key: route.key,
@@ -72,7 +72,13 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
         items={items}
         hidden={hidden}
         recordTestID="tab-record"
-        onRecord={() => navigation.navigate("Record" as never)}
+        // Hide FIRST, then navigate: the bar slides down at the same moment session mode
+        // slides up over the still-visible screen (Taylor, step-03 iteration — a sanctioned
+        // exception to scroll-only hiding, restored by SessionScreen on unmount).
+        onRecord={() => {
+          setHidden(true);
+          navigation.navigate("Record" as never);
+        }}
       />
     </View>
   );

@@ -85,6 +85,12 @@ export interface ReportVideoLayerProps {
   children: ReactNode;
   /** The SessionPillNav — the scaffold slides it away in video-open. */
   stickyFooter?: ReactNode;
+  /**
+   * Extra bottom clearance for the video-open controls (scrub + player bar), on top of the
+   * gesture inset. Session mode's persistent bottom bar renders OVER this layer as a
+   * sibling, so the controls must lift above it or the scrub lands under the bar.
+   */
+  controlsBottomInset?: number;
   /** The host's imperative seam (the sheet's "show video" tap scrolls to open). */
   scrollRef?: React.RefObject<{ scrollTo: (opts: { y: number; animated?: boolean }) => void } | null>;
   sheetStyle?: object;
@@ -106,6 +112,7 @@ export function ReportVideoLayer({
   sheetPresented = true,
   children,
   stickyFooter,
+  controlsBottomInset = 0,
   scrollRef,
   sheetStyle,
   testID = "report",
@@ -363,7 +370,7 @@ export function ReportVideoLayer({
    */
   const controls = (
     <View
-      style={[styles.controlsShell, { paddingBottom: insets.bottom + 14 }]}
+      style={[styles.controlsShell, { paddingBottom: insets.bottom + 14 + controlsBottomInset }]}
       pointerEvents="box-none"
     >
       {/* The layers button — the overlays sheet's opener, top-right over the picture

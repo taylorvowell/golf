@@ -34,9 +34,15 @@ resilience (`media-pipeline`).
 
 Live camera feed, full bleed. Over it, top to bottom:
 
+0. **The app header** (step-03 iteration): the persistent `AppHeader` — logo left, profile
+   door right — shows over the capture screen and does NOT move during the entrance: the
+   Record route is a transparent modal and the session surface slides up UNDER a stationary
+   header while the tab bar slides down off-screen at the same moment. Every exit reverses
+   both.
 1. **Top scrim** — a darkened gradient from the top edge so the header content reads over
    footage (same pattern as the wave nav's bottom fade, inverted).
-2. **Session name** — defaults to `Session N | <date>` where N counts the user's sessions.
+2. **"New Session" pill + session name** — a green pill reading "New Session" sits to the
+   LEFT of the name, same row. The name defaults to `Session N | <date>` where N counts the user's sessions.
    A pencil icon starts inline editing of **only the "Session N" part** (the date is fixed
    text); a save button commits. Renaming works before the session row exists (the name is
    held client-side until the first swing mints the row).
@@ -52,16 +58,18 @@ Live camera feed, full bleed. Over it, top to bottom:
    - An **info icon** right of the toggle slides up a panel explaining the three modes.
    - Type is locked once the first swing is recorded (a session is one type; mixing types
      retroactively re-labels swings that were captured under different promises).
-4. **Settings pills** — small pills summarizing the active session settings (e.g. `3s delay`,
-   `Auto-end`, `AI voice off`) plus a **recording-FPS pill** (e.g. `60 FPS` — the true probed
-   rate, honest per the never-silently-degrade rule; deliberately on screen at Taylor's
-   direction, an exception to the instruments-stay-in-dev rule). Tapping any pill opens the
-   same settings sheet as the cog.
+4. ~~Settings pills / FPS pill~~ — **removed (Taylor, step-03 iteration, 2026-08-18)**: no
+   settings-summary pills and no FPS pill on the capture screen. Settings live behind the
+   cog only. Honest-frame-rate surfacing moves to the capture wiring (step 04) — a degrade
+   message when a device cannot meet the requested rate, never a standing readout.
 5. **Alignment guide** — a faint address-pose silhouette overlay to help position the camera
    (a hint, not a gate; dismissable ghost that fades once recording starts).
 6. **Help orb** — bottom right, above the dock. Slides up a help panel: camera positioning,
    filming tips (inherits the current `RecordScreen` checklist content as its seed).
-7. **The dock** (sticky footer, styled like the existing pill dock):
+7. **The dock** (step-03 iteration: the main tab bar's WAVE construction — glass bar, bump,
+   fade — with the record button in the raised centre, **bigger than the main menu's and
+   always at the exact horizontal centre of the screen**; side items are bigger icons over
+   small labels):
    - **Cancel** — exits session mode. If no swing has been recorded, nothing is created; if
      swings exist it behaves as End session.
    - **Delay clock** — icon + current delay (`3s`). Tap opens a small select **above** the
@@ -91,8 +99,13 @@ defaults (device-local first, account-level when the settings API lands).
 
 ### Recording flow
 
-1. Tap Record → **countdown** renders huge (readable from the ball, several steps away),
-   counting down from the configured delay. Tapping stop during countdown aborts cleanly.
+1. Tap Record → **the screen strips to the essentials** (step-03 iteration): header, title,
+   type toggle, help orb, alignment ghost, the dock's side items AND the dock's whole
+   ground (bar, bump, fade) all fade out quickly — only the stop button floats over the
+   picture through countdown and recording, and the bar surface returns when recording
+   ends. The **countdown** renders
+   huge (readable from the ball, several steps away), counting down from the configured
+   delay. Tapping stop during countdown aborts cleanly.
 2. Recording starts: the frame gets a **stylized red recording treatment** — red outline
    pulse + a subtle red wash at the edges — unmistakable at a glance, never obscuring the
    golfer. The Record button is now **Stop**.
@@ -111,20 +124,25 @@ door, but built on the **same one-shape report player** (D-entry "One player"): 
 - **Analyzing bar** — below the playback area while analysis runs: a spinner at left and a
   staged progress bar (honest stages from the real pipeline once wired: uploading → queued →
   pose → club → scoring). Video-Only sessions never show it.
-- **The session dock** replaces the standard swing dock:
-  1. **Previous swing** — thumbnail of the prior swing in this session (hidden on the first
-     swing), labelled "Previous Swing"; opens it, still in session mode.
-  2. **End session** — ends the session, navigates to the Swing Log.
-  3. **Swing log** — slides up a quick-access panel listing this session's swings (current
-     one shows "analyzing…"), each row with **view / delete / star** actions; tapping a row
-     opens that swing in session mode. This is quick access, not the Swing Log page.
-  4. **Record** — big record button, labelled **"Record New Swing"** — the loop's one-tap
-     promise (§9.5).
-  5. **Delete / Favorite / Settings cog** — plain icons, no labels.
+- **The session dock** (trimmed in step-03 iteration to four items around the big centre
+  record): **End session · Swing log** left, **Delete · Favorite** right, and the big red
+  **"Record New Swing"** centre — the loop's one-tap promise (§9.5). The video-open scrub
+  and player controls sit lifted above this bar. Previous-swing navigation lives in the
+  swing-list panel; session settings live on the capture screen's cog.
+  - **Swing log** slides up the quick-access panel: this session's swings in the Swing Log
+    page's timeline language (connected rail + gradient dots, surface2 group) with a
+    per-swing **thumbnail**, status ("analyzing…" / ready), and **view / delete / star** on
+    every row; tapping a row opens that swing, still in session mode. Quick access — not
+    the Swing Log page.
 - **Analysis completion:** if the user is still on this swing's post-recording screen when
   analysis finishes, an **"Analysis complete"** overlay appears, then the **analysis sheet
   slides up** (the report sheet's existing `presented` entrance). If they've moved on, the
   swing just becomes ready wherever it is listed.
+- **End session → the log receives it** (step-03 iteration): ending the session navigates
+  to the Swing Log immediately, which plays the arrival — a brief "Saving session…" beat,
+  then the session card **springs in** (rise + scale) and the hero's session/swing counts
+  **roll up** to their new values. Staged through a consumed-once seam
+  (`sessionArrival.ts`); step 05 stages it from the real session row's confirmation.
 
 ## What this is built from (bindings)
 

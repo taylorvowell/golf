@@ -2,6 +2,33 @@
 
 Append-only log. Spec: `DESIGN-session-mode.md`. Decision: ARCHIVE D61.
 
+## 03 - UX iteration (in progress) — rounds 1–3 of Taylor's feedback applied
+**Date:** 2026-08-18
+**Phase:** Session Mode — UI
+**Summary:** Three feedback rounds landed in one pass. (1) Armed strip-down: after Record,
+everything but the stop fades fast — header, title, toggle, ghost, help orb, the bar's side
+items AND the bar's whole ground (surface/bump/fade now animate to transparent); settings
+pills + the FPS pill are REMOVED (Taylor withdrew the FPS exception). (2) The session bars
+are rebuilt on the tab bar's wave construction (`SessionNav`) with a bigger red record button
+(74px vs the tab bar's 58) that is ALWAYS at exact screen centre (flex halves around a fixed
+slot); the Record door is now a transparent modal — the surface slides up under a STATIONARY
+AppHeader while the tab bar slides down in the same moment, and every exit reverses both; the
+"New Session" green pill sits left of the name. (3) The post-swing dock trimmed to End
+Session · Swing Log · Delete · Favorite around the centre record; the video-open controls
+lift 104px above the bar (`controlsBottomInset`, additive prop on ReportVideoLayer); the
+analyzing bar now FLOATS over the video above the bar (it was buried in the low-held sheet —
+Taylor's "progress bar not showing" bug) and the swing-list sheet wears the Swing Log's
+timeline language (connected rail + gradient dots + thumbnails + view/delete/star). End
+session plays an arrival on the Swing Log: "Saving session…" beat → the card springs in →
+the hero counts roll up (`sessionArrival.ts` consumed-once seam; step 05 stages it from the
+real row).
+**Notes:** `tsc` clean; 42 suites / 366 tests green after each round. Deleted: SettingsPills,
+DockItem. From Home/Coach (light headers) the stationary-header illusion has a logo colour
+flip at transition start — hero headers (log/progress) are seamless; flagged for Taylor's
+next pass.
+
+---
+
 ## 02 - Post-recording screen UI, stubbed
 **Completed:** 2026-08-18 UTC
 **Phase:** Session Mode — UI

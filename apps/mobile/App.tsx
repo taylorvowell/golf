@@ -147,15 +147,19 @@ function Root() {
                     // Dark ground even in light mode, so the push never flashes light before video.
                     options={{ headerShown: false, contentStyle: { backgroundColor: COLORS.bg } }}
                   />
-                  {/* Capture comes up over everything, like a camera should. */}
+                  {/* Capture comes up over everything, like a camera should. A TRANSPARENT
+                      modal with no stack animation (the Profile drawer's pattern): the
+                      session surface runs its own slide-up, so the screen underneath — and
+                      its header — stays visible while the new page slides in under a
+                      stationary header (Taylor, step-03 iteration). */}
                   <Stack.Screen
                     name="Record"
                     component={RecordDark}
                     options={{
                       headerShown: false,
-                      presentation: "fullScreenModal",
-                      animation: "slide_from_bottom",
-                      contentStyle: { backgroundColor: COLORS.bg },
+                      presentation: "transparentModal",
+                      animation: "none",
+                      contentStyle: { backgroundColor: "transparent" },
                     }}
                   />
                   {/* The profile drawer covers the tab it was opened from rather than replacing

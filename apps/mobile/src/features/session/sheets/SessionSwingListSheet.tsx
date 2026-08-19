@@ -1,16 +1,24 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import { Eye, Star, Trash2 } from "lucide-react-native";
+import type { ImageSource } from "expo-image";
 
 import { Sheet } from "../../../design/system/Sheet";
 import { FONT_BODY, FONT_DISPLAY } from "../../../design/system/typography";
-import { COLORS } from "../../../theme";
+import { useTheme } from "../../../theme";
 import { useStarred } from "../../swings/useStarred";
 import type { SessionSwing } from "../sessionState";
 
 /**
- * Quick access to this session's swings (§9.6) — not the Swing Log page. Newest first;
- * the row still analyzing says so; view / delete / star sit on every row and tapping the
- * row itself views the swing, still in session mode.
+ * Quick access to this session's swings (§9.6) — not the Swing Log page, but dressed in its
+ * language (Taylor, step-03 iteration): the swing-timeline treatment — a surface2 group with
+ * the connected rail through gradient dots — plus a per-swing thumbnail, with view / delete /
+ * star on every row. Tapping the row views the swing, still in session mode.
+ *
+ * The rail + dot construction mirrors `SwingTimelineList` (design/system); the rows differ
+ * (thumbnail + actions), which is why this composes the pattern rather than forcing new
+ * props onto the system component.
  */
 
 export interface SessionSwingListSheetProps {
@@ -18,6 +26,8 @@ export interface SessionSwingListSheetProps {
   onClose: () => void;
   swings: SessionSwing[];
   currentId: string | null;
+  /** The clip's poster frame — one shared stub source until per-swing media exists. */
+  thumb: ImageSource | null;
   onView: (swingId: string) => void;
   onDelete: (swingId: string) => void;
 }
@@ -27,9 +37,11 @@ export function SessionSwingListSheet({
   onClose,
   swings,
   currentId,
+  thumb,
   onView,
   onDelete,
 }: SessionSwingListSheetProps) {
+  const t = useTheme();
   return (
     <Sheet
       visible={visible}
@@ -38,67 +50,103 @@ export function SessionSwingListSheet({
       subtitle={`${swings.length} swing${swings.length === 1 ? "" : "s"}`}
       testID="session-swing-list-sheet"
     >
-      {swings.map((swing) => (
-        <SwingRow
-          key={swing.id}
-          swing={swing}
-          current={swing.id === currentId}
-          onView={() => onView(swing.id)}
-          onDelete={() => onDelete(swing.id)}
-        />
-      ))}
+      <View style={[styles.group, { backgroundColor: t.surface2 }]}>
+        {swings.map((swing, i) => (
+          <SwingRow
+            key={swing.id}
+            swing={swing}
+            first={i === 0}
+            last={i === swings.length - 1}
+            current={swing.id === currentId}
+            thumb={thumb}
+            onView={() => onView(swing.id)}
+            onDelete={() => onDelete(swing.id)}
+          />
+        ))}
+      </View>
     </Sheet>
   );
 }
 
 function SwingRow({
   swing,
+  first,
+  last,
   current,
+  thumb,
   onView,
   onDelete,
 }: {
   swing: SessionSwing;
+  first: boolean;
+  last: boolean;
   current: boolean;
+  thumb: ImageSource | null;
   onView: () => void;
   onDelete: () => void;
 }) {
+  const t = useTheme();
   const { starred, toggle } = useStarred(swing.id);
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`Swing ${swing.number}`}
       onPress={onView}
-      style={({ pressed }) => [styles.row, current && styles.rowCurrent, pressed && styles.pressed]}
+      style={({ pressed }) => [
+        styles.row,
+        current && { backgroundColor: t.surfaceBlue },
+        pressed && styles.pressed,
+      ]}
       testID={`session-swing-row-${swing.number}`}
     >
+      {/* The rail + dot, `SwingTimelineList`'s construction: half-rail on the ends. */}
+      <View style={styles.railBox}>
+        <View
+          style={[
+            styles.rail,
+            { backgroundColor: t.surface3 },
+            first && { top: "50%" },
+            last && { bottom: "50%" },
+          ]}
+        />
+        <LinearGradient colors={[t.aqua, t.cobalt]} style={[styles.dot, { borderColor: t.surface2 }]} />
+      </View>
+
+      {thumb ? (
+        <Image source={thumb} style={styles.thumb} contentFit="cover" cachePolicy="disk" />
+      ) : (
+        <View style={[styles.thumb, { backgroundColor: t.surface3 }]} />
+      )}
+
       <View style={styles.rowText}>
-        <Text style={styles.rowTitle}>{`Swing ${swing.number}`}</Text>
+        <Text style={[styles.rowTitle, { color: t.text }]}>{`Swing ${swing.number}`}</Text>
         {swing.status === "analyzing" ? (
           <View style={styles.statusRow}>
-            <ActivityIndicator size="small" color={COLORS.aqua} />
-            <Text style={styles.statusText}>analyzing…</Text>
+            <ActivityIndicator size="small" color={t.aqua} />
+            <Text style={[styles.statusText, { color: t.muted }]}>analyzing…</Text>
           </View>
         ) : (
-          <Text style={styles.statusText}>ready</Text>
+          <Text style={[styles.statusText, { color: t.muted }]}>ready</Text>
         )}
       </View>
+
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`View swing ${swing.number}`}
         onPress={onView}
         hitSlop={8}
-        style={({ pressed }) => [styles.action, pressed && styles.pressed]}
+        style={({ pressed }) => [styles.action, { backgroundColor: t.surface3 }, pressed && styles.pressed]}
       >
-        <Eye size={16} color={COLORS.muted} strokeWidth={2.2} />
+        <Eye size={16} color={t.muted} strokeWidth={2.2} />
       </Pressable>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Delete swing ${swing.number}`}
         onPress={onDelete}
         hitSlop={8}
-        style={({ pressed }) => [styles.action, pressed && styles.pressed]}
+        style={({ pressed }) => [styles.action, { backgroundColor: t.surface3 }, pressed && styles.pressed]}
       >
-        <Trash2 size={16} color={COLORS.red} strokeWidth={2.2} />
+        <Trash2 size={16} color={t.bad} strokeWidth={2.2} />
       </Pressable>
       <Pressable
         accessibilityRole="button"
@@ -106,13 +154,13 @@ function SwingRow({
         accessibilityState={{ selected: starred }}
         onPress={toggle}
         hitSlop={8}
-        style={({ pressed }) => [styles.action, pressed && styles.pressed]}
+        style={({ pressed }) => [styles.action, { backgroundColor: t.surface3 }, pressed && styles.pressed]}
       >
         <Star
           size={16}
-          color={starred ? COLORS.aqua : COLORS.muted}
+          color={starred ? t.aqua : t.muted}
           strokeWidth={2.2}
-          fill={starred ? COLORS.aqua : "none"}
+          fill={starred ? t.aqua : "none"}
         />
       </Pressable>
     </Pressable>
@@ -120,26 +168,38 @@ function SwingRow({
 }
 
 const styles = StyleSheet.create({
+  group: { borderRadius: 10, overflow: "hidden" },
   row: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    padding: 12,
-    borderRadius: 12,
-    backgroundColor: COLORS.panel,
+    minHeight: 76,
+    paddingHorizontal: 12,
   },
-  rowCurrent: { backgroundColor: "rgba(67,205,208,0.14)" },
-  rowText: { flex: 1, gap: 2 },
-  rowTitle: { color: COLORS.text, fontFamily: FONT_DISPLAY.extraBold, fontSize: 14 },
+  railBox: { width: 24, alignSelf: "stretch" },
+  rail: { position: "absolute", left: 10, top: 0, bottom: 0, width: 2 },
+  dot: {
+    position: "absolute",
+    left: 4,
+    top: "50%",
+    marginTop: -7,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    // The mockup's surface halo — a shape-drawing ring, per the borderless rule's carve-out.
+    borderWidth: 2,
+  },
+  thumb: { width: 42, height: 54, borderRadius: 8 },
+  rowText: { flex: 1, minWidth: 0, gap: 2, paddingVertical: 10 },
+  rowTitle: { fontFamily: FONT_DISPLAY.black, fontSize: 15 },
   statusRow: { flexDirection: "row", alignItems: "center", gap: 6 },
-  statusText: { color: COLORS.muted, fontFamily: FONT_BODY.regular, fontSize: 11.5 },
+  statusText: { fontFamily: FONT_BODY.regular, fontSize: 11.5 },
   action: {
     width: 34,
     height: 34,
     borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.08)",
   },
   pressed: { opacity: 0.6 },
 });

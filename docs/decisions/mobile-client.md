@@ -126,9 +126,14 @@ differ. 231 vs 240 is 3.6% short and unexplained — check before relying on an 
 
 **Decision (Taylor, 2026-08-18):** The Record door opens **session mode** — the full recording
 experience specced in `.claude/feature-tracks/session-mode/DESIGN-session-mode.md`: live
-capture screen (editable session name, three-way session type, settings pills + honest FPS
-readout, alignment ghost, countdown, red recording treatment) and the post-recording screen
-(the one-shape report player in session chrome with a staged analyzing bar and a session dock).
+capture screen (app header + "New Session" pill, editable session name, three-way session
+type, alignment ghost, countdown, red recording treatment — and while armed the chrome strips
+to the stop button alone) and the post-recording screen (the one-shape report player in
+session chrome with a floating staged analyzing bar and the session bar). Both session bars
+are the tab bar's wave construction with a **bigger red record button always at the exact
+screen centre**; no settings pills and no FPS readout on screen (Taylor withdrew the FPS
+exception in the step-03 iteration — honest-rate surfacing is a degrade message in the
+capture wiring, never a standing readout).
 Build order is UI-stubbed-first; **wiring starts only after Taylor signs off the UX** — his
 explicit gate, an exception to the no-approval-gates rule. A session row is minted **only when
 the first swing is recorded**; sessions carry a name and a type (Swing Analysis / Practice
@@ -138,8 +143,7 @@ entitlement floor). Recording delay defaults to **3 s** (off/3/5/10).
 preview surface on its Camera2 constrained session — adding `expo-camera` for preview would put
 two stacks on one camera device, and vision-camera silently delivers 60 (D37–D39). The slide-up
 panels are the sanctioned Deck absorption: a `design/system` sheet re-expresses `DeckSheet`; no
-new Deck adoption. The on-screen FPS pill is Taylor's named exception to the
-instruments-stay-in-dev rule. Auto-end-on-impact ships as a disabled "coming soon" toggle —
+new Deck adoption. Auto-end-on-impact ships as a disabled "coming soon" toggle —
 detection is iceboxed.
 **See:** ARCHIVE D61; `PROJECT_MAIN.md` §8.1/§8.6/§9.5/§9.6.
 

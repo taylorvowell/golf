@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -7,6 +7,10 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { CountUp } from "../features/session/CountUp";
+import { SessionArrivalCard } from "../features/session/SessionArrivalCard";
+import { takeSessionArrival } from "../features/session/sessionArrival";
 
 import {
   APP_HEADER_BAR,
@@ -61,6 +65,23 @@ export function SwingLogScreen() {
   const older = sessions.slice(1);
   const log = useMemo(() => logStats(sessions), [sessions]);
 
+  // A session just ended (D61): play the arrival — a saving beat, then the card springs in
+  // and the counts roll up. Consumed once from the staging seam; an ordinary visit has none.
+  // UI phase: the counts and card are the arrival's own numbers layered over the real stats
+  // until the session rows persist (session-mode step 05).
+  const [arrival] = useState(takeSessionArrival);
+  const [arrivalPhase, setArrivalPhase] = useState<"saving" | "landed" | null>(
+    arrival ? "saving" : null,
+  );
+  useEffect(() => {
+    if (arrivalPhase !== "saving") return;
+    const settle = setTimeout(() => setArrivalPhase("landed"), 1100);
+    return () => clearTimeout(settle);
+  }, [arrivalPhase]);
+  const landed = arrivalPhase === "landed";
+  const shownSessions = log.sessions + (landed ? 1 : 0);
+  const shownSwings = log.swings + (landed && arrival ? arrival.swings : 0);
+
   const hero = (
     <HeroBackdrop overscan={HERO_PARALLAX.cap}>
       <View
@@ -84,14 +105,14 @@ export function SwingLogScreen() {
                 its label beneath, so the row reads as figures rather than a title. */}
             <View style={styles.statRow}>
               <View style={styles.statBox}>
-                <Text style={styles.statValue}>{log.sessions}</Text>
+                <CountUp value={shownSessions} style={styles.statValue} />
                 <Text style={styles.statLabel}>
-                  {log.sessions === 1 ? "session" : "sessions"}
+                  {shownSessions === 1 ? "session" : "sessions"}
                 </Text>
               </View>
               <View style={styles.statBox}>
-                <Text style={styles.statValue}>{log.swings}</Text>
-                <Text style={styles.statLabel}>{log.swings === 1 ? "swing" : "swings"}</Text>
+                <CountUp value={shownSwings} style={styles.statValue} />
+                <Text style={styles.statLabel}>{shownSwings === 1 ? "swing" : "swings"}</Text>
               </View>
             </View>
             {log.avg !== null && <ScoreRing score={log.avg} label="Average" size={88} />}
@@ -159,7 +180,15 @@ export function SwingLogScreen() {
           />
         ) : null}
 
-        {state.kind === "ok" && sessions.length === 0 ? (
+        {state.kind === "ok" && arrivalPhase != null && arrival ? (
+          <SessionArrivalCard
+            phase={arrivalPhase}
+            title={arrival.title}
+            swings={arrival.swings}
+          />
+        ) : null}
+
+        {state.kind === "ok" && sessions.length === 0 && arrivalPhase == null ? (
           <View style={styles.centre}>
             <Text style={styles.emptyTitle}>No swings yet</Text>
             <Text style={styles.emptyDetail}>
