@@ -63,10 +63,17 @@ Live camera feed, full bleed. Over it, top to bottom:
    cog only. Honest-frame-rate surfacing moves to the capture wiring (step 04) — a degrade
    message when a device cannot meet the requested rate, never a standing readout.
 5. **Alignment guide** — a faint address-pose silhouette overlay to help position the camera
-   (a hint, not a gate; dismissable ghost that fades once recording starts).
-6. **Help orb** — bottom right, above the dock. Slides up a help panel: camera positioning,
+   (a hint, not a gate; fades once recording starts). **Pose follows the view toggle**: a
+   down-the-line figure for DTL, a facing-the-camera figure for Front View.
+6. **Camera controls** (step-03 iteration) — stacked on the LEFT edge above the bar: the
+   front/back **camera flip** orb, then the **zoom stops** (stub 0.5×/1×/2×; the wiring
+   replaces them with the device's probed range). On the RIGHT edge, directly above the
+   help orb, the **DTL / Front View toggle** — which angle the next swing is filmed from,
+   stamped per swing (`dtl` / `face_on`), never locked for the session. Camera choices are
+   ignored while counting down or recording.
+7. **Help orb** — bottom right, above the dock. Slides up a help panel: camera positioning,
    filming tips (inherits the current `RecordScreen` checklist content as its seed).
-7. **The dock** (step-03 iteration: the main tab bar's WAVE construction — glass bar, bump,
+8. **The dock** (step-03 iteration: the main tab bar's WAVE construction — glass bar, bump,
    fade — with the record button in the raised centre, **bigger than the main menu's and
    always at the exact horizontal centre of the screen**; side items are bigger icons over
    small labels):

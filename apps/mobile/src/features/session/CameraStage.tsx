@@ -16,10 +16,12 @@ import { AlignmentGhost } from "./AlignmentGhost";
 export interface CameraStageProps {
   /** The alignment ghost shows while true — hidden the moment recording starts. */
   ghostVisible: boolean;
+  /** Which address pose the ghost suggests — follows the DTL/Front view toggle. */
+  view: "dtl" | "face_on";
   children?: ReactNode;
 }
 
-export function CameraStage({ ghostVisible, children }: CameraStageProps) {
+export function CameraStage({ ghostVisible, view, children }: CameraStageProps) {
   const [box, setBox] = useState({ width: 0, height: 0 });
   const onLayout = useCallback((e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
@@ -30,7 +32,7 @@ export function CameraStage({ ghostVisible, children }: CameraStageProps) {
     <View style={styles.root} onLayout={onLayout} testID="camera-stage">
       {/* Stub feed: the real preview mounts here in the wiring step. */}
       <View style={styles.feed} />
-      <AlignmentGhost width={box.width} height={box.height} visible={ghostVisible} />
+      <AlignmentGhost width={box.width} height={box.height} visible={ghostVisible} view={view} />
       {children}
     </View>
   );

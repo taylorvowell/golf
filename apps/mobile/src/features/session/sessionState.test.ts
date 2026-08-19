@@ -120,6 +120,22 @@ it("navigates between session swings and deletes back to capture", () => {
   expect(s.swings.map((sw) => sw.id)).toEqual(["b"]);
 });
 
+it("holds camera choices between recordings and stamps the view on the swing", () => {
+  let s = sessionReducer(base(), { type: "set-view", view: "face_on" });
+  s = sessionReducer(s, { type: "flip-camera" });
+  s = sessionReducer(s, { type: "set-zoom", zoom: 2 });
+  expect([s.view, s.facing, s.zoom]).toEqual(["face_on", "front", 2]);
+
+  s = sessionReducer(s, { type: "arm" });
+  // Mid-capture camera changes are ignored — they would change what the clip IS.
+  expect(sessionReducer(s, { type: "set-view", view: "dtl" }).view).toBe("face_on");
+  expect(sessionReducer(s, { type: "flip-camera" }).facing).toBe("front");
+
+  s = sessionReducer(s, { type: "countdown-done" });
+  s = sessionReducer(s, { type: "stop", swingId: "a", at: 1 });
+  expect(s.swings[0].view).toBe("face_on");
+});
+
 it("ignores arm while busy and countdown-done while not counting", () => {
   let s = sessionReducer(base(), { type: "arm" });
   expect(sessionReducer(s, { type: "arm" })).toBe(s);

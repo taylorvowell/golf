@@ -2,6 +2,16 @@
 
 Append-only log. Spec: `DESIGN-session-mode.md`. Decision: ARCHIVE D61.
 
+## 03 - UX iteration (in progress) — round 4: camera controls + view toggle
+**Date:** 2026-08-18
+**Summary:** Left edge above the bar: camera flip orb + zoom stops (stub 0.5×/1×/2×). Right
+edge above the help orb: the DTL/Front View toggle — and the alignment ghost now has a
+face-on pose that follows it. All reducer state (`view`/`facing`/`zoom`), gated to idle so
+nothing changes mid-capture; each swing is stamped with its view at stop. Step 04's Notes
+gained the binding list (flip/zoom range/`--view` threading). `tsc` clean; 367 tests green.
+
+---
+
 ## 03 - UX iteration (in progress) — rounds 1–3 of Taylor's feedback applied
 **Date:** 2026-08-18
 **Phase:** Session Mode — UI

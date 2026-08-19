@@ -22,7 +22,7 @@ interface Seg {
   w?: number;
 }
 
-const FIGURE: Seg[] = [
+const DTL_FIGURE: Seg[] = [
   // Spine, tilted into the ball — the address posture the guide exists to suggest.
   { x1: 0.52, y1: 0.175, x2: 0.475, y2: 0.46 },
   // Legs: hips to knees to ankles, slightly flexed.
@@ -39,16 +39,42 @@ const FIGURE: Seg[] = [
   { x1: 0.3, y1: 0.81, x2: 0.78, y2: 0.81, w: 1 },
 ];
 
-const HEAD = { cx: 0.525, cy: 0.115, r: 0.052 };
-const BALL = { cx: 0.7, cy: 0.79, r: 0.014 };
+// Facing the camera: square shoulders, the arms' triangle down to a centred grip, the
+// shaft dropping nearly straight to the ball.
+const FACE_ON_FIGURE: Seg[] = [
+  { x1: 0.42, y1: 0.205, x2: 0.58, y2: 0.205 },
+  { x1: 0.5, y1: 0.185, x2: 0.5, y2: 0.46 },
+  { x1: 0.44, y1: 0.46, x2: 0.56, y2: 0.46 },
+  // Legs, feet a shoulder-width-plus apart.
+  { x1: 0.46, y1: 0.46, x2: 0.435, y2: 0.63 },
+  { x1: 0.435, y1: 0.63, x2: 0.43, y2: 0.8 },
+  { x1: 0.54, y1: 0.46, x2: 0.565, y2: 0.63 },
+  { x1: 0.565, y1: 0.63, x2: 0.57, y2: 0.8 },
+  // The arms' triangle to the grip.
+  { x1: 0.43, y1: 0.215, x2: 0.475, y2: 0.35 },
+  { x1: 0.475, y1: 0.35, x2: 0.5, y2: 0.435 },
+  { x1: 0.57, y1: 0.215, x2: 0.525, y2: 0.35 },
+  { x1: 0.525, y1: 0.35, x2: 0.5, y2: 0.435 },
+  // The club, nearly vertical to the ball.
+  { x1: 0.5, y1: 0.435, x2: 0.525, y2: 0.775, w: 2 },
+  { x1: 0.26, y1: 0.81, x2: 0.74, y2: 0.81, w: 1 },
+];
+
+const POSES = {
+  dtl: { figure: DTL_FIGURE, head: { cx: 0.525, cy: 0.115, r: 0.052 }, ball: { cx: 0.7, cy: 0.79, r: 0.014 } },
+  face_on: { figure: FACE_ON_FIGURE, head: { cx: 0.5, cy: 0.115, r: 0.052 }, ball: { cx: 0.527, cy: 0.79, r: 0.014 } },
+} as const;
 
 export interface AlignmentGhostProps {
   width: number;
   height: number;
   visible: boolean;
+  /** Which address pose to suggest — DTL or Front View (face-on). */
+  view: "dtl" | "face_on";
 }
 
-export function AlignmentGhost({ width, height, visible }: AlignmentGhostProps) {
+export function AlignmentGhost({ width, height, visible, view }: AlignmentGhostProps) {
+  const { figure: FIGURE, head: HEAD, ball: BALL } = POSES[view];
   const fade = useRef(new Animated.Value(visible ? 1 : 0)).current;
   useEffect(() => {
     Animated.timing(fade, {

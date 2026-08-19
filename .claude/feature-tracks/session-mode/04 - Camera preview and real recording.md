@@ -100,3 +100,10 @@ file to the post-swing screen where `FrameClockView` plays it.
 Audio capture (RECORD_AUDIO) is wanted eventually for impact-sound ideas (icebox) and
 ambience; decide whether to include the permission now (one prebuild) and log the call in
 `docs/decisions/`.
+
+**Added by step-03 iteration (2026-08-18):** the capture UI now carries camera controls this
+step must bind — front/back **flip** (`state.facing`), **zoom** (`state.zoom`; replace the
+stub 0.5/1/2 stops with the device's probed zoom range), and the **DTL/Front view toggle**
+(`state.view`, stamped per swing and threaded to the analyzer's `--view` when the pipeline
+wires up in step 06). Camera choices are reducer-gated to idle; the native session should
+apply them on preview restart, not mid-recording.

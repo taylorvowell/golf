@@ -20,9 +20,11 @@ import { COLORS, SEMANTIC } from "../../theme";
 import { sessionize } from "../swings/sessions";
 import { useSwings } from "../swings/useSwings";
 import { STUB_ANALYSIS_MS } from "./AnalyzingBar";
+import { CameraControls } from "./CameraControls";
 import { CameraStage } from "./CameraStage";
 import { PostSwingView } from "./PostSwingView";
 import { CountdownOverlay } from "./CountdownOverlay";
+import { ViewToggle } from "./ViewToggle";
 import { RecordingFrame } from "./RecordingFrame";
 import { SessionDock } from "./SessionDock";
 import { SessionTitle } from "./SessionTitle";
@@ -213,7 +215,7 @@ export function SessionScreen() {
             onEndSession={endSession}
           />
         ) : (
-          <CameraStage ghostVisible={idle}>
+          <CameraStage ghostVisible={idle} view={state.view}>
             {state.mode === "recording" ? <RecordingFrame /> : null}
 
             {/* Top scrim + header chrome — all of it gone while armed. */}
@@ -248,6 +250,30 @@ export function SessionScreen() {
                   onInfo={() => setSheet("info")}
                 />
               </LinearGradient>
+
+              {/* Camera controls — left edge above the bar: flip on top, zoom stops below. */}
+              <View
+                style={[styles.leftControls, { bottom: 150 + insets.bottom }]}
+                pointerEvents="box-none"
+              >
+                <CameraControls
+                  facing={state.facing}
+                  zoom={state.zoom}
+                  onFlip={() => dispatch({ type: "flip-camera" })}
+                  onZoom={(zoom) => dispatch({ type: "set-zoom", zoom })}
+                />
+              </View>
+
+              {/* DTL / Front View — right edge, directly above the help orb. */}
+              <View
+                style={[styles.rightToggle, { bottom: 150 + 44 + 12 + insets.bottom }]}
+                pointerEvents="box-none"
+              >
+                <ViewToggle
+                  value={state.view}
+                  onChange={(view) => dispatch({ type: "set-view", view })}
+                />
+              </View>
 
               {/* Help orb — bottom right, above the bar. */}
               <Pressable
@@ -362,6 +388,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     textTransform: "uppercase",
   },
+  leftControls: { position: "absolute", left: 16 },
+  rightToggle: { position: "absolute", right: 16 },
   helpOrb: {
     position: "absolute",
     right: 16,

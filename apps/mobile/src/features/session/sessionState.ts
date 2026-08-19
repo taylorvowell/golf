@@ -32,6 +32,16 @@ export const DEFAULT_SESSION_SETTINGS: SessionSettings = {
 
 export type CaptureMode = "idle" | "countdown" | "recording";
 
+/** Which angle is being filmed — the analyzer's own view enum ("Front View" in the UI). */
+export type CaptureView = "dtl" | "face_on";
+
+export type CameraFacing = "back" | "front";
+
+/** Stub zoom stops; step 04 replaces them with the device's probed zoom range. */
+export type CameraZoom = 0.5 | 1 | 2;
+
+export const CAMERA_ZOOMS: CameraZoom[] = [0.5, 1, 2];
+
 /** Stub-grade swing record — the wiring replaces `id` with the server's and drives `status`
  * from the real job. Newest first. */
 export interface SessionSwing {
@@ -39,6 +49,8 @@ export interface SessionSwing {
   /** 1-based hit order within the session — "Swing N" in every list. */
   number: number;
   recordedAt: number;
+  /** The angle it was filmed from — captured at stop, per swing. */
+  view: CaptureView;
   status: "analyzing" | "ready";
 }
 
@@ -49,6 +61,10 @@ export interface SessionState {
   sessionType: SessionType;
   settings: SessionSettings;
   mode: CaptureMode;
+  /** The angle the NEXT recording captures — per swing, not per session, so never locked. */
+  view: CaptureView;
+  facing: CameraFacing;
+  zoom: CameraZoom;
   swings: SessionSwing[];
   /**
    * The swing on the post-recording screen, or null on the capture screen. A view of the
@@ -62,6 +78,9 @@ export type SessionAction =
   | { type: "rename"; title: string }
   | { type: "set-type"; sessionType: SessionType }
   | { type: "set-settings"; settings: Partial<SessionSettings> }
+  | { type: "set-view"; view: CaptureView }
+  | { type: "flip-camera" }
+  | { type: "set-zoom"; zoom: CameraZoom }
   /** Record pressed: idle → countdown, or straight to recording when the delay is 0. */
   | { type: "arm" }
   | { type: "countdown-done" }
@@ -96,6 +115,9 @@ export function initialSessionState(
     sessionType: "swing_analysis",
     settings,
     mode: "idle",
+    view: "dtl",
+    facing: "back",
+    zoom: 1,
     swings: [],
     reviewing: null,
   };
@@ -115,6 +137,16 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
     }
     case "set-settings":
       return { ...state, settings: { ...state.settings, ...action.settings } };
+    // Camera choices only apply between recordings — mid-capture they would change what
+    // the clip IS halfway through it.
+    case "set-view":
+      return state.mode === "idle" ? { ...state, view: action.view } : state;
+    case "flip-camera":
+      return state.mode === "idle"
+        ? { ...state, facing: state.facing === "back" ? "front" : "back" }
+        : state;
+    case "set-zoom":
+      return state.mode === "idle" ? { ...state, zoom: action.zoom } : state;
     case "arm": {
       if (state.mode !== "idle") return state;
       return { ...state, mode: state.settings.delaySeconds === 0 ? "recording" : "countdown" };
@@ -131,6 +163,7 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
         id: action.swingId ?? `local-${number}`,
         number,
         recordedAt: action.at ?? Date.now(),
+        view: state.view,
         status: analyzes ? "analyzing" : "ready",
       };
       return {
