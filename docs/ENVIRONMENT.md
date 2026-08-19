@@ -151,6 +151,18 @@ The product's own deletion path is unaffected — `DELETE /api/v1/account` remov
 
 - **Expo inlines `EXPO_PUBLIC_*` at build time.** A value added while Metro is running never reaches
   the app. Restart with `--clear`; the transform cache holds the old literal otherwise.
+- **RN 0.86.2's bundle download dies on Metro's multipart response — the dev client sits on
+  "Loading from …" forever.** okhttp throws `ProtocolException: Expected leading [0-9a-fA-F]
+  character but was 0xd` (visible only via `adb logcat --pid <pid>`; the screen just never
+  loads). Content-dependent — the 2026-08-14 bundle downloaded fine, the 2026-08-18 one hit it
+  every time, on two independent Metro instances and both network routes (LAN and `10.0.2.2`),
+  so it is NOT the hung-Metro trap (whose `/status` check passes here too). Upstream closed it
+  unfixed (facebook/react-native#56034). **The standing fix is `apps/mobile/metro.config.js`**,
+  which strips `Accept: multipart/mixed` from bundle requests so Metro answers plain
+  `Content-Length` (only cost: no download-progress percentage). **A Metro started before
+  2026-08-18 predates that file — restart it or the client will hang.** Sibling fact: Metro
+  actually binds `0.0.0.0:8081`; the loopback QStash squatter out-specifics it on `127.0.0.1`
+  only, which is why the LAN URL works and `localhost` doesn't.
 - **Next 16 refuses a second `next dev` for the same directory.** There is no `-p 3100` escape — stop
   the first one or use the one that is running.
 - **pnpm uses the hoisted linker here** (`.npmrc`, D21) — everything lands in the repo-root

@@ -31,6 +31,12 @@ class HighSpeedCameraModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("HighSpeedCamera")
 
+    /** The live capture preview (D61 step 04) — facing + zoom as props. */
+    View(HighSpeedCameraView::class) {
+      Prop("facing") { view: HighSpeedCameraView, facing: String -> view.setFacing(facing) }
+      Prop("zoom") { view: HighSpeedCameraView, zoom: Double -> view.setZoom(zoom.toFloat()) }
+    }
+
     /** What the constrained-high-speed map offers, read from CameraCharacteristics directly. */
     AsyncFunction("camera2Capabilities") { promise: Promise ->
       try {

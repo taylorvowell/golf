@@ -82,6 +82,18 @@ jest.mock("expo-image", () => {
  * right index, which is the one thing about this player worth asserting off-device. The handle's
  * methods are re-created per instance so parallel tests cannot see each other's calls.
  */
+/**
+ * `modules/high-speed-camera`'s preview view is native for the same reason frame-clock's
+ * is — `requireNativeView` throws at import under jest. A plain View stands in; what a
+ * test would assert is which props (facing/zoom) reached it.
+ */
+jest.mock("./modules/high-speed-camera/src/HighSpeedCameraView", () => {
+  const React = require("react");
+  const { View } = require("react-native");
+  const HighSpeedCameraView = (props) => React.createElement(View, props);
+  return { __esModule: true, default: HighSpeedCameraView };
+});
+
 jest.mock("./modules/frame-clock/src/FrameClockView", () => {
   const React = require("react");
   const { View } = require("react-native");

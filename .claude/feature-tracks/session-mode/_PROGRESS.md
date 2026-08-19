@@ -2,6 +2,35 @@
 
 Append-only log. Spec: `DESIGN-session-mode.md`. Decision: ARCHIVE D61.
 
+## 03/04 - Live camera preview pulled forward (in progress)
+**Date:** 2026-08-18
+**Summary:** Taylor asked for the camera during UX iteration — the exact scenario step 03's
+notes anticipated, and his request authorizes the step-04 preview piece early.
+`modules/high-speed-camera` gained `HighSpeedCameraView`: a Camera2 TextureView preview
+(ordinary session for now; merging with the constrained record session is the rest of step
+04) with `facing` + `zoom` props (CONTROL_ZOOM_RATIO, clamped to the device range),
+centre-crop transform, generation-guarded lifecycle, released on every teardown path.
+`CameraStage` mounts it behind a real permission state (denied = readable screen with a
+Settings door, never an alert) and keeps the stub ground as fallback. Jest mocks the native
+view like frame-clock's.
+**Notes:** Recording remains the stub. Native change → dev-client rebuild required on both
+emulator and S25+.
+**Verified on the emulator (2026-08-18):** live preview renders under the full session chrome
+— permission dialog → grant → synthetic camera scene with the DTL ghost, zoom stops, flip,
+view switcher and dock all over it. Layout/flow only; no fps or reliability claim (emulator
+rule).
+**A pre-existing trap ate the first hour:** the rebuilt client hung on "Loading from…" —
+NOT this feature's code (reproduced with the View registration stripped) and NOT the
+hung-Metro trap (/status passed). RN 0.86.2's Kotlin `MultipartStreamReader` dies on Metro's
+chunked multipart bundle response (`ProtocolException: Expected leading [0-9a-fA-F] character
+but was 0xd`), content-dependent — today's bundle triggers it, last week's didn't — upstream
+closed unfixed (facebook/react-native#56034). Standing fix: `apps/mobile/metro.config.js`
+strips `Accept: multipart/mixed` from bundle requests (Metro then answers plain
+Content-Length; only cost is the splash's download percentage). Recorded in ENVIRONMENT.md;
+any Metro started before this file must be restarted.
+
+---
+
 ## 03 - UX iteration (in progress) — round 4: camera controls + view toggle
 **Date:** 2026-08-18
 **Summary:** Left edge above the bar: camera flip orb + zoom stops (stub 0.5×/1×/2×). Right

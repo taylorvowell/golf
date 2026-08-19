@@ -215,7 +215,12 @@ export function SessionScreen() {
             onEndSession={endSession}
           />
         ) : (
-          <CameraStage ghostVisible={idle} view={state.view}>
+          <CameraStage
+            ghostVisible={idle}
+            view={state.view}
+            facing={state.facing}
+            zoom={state.zoom}
+          >
             {state.mode === "recording" ? <RecordingFrame /> : null}
 
             {/* Top scrim + header chrome — all of it gone while armed. */}
