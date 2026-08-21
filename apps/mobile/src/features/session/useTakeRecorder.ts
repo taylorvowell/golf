@@ -25,6 +25,8 @@ export function useTakeRecorder(
   camera: RefObject<HighSpeedCameraViewRef | null>,
   dispatch: (action: SessionAction) => void,
   onError: (message: string) => void,
+  /** Told whether the picture stays live during the take — some devices cannot do both. */
+  onPreviewLive?: (live: boolean) => void,
 ) {
   /** True from the start call until ANY ending settled — the guard that keeps the tap/cap
    * race from double-finalizing one take. */
@@ -38,7 +40,8 @@ export function useTakeRecorder(
         // Rate-first: the native side picks the highest offered rate at or below the
         // ceiling and resolves with the rate it actually configured (§02.4). The cap
         // always includes the post-roll allowance — see MAX_TAKE_SEC's comment.
-        await camera.current?.startRecording(MAX_FPS_REQUEST, MAX_TAKE_SEC);
+        const started = await camera.current?.startRecording(MAX_FPS_REQUEST, MAX_TAKE_SEC);
+        if (started) onPreviewLive?.(started.previewLive);
       } catch (e) {
         active.current = false;
         dispatch({ type: "record-failed" });
@@ -46,6 +49,12 @@ export function useTakeRecorder(
       }
     })();
     // The recorder is started by ENTERING the mode; the other props are read through refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
+
+  // Leaving the take, the picture is live again whatever it did during it.
+  useEffect(() => {
+    if (mode !== "recording") onPreviewLive?.(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 

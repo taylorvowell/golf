@@ -405,14 +405,24 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
     // MAIN thread, and `MediaRecorder.prepare()` — like `stop()` — blocks for hundreds of
     // milliseconds. On the main thread that is a frozen screen with a dead Stop button, which
     // is exactly how the record freeze presented (2026-08-20).
-    h.post { beginTake(maxFps, maxSeconds, h, promise) }
+    h.post { beginTake(maxFps, maxSeconds, h, previewLive = true, promise = promise) }
   }
 
+  /**
+   * @param previewLive Carry the preview surface into the constrained session, so the golfer
+   *   keeps seeing themselves at the capture rate. Some devices — the S25+ among them —
+   *   accept the two-output configuration and then never answer: no `onConfigured`, no
+   *   `onConfigureFailed`, and the HAL leaks fences until it triggers its own recovery
+   *   (2026-08-20). The watchdog catches that silence and retries ONCE with the recorder
+   *   alone, which is the configuration D39 measured at 231 fps on this phone. A frozen
+   *   picture for three seconds is a real cost; not recording the swing is a bigger one.
+   */
   @SuppressLint("MissingPermission")
   private fun beginTake(
     maxFps: Int,
     maxSeconds: Int,
     h: Handler,
+    previewLive: Boolean,
     promise: (Result<Map<String, Any>>) -> Unit,
   ) {
     if (recording) return promise(Result.failure(IllegalStateException("already recording")))
@@ -474,10 +484,12 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
 
     val recSurface = rec.surface
     // Already the take's size, already the session's surface — nothing to resize or rewrap.
-    val preview = previewSurface() ?: run {
+    val preview = if (previewLive) previewSurface() else null
+    if (previewLive && preview == null) {
       runCatching { rec.reset(); rec.release() }
       return promise(Result.failure(IllegalStateException("preview surface is gone")))
     }
+    val targets = listOfNotNull(preview, recSurface)
 
     recorder = rec
     recordFile = file
@@ -490,32 +502,44 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
     // → fatal ERROR_CAMERA_DEVICE, 2026-08-20) when the create follows immediately.
     session = null
 
-    Log.i(TAG, "record: ${size.width}x${size.height} @ $fps, cap ${maxSeconds}s, ${bitrateFor(size, fps)}bps")
+    Log.i(TAG, "record: ${size.width}x${size.height} @ $fps, cap ${maxSeconds}s, " +
+      "${bitrateFor(size, fps)}bps, preview=${previewLive}")
 
     // This HAL's failure mode of choice is a session that never configures (it wedges rather
-    // than refuses — D38, and the 2026-08-20 fence-leak freeze). First answer wins; the
-    // watchdog turns "frozen forever, Stop dead" into a reported failure with preview back.
+    // than refuses — D38, and the 2026-08-20 fence-leak freeze). First answer wins.
     var settled = false
     val settleOnce = fun(action: () -> Unit) {
       if (settled) return
       settled = true
       action()
     }
-    h.postDelayed({
+
+    /** Silence or refusal at this configuration — drop the preview and try again, once. */
+    val fallBackOrFail = fun(why: String) {
       settleOnce {
-        Log.w(TAG, "high-speed session never configured — watchdog fired")
+        Log.w(TAG, "high-speed session $why (preview=$previewLive)")
         teardownRecorder()
-        promise(Result.failure(IllegalStateException(
-          "the camera stalled starting the high-speed session — try again"
-        )))
-        restorePreview()
+        if (previewLive) {
+          // The picture will freeze for the take. That is the honest trade against not
+          // recording the swing at all, and JS says so on screen.
+          beginTake(maxFps, maxSeconds, h, previewLive = false, promise = promise)
+        } else {
+          promise(Result.failure(IllegalStateException(
+            "the camera could not start a high-speed session — try again"
+          )))
+          restorePreview()
+        }
       }
-    }, 8_000)
+    }
+
+    // 4s, not 8: with a fallback behind it the ladder must not keep the golfer waiting
+    // through two full timeouts before anything records.
+    h.postDelayed({ fallBackOrFail("never configured — watchdog fired") }, 4_000)
 
     try {
       @Suppress("DEPRECATION") // The modern overload is swallowed on this device; see the class comment.
       cam.createConstrainedHighSpeedCaptureSession(
-        listOf(preview, recSurface),
+        targets,
         object : CameraCaptureSession.StateCallback() {
           override fun onConfigured(s: CameraCaptureSession) {
             if (settled) { runCatching { s.close() }; return }
@@ -523,10 +547,9 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
               session = s
               val highSpeed = s as CameraConstrainedHighSpeedCaptureSession
               val request = cam.createCaptureRequest(CameraDevice.TEMPLATE_RECORD).apply {
-                // BOTH targets: the golfer keeps seeing themselves at the capture rate. This is
-                // the whole reason preview and record share one session.
-                addTarget(preview)
-                addTarget(recSurface)
+                // Every session target, and only session targets — a constrained session
+                // rejects a request that does not cover exactly what it was configured with.
+                targets.forEach { addTarget(it) }
                 set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, range)
                 // NOTHING else. `createHighSpeedRequestList` accepts a restricted key set, and
                 // a key outside it is another silent-misbehaviour risk on this HAL — Samsung's
@@ -553,35 +576,26 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
                   "width" to size.width,
                   "height" to size.height,
                   "maxSeconds" to maxSeconds,
+                  // The screen must not claim a live picture it is not showing.
+                  "previewLive" to previewLive,
                 )))
               }
             } catch (e: Throwable) {
-              settleOnce {
-                teardownRecorder()
-                promise(Result.failure(e))
-                restorePreview()
-              }
+              // A throw here is this configuration failing, not the device refusing outright —
+              // the ladder gets its turn before the golfer sees an error.
+              Log.w(TAG, "high-speed start threw: ${e.message}")
+              fallBackOrFail("threw at start: ${e.message}")
             }
           }
 
           override fun onConfigureFailed(s: CameraCaptureSession) {
-            settleOnce {
-              teardownRecorder()
-              promise(Result.failure(IllegalStateException(
-                "device REFUSED a high-speed session at ${size.width}x${size.height}@$fps"
-              )))
-              restorePreview()
-            }
+            fallBackOrFail("REFUSED at ${size.width}x${size.height}@$fps")
           }
         },
         h,
       )
     } catch (e: Throwable) {
-      settleOnce {
-        teardownRecorder()
-        promise(Result.failure(e))
-        restorePreview()
-      }
+      fallBackOrFail("threw at create: ${e.message}")
     }
   }
 

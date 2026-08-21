@@ -15,7 +15,7 @@ import { COLORS } from "../../theme";
  * thumb's ring) — it is the recording indicator itself, not surface decoration.
  */
 
-export function RecordingFrame() {
+export function RecordingFrame({ paused = false }: { paused?: boolean }) {
   const breathe = useRef(new Animated.Value(0)).current;
   const [elapsed, setElapsed] = useState(0);
 
@@ -64,6 +64,13 @@ export function RecordingFrame() {
         />
         <Text style={styles.chipText}>{`REC ${mm}:${ss}`}</Text>
       </View>
+      {/* A frozen picture with no explanation reads as a crash — say what it is. The swing
+          is recording at full rate behind the still frame. */}
+      {paused ? (
+        <View style={styles.pausedChip}>
+          <Text style={styles.pausedText}>Preview paused while filming</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -95,6 +102,22 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 999,
     backgroundColor: "rgba(11,16,28,0.66)",
+  },
+  pausedChip: {
+    position: "absolute",
+    top: 62,
+    alignSelf: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: "rgba(11,16,28,0.66)",
+  },
+  pausedText: {
+    color: "rgba(255,255,255,0.72)",
+    fontFamily: FONT_DISPLAY.black,
+    fontSize: 10,
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
   },
   dot: { width: 9, height: 9, borderRadius: 5, backgroundColor: RED },
   chipText: {

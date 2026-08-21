@@ -67,7 +67,19 @@ export interface HighSpeedCameraViewRef {
   startRecording(
     maxFps: number,
     maxSeconds: number,
-  ): Promise<{ fps: number; width: number; height: number; maxSeconds: number }>;
+  ): Promise<{
+    fps: number;
+    width: number;
+    height: number;
+    maxSeconds: number;
+    /**
+     * False when the device would not configure a session carrying BOTH the preview and the
+     * recorder, so the take runs recorder-only and the picture is frozen until it ends. The
+     * swing still records at full rate — but the screen must say so rather than showing a
+     * still frame that reads as a crash.
+     */
+    previewLive: boolean;
+  }>;
   /** End the take by tap. The hard cap ends it through `onRecordingEnded` instead. */
   stopRecording(): Promise<RecordingResult>;
 }

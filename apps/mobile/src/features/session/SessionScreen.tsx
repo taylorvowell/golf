@@ -142,11 +142,16 @@ export function SessionScreen() {
    * 2026-08-20). Null until the camera answers. */
   const [capture, setCapture] = useState<{ fps: number; highSpeed: boolean } | null>(null);
 
+  /** False while a take runs on a device that cannot keep the picture live through it —
+   * the screen says so instead of showing a still frame that reads as a crash. */
+  const [previewLive, setPreviewLive] = useState(true);
+
   const { stop: stopTake, onRecordingEnded } = useTakeRecorder(
     state.mode,
     cameraRef,
     dispatch,
     onRecordError,
+    setPreviewLive,
   );
 
   /** Save on the review screen: trim to the chosen window, then mint the swing. */
@@ -415,7 +420,7 @@ export function SessionScreen() {
               setCapture({ fps: e.nativeEvent.fps, highSpeed: e.nativeEvent.highSpeed })
             }
           >
-            {state.mode === "recording" ? <RecordingFrame /> : null}
+            {state.mode === "recording" ? <RecordingFrame paused={!previewLive} /> : null}
 
             {/* The capture rate, framing AND recording (Taylor, 2026-08-20). Outside the
                 chrome fade on purpose — a rate that vanishes the moment you start filming
