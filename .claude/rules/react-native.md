@@ -131,6 +131,22 @@ along.
   go in `app.json` (or a config plugin), then `npx expo prebuild -p android --clean` — and note
   that `expo run:android` does NOT regenerate an existing `android/`, so a native-config edit
   without `--clean` silently never lands on the device.
+- **A permission missing from the built manifest DENIES instantly with no prompt.** That is what
+  app.json-manifest drift looks like on the device: `requestMultiple` returns denied, no dialog,
+  and the UI sends the user to Settings for a toggle that does not exist. It shipped a mic-less
+  build on 2026-08-20. `dev-device.mjs` now auto-runs `prebuild --clean` when `app.json`'s hash
+  changed (stamp: `android/.appjson-hash`); if a runtime permission still misbehaves, `grep` the
+  generated `AndroidManifest.xml` for it before debugging JS.
+- **The white screen after a native build was the Metro cold-graph race — the script now warms
+  the bundle before launching** (`warmBundle()` curls `index.bundle` until it serves). If a white
+  page ever appears anyway: `curl "http://127.0.0.1:8082/apps/mobile/index.bundle?platform=android&dev=true"`,
+  then rerun `pnpm --filter mobile phone`. "MainActivity is up" does not prove the bundle loaded.
+- **A wedged Metro must be KILLED before relaunching, and the script does it** — but note the
+  trap that broke it once: from Node's `execFileSync`, taskkill flags are `/PID /T /F`; the
+  git-bash `//PID` form reaches taskkill literally, errors silently, and the hung process
+  survives while every restart "fails". The script now verifies the port is actually free after
+  the kill and dies loudly if not. By hand: `netstat -ano | grep :8082` → `taskkill //F //T //PID <pid>`
+  (double slashes ONLY in a git-bash terminal), then `pnpm --filter mobile phone`.
 - **Release builds ship minified** (expo-build-properties: R8 + shrinkResources on), with
   `allowBackup` false and no debug-only permissions in the main manifest
   (`android.blockedPermissions` for anything a dev tool needs that release must not carry).

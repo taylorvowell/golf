@@ -25,6 +25,8 @@
  */
 
 import { execFileSync, spawn } from "node:child_process";
+import { createHash } from "node:crypto";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { networkInterfaces } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -132,8 +134,15 @@ async function ensureMetro(lan, { force = false } = {}) {
         ? "restarting after the native build"
         : "restarting on request";
     console.log(`  port held by pid ${held.join(", ")}; ${why}`);
-    for (const pid of held) quiet("taskkill", ["//PID", pid, "//T", "//F"]);
+    // Real Windows flags: `//PID` is a git-bash escaping habit, and from Node it reaches
+    // taskkill literally — which errors, quiet() eats it, and the hung Metro survives every
+    // "restart" while the new one fails to bind (2026-08-20, cost a device round-trip).
+    for (const pid of held) quiet("taskkill", ["/PID", pid, "/T", "/F"]);
     await sleep(1500);
+    const survivors = pidsOnPort(METRO_PORT);
+    if (survivors.length) {
+      die(`pid ${survivors.join(", ")} still holds :${METRO_PORT} after taskkill — kill it by hand`);
+    }
   }
 
   const child = spawn(
@@ -143,7 +152,10 @@ async function ensureMetro(lan, { force = false } = {}) {
   );
   child.unref();
 
-  for (let i = 0; i < 25; i += 1) {
+  // 120s, not 50: a cold start right after a prebuild's watcher storm can take longer than
+  // Metro's own ~75s first build, and giving up early reads as "Metro is broken" when it is
+  // merely slow.
+  for (let i = 0; i < 60; i += 1) {
     await sleep(2000);
     if (await metroServing(lan)) {
       ok(`serving on ${lan}:${METRO_PORT}`);
@@ -172,7 +184,31 @@ function resolveTarget() {
   return phone ?? serials.find((s) => !s.startsWith("emulator-")) ?? die("No phone attached.");
 }
 
+/**
+ * `android/` is prebuild OUTPUT, and gradle alone never re-reads `app.json` — a permission
+ * added there but never prebuilt ships an APK without it, and Android then DENIES the
+ * permission request instantly with no prompt (this exact drift shipped a mic-less build on
+ * 2026-08-20). A hash stamp of `app.json` decides when the expensive `prebuild --clean` is
+ * actually owed, so Kotlin-only rebuilds stay incremental.
+ */
+function prebuildIfConfigChanged() {
+  const stampFile = join(MOBILE_DIR, "android/.appjson-hash");
+  const hash = createHash("sha256")
+    .update(readFileSync(join(MOBILE_DIR, "app.json")))
+    .digest("hex");
+  const stale =
+    !existsSync(stampFile) || readFileSync(stampFile, "utf8").trim() !== hash;
+  if (!stale) return;
+  step("app.json changed since last prebuild — regenerating android/ (--clean)");
+  sh("npx", ["expo", "prebuild", "-p", "android", "--clean"], {
+    cwd: MOBILE_DIR, stdio: "inherit", shell: true,
+  });
+  writeFileSync(stampFile, hash);
+  ok("prebuilt");
+}
+
 function buildAndInstall(target) {
+  prebuildIfConfigChanged();
   step("Native rebuild (Kotlin / app.json changed)");
   const env = { ...process.env };
   // Its value contains its own name, so AGP dies with a message that names nothing.
@@ -190,6 +226,28 @@ function buildAndInstall(target) {
   step(`Installing on ${target}`);
   sh("adb", ["-s", target, "install", "-r", APK], { stdio: "inherit" });
   ok("installed");
+}
+
+/**
+ * Force Metro to BUILD the bundle before any device asks for it. The dev client's fetch times
+ * out around 60s while a cold full build takes ~75s on this machine, and the client then
+ * boots a stale cached bundle — or a white screen — while every probe says Metro is healthy
+ * (the 2026-08-20 white page, and the lost hour on the same trap the day before). A warmed
+ * graph answers the device in low seconds, so the race cannot happen.
+ */
+async function warmBundle() {
+  step("Warming Metro's bundle graph");
+  try {
+    const res = await fetch(
+      `http://127.0.0.1:${METRO_PORT}/apps/mobile/index.bundle?platform=android&dev=true`,
+      { signal: AbortSignal.timeout(180_000) },
+    );
+    if (!res.ok) die(`Metro answered ${res.status} for the bundle — check start.log`);
+    await res.arrayBuffer();
+    ok("bundle serves");
+  } catch (e) {
+    die(`Bundle build did not finish in 180s (${e?.message}) — check apps/mobile/.expo/dev/logs/start.log`);
+  }
 }
 
 async function launch(target, lan) {
@@ -230,6 +288,7 @@ console.log(`SwingSage → ${target}  (this PC: ${lan})`);
 // again" and is the single most repeated failure in this project's dev loop.
 if (wantsNative) buildAndInstall(target);
 await ensureMetro(lan, { force: wantsNative || wantsRestart });
+await warmBundle();
 await launch(target, lan);
 
 console.log(
