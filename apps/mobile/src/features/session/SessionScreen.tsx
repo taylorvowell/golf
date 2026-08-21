@@ -32,7 +32,13 @@ import { DualSyncConnectOverlay } from "./DualSyncConnectOverlay";
 import { DualSyncPip } from "./DualSyncPip";
 import { PostSwingView } from "./PostSwingView";
 import { CountdownOverlay } from "./CountdownOverlay";
-import { AUTOSTOP_COUNTDOWN_SEC, MAX_TAKE_SEC, SAVE_PAD_S } from "./captureConstants";
+import {
+  AUTOSTOP_COUNTDOWN_SEC,
+  CACHE_KEEP_MS,
+  MAX_TAKE_SEC,
+  SAVE_PAD_S,
+  STOP_TIMEOUT_MS,
+} from "./captureConstants";
 import { ViewToggle } from "./ViewToggle";
 import { RecordingFrame } from "./RecordingFrame";
 import { SessionDock } from "./SessionDock";
@@ -144,23 +150,29 @@ export function SessionScreen() {
    * the screen says so instead of showing a still frame that reads as a crash. */
   const [previewLive, setPreviewLive] = useState(true);
 
+  /** The recorder's own start — the countdown must agree with the cap it is counting to. */
+  const [takeStartedAt, setTakeStartedAt] = useState<number | null>(null);
+
   /**
    * Seconds until the take stops itself, inside the last few (null the rest of the time).
    * A one-second tick, alive only while recording — nothing here runs on an idle screen.
    */
   const [autoStopIn, setAutoStopIn] = useState<number | null>(null);
   useEffect(() => {
-    if (state.mode !== "recording") {
+    // Counts from the RECORDER's start, never the tap. The capture ladder can spend seconds
+    // finding a configuration the device accepts, and a countdown started at the tap hits
+    // zero mid-swing and sits there — on the one screen whose job is saying when the take
+    // ends. Null until native reports its start, so nothing is claimed before it is known.
+    if (state.mode !== "recording" || takeStartedAt === null) {
       setAutoStopIn(null);
       return;
     }
-    const startedAt = Date.now();
     const tick = setInterval(() => {
-      const left = Math.ceil(MAX_TAKE_SEC - (Date.now() - startedAt) / 1000);
+      const left = Math.ceil(MAX_TAKE_SEC - (Date.now() - takeStartedAt) / 1000);
       setAutoStopIn(left <= AUTOSTOP_COUNTDOWN_SEC ? Math.max(0, left) : null);
     }, 250);
     return () => clearInterval(tick);
-  }, [state.mode]);
+  }, [state.mode, takeStartedAt]);
 
   /**
    * The gap between the tap and the review screen — finalising an MP4 and closing the
@@ -170,8 +182,32 @@ export function SessionScreen() {
    */
   const [stopping, setStopping] = useState(false);
   useEffect(() => {
-    if (state.mode !== "recording") setStopping(false);
-  }, [state.mode]);
+    if (state.mode !== "recording") {
+      setStopping(false);
+      return;
+    }
+    if (!stopping) return;
+    // A stop that never answers must not hold the screen forever. The overlay covers the
+    // dock, so a wedged recorder would otherwise leave "Processing" over a dead Stop button
+    // with no way out but killing the app — the exact 2026-08-20 failure, one layer up.
+    const bail = setTimeout(() => setStopping(false), STOP_TIMEOUT_MS);
+    return () => clearTimeout(bail);
+  }, [state.mode, stopping]);
+
+  /**
+   * Sweep capture leftovers once per session-mode entry.
+   *
+   * Takes stranded by a crash mid-review and the filmstrips of every reviewed take were
+   * never deleted by anything: a phone in real use reached 1.8 GB of them. Fire-and-forget —
+   * a failed sweep is not worth telling a golfer about.
+   */
+  useEffect(() => {
+    void HighSpeedCamera.sweepCaptureCache?.(CACHE_KEEP_MS)
+      .then((freed) => {
+        if (__DEV__ && freed > 0) console.log(`swept ${Math.round(freed / 1e6)}MB of capture cache`);
+      })
+      .catch(() => {});
+  }, []);
 
   const { stop: stopTake, onRecordingEnded } = useTakeRecorder(
     state.mode,
@@ -179,6 +215,7 @@ export function SessionScreen() {
     dispatch,
     onRecordError,
     setPreviewLive,
+    setTakeStartedAt,
   );
 
   /** Save on the review screen: trim to the chosen window, then mint the swing. */
@@ -313,13 +350,25 @@ export function SessionScreen() {
   // Focus-scoped, not mount-scoped: this screen stays mounted under anything pushed above it
   // (Profile, a swing report), and a mount-scoped handler would swallow back there and pop
   // the exit sheet over the wrong page.
+  // Written in an effect, never the render body: these are read from a native BackHandler
+  // callback, and concurrent React can discard a render whose ref write already leaked out.
   const reviewingRef = useRef(state.reviewing);
-  reviewingRef.current = state.reviewing;
   const pendingTakeRef = useRef(state.pendingTake);
-  pendingTakeRef.current = state.pendingTake;
+  useEffect(() => {
+    reviewingRef.current = state.reviewing;
+    pendingTakeRef.current = state.pendingTake;
+  }, [state.reviewing, state.pendingTake]);
   useFocusEffect(
     useCallback(() => {
       const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+        if (modeRef.current !== "idle") {
+          // Mid-countdown or mid-take, back does NOTHING. Leaving the screen unmounts the
+          // camera view, which finalises the recording natively — the golfer's only copy of
+          // that swing, written to disk with no path in JS and no way to review it, while
+          // the reducer sat in `recording` forever and Record never worked again. Stop is
+          // the way out of a take.
+          return true;
+        }
         if (pendingTakeRef.current !== null) {
           // An unreviewed take is the only copy of that swing. Back must not decide its
           // fate — the golfer chooses Save or Delete on the review screen.
@@ -704,5 +753,4 @@ const styles = StyleSheet.create({
   controlsRailRight: { position: "absolute", right: 16, alignItems: "flex-end", gap: 14 },
   syncRailRight: { position: "absolute", right: 16, alignItems: "flex-end", gap: 8 },
   syncRailLeft: { position: "absolute", left: 16, alignItems: "flex-start", gap: 8 },
-  pressed: { opacity: 0.6 },
 });

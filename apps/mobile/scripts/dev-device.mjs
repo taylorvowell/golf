@@ -26,9 +26,9 @@
 
 import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { networkInterfaces } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /**
@@ -174,15 +174,23 @@ async function ensureMetro(lan, { force = false } = {}) {
  */
 function spawnDetachedMetro() {
   mkdirSync(dirname(METRO_LOG), { recursive: true });
+  // The redirect target is RELATIVE and unquoted. Node escapes embedded quotes onto the
+  // command line, then the inner `cmd /c` strips only the outer pair, so a quoted absolute
+  // path arrived as `\C:\...\metro-console.log\` and the command never ran at all — silently,
+  // for the full 120 s timeout, pointing at a log that was never created. `cwd` is already
+  // MOBILE_DIR, so a relative target needs no quoting and no escaping.
+  const logArg = relative(MOBILE_DIR, METRO_LOG).replace(/\\/g, "/");
   const cmd =
-    `npx expo start --dev-client --host lan --port ${METRO_PORT} ` +
-    `> "${METRO_LOG}" 2>&1`;
+    `npx expo start --dev-client --host lan --port ${METRO_PORT} > ${logArg} 2>&1`;
   const child = spawn("cmd", ["/c", "start", "/min", "", "cmd", "/c", cmd], {
     cwd: MOBILE_DIR,
     detached: true,
     stdio: "ignore",
     windowsHide: true,
   });
+  // A spawn failure is asynchronous and, with no listener, an uncaught exception AFTER
+  // unref — invisible where it matters.
+  child.on("error", (e) => die(`could not start Metro: ${e.message}`));
   child.unref();
 }
 
@@ -213,19 +221,40 @@ function resolveTarget() {
  * actually owed, so Kotlin-only rebuilds stay incremental.
  */
 function prebuildIfConfigChanged() {
-  const stampFile = join(MOBILE_DIR, "android/.appjson-hash");
-  const hash = createHash("sha256")
-    .update(readFileSync(join(MOBILE_DIR, "app.json")))
-    .digest("hex");
+  // In `.expo/`, NOT `android/`: `prebuild --clean` deletes the whole android tree, so a
+  // stamp kept there is lost to any out-of-band prebuild (the RUNBOOK tells you to run one)
+  // and to every fresh clone, buying a needless full prebuild each time.
+  const stampFile = join(MOBILE_DIR, ".expo/prebuild-hash");
+  // app.json AND the config plugins it loads. Hashing app.json alone missed a plugin edit
+  // entirely — the generated manifest changes while the gate says "not stale", which is the
+  // exact drift class this stamp exists to catch.
+  const sources = [join(MOBILE_DIR, "app.json"), ...pluginFiles()];
+  const hash = createHash("sha256");
+  for (const f of sources) hash.update(readFileSync(f));
+  const digest = hash.digest("hex");
   const stale =
-    !existsSync(stampFile) || readFileSync(stampFile, "utf8").trim() !== hash;
+    !existsSync(stampFile) ||
+    readFileSync(stampFile, "utf8").trim() !== digest ||
+    // A tree that was never generated (fresh clone) is stale whatever the stamp says.
+    !existsSync(join(MOBILE_DIR, "android/app/build.gradle"));
   if (!stale) return;
-  step("app.json changed since last prebuild — regenerating android/ (--clean)");
+  step("Native config changed since last prebuild — regenerating android/ (--clean)");
   sh("npx", ["expo", "prebuild", "-p", "android", "--clean"], {
     cwd: MOBILE_DIR, stdio: "inherit", shell: true,
   });
-  writeFileSync(stampFile, hash);
+  mkdirSync(dirname(stampFile), { recursive: true });
+  writeFileSync(stampFile, digest);
   ok("prebuilt");
+}
+
+/** Every config plugin `app.json` can pull in — their CONTENTS decide the manifest too. */
+function pluginFiles() {
+  const dir = join(MOBILE_DIR, "plugins");
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .filter((f) => f.endsWith(".js") || f.endsWith(".mjs") || f.endsWith(".ts"))
+    .sort()
+    .map((f) => join(dir, f));
 }
 
 function buildAndInstall(target) {
@@ -298,6 +327,12 @@ async function launch(target, lan) {
   }
   die("Still on the dev launcher. Metro is serving, so the device could not reach it: check " +
       "both are on the same Wi-Fi and that no VPN is on the phone.");
+}
+
+// Windows-only by construction: netstat/taskkill/`cmd /c start`/gradlew.bat. Said plainly
+// rather than crashing inside `spawn("cmd")` on another OS.
+if (process.platform !== "win32") {
+  die("dev-device.mjs is Windows-only (netstat/taskkill/cmd/gradlew.bat) — see docs/RUNBOOK.md §13.");
 }
 
 const lan = lanAddress() ?? die("No 10.x LAN address on this PC — phones cannot reach Metro.");

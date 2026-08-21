@@ -1,6 +1,7 @@
 import { Pressable, Text, View } from "react-native";
 import type { LucideIcon } from "lucide-react-native";
 
+import { PRESS_SUNK } from "../../../design/system/press";
 import { Sheet } from "../../../design/system/Sheet";
 import { FONT_BODY, FONT_DISPLAY } from "../../../design/system/typography";
 import { appStyles, useAppTheme } from "../../../theme";
@@ -107,7 +108,6 @@ const useStyles = appStyles((t) => ({
   title: { fontFamily: FONT_DISPLAY.extraBold, fontSize: 15 },
   detail: { color: t.muted, fontFamily: FONT_BODY.regular, fontSize: 12, lineHeight: 16 },
   detailFilled: { color: "rgba(255,255,255,0.78)" },
-  /** Shrink AND dim (Taylor, 2026-08-21): these rows are tapped without looking, and a
-   * dimmed row alone is easy to miss on a bright screen. */
-  pressed: { transform: [{ scale: 0.97 }], opacity: 0.75 },
+  /** The shared outdoor press — these rows are tapped without looking. */
+  pressed: PRESS_SUNK,
 }));

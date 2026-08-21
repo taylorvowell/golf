@@ -4,7 +4,7 @@ import { PoseOutline } from "../../design/system/PoseOutline";
 import { FONT_DISPLAY } from "../../design/system/typography";
 import { useHandedness } from "../profile/useProfile";
 import { COLORS } from "../../theme";
-import { CONTROL_EDGE } from "./controlEdge";
+import { CONTROL_EDGE } from "../../design/system/controlEdge";
 import type { CaptureView } from "./sessionState";
 
 /**

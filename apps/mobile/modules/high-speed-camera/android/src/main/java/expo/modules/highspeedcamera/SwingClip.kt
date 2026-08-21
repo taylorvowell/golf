@@ -6,6 +6,7 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMetadataRetriever
 import android.media.MediaMuxer
+import android.os.SystemClock
 import android.util.Log
 import java.io.File
 import java.io.FileOutputStream
@@ -49,6 +50,10 @@ object SwingClip {
 
   /** Candidates closer together than this are the same event (a strike plus its own echo). */
   private const val MIN_SEPARATION_S = 0.35
+
+  /** Ceiling on one audio decode. A 30s take's audio decodes in well under a second, so this
+   * only ever fires on a malformed file — see the deadline in `decodeEnvelope`. */
+  private const val DECODE_BUDGET_MS = 10_000L
 
   data class Impact(val timeSec: Double, val score: Double)
 
@@ -96,9 +101,17 @@ object SwingClip {
     channels: Int,
   ): DoubleArray {
     val mime = format.getString(MediaFormat.KEY_MIME) ?: return DoubleArray(0)
+    // Created INSIDE the try whose finally releases it — a codec that fails to configure
+    // (unsupported profile, corrupt format) otherwise leaks the native instance, silently,
+    // on every take, because the caller catches and logs.
     val codec = MediaCodec.createDecoderByType(mime)
-    codec.configure(format, null, null, 0)
-    codec.start()
+    try {
+      codec.configure(format, null, null, 0)
+      codec.start()
+    } catch (e: Throwable) {
+      runCatching { codec.release() }
+      throw e
+    }
 
     val samplesPerWindow = max(1, (sampleRate * WINDOW_MS / 1000.0).toInt())
     val out = ArrayList<Double>(4096)
@@ -109,8 +122,17 @@ object SwingClip {
     var sawInputEnd = false
     var sawOutputEnd = false
 
+    // A truncated MP4 — the shape an interrupted take leaves behind — can decode without ever
+    // emitting END_OF_STREAM. Unbounded, that spins forever on the module's queue and wedges
+    // every later detectImpacts/clipThumbnails/trimClip on the same thread.
+    val deadline = SystemClock.elapsedRealtime() + DECODE_BUDGET_MS
+
     try {
       while (!sawOutputEnd) {
+        if (SystemClock.elapsedRealtime() > deadline) {
+          Log.w(TAG, "audio decode exceeded ${DECODE_BUDGET_MS}ms — using what was decoded")
+          break
+        }
         if (!sawInputEnd) {
           val inIndex = codec.dequeueInputBuffer(10_000)
           if (inIndex >= 0) {
@@ -231,31 +253,83 @@ object SwingClip {
         // spans of time, and the frame at a span's midpoint is the one that represents it.
         val atMs = (durationMs * (i + 0.5) / count).toLong()
         val frame = runCatching {
+          // A square-ish box on BOTH axes: the take is a portrait-rotated 1080p file, and
+          // asking for a 16:9 box made the retriever fit a portrait frame inside it — the
+          // strip got ~90px-wide thumbnails from a 160px request. `getScaledFrameAtTime`
+          // preserves aspect, so the larger box is the one that binds.
           retriever.getScaledFrameAtTime(
             atMs * 1000L,
             MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
             width,
-            // Height from the source's own aspect; the caller lays out to whatever comes back.
-            (width * 9 / 16).coerceAtLeast(1),
+            width,
           )
         }.getOrNull() ?: continue
 
-        val file = File(outDir, "thumb_${stem}_$i.jpg")
-        runCatching {
+        val file = File(outDir, "$THUMB_PREFIX${stem}_$i.jpg")
+        val wrote = runCatching {
           FileOutputStream(file).use { frame.compress(Bitmap.CompressFormat.JPEG, 70, it) }
-        }.onFailure { frame.recycle(); return@onFailure }
+        }.isSuccess
+        // Read the dimensions BEFORE recycling, and skip the cell entirely when the write
+        // failed. (The previous `runCatching{}.onFailure{ recycle; return@onFailure }` only
+        // returned from the lambda, so a failed write still shipped a path to a zero-byte
+        // file and recycled the bitmap twice.)
+        val w = frame.width
+        val h = frame.height
+        frame.recycle()
+        if (!wrote) {
+          runCatching { file.delete() }
+          continue
+        }
         out.add(mapOf(
           "path" to file.absolutePath,
           "timeSec" to atMs / 1000.0,
-          "width" to frame.width,
-          "height" to frame.height,
+          "width" to w,
+          "height" to h,
         ))
-        frame.recycle()
       }
     } finally {
       runCatching { retriever.release() }
     }
     return out
+  }
+
+  /** Filmstrip frames are named for the take they came from, so they can be swept with it. */
+  private const val THUMB_PREFIX = "thumb_"
+
+  /**
+   * Delete the filmstrip belonging to one take.
+   *
+   * Every reviewed take writes a dozen JPEGs and nothing was ever deleting them: a phone in
+   * real use accumulated 192 of them alongside 14 stranded takes — 1.8 GB of cache (measured,
+   * 2026-08-21). The spec asks for exactly this (§02.12).
+   */
+  fun deleteThumbnails(path: String): Int {
+    val stem = File(path).nameWithoutExtension
+    val dir = File(path).parentFile ?: return 0
+    val doomed = dir.listFiles { f -> f.name.startsWith("$THUMB_PREFIX${stem}_") } ?: return 0
+    return doomed.count { runCatching { it.delete() }.getOrDefault(false) }
+  }
+
+  /**
+   * Sweep takes and filmstrips left behind by a crash, a kill, or an interrupted review.
+   *
+   * Runs at capture-screen mount. `keepNewerThanMs` protects the take currently being
+   * reviewed — anything younger than the window is assumed live. Returns bytes reclaimed so
+   * the caller can log a real number rather than claim success.
+   */
+  fun sweepOrphans(cacheDir: File, keepNewerThanMs: Long): Long {
+    val cutoff = System.currentTimeMillis() - keepNewerThanMs
+    val files = cacheDir.listFiles { f ->
+      f.isFile && (f.name.startsWith("swing_") || f.name.startsWith(THUMB_PREFIX)) &&
+        f.lastModified() < cutoff
+    } ?: return 0L
+    var freed = 0L
+    for (f in files) {
+      val size = f.length()
+      if (runCatching { f.delete() }.getOrDefault(false)) freed += size
+    }
+    if (freed > 0) Log.i(TAG, "swept ${files.size} orphaned capture files (${freed / 1_000_000}MB)")
+    return freed
   }
 
   // ------------------------------------------------------------------ trim

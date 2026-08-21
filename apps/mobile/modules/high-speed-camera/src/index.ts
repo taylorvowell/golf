@@ -40,9 +40,16 @@ interface HighSpeedCameraModule {
   ): Promise<Array<{ path: string; timeSec: number; width: number; height: number }>>;
   /** Remux a window out of a take. No re-encode — milliseconds, and no quality lost. */
   trimClip(path: string, startSec: number, endSec: number): Promise<{ path: string }>;
-  /** Remove a recording the flow is finished with (a trimmed-away source, a binned take).
-   * Resolves false when the file was already gone — never an error. */
+  /** Remove a recording the flow is finished with (a trimmed-away source, a binned take),
+   * along with its filmstrip. Resolves false when the file was already gone — never an error. */
   deleteClip(path: string): Promise<boolean>;
+  /**
+   * Delete takes and filmstrips older than `keepNewerThanMs`, returning bytes reclaimed.
+   *
+   * Capture leftovers are otherwise permanent: a crash mid-review strands a swing-sized MP4,
+   * and every reviewed take writes a dozen JPEGs. Call on capture-screen mount.
+   */
+  sweepCaptureCache(keepNewerThanMs: number): Promise<number>;
   playRecordSound(start: boolean): Promise<void>;
   playCountdownTick(): Promise<void>;
   playClickSound(): Promise<void>;

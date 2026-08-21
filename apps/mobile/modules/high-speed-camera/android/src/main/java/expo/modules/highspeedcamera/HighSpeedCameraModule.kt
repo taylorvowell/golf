@@ -82,6 +82,11 @@ class HighSpeedCameraModule : Module() {
       // onCaptureConfig: the probed rate/size this lens will record at — the FPS pill's only
       // source, so the number on screen is never a request.
       Events("onZoomRange", "onRecordingEnded", "onCaptureConfig")
+
+      // The hook the house rule points at for deterministic native release — it still runs
+      // when a view is destroyed while already detached, which `onDetachedFromWindow` does
+      // not. Releasing twice is safe; not releasing at all holds the camera until app kill.
+      OnViewDestroys { view: HighSpeedCameraView -> view.releaseCamera() }
       Prop("zoom") { view: HighSpeedCameraView, zoom: Double -> view.setZoom(zoom.toFloat()) }
 
       /**
@@ -141,6 +146,21 @@ class HighSpeedCameraModule : Module() {
       }
     }
 
+    /**
+     * Delete capture leftovers: takes and filmstrips older than `keepNewerThanMs`.
+     *
+     * Called when the capture screen mounts. Without it the cache only grows — a phone in
+     * real use reached 1.8 GB of stranded takes and thumbnails (measured 2026-08-21), and
+     * spec §02.12 asks for exactly this sweep.
+     */
+    AsyncFunction("sweepCaptureCache") { keepNewerThanMs: Double, promise: Promise ->
+      try {
+        promise.resolve(SwingClip.sweepOrphans(context.cacheDir, keepNewerThanMs.toLong()))
+      } catch (e: Throwable) {
+        promise.reject("SWEEP_CACHE", e.message ?: "cache sweep failed", e)
+      }
+    }
+
     /** Remux a window out of a take — no re-encode, so it costs milliseconds and loses nothing. */
     AsyncFunction("trimClip") { path: String, startSec: Double, endSec: Double, promise: Promise ->
       try {
@@ -156,6 +176,9 @@ class HighSpeedCameraModule : Module() {
      * caller's goal is "not on disk", and it isn't.
      */
     AsyncFunction("deleteClip") { path: String ->
+      // The take's filmstrip goes with the take — those JPEGs are named after it and nothing
+      // else will ever claim them.
+      SwingClip.deleteThumbnails(path)
       File(path).delete()
     }
 

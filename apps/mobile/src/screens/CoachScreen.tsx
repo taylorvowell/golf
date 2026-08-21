@@ -28,7 +28,6 @@ import {
   COACH_TIP,
   type CoachFocusArea,
 } from "../features/coach/coachStubs";
-import { InstructorBubble } from "../features/instructor/InstructorBubble";
 import { NotificationBell } from "../features/notifications/NotificationBell";
 import { createdAtMs } from "../features/swings/sessions";
 import { useSwings } from "../features/swings/useSwings";
@@ -226,8 +225,6 @@ export function CoachScreen() {
         onProfile={() => navigation.navigate("Profile")}
         profileTestID="coach-profile"
       />
-      {/* Only when an instructor is connected — the store decides. */}
-      <InstructorBubble />
     </View>
   );
 }

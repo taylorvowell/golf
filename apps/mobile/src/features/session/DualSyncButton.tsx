@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { FONT_DISPLAY } from "../../design/system/typography";
 import { COLORS } from "../../theme";
 import { DualViewIcon } from "../../design/system/DualViewIcon";
-import { CONTROL_EDGE } from "./controlEdge";
+import { CONTROL_EDGE } from "../../design/system/controlEdge";
 
 /**
  * Dual Sync (Taylor, step-03 iteration) — the door to filming one swing from two angles.

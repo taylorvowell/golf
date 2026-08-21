@@ -272,6 +272,11 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
       // Idempotent against the tap/hard-cap race: whichever path finalized the take first
       // already moved the mode off "recording", and a second answer must not re-open review
       // over a take that no longer exists.
+      //
+      // The DROPPED take's file is not this reducer's to delete — `useTakeRecorder` deletes
+      // it at the dispatch site, because a real recording that nobody will ever see must not
+      // be left behind in the cache. Dropping it here and forgetting it is how the cache
+      // grew to 1.8 GB.
       if (state.mode !== "recording") return state;
       return {
         ...state,
@@ -378,7 +383,3 @@ export function previousSwing(state: SessionState, swingId: string): SessionSwin
   return state.swings.find((s) => s.number === current.number - 1) ?? null;
 }
 
-/** The full display name everywhere the session is titled. */
-export function sessionDisplayName(state: Pick<SessionState, "title" | "dateLabel">): string {
-  return `${state.title} | ${state.dateLabel}`;
-}

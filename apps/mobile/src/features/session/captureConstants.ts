@@ -38,6 +38,30 @@ export const PRE_ROLL_SEC = REVIEW_WINDOW_S / 2;
 export const SAVE_PAD_S = 0.1;
 
 /**
+ * How long the "Processing" overlay may cover the screen before it gives up.
+ *
+ * Finalising a 30 s 1080p240 MP4 is fast, so this only fires when the recorder has wedged —
+ * and then the overlay must come down, because it sits over the Stop button.
+ */
+export const STOP_TIMEOUT_MS = 8_000;
+
+/** A candidate this far below the strongest is noise, not a second swing. Detector tuning
+ * (spec §11.7 names this class of value as remote-config material). */
+export const CANDIDATE_FLOOR = 0.45;
+
+/** Filmstrip density and decode width — spec §04.3 asks for 10–24 frames across the source. */
+export const STRIP_FRAMES = 12;
+export const STRIP_PX = 160;
+
+/**
+ * Capture leftovers older than this are swept when the capture screen mounts.
+ *
+ * Long enough that a take being reviewed right now is never touched, short enough that a
+ * crash does not leave a swing-sized file on the phone for a week.
+ */
+export const CACHE_KEEP_MS = 60 * 60 * 1000;
+
+/**
  * The rate ceiling handed to the recorder — §02.4's priority order (240 → 120 → 60) is
  * implemented natively as a ladder of real configurations, and the session resolves with the
  * rate the device actually configured, never this number.

@@ -79,8 +79,10 @@ feedback + spoken feedback (`practice-loop`), capability messaging + manual trim
 (icebox), entitlement gating of session types (`billing-iap` reads the seam).
 
 **Aligned to the capture spec package (2026-08-20):** two spec items join this step's sweep —
-a short **Undo after deleting a take** on the review screen (spec §01.6.2: the file survives
-until the undo window expires; today Delete is immediate) and an **orphaned-take cleanup**
-sweep for recordings stranded in cache by a crash mid-review (spec §02.12). Filmstrip
-thumbnails on the review track remain a named deviation (skinning-pass upgrade), not this
-step's work.
+a short **Undo after deleting a take** on the review screen (spec §01.6.2 — today Delete asks
+for confirmation instead, which is further from the spec, not closer) and **prediction-vs-correction
+telemetry** (spec §03.20/§06.11: the detector's seed and the golfer's final mark exist together at
+the moment of Save and are currently both discarded — the one deviation with no upside).
+
+The filmstrip SHIPPED in step 04, and orphan cleanup was implemented in the 2026-08-21 audit pass
+(`sweepCaptureCache`, called on capture-screen mount) — neither is outstanding.

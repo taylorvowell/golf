@@ -79,6 +79,13 @@ export interface HighSpeedCameraViewRef {
      * still frame that reads as a crash.
      */
     previewLive: boolean;
+    /**
+     * When the recorder actually started (device clock), not when Record was tapped.
+     *
+     * The capture ladder can spend seconds finding a configuration the device accepts, so a
+     * countdown timed from the tap reaches zero while the take is still running.
+     */
+    startedAtMs: number;
   }>;
   /** End the take by tap. The hard cap ends it through `onRecordingEnded` instead. */
   stopRecording(): Promise<RecordingResult>;

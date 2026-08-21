@@ -3,6 +3,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Plus } from "lucide-react-native";
 
 import { FONT_DISPLAY } from "../../design/system/typography";
+import { PRESS_SUNK_HARD } from "../../design/system/press";
 import { useAppTheme } from "../../theme";
 
 /**
@@ -129,9 +130,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  /** A real, felt press: the face shrinks by a tenth. Scale, not opacity — a control over
-   * footage that fades reads as disabled rather than held. */
-  facePressed: { transform: [{ scale: 0.9 }] },
+  /** The louder of the two shared outdoor presses — this is the control that must not be
+   * missed from arm's length. */
+  facePressed: PRESS_SUNK_HARD,
   stopSquare: { width: STOP, height: STOP, borderRadius: 5, backgroundColor: "#FFFFFF" },
   /** The square shrinks further and rounds off, so the glyph moves too — motion at the centre
    * of the control is what the eye actually catches. */

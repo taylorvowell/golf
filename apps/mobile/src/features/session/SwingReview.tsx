@@ -16,8 +16,15 @@ import FrameClockView from "../../../modules/frame-clock/src/FrameClockView";
 import type { FrameClockHandle } from "../../../modules/frame-clock/src/FrameClock.types";
 import HighSpeedCamera from "../../../modules/high-speed-camera/src";
 import { FONT_BODY, FONT_DISPLAY } from "../../design/system/typography";
+import { PRESS_SUNK } from "../../design/system/press";
 import { COLORS, SEMANTIC } from "../../theme";
-import { PRE_ROLL_SEC, REVIEW_WINDOW_S } from "./captureConstants";
+import {
+  CANDIDATE_FLOOR,
+  PRE_ROLL_SEC,
+  REVIEW_WINDOW_S,
+  STRIP_FRAMES,
+  STRIP_PX,
+} from "./captureConstants";
 import { ChoiceSheet } from "./sheets/ChoiceSheet";
 
 /**
@@ -46,16 +53,12 @@ import { ChoiceSheet } from "./sheets/ChoiceSheet";
  * real one, so the strike that matters is the later of two similar transients.
  */
 
-/** A candidate this far below the strongest is noise, not a second swing. */
-const CANDIDATE_FLOOR = 0.45;
-
-/** Enough pictures to recognise a swing along the track, few enough to decode instantly. */
-const STRIP_FRAMES = 12;
-/** Decode width per frame. The strip is ~64pt tall on a 3x screen — 160px is already generous. */
-const STRIP_PX = 160;
-
 /** The handle's width. Small — it marks an instant now, not a span of time. */
 const HANDLE_W = 26;
+
+/** One screen-reader step. A tenth of a second is well inside the tolerance the hint
+ * promises ("just get close"), so a few taps always land the mark. */
+const A11Y_STEP_S = 0.1;
 
 export interface SwingTake {
   /** Absolute path to the untrimmed take, as the native recorder wrote it. */
@@ -220,6 +223,24 @@ export function SwingReview({ take, onSave, onDelete, saving = false }: SwingRev
         <View
           style={styles.track}
           onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}
+          // A drag-only surface is unreachable without this: the mark is the one piece of
+          // precision this screen asks for, so a screen-reader user gets it as an adjustable
+          // with explicit steps rather than a gesture they cannot perform.
+          accessible
+          accessibilityRole="adjustable"
+          accessibilityLabel="Where you hit the ball"
+          accessibilityValue={{
+            min: 0,
+            max: Math.round(durationS * 10),
+            now: Math.round((impactSec ?? 0) * 10),
+            text: `${(impactSec ?? 0).toFixed(1)} seconds`,
+          }}
+          accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
+          onAccessibilityAction={(e) => {
+            const step = e.nativeEvent.actionName === "increment" ? A11Y_STEP_S : -A11Y_STEP_S;
+            setMark(markRef.current + step);
+            seekTo(markRef.current);
+          }}
           {...pan.panHandlers}
         >
           {/* The swing, along the track. Finding the strike by SEEING it beats finding it by
@@ -397,8 +418,5 @@ const styles = StyleSheet.create({
     fontSize: 17,
     letterSpacing: -0.2,
   },
-  /** A press you can see from arm's length (Taylor, 2026-08-21): the control shrinks and
-   * dims together. Scale is what carries — an opacity change alone is invisible outdoors in
-   * sunlight, which is exactly where this screen is used. */
-  pressedHard: { transform: [{ scale: 0.94 }], opacity: 0.85 },
+  pressedHard: PRESS_SUNK,
 });

@@ -3,7 +3,7 @@ import { PanResponder, StyleSheet, Text, View } from "react-native";
 
 import { FONT_DISPLAY } from "../../design/system/typography";
 import { COLORS } from "../../theme";
-import { CONTROL_EDGE } from "./controlEdge";
+import { CONTROL_EDGE } from "../../design/system/controlEdge";
 import { zoomIsAdjustable, type CameraZoom, type ZoomRange } from "./sessionState";
 
 /**

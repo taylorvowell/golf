@@ -43,11 +43,19 @@ ranges are gone entirely (a floating rate writes timestamps that disagree with
    failed from Node).
 
 **Also shipped this session:** front camera removed entirely (high-speed is a rear-sensor
-feature); FPS pill (probed rate only, shown while filming); review screen rebuilt as a
+feature); an FPS pill was added and then REMOVED again the same day (Taylor — the rate is an
+instrument; the never-degrade-silently promise is kept by the failure message and the capture
+ladder's log); review screen rebuilt as a
 **mark-the-strike** interaction — paused frame, scrub moves the frame, a small handle instead
 of a range box, filmstrip from a new native `clipThumbnails`, delete confirms; 30s cap with a
 5s on-screen countdown; `CONTROL_EDGE` (20% aqua) on capture controls as a named exception to
 the no-borders rule.
+**Audited 2026-08-21** — `.claude/audits/session-capture-2026-08-21/`. Four parallel reviewers
+(fresh-eyes JS, native Kotlin, spec-conformance, tooling/reuse) found 4 native criticals, ~12
+highs and a broken Metro launcher; all fixed in the same pass. The two worth remembering:
+hardware BACK during a take finalised the recording natively with no path in JS and wedged the
+reducer in `recording` forever (a lost swing AND a dead Record button), and nothing ever deleted
+capture leftovers — a real phone had 1.8GB of stranded takes and filmstrips.
 **Notes:** Orphan recovery added after a Fast Refresh remount mid-take desynced JS from
 native and left "already recording" forever — native now abandons an unclaimable take rather
 than refusing Record. Remaining shortfalls are in `_STATUS.json`: an outdoor pass (audio-seed

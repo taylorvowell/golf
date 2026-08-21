@@ -233,24 +233,35 @@ disagrees with it, the spec wins. The wired chain: Record drives the native sess
 `useTakeRecorder` (requests the 240 ceiling; the device's configured rate is the truth); a
 finalized take enters `pendingTake` and **review owns the surface** — a recording never becomes a
 swing except through `save-take`, and nothing (arm, shutter remote, hardware back) can touch an
-unreviewed take, because it is the only copy of that swing. Save trims to the golfer's six-second
-window (remux, no re-encode) and mints the swing with its `clip`; Delete discards take and file.
+unreviewed take, because it is the only copy of that swing — hardware back is inert for the whole
+of a countdown, a take and a review for exactly that reason. Save cuts a **5 s** clip around the
+marked strike (remux, no re-encode) and mints the swing with its `clip`; Delete discards take and
+file, and a take the flow can no longer reach is deleted rather than merely dropped.
 The post-swing screen plays the trimmed clip until step 06 swaps in the analyzed swing.
-**Constants live in `features/session/captureConstants.ts`** (spec §11.7): 20 s impact window,
-17 s warning tone, 3 s pre/post-roll, 240 fps ceiling. The hard cap is 23 s — without live
-detection the app cannot know a shot at second 19 still needs its follow-through, and a lost swing
-is the worst failure the spec names; when live detection lands (auto-stop, iceboxed), an
-impact-free take ends at 20 s.
+**Constants live in `features/session/captureConstants.ts`** (spec §11.7): a **30 s** hard cap
+with the last **5 s** counted down on screen (and the warning tone moved to where that countdown
+begins), a **5 s** review window, `SAVE_PAD_S` = 100 ms of hidden slack added to each end of the
+saved clip, and a 240 fps ceiling. The cap is generous on purpose: without live detection the app
+cannot know a late shot still needs its follow-through, and a lost swing is the worst failure the
+spec names.
 **Source-deletion contract, local half:** the untrimmed source is deleted only after a successful
 trim (locally, a successful trim is acceptance; the upload half arrives with step 06). A failed
 trim saves the take **untrimmed** as the swing's clip — never lose the only copy.
-**Named deviations from the spec, deliberate:** the review scrubber is a plain track that slides
-the fixed window, not a thumbnail filmstrip (the interaction contract — fixed six-second window,
-one degree of freedom — is the spec's; thumbnails are a skinning-pass upgrade). Delete on review
-is immediate, with no Undo yet. Detection is post-hoc audio only (the spec's Tier C — the
-two-surface limit forbids live sampling), so candidate markers seed from `detectImpacts` after
-recording. Capture-attempt telemetry (predicted vs corrected window) waits for the step 06 create
-API.
+**The review screen asks for ONE moment, not a range** (Taylor, 2026-08-21) — a deliberate
+inversion of spec §01.5.6, which specifies a fixed six-second window the golfer slides. The golfer
+marks where they hit the ball on a **filmstrip** scrubber; the clip is cut around that mark and its
+edges are never shown, because "that is where I hit the ball" is a question a golfer can answer
+between swings and "that is a good place for a clip to start" is not. The picture stays **paused**
+(scrub moves the frame, no loop): a loop invites refereeing its edges — the judgement being taken
+off them — and at 240 fps the bottom of a downswing is gone before a loop restarts.
+**Other named deviations:** Delete asks for confirmation instead of the spec's delete-with-Undo
+(§01.6.2) — the take is the only copy, never uploaded, with no undo behind it; an Undo is the
+better end state and is step 07's. Candidate markers are NOT drawn on the track: a row of the
+app's guesses asks the golfer to choose between them, which is harder than the question being
+asked. Detection is post-hoc audio only (the spec's Tier C — the two-surface limit forbids live
+sampling). Capture-attempt telemetry (predicted vs corrected mark, spec §03.20/§06.11) is not yet
+captured and belongs with the step 06 create API — the one deviation with no upside, since the
+comparison exists for free at the moment of Save.
 
 ### Session mode is the capture surface, built UI-first behind Taylor's sign-off gate
 

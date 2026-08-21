@@ -1,5 +1,5 @@
-import { useCallback, useRef } from "react";
-import { StyleSheet } from "react-native";
+import { useCallback, useEffect, useRef } from "react";
+import { AppState, StyleSheet } from "react-native";
 
 import type {
   FrameClockHandle,
@@ -27,13 +27,36 @@ export function LocalClipPlayer({ clip }: { clip: SwingClipRef }) {
     void player.current?.play();
   }, []);
 
+  /** True between reaching the end and the seek landing — without it, every frame past the
+   * last one re-fires the seek instead of one seek re-firing the loop. */
+  const looping = useRef(false);
+
   const onFrameRendered = useCallback(
     (e: { nativeEvent: FrameRenderedEvent }) => {
       const lastFrame = Math.floor((durationMsRef.current / 1000) * clip.fps) - 1;
-      if (e.nativeEvent.frame >= lastFrame) void player.current?.seekToFrame(0);
+      if (e.nativeEvent.frame >= lastFrame) {
+        if (looping.current) return;
+        looping.current = true;
+        void player.current?.seekToFrame(0);
+      } else {
+        looping.current = false;
+      }
     },
     [clip.fps],
   );
+
+  /**
+   * Nothing plays while the app is backgrounded (`.claude/rules/react-native.md`, Lifecycle).
+   * Without this the decoder keeps running behind the home button — battery on a screen the
+   * golfer cannot see, and the one rule the report player already keeps.
+   */
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (next) => {
+      if (next === "active") void player.current?.play();
+      else void player.current?.pause();
+    });
+    return () => sub.remove();
+  }, []);
 
   return (
     <FrameClockView

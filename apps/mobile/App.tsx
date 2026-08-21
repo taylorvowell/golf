@@ -15,6 +15,7 @@ import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useMemo } from "react";
 import { StatusBar } from "expo-status-bar";
+import { View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { AuthGate } from "./src/features/auth/AuthGate";
@@ -27,6 +28,7 @@ import { EntitlementProvider } from "./src/features/billing/entitlement";
 import { CoachScreen } from "./src/screens/CoachScreen";
 import { DeleteAccountRoute } from "./src/screens/DeleteAccountRoute";
 import { HomeScreen } from "./src/screens/HomeScreen";
+import { InstructorBubble } from "./src/features/instructor/InstructorBubble";
 import { InstructorChatScreen } from "./src/screens/InstructorChatScreen";
 import { InstructorScreen } from "./src/screens/InstructorScreen";
 import { NotificationsScreen } from "./src/screens/NotificationsScreen";
@@ -116,17 +118,26 @@ function DeepAnalysisDark() {
 
 function Tabs() {
   return (
-    // Headerless: each tab draws its own header (the hero top row on Swings/Progress, the
-    // system ScreenHeader on Home/Coach), which is what owns the top inset.
-    <Tab.Navigator
-      screenOptions={{ headerShown: false }}
-      tabBar={(props) => <TabBar {...props} />}
-    >
-      <Tab.Screen name="Home" component={HomeScreen} />
-      <Tab.Screen name="SwingLog" component={SwingLogScreen} />
-      <Tab.Screen name="Progress" component={ProgressScreen} />
-      <Tab.Screen name="Coach" component={CoachScreen} />
-    </Tab.Navigator>
+    // `box-none` so the wrapper is only a mount point for the bubble and never eats a touch
+    // meant for the tab underneath it.
+    <View style={{ flex: 1 }} pointerEvents="box-none">
+      {/* Headerless: each tab draws its own header (the hero top row on Swings/Progress, the
+          system ScreenHeader on Home/Coach), which is what owns the top inset. */}
+      <Tab.Navigator
+        screenOptions={{ headerShown: false }}
+        tabBar={(props) => <TabBar {...props} />}
+      >
+        <Tab.Screen name="Home" component={HomeScreen} />
+        <Tab.Screen name="SwingLog" component={SwingLogScreen} />
+        <Tab.Screen name="Progress" component={ProgressScreen} />
+        <Tab.Screen name="Coach" component={CoachScreen} />
+      </Tab.Navigator>
+      {/* The instructor's chat bubble belongs to the SHELL, not to a screen — every normal
+          page carries it, and only when an instructor is connected (the store decides).
+          Mounted here rather than per screen so the surfaces stacked ABOVE the shell — the
+          player, capture, the guided walkthroughs — are free of it by construction. */}
+      <InstructorBubble />
+    </View>
   );
 }
 

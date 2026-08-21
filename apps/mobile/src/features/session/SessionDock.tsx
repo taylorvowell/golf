@@ -237,16 +237,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(16,28,50,0.96)",
     zIndex: 2,
   },
-  // Subtle corner controls over the footage: a white glyph over a small white word, no fill.
-  corner: { position: "absolute", alignItems: "center", gap: 4, padding: 6 },
-  cornerLabel: {
-    color: "rgba(255,255,255,0.85)",
-    fontFamily: FONT_DISPLAY.black,
-    fontSize: 9,
-    letterSpacing: 0.4,
-    textTransform: "uppercase",
-  },
-  cornerPressed: { opacity: 0.6 },
   modeOption: {
     minHeight: 36,
     borderRadius: 14,

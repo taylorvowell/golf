@@ -2,7 +2,6 @@ import {
   DEFAULT_SESSION_SETTINGS,
   initialSessionState,
   previousSwing,
-  sessionDisplayName,
   sessionReducer,
   type SessionState,
   type SwingClipRef,
@@ -30,17 +29,14 @@ function recordSwing(s: SessionState, id: string, at = 1): SessionState {
   return s;
 }
 
-it("names the session from its number and date", () => {
+it("names the session from its number", () => {
   const s = base();
   expect(s.title).toBe("Session 3");
-  expect(s.dateLabel).toBe("Aug 18");
-  expect(sessionDisplayName(s)).toBe("Session 3 | Aug 18");
 });
 
-it("renames the title half only, and drops a whitespace rename", () => {
+it("renames, and drops a whitespace rename", () => {
   const s = sessionReducer(base(), { type: "rename", title: "Morning grind" });
   expect(s.title).toBe("Morning grind");
-  expect(s.dateLabel).toBe("Aug 18");
   expect(sessionReducer(s, { type: "rename", title: "   " }).title).toBe("Morning grind");
 });
 
@@ -107,6 +103,45 @@ it("nothing arms over an unreviewed take, and discard mints nothing", () => {
   expect(s.pendingTake).toBeNull();
   expect(s.swings).toHaveLength(0);
   expect(s.mode).toBe("idle");
+});
+
+it("a countdown stopped MID-SESSION returns to the swing you came from", () => {
+  // The "a session is a LOOP" rule (Taylor): stopping a countdown must not drop the golfer
+  // on the empty capture screen when there is a swing behind them. Only the empty-session
+  // case was pinned before, which is the branch that does NOT exercise the rule.
+  let s = recordSwing(base(), "a");
+  s = sessionReducer(s, { type: "back-to-capture" });
+  s = sessionReducer(s, { type: "arm" });
+  expect(s.mode).toBe("countdown");
+
+  s = sessionReducer(s, { type: "stop" });
+  expect(s.mode).toBe("idle");
+  expect(s.reviewing).toBe("a");
+  expect(s.swings).toHaveLength(1);
+});
+
+it("an untouched zoom re-defaults to the new lens; a chosen one is kept and clamped", () => {
+  // The trickiest expression in the reducer and it was never exercised: the real range only
+  // arrives once the preview opens, so Front view's "widest" is unknowable before that.
+  let s = sessionReducer(base(), { type: "set-view", view: "face_on" });
+  s = sessionReducer(s, { type: "set-zoom-range", range: { min: 0.5, max: 8 } });
+  // Untouched → face_on's default is the lens's WIDEST.
+  expect(s.zoom).toBe(0.5);
+
+  s = sessionReducer(s, { type: "set-zoom", zoom: 4 });
+  s = sessionReducer(s, { type: "set-zoom-range", range: { min: 1, max: 2 } });
+  // Deliberately chosen → kept, but clamped into what the new lens can reach.
+  expect(s.zoom).toBe(2);
+});
+
+it("save-take with no pending take changes nothing", () => {
+  const s = base();
+  expect(sessionReducer(s, { type: "save-take", clip: CLIP, at: 1 })).toBe(s);
+});
+
+it("record-failed off `recording` changes nothing — the guard the tap/cap race rests on", () => {
+  const s = recordSwing(base(), "a");
+  expect(sessionReducer(s, { type: "record-failed" })).toBe(s);
 });
 
 it("record-failed returns to idle with nothing minted", () => {

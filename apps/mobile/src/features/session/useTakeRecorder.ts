@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, type RefObject } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 
+import HighSpeedCamera from "../../../modules/high-speed-camera/src";
 import type {
   HighSpeedCameraViewProps,
   HighSpeedCameraViewRef,
@@ -27,10 +28,18 @@ export function useTakeRecorder(
   onError: (message: string) => void,
   /** Told whether the picture stays live during the take — some devices cannot do both. */
   onPreviewLive?: (live: boolean) => void,
+  /** The recorder's own start time (device clock), for timers that must match its cap. */
+  onStarted?: (startedAtMs: number) => void,
 ) {
   /** True from the start call until ANY ending settled — the guard that keeps the tap/cap
    * race from double-finalizing one take. */
   const active = useRef(false);
+
+  /** The recorder's own start, once it reports one. Drives both take timers. */
+  const [startedAtMs, setStartedAtMs] = useState<number | null>(null);
+  useEffect(() => {
+    if (mode !== "recording") setStartedAtMs(null);
+  }, [mode]);
 
   useEffect(() => {
     if (mode !== "recording" || active.current) return;
@@ -41,7 +50,15 @@ export function useTakeRecorder(
         // ceiling and resolves with the rate it actually configured (§02.4). The cap
         // always includes the post-roll allowance — see MAX_TAKE_SEC's comment.
         const started = await camera.current?.startRecording(MAX_FPS_REQUEST, MAX_TAKE_SEC);
-        if (started) onPreviewLive?.(started.previewLive);
+        if (started) {
+          onPreviewLive?.(started.previewLive);
+          // The recorder's OWN start, not the tap: the ladder can spend seconds finding a
+          // configuration the device accepts, and a countdown timed from the tap reaches
+          // zero while the take is still running — on the screen whose whole purpose is
+          // telling the golfer when the take will end.
+          setStartedAtMs(started.startedAtMs);
+          onStarted?.(started.startedAtMs);
+        }
       } catch (e) {
         active.current = false;
         dispatch({ type: "record-failed" });
@@ -59,15 +76,42 @@ export function useTakeRecorder(
   }, [mode]);
 
   // The warning (§01.4.4), fired as the on-screen countdown begins: the take is about to end
-  // and the golfer is out at the ball, where a tone carries and a screen does not.
+  // and the golfer is out at the ball, where a tone carries and a screen does not. Timed from
+  // the RECORDER's start for the same reason the countdown is — see `onStarted`.
   useEffect(() => {
-    if (mode !== "recording") return;
-    const timer = setTimeout(
-      playWarningTone,
-      (MAX_TAKE_SEC - AUTOSTOP_COUNTDOWN_SEC) * 1000,
-    );
+    if (mode !== "recording" || startedAtMs === null) return;
+    const elapsed = Date.now() - startedAtMs;
+    const delay = (MAX_TAKE_SEC - AUTOSTOP_COUNTDOWN_SEC) * 1000 - elapsed;
+    if (delay <= 0) return;
+    const timer = setTimeout(playWarningTone, delay);
     return () => clearTimeout(timer);
+  }, [mode, startedAtMs]);
+
+  /** Mirrors the reducer's mode without re-creating callbacks — read to tell a delivered take
+   * from one arriving after the flow already moved on. */
+  const modeRef = useRef(mode);
+  useEffect(() => {
+    modeRef.current = mode;
   }, [mode]);
+
+  /**
+   * Hand a finalized take to the reducer — or, if the flow already moved on, delete it.
+   *
+   * The reducer drops a `take-ready` that arrives off `recording` (the tap/cap race), and
+   * that drop is correct. What was NOT correct was forgetting the file: a real recording
+   * nobody can reach stayed in the cache forever. Every finalized take now ends up either on
+   * screen or deleted, never merely dropped.
+   */
+  const deliverTake = useCallback(
+    (path: string, fps: number, durationMs: number) => {
+      if (modeRef.current !== "recording") {
+        void HighSpeedCamera.deleteClip?.(path);
+        return;
+      }
+      dispatch({ type: "take-ready", take: { path, fps, durationMs } });
+    },
+    [dispatch],
+  );
 
   /**
    * The golfer's stop — dock button or shutter remote. Safe to call in any state.
@@ -82,10 +126,7 @@ export function useTakeRecorder(
       const result = await camera.current?.stopRecording();
       active.current = false;
       if (result) {
-        dispatch({
-          type: "take-ready",
-          take: { path: result.path, fps: result.fps, durationMs: result.durationMs },
-        });
+        deliverTake(result.path, result.fps, result.durationMs);
       } else {
         // The ref was gone (view unmounted mid-take) — nothing was finalized.
         dispatch({ type: "record-failed" });
@@ -107,16 +148,13 @@ export function useTakeRecorder(
         active.current = false;
         const ev = e.nativeEvent;
         if (ev.reason === "cap") {
-          dispatch({
-            type: "take-ready",
-            take: { path: ev.path, fps: ev.fps, durationMs: ev.durationMs },
-          });
+          deliverTake(ev.path, ev.fps, ev.durationMs);
         } else {
           dispatch({ type: "record-failed" });
           onError(ev.error);
         }
       },
-      [dispatch, onError],
+      [deliverTake, dispatch, onError],
     );
 
   return { stop, onRecordingEnded };

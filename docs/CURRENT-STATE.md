@@ -646,8 +646,9 @@ Stated as fact, with no implied ordering or plan. See
   (`features/profile/profileFields.ts`); every other profile column and the goals machinery
   were dropped from schema, API and contract (migrations 0014/0015 — goals belong to the
   guidance features). Profile handedness mirrors the capture guide art and swaps the session
-  screen's control rails for a left-handed golfer. No capture, no upload, and no iOS build has ever
-  been compiled.
+  screen's control rails for a left-handed golfer. **Capture is real as of 2026-08-21** (record →
+  review → trim → local playback, on the phone); upload from the phone is not, and no iOS build has
+  ever been compiled.
 - **KNOWN DEFECT — every swing-log thumbnail is a contact SHEET, not a frame.** `GET
   /api/v1/swings/:id/thumb` serves the analyzer's `contact.jpg`, and the route describes it as
   *"the contact-frame still"*. It is not: `contact.jpg` is a **24-up contact sheet** (1920×2272,
@@ -657,7 +658,13 @@ Stated as fact, with no implied ordering or plan. See
   sense. Fixing it needs a single-frame artifact (impact, P7, is the obvious choice) or a
   server-side crop; picking which is a product call. Found 2026-08-13 by looking at the running
   app on the emulator — nothing in the code or the tests says anything is wrong.
-- **No capture of any kind.** No in-app recording, no camera code, no multi-device sync.
+- **Capture works; capture does not UPLOAD.** A golfer can record a swing on the phone at
+  **1080p240 with a live preview**, mark the strike on a filmstrip scrubber, save, and watch the
+  trimmed clip — all local (`apps/mobile/src/features/session/`, `modules/high-speed-camera`,
+  session-mode step 04). What does not exist yet: the clip never leaves the device (step 06 wires
+  the two-phase ingest that is already built server-side), sessions are client-state only and do
+  not survive leaving the screen (step 05), analysis on a captured swing is a ~12 s stub timer, and
+  there is **no multi-device sync** (`dual-device-capture`, still a `__DEV__` stub).
 - **No upload flow.** Analysis is started by hand (`burnin.py`) or via the web app's re-analyze
   button on an already-indexed swing. Two job drivers exist behind `JOBS_DRIVER` (spawn is the
   default): the analyzer as a child process of the web server, or QStash dispatch to the worker

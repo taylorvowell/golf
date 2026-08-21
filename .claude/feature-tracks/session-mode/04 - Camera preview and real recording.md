@@ -108,6 +108,14 @@ stub 0.5/1/2 stops with the device's probed zoom range), and the **DTL/Front vie
 wires up in step 06). Camera choices are reducer-gated to idle; the native session should
 apply them on preview restart, not mid-recording.
 
+**SUPERSEDED — read this note, not the step body above.** The body predates the capture spec and
+is wrong in four specific ways a future reader would otherwise trust: there is **no FPS pill**
+(mentioned at four points above — the rate is an instrument and is never displayed; §2.3 is kept by
+the failure message instead), there is **no camera flip and no `state.facing`** (high-speed is a
+rear-sensor feature, so the back lens is the only one that can record), the review window is **5 s
+built around a marked strike**, not a fixed six-second window that slides, and the cap is **30 s
+with a 5 s on-screen countdown**, not 23 s with a 17 s tone.
+
 **Superseded in part by the capture spec package (2026-08-20):**
 `.claude/golf_swing_capture_spec/` is now the governing contract for this subsystem (decision
 logged in `docs/decisions/mobile-client.md`, "The record chain is take → review → trim").
@@ -116,6 +124,12 @@ finalized take enters review (`SwingReview`, fixed six-second window seeded by p
 detection) and only Save mints the swing, so "Stop → post-swing plays the file" gained a
 review stage in between; (2) the FPS pill was already withdrawn by Taylor in step 03 —
 honest-rate surfacing is a failure message, never a standing readout. Recording requests the
-240 ceiling with a 23 s hard cap and a 17 s warning tone (`captureConstants.ts`). Shipped
-2026-08-20 across commits `38b7854`, `66a3479`, and the record-chain wiring; the S25+ device
-pass (real fps, frame-lock, reliability) is the named shortfall on the HANDOFF register.
+240 ceiling with a 30 s hard cap and a 5 s on-screen countdown (`captureConstants.ts`).
+
+**Shipped and verified on the S25+ 2026-08-21: 1080p at 240 fps WITH a live preview.** The blocker
+was a documented API rule this code was violating — a high-speed session carrying both preview and
+recorder requires the FIXED fps range, and the device publishes both a fixed and a variable range
+at 240, so the code was tie-breaking onto the invalid one at random. Capture is now a ladder of
+real configurations asked of the device. Audited the same day
+(`.claude/audits/session-capture-2026-08-21/`); findings fixed in that pass. What remains is an
+outdoor pass and the bitrate sweep — both HANDOFF rows.
