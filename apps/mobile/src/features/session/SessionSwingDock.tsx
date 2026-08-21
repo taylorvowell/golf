@@ -77,6 +77,7 @@ export function SessionSwingDock({
       center={
         <SessionRecordButton
           stop={false}
+          plus
           label="Record New Swing"
           onPress={onRecordNew}
           testID="session-record-new"

@@ -1,10 +1,12 @@
 import { Pressable, Text, View } from "react-native";
 import { Check, Smartphone } from "lucide-react-native";
 
+import { DualViewIcon } from "../../../design/system/DualViewIcon";
 import { QrPlaceholder } from "../../../design/system/QrPlaceholder";
 import { Sheet } from "../../../design/system/Sheet";
 import { FONT_BODY, FONT_DISPLAY } from "../../../design/system/typography";
 import { COLORS, appStyles, useAppTheme } from "../../../theme";
+import { DUAL_SYNC_CODE, viewLabel } from "../dualSync";
 import type { CaptureView } from "../sessionState";
 
 /**
@@ -20,9 +22,6 @@ import type { CaptureView } from "../sessionState";
  * model. This phone owns the swing and the trigger; the second one is a camera. A golfer acts
  * on "is it connected" and "which angle is it filming" — everything else is an instrument.
  */
-
-/** Stubbed until pairing is real — the server mints this with the session. */
-const STUB_CODE = "7K4P2Q";
 
 const STEPS = [
   "Open SwingSage on the other phone",
@@ -40,10 +39,6 @@ export interface DualSyncSheetProps {
   onPairedChange: (paired: boolean) => void;
 }
 
-function viewLabel(view: CaptureView): string {
-  return view === "dtl" ? "Down the line" : "Front view";
-}
-
 export function DualSyncSheet({
   visible,
   onClose,
@@ -59,7 +54,8 @@ export function DualSyncSheet({
     <Sheet
       visible={visible}
       onClose={onClose}
-      title="Dual Sync"
+      title="Dual View Sync"
+      titleIcon={<DualViewIcon size={28} color={t.text} strokeWidth={1.1} />}
       subtitle="Film this swing from two angles at once"
       testID="dual-sync-sheet"
     >
@@ -94,12 +90,12 @@ export function DualSyncSheet({
       ) : (
         <View style={styles.block}>
           <View style={styles.qrCard}>
-            <QrPlaceholder value={STUB_CODE} size={168} />
+            <QrPlaceholder value={DUAL_SYNC_CODE} size={168} />
           </View>
 
           <View style={styles.codeRow}>
             <Text style={styles.codeLabel}>Or enter code</Text>
-            <Text style={styles.code}>{STUB_CODE}</Text>
+            <Text style={styles.code}>{DUAL_SYNC_CODE}</Text>
           </View>
 
           <View style={styles.steps}>
@@ -110,16 +106,6 @@ export function DualSyncSheet({
               </View>
             ))}
           </View>
-
-          <Text style={styles.note}>
-            The other phone films {viewLabel(otherView).toLowerCase()} while this one films{" "}
-            {viewLabel(view).toLowerCase()}. Signing in on it takes a minute the first time,
-            then it is just a scan.
-          </Text>
-
-          <Text style={styles.waiting} testID="dual-sync-waiting">
-            Waiting for a second camera…
-          </Text>
 
           {__DEV__ ? (
             <Pressable
@@ -178,13 +164,6 @@ const useStyles = appStyles((t) => ({
   },
   stepText: { color: t.text, fontFamily: FONT_BODY.regular, fontSize: 13 },
   note: { color: t.muted, fontFamily: FONT_BODY.regular, fontSize: 12.5, lineHeight: 18 },
-  waiting: {
-    color: t.aqua,
-    fontFamily: FONT_DISPLAY.black,
-    fontSize: 11,
-    letterSpacing: 0.6,
-    textAlign: "center",
-  },
   pairedCard: {
     flexDirection: "row",
     alignItems: "center",

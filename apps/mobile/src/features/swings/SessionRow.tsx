@@ -2,7 +2,13 @@ import { useRef, useState } from "react";
 import { Animated, Easing, Pressable, Text, View } from "react-native";
 import { ChevronDown } from "lucide-react-native";
 
-import { DateTitle, ScoreOrb, SwingTimelineList, formatDayTitle } from "../../design/system";
+import {
+  DateTitle,
+  SCROLL_PRESS_DELAY_MS,
+  ScoreOrb,
+  SwingTimelineList,
+  formatDayTitle,
+} from "../../design/system";
 import { FONT_BODY } from "../../design/system/typography";
 import { themedStyles, useTheme } from "../../theme";
 import { SessionTags } from "./SessionTags";
@@ -58,11 +64,12 @@ export function SessionRow({
         }, ${session.swings.length} swings`}
         accessibilityHint={open ? "Hides the swings" : "Shows the swings in this session"}
         onPress={toggle}
+        unstable_pressDelay={SCROLL_PRESS_DELAY_MS}
         style={({ pressed }) => [styles.head, pressed && styles.pressed]}
       >
         <SessionThumb session={session} />
         <View style={{ flex: 1, minWidth: 0 }}>
-          <DateTitle ms={session.start} size={17} />
+          <DateTitle ms={session.start} size={13} />
           {/* What kind of session, how it was filmed, then when — one line under the date. */}
           <View style={styles.metaRow}>
             <SessionTags session={session} />
@@ -103,9 +110,21 @@ export function SessionRow({
 
 const useStyles = themedStyles((t) => ({
   card: { padding: 16, borderRadius: 14, backgroundColor: t.surface },
-  head: { flexDirection: "row", alignItems: "center", gap: 12 },
+  // Negative margin + matching padding: the pressed fill gets breathing room around the row's
+  // content without moving anything — the box the golfer sees is unchanged.
+  head: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginHorizontal: -8,
+    marginVertical: -6,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 10,
+  },
   metaRow: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 5 },
   meta: { color: t.textSoft, fontFamily: FONT_BODY.regular, fontSize: 13 },
   notScored: { color: t.muted2, fontFamily: FONT_BODY.bold, fontSize: 12 },
-  pressed: { opacity: 0.6 },
+  // Pressed is one step up the surface ramp — a fill, never opacity (ListRow's rule).
+  pressed: { backgroundColor: t.surface2 },
 }));

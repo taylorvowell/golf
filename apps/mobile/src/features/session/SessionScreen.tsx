@@ -10,24 +10,28 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AppHeader, APP_HEADER_BAR, useNavVisibility } from "../../design/system";
 import { FONT_DISPLAY } from "../../design/system/typography";
 import { useAppNavigation } from "../../navigation";
 import { COLORS, SEMANTIC } from "../../theme";
+import { useHandedness } from "../profile/useProfile";
 import { sessionize } from "../swings/sessions";
 import { useSwings } from "../swings/useSwings";
 import { STUB_ANALYSIS_MS } from "./AnalyzingBar";
 import { CameraControls } from "./CameraControls";
 import { CameraStage } from "./CameraStage";
 import { DualSyncButton } from "./DualSyncButton";
+import { DualSyncConnectOverlay } from "./DualSyncConnectOverlay";
 import { DualSyncPip } from "./DualSyncPip";
 import { PostSwingView } from "./PostSwingView";
 import { CountdownOverlay } from "./CountdownOverlay";
 import { ViewToggle } from "./ViewToggle";
 import { RecordingFrame } from "./RecordingFrame";
 import { SessionDock } from "./SessionDock";
+import { SESSION_NAV_CLEARANCE } from "./SessionNav";
 import { SessionTitle } from "./SessionTitle";
 import { SwingExitSheet } from "./sheets/SwingExitSheet";
 import { stageSessionArrival } from "./sessionArrival";
@@ -40,6 +44,8 @@ import {
 import { DualSyncSheet } from "./sheets/DualSyncSheet";
 import { SessionSettingsSheet } from "./sheets/SessionSettingsSheet";
 import { SessionTypeInfoSheet } from "./sheets/SessionTypeInfoSheet";
+import { useRecordSounds } from "./useRecordSounds";
+import { useShutterRemote } from "./useShutterRemote";
 
 /**
  * Session mode (D61) — the capture surface behind the tab bar's Record door.
@@ -67,9 +73,22 @@ export function SessionScreen() {
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
   const { setHidden } = useNavVisibility();
+  /**
+   * A left-handed golfer sets up mirror-imaged, so the rails swap sides with the profile
+   * (Taylor, 2026-08-20): zoom + camera flip + the view switcher move to the RIGHT edge —
+   * the hand nearest a lefty at address — and the Dual View column takes the left.
+   */
+  const leftHanded = useHandedness() === "left";
   // Stub seam for Dual Sync: no pairing exists yet, so the connected state is client-only
   // and reachable from the sheet's __DEV__ control (dual-device-capture replaces this).
   const [paired, setPaired] = useState(false);
+  /**
+   * The handshake owns the whole screen while it runs (Taylor): the sheet gets out of the way
+   * the moment a camera starts joining, and the overlay hands back to the capture screen with
+   * the second angle already a tile on it. `paired` only flips when the overlay is finished —
+   * the confirmation IS the transition, so the PiP must not appear behind it.
+   */
+  const [connecting, setConnecting] = useState(false);
   /** Hardware back on the post-swing screen asks instead of guessing — see `SwingExitSheet`. */
   const [exitOpen, setExitOpen] = useState(false);
 
@@ -178,28 +197,33 @@ export function SessionScreen() {
 
   // Hardware back: on post-swing it returns to capture; on capture it leaves with the
   // slide-down — never an instant pop out of a self-animated surface.
+  // Focus-scoped, not mount-scoped: this screen stays mounted under anything pushed above it
+  // (Profile, a swing report), and a mount-scoped handler would swallow back there and pop
+  // the exit sheet over the wrong page.
   const reviewingRef = useRef(state.reviewing);
   reviewingRef.current = state.reviewing;
-  useEffect(() => {
-    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
-      if (reviewingRef.current !== null) {
-        // Back is ambiguous on the post-swing screen — "another swing" and "end the session"
-        // are both plausible and both destructive of the other. Ask.
-        setExitOpen(true);
-      } else if (lockedRef.current) {
-        // A session with swings in it is a LOOP, and the only way out of it is End (Taylor,
-        // step-03 iteration). Back therefore returns to the swing that is already recorded
-        // rather than dropping out of a session the golfer has not finished.
-        const last = swingsRef.current[0];
-        if (last) dispatch({ type: "review", swingId: last.id });
-        else leave(() => navigation.goBack());
-      } else {
-        leave(() => navigation.goBack());
-      }
-      return true;
-    });
-    return () => sub.remove();
-  }, [leave, navigation]);
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+        if (reviewingRef.current !== null) {
+          // Back is ambiguous on the post-swing screen — "another swing" and "end the session"
+          // are both plausible and both destructive of the other. Ask.
+          setExitOpen(true);
+        } else if (lockedRef.current) {
+          // A session with swings in it is a LOOP, and the only way out of it is End (Taylor,
+          // step-03 iteration). Back therefore returns to the swing that is already recorded
+          // rather than dropping out of a session the golfer has not finished.
+          const last = swingsRef.current[0];
+          if (last) dispatch({ type: "review", swingId: last.id });
+          else leave(() => navigation.goBack());
+        } else {
+          leave(() => navigation.goBack());
+        }
+        return true;
+      });
+      return () => sub.remove();
+    }, [leave, navigation]),
+  );
 
   /**
    * @param stage Whether to announce the session on the log. Pass `false` when the caller has
@@ -223,6 +247,18 @@ export function SessionScreen() {
     },
     [leave, navigation, state.sessionType, state.swings.length, state.title],
   );
+
+  // The Bluetooth shutter remote (or the volume rocker) — live for the whole session, both
+  // screens; the reducer resolves what a press means from where the golfer is.
+  useShutterRemote(
+    useCallback(() => {
+      touched.current = true;
+      dispatch({ type: "shutter-press" });
+    }, []),
+  );
+
+  // Audible record start/stop cue (Settings → "Play record and stop sound").
+  useRecordSounds(state.mode);
 
   const idle = state.mode === "idle";
 
@@ -293,9 +329,16 @@ export function SessionScreen() {
                 </View>
               </LinearGradient>
 
-              {/* Camera controls — left edge, tucked close above the bar (Taylor). */}
+              {/* Controls rail — everything you touch while FRAMING THIS phone, in one column:
+                  the camera's own controls up top, the compact DTL / Front switcher sat directly
+                  above the bar (Taylor, 2026-08-20). Left edge for a righty, right edge for a
+                  lefty. Measured off the bar's own height so the two never drift apart when the
+                  bar changes. */}
               <View
-                style={[styles.leftControls, { bottom: 100 + insets.bottom }]}
+                style={[
+                  leftHanded ? styles.controlsRailRight : styles.controlsRailLeft,
+                  { bottom: SESSION_NAV_CLEARANCE + insets.bottom - 4 },
+                ]}
                 pointerEvents="box-none"
               >
                 <CameraControls
@@ -305,30 +348,29 @@ export function SessionScreen() {
                   onFlip={() => dispatch({ type: "flip-camera" })}
                   onZoom={(zoom) => dispatch({ type: "set-zoom", zoom })}
                 />
-              </View>
-
-              {/* Right rail — the angle controls as one stack: DTL/Front on top, Dual Sync
-                  directly under it (Taylor), the help orb unmoved below both. */}
-              <View
-                style={[styles.rightRail, { bottom: 100 + insets.bottom }]}
-                pointerEvents="box-none"
-              >
                 <ViewToggle
                   value={state.view}
                   onChange={(view) => dispatch({ type: "set-view", view })}
                 />
-                {/* One slot, two states (Taylor): the button is the door IN, and once a camera
-                    is paired the second angle itself takes its place — the preview is what you
-                    want under your thumb while framing, and a button that says "connected" is
-                    a worse version of a picture that shows it. Tapping either opens the sheet. */}
+              </View>
+
+              {/* Sync rail — the SECOND phone, on the far edge opposite this one's controls
+                  (Taylor, 2026-08-20). The Dual View button is the door in and stays put once
+                  paired; the picture it opened sits above it. Tapping either opens the sheet. */}
+              <View
+                style={[
+                  leftHanded ? styles.syncRailLeft : styles.syncRailRight,
+                  { bottom: SESSION_NAV_CLEARANCE + insets.bottom - 4 },
+                ]}
+                pointerEvents="box-none"
+              >
                 {paired ? (
                   <DualSyncPip
                     view={state.view === "dtl" ? "face_on" : "dtl"}
                     onPress={() => setSheet("sync")}
                   />
-                ) : (
-                  <DualSyncButton paired={paired} onPress={() => setSheet("sync")} />
-                )}
+                ) : null}
+                <DualSyncButton paired={paired} onPress={() => setSheet("sync")} />
               </View>
 
             </Animated.View>
@@ -421,8 +463,24 @@ export function SessionScreen() {
         onClose={() => setSheet(null)}
         view={state.view}
         paired={paired}
-        onPairedChange={setPaired}
+        onPairedChange={(next) => {
+          if (!next) {
+            setPaired(false);
+            return;
+          }
+          setSheet(null);
+          setConnecting(true);
+        }}
       />
+      {connecting ? (
+        <DualSyncConnectOverlay
+          view={state.view === "dtl" ? "face_on" : "dtl"}
+          onDone={() => {
+            setConnecting(false);
+            setPaired(true);
+          }}
+        />
+      ) : null}
     </View>
   );
 }
@@ -455,7 +513,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     textTransform: "uppercase",
   },
-  leftControls: { position: "absolute", left: 16 },
-  rightRail: { position: "absolute", right: 16, alignItems: "flex-end", gap: 8 },
+  // Each rail exists in both positions — the profile's handedness picks which (see above).
+  controlsRailLeft: { position: "absolute", left: 16, alignItems: "flex-start", gap: 14 },
+  controlsRailRight: { position: "absolute", right: 16, alignItems: "flex-end", gap: 14 },
+  syncRailRight: { position: "absolute", right: 16, alignItems: "flex-end", gap: 8 },
+  syncRailLeft: { position: "absolute", left: 16, alignItems: "flex-start", gap: 8 },
   pressed: { opacity: 0.6 },
 });

@@ -3,6 +3,7 @@ import { Animated, StyleSheet } from "react-native";
 
 import { PoseOutline } from "../../design/system/PoseOutline";
 import { posePlacement } from "../../design/system/capturePoses";
+import { useHandedness } from "../profile/useProfile";
 import { COLORS } from "../../theme";
 
 /**
@@ -32,6 +33,9 @@ export interface AlignmentGhostProps {
 }
 
 export function AlignmentGhost({ width, height, visible, view }: AlignmentGhostProps) {
+  // The art is right-handed; a left-handed golfer gets the mirror image in the mirrored spot,
+  // or the guide teaches them to stand on the wrong side of the ball (profile handedness, §5.4).
+  const mirrored = useHandedness() === "left";
   const fade = useRef(new Animated.Value(visible ? GHOST_OPACITY : 0)).current;
   useEffect(() => {
     Animated.timing(fade, {
@@ -44,7 +48,7 @@ export function AlignmentGhost({ width, height, visible, view }: AlignmentGhostP
   if (width <= 0 || height <= 0) return null;
 
   // The artboard contain-fitted in the stage, centred; the figure rect lives inside it.
-  const place = posePlacement(view, width, height);
+  const place = posePlacement(view, width, height, mirrored);
 
   return (
     <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: fade }]}>
@@ -59,6 +63,7 @@ export function AlignmentGhost({ width, height, visible, view }: AlignmentGhostP
           pose={view}
           width={place.width}
           height={place.height}
+          mirrored={mirrored}
           color={COLORS.aqua}
           // Really thin (Taylor, step-03 iteration): the ghost is a guide to line a body up
           // against, so it has to sit ON the golfer without hiding them. 3 read as a drawing

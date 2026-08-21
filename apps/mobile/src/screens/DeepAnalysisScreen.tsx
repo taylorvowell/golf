@@ -20,7 +20,7 @@ import {
   StanceStage,
   type StanceAnnotation,
 } from "../design/system";
-import { FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
+import { displayLine, FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
 import { computeSwingPlane, DEEP_MOMENTS, PLANE_NARRATION } from "../features/coach/deepScript";
 import { useSubjectSwing } from "../features/coach/subjectSwing";
 import { fitBox, windowBounds } from "../features/player/frames";
@@ -562,7 +562,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontFamily: FONT_DISPLAY.black,
     fontSize: 22,
-    lineHeight: 25,
+    lineHeight: displayLine(22),
     letterSpacing: -0.44,
   },
   narration: {

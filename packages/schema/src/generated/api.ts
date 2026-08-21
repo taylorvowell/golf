@@ -15,6 +15,13 @@ export type ApiVersion = "v1";
  * via the `definition` "jobStatusResponse".
  */
 export type JobStatusResponse = Job | JobIdle;
+/**
+ * Which side the golfer swings from. The one required onboarding answer — every piece of angle math threads through it (§5.4).
+ *
+ * This interface was referenced by `Api`'s JSON-Schema
+ * via the `definition` "handedness".
+ */
+export type Handedness = "right" | "left";
 
 /**
  * Every JSON request and response body of the versioned HTTP API, in one place.
@@ -399,4 +406,76 @@ export interface NotificationAckResponse {
    * The count AFTER the ack, so the bell never needs a second round trip.
    */
   unreadCount: number;
+}
+/**
+ * The half of the profile a directory or a shared swing may show (§5.1). The split is WHICH OBJECT a field is in, not a per-field flag.
+ *
+ * This interface was referenced by `Api`'s JSON-Schema
+ * via the `definition` "profilePublic".
+ */
+export interface ProfilePublic {
+  displayName: string;
+  avatarUrl: string | null;
+  bio: string | null;
+  region: string | null;
+}
+/**
+ * The six things the product asks a golfer (Taylor, 2026-08-20): handedness, swing style, handicap, age, driver speed, 7-iron carry. Deliberately tiny — everything else was removed from product, API and database together, and goals moved out of the profile entirely. Every field nullable: required is a property of the onboarding FLOW, never of the schema. No required list on purpose — fields WILL be added, and an addition must never invalidate an older client.
+ *
+ * This interface was referenced by `Api`'s JSON-Schema
+ * via the `definition` "golferProfilePrivate".
+ */
+export interface GolferProfilePrivate {
+  handedness?: "right" | "left" | null;
+  /**
+   * The golfer's SELF-REPORT against the §15.4 taxonomy — a prior, not a verdict. 'unsure' is a real answer, not a null.
+   */
+  selfReportedStyle?: "sty_01" | "sty_02" | "sty_03" | "sty_04" | "unsure" | null;
+  handicapRange?: "plus" | "scratch_5" | "6_10" | "11_15" | "16_20" | "21_28" | "29_plus" | null;
+  driverSwingSpeedMph?: number | null;
+  sevenIronCarryYds?: number | null;
+  ageRange?: "under_18" | "18_29" | "30_39" | "40_49" | "50_59" | "60_69" | "70_plus" | null;
+  /**
+   * Null means onboarding is still resumable — the profile row itself is the draft (§4.4).
+   */
+  onboardingCompletedAt?: string | null;
+}
+/**
+ * GET /api/v1/profile — the caller's own profile. Also the body PATCH answers with, so a client reconciles against what the server confirmed rather than what it sent.
+ *
+ * This interface was referenced by `Api`'s JSON-Schema
+ * via the `definition` "profileResponse".
+ */
+export interface ProfileResponse {
+  public: ProfilePublic;
+  private: GolferProfilePrivate;
+}
+/**
+ * PATCH /api/v1/profile. Partial on purpose — a screen sends only what it edits, so a screen written before a field existed can never erase it.
+ *
+ * This interface was referenced by `Api`'s JSON-Schema
+ * via the `definition` "profilePatchRequest".
+ */
+export interface ProfilePatchRequest {
+  public?: {
+    displayName?: string;
+    avatarUrl?: string | null;
+    bio?: string | null;
+    region?: string | null;
+  };
+  private?: GolferProfilePrivate;
+  /**
+   * Stamps onboardingCompletedAt. Idempotent.
+   */
+  completeOnboarding?: boolean;
+}
+/**
+ * GET/POST /api/v1/roles — which roles the caller holds and which they may claim (§4.4, D32).
+ *
+ * This interface was referenced by `Api`'s JSON-Schema
+ * via the `definition` "rolesResponse".
+ */
+export interface RolesResponse {
+  roles: string[];
+  claimable: string[];
 }

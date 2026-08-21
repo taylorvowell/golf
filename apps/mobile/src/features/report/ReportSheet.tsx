@@ -2,8 +2,13 @@ import { Pressable, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { Play } from "lucide-react-native";
 
-import { SwingProfile, Tag, type ProfileCallout } from "../../design/system";
-import { FONT_BODY, FONT_DISPLAY } from "../../design/system/typography";
+import {
+  SCROLL_PRESS_DELAY_MS,
+  SwingProfile,
+  Tag,
+  type ProfileCallout,
+} from "../../design/system";
+import { displayLine, FONT_BODY, FONT_DISPLAY } from "../../design/system/typography";
 import { useAuthenticatedImage } from "../../platform/useAuthenticatedImage";
 import { useTheme } from "../../theme";
 import type { ReportViewModel } from "./selectors";
@@ -100,7 +105,7 @@ export function ReportSheet({
               color: t.text,
               fontFamily: FONT_DISPLAY.black,
               fontSize: 28,
-              lineHeight: 28,
+              lineHeight: displayLine(28),
               letterSpacing: -0.56,
             }}
           >
@@ -163,6 +168,7 @@ export function ReportSheet({
             accessibilityRole="button"
             accessibilityLabel="Show full video"
             onPress={onShowVideo}
+            unstable_pressDelay={SCROLL_PRESS_DELAY_MS}
             style={{
               width: 126,
               height: 168,
@@ -171,32 +177,44 @@ export function ReportSheet({
               backgroundColor: "#101A2A",
             }}
           >
-            {thumb ? (
-              <Image
-                source={thumb}
-                style={{ position: "absolute", inset: 0 }}
-                contentFit="cover"
-                cachePolicy="disk"
-              />
-            ) : null}
-            {/* .report-play — the aqua play circle. */}
-            <View
-              style={{
-                position: "absolute",
-                left: "50%",
-                top: "48%",
-                marginLeft: -24,
-                marginTop: -24,
-                width: 48,
-                height: 48,
-                borderRadius: 24,
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: t.aqua,
-              }}
-            >
-              <Play size={16} color="#10204A" fill="#10204A" strokeWidth={0} />
-            </View>
+            {({ pressed }) => (
+              <>
+                {thumb ? (
+                  <Image
+                    source={thumb}
+                    style={{ position: "absolute", inset: 0 }}
+                    contentFit="cover"
+                    cachePolicy="disk"
+                  />
+                ) : null}
+                {/* .report-play — the aqua play circle. */}
+                <View
+                  style={{
+                    position: "absolute",
+                    left: "50%",
+                    top: "48%",
+                    marginLeft: -24,
+                    marginTop: -24,
+                    width: 48,
+                    height: 48,
+                    borderRadius: 24,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: t.aqua,
+                  }}
+                >
+                  <Play size={16} color="#10204A" fill="#10204A" strokeWidth={0} />
+                </View>
+                {/* Pressed reads as a shade over the footage — a fill on top, because a surface
+                    swap has nothing to show through a photograph. */}
+                {pressed ? (
+                  <View
+                    pointerEvents="none"
+                    style={{ position: "absolute", inset: 0, backgroundColor: "rgba(7,16,31,0.28)" }}
+                  />
+                ) : null}
+              </>
+            )}
           </Pressable>
           {/* .focus-copy */}
           <View style={{ flex: 1, minWidth: 0 }}>
@@ -217,7 +235,7 @@ export function ReportSheet({
                 color: t.text,
                 fontFamily: FONT_DISPLAY.black,
                 fontSize: 18,
-                lineHeight: 18.5,
+                lineHeight: displayLine(18),
                 letterSpacing: -0.36,
               }}
             >
@@ -306,7 +324,7 @@ export function ReportSheet({
             color: t.text,
             fontFamily: FONT_DISPLAY.black,
             fontSize: 22,
-            lineHeight: 22.5,
+            lineHeight: displayLine(22),
             letterSpacing: -0.44,
           }}
         >

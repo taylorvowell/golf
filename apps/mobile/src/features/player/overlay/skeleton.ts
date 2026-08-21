@@ -25,7 +25,12 @@ export const SIDE_COLOR: Record<string, string> = {
  * **Deliberate deviation from the club-tracking spec / the UI brief's "locked" palette**, which specified
  * red backswing and blue downswing. Red-back / blue-down is a golf-instruction convention, so
  * a coach reading this trace will not get the pairing they expect — that cost is real and was
- * accepted knowingly.
+ * accepted knowingly. As of Taylor's final styling verdict (2026-08-19, five comparison
+ * rounds) the mobile trace is the aquaDeep gradient — shades of one teal hue, dark at address
+ * to bright at the strike — and these two values are its endpoints: they keep the scrub's
+ * phase bands, the menu tiles and the WEB player's two-colour trace visibly the same system
+ * as the drawn line. Web still phase-colours (dashed back / solid down) pending the gradient
+ * port — the named divergence in docs/decisions/mobile-client.md.
  *
  * Follow-through carries its alpha in the colour rather than being drawn at a lower opacity,
  * so it stays translucent regardless of how the renderer sets globalAlpha. It is also drawn
@@ -34,8 +39,8 @@ export const SIDE_COLOR: Record<string, string> = {
  * competing with the backswing and downswing it crosses.
  */
 export const TRACE_COLOR = {
-  backswing: "#8B7BFF",
-  downswing: "#6FE5FF",
+  backswing: "#0E7490",
+  downswing: "#3FFFF5",
   // Follow-through is drawn at ZERO alpha — hidden, not deleted (user directive
   // 2026-08-08: "change styling to 0 but keep it in case we want it"). Everything that
   // builds and cuts the follow-through path still runs; only the paint is invisible, so

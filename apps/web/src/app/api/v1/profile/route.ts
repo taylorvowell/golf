@@ -44,13 +44,6 @@ export async function PATCH(req: Request) {
     if (err instanceof ProfileError) {
       return Response.json({ error: err.code, message: err.message }, { status: 400 });
     }
-    const message = err instanceof Error ? err.message : String(err);
-    if (message.includes("SS_TOO_MANY_GOALS")) {
-      return Response.json(
-        { error: "too_many_goals", message: "at most 3 goals may be selected" },
-        { status: 400 },
-      );
-    }
     console.error("[profile] update failed", err);
     return Response.json({ error: "update_failed" }, { status: 500 });
   }

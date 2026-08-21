@@ -146,3 +146,34 @@ it("ignores arm while busy and countdown-done while not counting", () => {
   s = sessionReducer(s, { type: "countdown-done" });
   expect(sessionReducer(s, { type: "countdown-done" })).toBe(s);
 });
+
+it("shutter press arms from idle, cancels a countdown, and stops a recording", () => {
+  let s = sessionReducer(base(), { type: "shutter-press", at: 0 });
+  expect(s.mode).toBe("countdown");
+
+  // A press mid-countdown cancels it — nothing minted, and no hold on trying again.
+  s = sessionReducer(s, { type: "shutter-press", at: 1_000 });
+  expect(s.mode).toBe("idle");
+  expect(s.swings).toHaveLength(0);
+  s = sessionReducer(s, { type: "shutter-press", at: 1_500 });
+  expect(s.mode).toBe("countdown");
+
+  s = sessionReducer(s, { type: "countdown-done" });
+  s = sessionReducer(s, { type: "shutter-press", at: 8_000 });
+  expect(s.mode).toBe("idle");
+  expect(s.swings).toHaveLength(1);
+});
+
+it("shutter press within 3s of a stop is the double click on Stop — ignored", () => {
+  let s = sessionReducer(base(), { type: "arm" });
+  s = sessionReducer(s, { type: "countdown-done" });
+  s = sessionReducer(s, { type: "stop", swingId: "a", at: 10_000 });
+  expect(s.reviewing).toBe("a");
+
+  expect(sessionReducer(s, { type: "shutter-press", at: 11_000 })).toBe(s);
+
+  // Past the hold, a press on the post-swing screen starts the next swing.
+  s = sessionReducer(s, { type: "shutter-press", at: 13_500 });
+  expect(s.reviewing).toBeNull();
+  expect(s.mode).toBe("countdown");
+});

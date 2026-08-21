@@ -24,6 +24,12 @@ import {
  */
 
 const TRACK_HEIGHT = 148;
+/** The rail is the width of the handle that rides it — one column, not a pill on a hairline. */
+const TRACK_WIDTH = 34;
+/** The handle is a circle of the rail's width, and it travels INSIDE the rail — never past it. */
+const THUMB = TRACK_WIDTH;
+/** The travelled part of the rail: aqua, but translucent enough that the pill still reads. */
+const AQUA_FILL = "rgba(67,205,208,0.34)";
 /** Ratios within this much of 1x land exactly on it — the one stop worth keeping. */
 const DETENT = 0.06;
 
@@ -68,9 +74,12 @@ export function CameraControls({ facing, zoom, zoomRange, onFlip, onZoom }: Came
     const grantY = { current: 0 };
     const applyY = (y: number) => {
       const { zoomRange: range, onZoom: emit, height: h } = latest.current;
-      if (h <= 0) return;
+      const travel = h - THUMB;
+      if (travel <= 0) return;
       // Top of the rail is the most zoom — the direction a finger expects to push for "closer".
-      const pos = 1 - Math.min(1, Math.max(0, y / h));
+      // Measured against the handle's TRAVEL, not the raw height, so the circle's centre sits
+      // under the finger at both ends instead of running out of rail half a handle early.
+      const pos = 1 - Math.min(1, Math.max(0, (y - THUMB / 2) / travel));
       emit(zoomFromPos(pos, range));
     };
     return PanResponder.create({
@@ -86,7 +95,9 @@ export function CameraControls({ facing, zoom, zoomRange, onFlip, onZoom }: Came
 
   const adjustable = zoomIsAdjustable(zoomRange);
   const pos = adjustable ? posFromZoom(zoom, zoomRange) : 0;
-  const thumbBottom = pos * height;
+  // The handle rides between the rail's ends; the fill stops at its centre, so the two agree.
+  const thumbBottom = pos * Math.max(0, height - THUMB);
+  const fillHeight = thumbBottom + THUMB / 2;
 
   return (
     <View style={styles.stack} pointerEvents="box-none">
@@ -123,15 +134,16 @@ export function CameraControls({ facing, zoom, zoomRange, onFlip, onZoom }: Came
             {...responder.panHandlers}
           >
             <View style={styles.track} pointerEvents="none" />
-            <View style={[styles.trackFill, { height: thumbBottom }]} pointerEvents="none" />
-            <View style={[styles.thumb, { bottom: thumbBottom - 14 }]} pointerEvents="none">
+            <View style={[styles.trackFill, { height: fillHeight }]} pointerEvents="none" />
+            <View style={[styles.thumb, { bottom: thumbBottom }]} pointerEvents="none">
               <Text style={styles.thumbText}>{label(zoom)}</Text>
             </View>
           </View>
-          {/* Names the rail (Taylor) — a bare vertical line reads as decoration otherwise. */}
-          <View style={styles.zoomTag} pointerEvents="none">
-            <Text style={styles.zoomTagText}>Zoom</Text>
-          </View>
+          {/* Names the rail (Taylor) — a bare column reads as decoration otherwise. Bare text,
+              no chip: the rail already carries the glass, and a second one stacks two. */}
+          <Text style={styles.zoomTagText} pointerEvents="none">
+            Zoom
+          </Text>
         </View>
       ) : null}
     </View>
@@ -140,7 +152,8 @@ export function CameraControls({ facing, zoom, zoomRange, onFlip, onZoom }: Came
 
 const styles = StyleSheet.create({
   // Positioned by the screen — the stack only owns its own layout.
-  stack: { gap: 8, alignItems: "center" },
+  // Room to breathe above the rail (Taylor) — the flip orb was crowding it.
+  stack: { gap: 18, alignItems: "center" },
   orb: {
     width: 44,
     height: 44,
@@ -149,13 +162,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "rgba(11,16,28,0.66)",
   },
-  zoomGroup: { alignItems: "center", gap: 4 },
-  zoomTag: {
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 9,
-    backgroundColor: "rgba(11,16,28,0.66)",
-  },
+  zoomGroup: { alignItems: "center", gap: 6 },
   zoomTagText: {
     color: "rgba(255,255,255,0.8)",
     fontFamily: FONT_DISPLAY.black,
@@ -163,22 +170,34 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
     textTransform: "uppercase",
   },
-  // 44 wide so the touch target is a thumb's width even though the rail reads as 4.
+  // The touch target stays a thumb wide; the rail now reads at the pill's own width (Taylor),
+  // so the control is one column rather than a pill riding a hairline.
   slider: { width: 44, height: TRACK_HEIGHT, alignItems: "center", justifyContent: "flex-end" },
   track: {
     position: "absolute",
-    width: 4,
+    width: TRACK_WIDTH,
     top: 0,
     bottom: 0,
-    borderRadius: 2,
-    backgroundColor: "rgba(11,16,28,0.66)",
+    borderRadius: TRACK_WIDTH / 2,
+    // Barely-there glass (Taylor): at full width the old opacity read as a solid bar over the
+    // footage, and the framing behind it is what the golfer is actually looking at.
+    backgroundColor: "rgba(11,16,28,0.28)",
   },
-  trackFill: { position: "absolute", bottom: 0, width: 4, borderRadius: 2, backgroundColor: COLORS.aqua },
+  trackFill: {
+    position: "absolute",
+    bottom: 0,
+    width: TRACK_WIDTH,
+    // Rounded at the foot only: the top edge dies under the circular handle, and a radius
+    // there leaves a visible crescent of unfilled rail beside it (Taylor).
+    borderBottomLeftRadius: TRACK_WIDTH / 2,
+    borderBottomRightRadius: TRACK_WIDTH / 2,
+    backgroundColor: AQUA_FILL,
+  },
   thumb: {
     position: "absolute",
-    width: 34,
-    height: 28,
-    borderRadius: 14,
+    width: THUMB,
+    height: THUMB,
+    borderRadius: THUMB / 2,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: COLORS.aqua,

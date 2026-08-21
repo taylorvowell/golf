@@ -225,5 +225,6 @@ const useStyles = appStyles((t) => ({
     backgroundColor: t.surface,
   },
   chipLabel: { color: t.cobalt, fontFamily: FONT_DISPLAY.extraBold, fontSize: 11 },
-  pressed: { opacity: 0.75 },
+  // Pressed is a FILL, never opacity (mobile-client register) — one step down the ramp.
+  pressed: { backgroundColor: t.surface2 },
 }));

@@ -42,5 +42,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "rgba(7,16,31,0.56)", // .report-full-pill's glass (blur is a named deviation)
   },
-  pressed: { opacity: 0.7 },
+  // Pressed deepens the glass — a fill, never opacity: dimming a translucent orb over footage
+  // makes it vanish into the picture instead of reading as held.
+  pressed: { backgroundColor: "rgba(7,16,31,0.8)" },
 });

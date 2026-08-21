@@ -122,6 +122,7 @@ export function SessionNav({
           opacity: entry.disabled ? 0.5 : 1,
         }}
       >
+        {/* No pressed bed — Taylor tried one on the sticky bars (2026-08-19) and cut it. */}
         {/* A 28px box holding a ~24px glyph — bigger than the tab bar's, per Taylor. */}
         <View
           style={{
@@ -196,7 +197,9 @@ export function SessionNav({
             color,
             fontFamily: FONT_DISPLAY.black,
             fontSize: 8,
-            lineHeight: 8,
+            // Taller than the font size on purpose: Android clips a glyph to its line box, so
+            // lineHeight 8 shaved the descenders off g/y/p in the labels.
+            lineHeight: 11,
             letterSpacing: 0.2,
           }}
         >

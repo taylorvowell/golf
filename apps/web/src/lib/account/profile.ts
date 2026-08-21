@@ -1,44 +1,26 @@
 import { sql } from "drizzle-orm";
 import { eq } from "drizzle-orm";
 import { withUser } from "@/db/session";
-import {
-  GOAL_VALUES,
-  golferGoals,
-  golferProfiles,
-  users,
-  type GolferGoal,
-  type GolferProfileRow,
-} from "@/db/schema";
+import { golferProfiles, users, type GolferProfileRow } from "@/db/schema";
 
 /**
  * Reading and writing §5's profile, on the server side.
  *
  * The shape crossing the wire has two halves for the same reason the schema does: `public` is what
- * a coach directory or a shared swing may show, `private` is everything §5.2/§5.4/§5.5 collects.
+ * a coach directory or a shared swing may show, `private` is what the product asks the golfer.
  * A single flat body would have made the split a convention that every future field has to
  * remember; two objects make putting a field in the wrong one visible in a diff.
  *
- * Goals are part of the profile on the wire and a separate table underneath, because §5.3 needs
- * them ordered and capped and a golfer edits them as one set — three writes to describe "these are
- * my goals now" is an interface that will eventually be called partially.
+ * Goals are deliberately NOT here (Taylor, 2026-08-20): they belong to the guidance features,
+ * not to the profile, and `golfer_goals` was dropped with them (migration 0015).
  */
 
-/** The eight §5.3 goals, exported for validation and for clients that render the picker. */
-export const GOALS: readonly GolferGoal[] = GOAL_VALUES;
-
-export function isGoal(value: unknown): value is GolferGoal {
-  return typeof value === "string" && (GOAL_VALUES as readonly string[]).includes(value);
-}
-
-/** Fields a client may write. Identity, timestamps and the goal set are handled separately. */
+/** Fields a client may write — exactly the six the product asks (2026-08-20 cut). Identity and
+ *  timestamps are handled separately; a field the product does not ask about has no business
+ *  being writable. */
 const WRITABLE = [
-  "handedness", "selfReportedStyle", "skillLevel", "handicapRange",
-  "typicalMissDriver", "typicalMissIrons", "averageScore", "driverSwingSpeedMph",
-  "sevenIronCarryYds", "fittedStatus", "fittedYear", "gripSize", "physicalLimitations",
-  "launchMonitorAccess", "practiceAccess", "roundsPerMonth", "practiceSessionsPerWeek",
-  "altitudeFt", "climate", "heightCm", "wingspanCm", "wristToFloorCm", "ageRange",
-  "yearsPlaying", "mobilityScreen", "workingWithCoach", "swingChangeInProgress",
-  "preferredShotShape", "coachingStyle", "feedbackDepth",
+  "handedness", "selfReportedStyle", "handicapRange", "ageRange",
+  "driverSwingSpeedMph", "sevenIronCarryYds",
 ] as const satisfies readonly (keyof GolferProfileRow)[];
 
 export type WritableProfileField = (typeof WRITABLE)[number];
@@ -46,7 +28,6 @@ export type WritableProfileField = (typeof WRITABLE)[number];
 export interface ProfileBody {
   public: { displayName: string; avatarUrl: string | null; bio: string | null; region: string | null };
   private: Partial<Record<WritableProfileField, unknown>> & { onboardingCompletedAt: string | null };
-  goals: GolferGoal[];
 }
 
 export class ProfileError extends Error {
@@ -74,9 +55,6 @@ export async function readProfile(userId: string): Promise<ProfileBody> {
     const [profile] = await tx.select().from(golferProfiles)
       .where(eq(golferProfiles.userId, userId)).limit(1);
 
-    const goalRows = await tx.select({ goal: golferGoals.goal, rank: golferGoals.rank })
-      .from(golferGoals).where(eq(golferGoals.userId, userId));
-
     const priv: Record<string, unknown> = {};
     for (const field of WRITABLE) priv[field] = profile ? profile[field] : null;
 
@@ -91,7 +69,6 @@ export async function readProfile(userId: string): Promise<ProfileBody> {
         ...priv,
         onboardingCompletedAt: profile?.onboardingCompletedAt?.toISOString() ?? null,
       },
-      goals: goalRows.sort((a, b) => a.rank - b.rank).map((r) => r.goal),
     } as ProfileBody;
   });
 }
@@ -99,8 +76,6 @@ export async function readProfile(userId: string): Promise<ProfileBody> {
 export interface ProfilePatch {
   public?: Partial<{ displayName: string; avatarUrl: string | null; bio: string | null; region: string | null }>;
   private?: Partial<Record<WritableProfileField, unknown>>;
-  /** The complete goal set, in the golfer's order. Absent leaves goals alone; `[]` clears them. */
-  goals?: GolferGoal[];
   /** Set once onboarding's required answers exist. Idempotent. */
   completeOnboarding?: boolean;
 }
@@ -111,22 +86,6 @@ export interface ProfilePatch {
  * would leave the resume point lying about where the golfer got to.
  */
 export async function updateProfile(userId: string, patch: ProfilePatch): Promise<ProfileBody> {
-  if (patch.goals) {
-    // Validated before the transaction opens so a bad body is a 400 rather than a rolled-back
-    // write. The 2-3 cap is also a database rule (migration 0012) — this is the message, not the
-    // enforcement.
-    const unknown = patch.goals.filter((g) => !isGoal(g));
-    if (unknown.length) {
-      throw new ProfileError("unknown_goal", `not a selectable goal: ${unknown.join(", ")}`);
-    }
-    if (new Set(patch.goals).size !== patch.goals.length) {
-      throw new ProfileError("duplicate_goal", "the same goal was selected twice");
-    }
-    if (patch.goals.length > 3) {
-      throw new ProfileError("too_many_goals", "at most 3 goals may be selected");
-    }
-  }
-
   await withUser(userId, async (tx) => {
     if (patch.public && Object.keys(patch.public).length) {
       await tx.update(users).set(patch.public).where(eq(users.id, userId));
@@ -153,17 +112,6 @@ export async function updateProfile(userId: string, patch: ProfilePatch): Promis
       await tx.insert(golferProfiles)
         .values({ userId, ...set })
         .onConflictDoUpdate({ target: golferProfiles.userId, set });
-    }
-
-    if (patch.goals) {
-      // Replace, never merge: the client sends the complete set because that is how a golfer
-      // thinks about it, and a merge would make "remove this goal" unexpressible.
-      await tx.delete(golferGoals).where(eq(golferGoals.userId, userId));
-      if (patch.goals.length) {
-        await tx.insert(golferGoals).values(
-          patch.goals.map((goal, i) => ({ userId, goal, rank: i + 1 })),
-        );
-      }
     }
   });
 

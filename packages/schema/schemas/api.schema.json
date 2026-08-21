@@ -748,6 +748,213 @@
           "description": "The count AFTER the ack, so the bell never needs a second round trip."
         }
       }
+    },
+    "handedness": {
+      "title": "Handedness",
+      "type": "string",
+      "enum": [
+        "right",
+        "left"
+      ],
+      "description": "Which side the golfer swings from. The one required onboarding answer — every piece of angle math threads through it (§5.4)."
+    },
+    "profilePublic": {
+      "title": "ProfilePublic",
+      "type": "object",
+      "description": "The half of the profile a directory or a shared swing may show (§5.1). The split is WHICH OBJECT a field is in, not a per-field flag.",
+      "required": [
+        "displayName",
+        "avatarUrl",
+        "bio",
+        "region"
+      ],
+      "properties": {
+        "displayName": {
+          "type": "string"
+        },
+        "avatarUrl": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "bio": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "region": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "golferProfilePrivate": {
+      "title": "GolferProfilePrivate",
+      "type": "object",
+      "description": "The six things the product asks a golfer (Taylor, 2026-08-20): handedness, swing style, handicap, age, driver speed, 7-iron carry. Deliberately tiny — everything else was removed from product, API and database together, and goals moved out of the profile entirely. Every field nullable: required is a property of the onboarding FLOW, never of the schema. No required list on purpose — fields WILL be added, and an addition must never invalidate an older client.",
+      "properties": {
+        "handedness": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "right",
+            "left",
+            null
+          ]
+        },
+        "selfReportedStyle": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "sty_01",
+            "sty_02",
+            "sty_03",
+            "sty_04",
+            "unsure",
+            null
+          ],
+          "description": "The golfer's SELF-REPORT against the §15.4 taxonomy — a prior, not a verdict. 'unsure' is a real answer, not a null."
+        },
+        "handicapRange": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "plus",
+            "scratch_5",
+            "6_10",
+            "11_15",
+            "16_20",
+            "21_28",
+            "29_plus",
+            null
+          ]
+        },
+        "driverSwingSpeedMph": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "sevenIronCarryYds": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "ageRange": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "under_18",
+            "18_29",
+            "30_39",
+            "40_49",
+            "50_59",
+            "60_69",
+            "70_plus",
+            null
+          ]
+        },
+        "onboardingCompletedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Null means onboarding is still resumable — the profile row itself is the draft (§4.4)."
+        }
+      }
+    },
+    "profileResponse": {
+      "title": "ProfileResponse",
+      "type": "object",
+      "description": "GET /api/v1/profile — the caller's own profile. Also the body PATCH answers with, so a client reconciles against what the server confirmed rather than what it sent.",
+      "required": [
+        "public",
+        "private"
+      ],
+      "properties": {
+        "public": {
+          "$ref": "#/definitions/profilePublic"
+        },
+        "private": {
+          "$ref": "#/definitions/golferProfilePrivate"
+        }
+      }
+    },
+    "profilePatchRequest": {
+      "title": "ProfilePatchRequest",
+      "type": "object",
+      "description": "PATCH /api/v1/profile. Partial on purpose — a screen sends only what it edits, so a screen written before a field existed can never erase it.",
+      "properties": {
+        "public": {
+          "type": "object",
+          "properties": {
+            "displayName": {
+              "type": "string"
+            },
+            "avatarUrl": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "bio": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "region": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "private": {
+          "$ref": "#/definitions/golferProfilePrivate"
+        },
+        "completeOnboarding": {
+          "type": "boolean",
+          "description": "Stamps onboardingCompletedAt. Idempotent."
+        }
+      }
+    },
+    "rolesResponse": {
+      "title": "RolesResponse",
+      "type": "object",
+      "description": "GET/POST /api/v1/roles — which roles the caller holds and which they may claim (§4.4, D32).",
+      "required": [
+        "roles",
+        "claimable"
+      ],
+      "properties": {
+        "roles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "claimable": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
     }
   }
 }

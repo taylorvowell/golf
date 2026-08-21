@@ -238,8 +238,20 @@ grant. The kind list is one enum, mirrored between the table check and
 0013 must revoke back down (the RLS suite caught the ack policy exposing every column).
 `app.notify` is safe only while the `app` schema stays out of PostgREST's exposed list.
 Delivery channels (steps 03/05) fan out FROM rows, never mint their own.
+**Emitting one, from any feature:** inside a `withUser` transaction, call
+`notify(tx, { userId, kind, title, body?, data?, groupKey? })` from `@/lib/notifications` —
+never an INSERT, never a second helper. `userId` is the RECIPIENT (not the actor: a coach
+commenting notifies the golfer). `kind` must already be in the enum — growing it means editing
+`api.schema.json#/definitions/notification`, the table's check constraint and the mobile glyph
+map together, in one change. `title`/`body` are the final copy the inbox renders; the client
+never writes copy for a row. `data` is the deep-link payload the destination screen reads
+(`{ swingId }`, `{ conversationId }`) and is schema-open by design. `groupKey` is what makes
+repeat events COLLAPSE while unread — pass a stable per-thread key (`conversation:<id>`) for
+anything that can arrive in bursts, and omit it for one-off events. Emission never decides
+delivery: push and email fan out from the row, so an emitter never calls a channel.
 **See:** `.claude/feature-tracks/notifications/01 - The Notification Backbone.md`;
-`apps/web/src/db/notificationsRls.test.ts`.
+`apps/web/src/db/notificationsRls.test.ts`;
+`apps/mobile/src/features/notifications/` (the read surface).
 
 ### Coaching conversations are one feed; messages are immutable, referenced objects carry state
 

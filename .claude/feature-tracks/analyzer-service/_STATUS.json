@@ -3,7 +3,7 @@
   "featureName": "analyzer-service",
   "currentStep": "07",
   "phase": "Platform Foundation",
-  "lastUpdated": "2026-08-18T17:01:32Z",
+  "lastUpdated": "2026-08-19T20:17:33Z",
   "steps": {
     "01": {
       "status": "complete",
@@ -40,6 +40,14 @@
       "note": "Declared, file not yet authored (lazy). The deploy half, split out of the original step 06: choose and provision the worker host (BLOCKED on the OPEN HANDOFF row - spend, Taylor), production QStash credentials, then the deployed loop re-proven end-to-end and the capacity model re-measured on the real host class against the p95<180s SLO."
     }
   },
-  "blockers": [],
+  "blockers": [
+    {
+      "step": "07",
+      "classification": "USER-ACTION-NEEDED",
+      "description": "Step 07 (deploy) needs the analyzer worker host chosen and provisioned - the OPEN HANDOFF row 'Decide the analyzer worker host' (strategic + spend, Taylor's call). Production QStash credentials are the same gate (vendor dashboard + spend). Every non-spend prerequisite closed with step 06; the HANDOFF row itself says 'Tell Claude which and the track continues'. The row also notes it is reasonable to park this until closer to launch, since variants-off-in-production recovers most of the latency without hardware.",
+      "requiredAction": "Taylor answers the HANDOFF row: pick the worker host (GPU host like Modal/RunPod/Fly GPU vs Railway-on-CPU), or explicitly park step 07 and move the spine to the next priority track. Then re-run /build.",
+      "loggedAt": "2026-08-19T20:17:33Z"
+    }
+  ],
   "skipped": []
 }

@@ -21,7 +21,7 @@ import {
   useChromeScroll,
   WAVE_NAV_CLEARANCE,
 } from "../design/system";
-import { FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
+import { displayLine, FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
 import {
   COACH_DRILLS,
   COACH_FOCUS_AREAS,
@@ -29,6 +29,7 @@ import {
   type CoachFocusArea,
 } from "../features/coach/coachStubs";
 import { InstructorBubble } from "../features/instructor/InstructorBubble";
+import { NotificationBell } from "../features/notifications/NotificationBell";
 import { createdAtMs } from "../features/swings/sessions";
 import { useSwings } from "../features/swings/useSwings";
 import { useAppNavigation } from "../navigation";
@@ -221,6 +222,7 @@ export function CoachScreen() {
       <AppHeader
         hero
         chromePx={chromePx}
+        bell={<NotificationBell hero onPress={() => navigation.navigate("Notifications")} />}
         onProfile={() => navigation.navigate("Profile")}
         profileTestID="coach-profile"
       />
@@ -292,7 +294,7 @@ const useStyles = themedStyles((t) => ({
     color: t.onDark,
     fontFamily: FONT_DISPLAY.black,
     fontSize: 31,
-    lineHeight: 31,
+    lineHeight: displayLine(31),
     letterSpacing: -0.62,
   },
   heroEyebrow: {
@@ -308,7 +310,7 @@ const useStyles = themedStyles((t) => ({
     color: t.onDark,
     fontFamily: FONT_DISPLAY.black,
     fontSize: 24,
-    lineHeight: 26,
+    lineHeight: displayLine(24),
     letterSpacing: -0.48,
     maxWidth: 300,
   },
@@ -340,7 +342,7 @@ const useStyles = themedStyles((t) => ({
     color: t.text,
     fontFamily: FONT_DISPLAY.extraBold,
     fontSize: 15,
-    lineHeight: 18,
+    lineHeight: displayLine(15),
   },
   tipCopy: {
     marginTop: 4,
@@ -459,7 +461,7 @@ const useStyles = themedStyles((t) => ({
     color: t.text,
     fontFamily: FONT_DISPLAY.extraBold,
     fontSize: 13,
-    lineHeight: 16,
+    lineHeight: displayLine(13),
   },
   drillMeta: { alignItems: "flex-end", gap: 6 },
   drillDose: {

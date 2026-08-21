@@ -1,9 +1,10 @@
 import { useEffect, useRef } from "react";
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from "react-native";
-import { CloudSync } from "lucide-react-native";
 
+import { DualViewIcon } from "../../design/system/DualViewIcon";
 import { PoseOutline } from "../../design/system/PoseOutline";
 import { FONT_DISPLAY } from "../../design/system/typography";
+import { useHandedness } from "../profile/useProfile";
 import { SEMANTIC } from "../../theme";
 import type { CaptureView } from "./sessionState";
 
@@ -31,6 +32,8 @@ export interface DualSyncPipProps {
 
 export function DualSyncPip({ view, onPress }: DualSyncPipProps) {
   const label = view === "dtl" ? "DTL" : "Front";
+  // The stand-in art shows the golfer themself — it mirrors with profile handedness.
+  const mirrored = useHandedness() === "left";
 
   // A slow halo behind the glyph — the tile's only motion, and the one thing on it that says
   // "this is live right now" rather than "a camera was connected at some point". Native driver
@@ -59,7 +62,13 @@ export function DualSyncPip({ view, onPress }: DualSyncPipProps) {
       style={({ pressed }) => [styles.tile, pressed && styles.pressed]}
       testID="dual-sync-pip"
     >
-      <PoseOutline pose={view} width={44} height={64} color="rgba(255,255,255,0.5)" />
+      <PoseOutline
+        pose={view}
+        width={44}
+        height={64}
+        color="rgba(255,255,255,0.5)"
+        mirrored={mirrored}
+      />
       <View style={styles.tag}>
         {/* The Dual Sync glyph, green — same icon as the control that opened this, so the tile
             is legible as "the synced camera" without a word for it. */}
@@ -76,7 +85,7 @@ export function DualSyncPip({ view, onPress }: DualSyncPipProps) {
               },
             ]}
           />
-          <CloudSync size={11} color={SEMANTIC.good} strokeWidth={2.6} />
+          <DualViewIcon size={16} color={SEMANTIC.good} strokeWidth={0.9} />
         </View>
         <Text style={styles.tagText}>{label}</Text>
       </View>
@@ -107,7 +116,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: "rgba(11,16,28,0.66)",
   },
-  glyph: { width: 12, height: 12, alignItems: "center", justifyContent: "center" },
+  glyph: { height: 16, alignItems: "center", justifyContent: "center" },
   pulse: {
     position: "absolute",
     width: 12,

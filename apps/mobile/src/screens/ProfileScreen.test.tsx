@@ -32,7 +32,22 @@ jest.mock("../features/auth/AuthProvider", () => ({
   }),
 }));
 
+import { EntitlementProvider } from "../features/billing/entitlement";
 import { ProfileScreen } from "./ProfileScreen";
+
+/**
+ * The drawer reads the golfer's plan to decide between the upgrade card and the Pro status
+ * line, so it needs the entitlement seam the way it needs auth. Rendered through the real
+ * provider rather than a mock: its default state is the one a Pro golfer sees, and a mock
+ * here would let the two drift apart silently.
+ */
+function renderProfile() {
+  return render(
+    <EntitlementProvider>
+      <ProfileScreen />
+    </EntitlementProvider>,
+  );
+}
 
 /** Long enough for the open slide, a press, and the close slide to all land. */
 async function settle() {
@@ -54,7 +69,7 @@ afterEach(() => {
 
 describe("ProfileScreen", () => {
   it("shows who is signed in", async () => {
-    const { getByText } = await render(<ProfileScreen />);
+    const { getByText } = await renderProfile();
     await settle();
     expect(getByText("golfer@example.com")).toBeTruthy();
   });
@@ -64,9 +79,11 @@ describe("ProfileScreen", () => {
     // Instructor page. The connected card's doors are covered by their own testIDs when the
     // debug flag is on; the default state is what release ships.
     ["profile-instructor", ["Instructor"]],
+    ["profile-notifications", ["Notifications"]],
     ["profile-settings", ["Settings"]],
+    ["profile-my-profile", ["MyProfile"]],
   ])("routes %s where it claims, once the drawer is shut", async (testID, args) => {
-    const { getByTestId } = await render(<ProfileScreen />);
+    const { getByTestId } = await renderProfile();
     await settle();
 
     await act(async () => void fireEvent.press(getByTestId(testID as string)));
@@ -78,16 +95,14 @@ describe("ProfileScreen", () => {
     expect(mockNavigate).toHaveBeenCalledWith(...(args as [string, unknown?]));
   });
 
-  // The design's other five rows are drawn but have no screen behind them yet. Pinned so that
+  // The design's remaining rows are drawn but have no screen behind them yet. Pinned so that
   // wiring one is a deliberate edit here, not something that quietly starts half-working.
   it.each([
-    "profile-my-profile",
     "profile-lesson-history",
-    "profile-notifications",
     "profile-privacy",
     "profile-help",
   ])("draws %s without sending anyone anywhere yet", async (testID) => {
-    const { getByTestId } = await render(<ProfileScreen />);
+    const { getByTestId } = await renderProfile();
     await settle();
 
     await act(async () => void fireEvent.press(getByTestId(testID)));
@@ -98,7 +113,7 @@ describe("ProfileScreen", () => {
   });
 
   it("closes on the X without navigating anywhere", async () => {
-    const { getByTestId } = await render(<ProfileScreen />);
+    const { getByTestId } = await renderProfile();
     await settle();
 
     await act(async () => void fireEvent.press(getByTestId("profile-close")));
@@ -109,7 +124,7 @@ describe("ProfileScreen", () => {
   });
 
   it("closes on a tap outside the panel", async () => {
-    const { getByTestId } = await render(<ProfileScreen />);
+    const { getByTestId } = await renderProfile();
     await settle();
 
     await act(async () => void fireEvent.press(getByTestId("profile-drawer-scrim")));
@@ -119,7 +134,7 @@ describe("ProfileScreen", () => {
   });
 
   it("logs out through the auth seam, not through navigation", async () => {
-    const { getByTestId } = await render(<ProfileScreen />);
+    const { getByTestId } = await renderProfile();
     await settle();
 
     await act(async () => void fireEvent.press(getByTestId("profile-sign-out")));

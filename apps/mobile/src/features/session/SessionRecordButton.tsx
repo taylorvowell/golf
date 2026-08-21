@@ -1,5 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { Plus } from "lucide-react-native";
 
 import { FONT_DISPLAY } from "../../design/system/typography";
 import { useAppTheme } from "../../theme";
@@ -11,11 +12,14 @@ import { useAppTheme } from "../../theme";
  * deliberately larger, "the one control that must dominate the screen"; matching the shell won).
  * Every number here is `RecordButton`'s compact geometry, and `SessionNav`'s bump is `WaveNav`'s
  * — change one and the two bars stop reading as the same bar. `stop` latches it into the white
- * square.
+ * square. `plus` marks the after-swing dock's copy, where the control starts the NEXT swing —
+ * a bare ring there says "recording", and a plus says "another one" (Taylor).
  */
 
 export interface SessionRecordButtonProps {
   stop: boolean;
+  /** Draws a `+` inside the ring — the "record another swing" reading. */
+  plus?: boolean;
   label: string;
   onPress: () => void;
   testID?: string;
@@ -25,8 +29,20 @@ const SIZE = 58; // RecordButton's `compact` size, verbatim.
 /** The ring and the stop square, as fractions of the face — they scaled with the old 74. */
 const RING = Math.round(SIZE * 0.7);
 const STOP = Math.round(SIZE * 0.32);
+// Press darkens the face rather than fading it — a translucent record control shows the bar
+// through itself and reads as disabled, not held (Taylor, 2026-08-19).
+const REC_FACE = ["#F0546A", "#E03144"] as const;
+const REC_FACE_PRESSED = ["#CE4159", "#B72636"] as const;
+const STOP_FACE = ["#3A4358", "#2B3345"] as const;
+const STOP_FACE_PRESSED = ["#2D3546", "#1F2532"] as const;
 
-export function SessionRecordButton({ stop, label, onPress, testID }: SessionRecordButtonProps) {
+export function SessionRecordButton({
+  stop,
+  plus = false,
+  label,
+  onPress,
+  testID,
+}: SessionRecordButtonProps) {
   // The bar under this control wears the app's light fill (see `SessionNav`), so the two
   // colours that used to read against a dark bar have to come from the theme: a white-on-white
   // label is invisible, and a white glass halo has nothing to sit on.
@@ -38,20 +54,32 @@ export function SessionRecordButton({ stop, label, onPress, testID }: SessionRec
         accessibilityLabel={label}
         onPress={onPress}
         testID={testID}
-        style={({ pressed }) => [
-          styles.halo,
-          { backgroundColor: t.surface2 },
-          pressed && styles.pressed,
-        ]}
+        style={[styles.halo, { backgroundColor: t.surface2 }]}
       >
-        <LinearGradient
-          colors={stop ? ["#3A4358", "#2B3345"] : ["#F0546A", "#E03144"]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.face}
-        >
-          {stop ? <View style={styles.stopSquare} /> : <View style={styles.ring} />}
-        </LinearGradient>
+        {({ pressed }) => (
+          <LinearGradient
+            colors={
+              stop
+                ? pressed
+                  ? STOP_FACE_PRESSED
+                  : STOP_FACE
+                : pressed
+                  ? REC_FACE_PRESSED
+                  : REC_FACE
+            }
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.face}
+          >
+            {stop ? (
+              <View style={styles.stopSquare} />
+            ) : (
+              <View style={styles.ring}>
+                {plus ? <Plus size={RING - 14} color="rgba(255,255,255,0.9)" strokeWidth={2.8} /> : null}
+              </View>
+            )}
+          </LinearGradient>
+        )}
       </Pressable>
       <Text style={[styles.label, { color: t.muted }]}>{label}</Text>
     </View>
@@ -81,6 +109,8 @@ const styles = StyleSheet.create({
     borderRadius: RING / 2,
     borderWidth: 2.5,
     borderColor: "rgba(255,255,255,0.85)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   stopSquare: { width: STOP, height: STOP, borderRadius: 5, backgroundColor: "#FFFFFF" },
   label: {
@@ -90,5 +120,4 @@ const styles = StyleSheet.create({
     textTransform: "uppercase",
     textAlign: "center",
   },
-  pressed: { opacity: 0.75 },
 });

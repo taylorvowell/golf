@@ -38,6 +38,12 @@ export interface IdealTokens {
   surface3: string;
   /** The blue-tinted surface — selected rows, info beds. */
   surfaceBlue: string;
+  /**
+   * The round bed behind a bare glyph while it is pressed — a translucent grey state layer
+   * (Taylor, 2026-08-19). Translucent so it reads as "held" on any bar fill, in both themes,
+   * without joining the opaque surface ramp.
+   */
+  pressBed: string;
 
   /** Primary reading text. */
   text: string;
@@ -80,6 +86,9 @@ export type Theme = IdealTokens;
 const LIGHT_BASE: IdealTokens = {
   mode: "light",
   ...LIGHT_SURFACES,
+  // 13%, not subtler: at 7% the blend over the pure-white nav bar was ~#EFF0F2 — invisible on
+  // glass during a real tap (Taylor, 2026-08-19, "the circle is not showing").
+  pressBed: "rgba(31,42,68,0.13)",
   cobalt: COBALT[600],
   cobaltPressed: COBALT[700],
   aqua: AQUA[500],
@@ -93,6 +102,7 @@ const LIGHT_BASE: IdealTokens = {
 const DARK_BASE: IdealTokens = {
   mode: "dark",
   ...DARK_SURFACES,
+  pressBed: "rgba(255,255,255,0.12)",
   // The dark token table swaps cobalt one step lighter so it reads on a navy ground.
   cobalt: COBALT[500],
   cobaltPressed: COBALT[600],

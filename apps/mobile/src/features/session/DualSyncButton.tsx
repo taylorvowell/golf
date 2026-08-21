@@ -1,15 +1,15 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { CloudSync } from "lucide-react-native";
 
 import { FONT_DISPLAY } from "../../design/system/typography";
 import { COLORS } from "../../theme";
+import { DualViewIcon } from "../../design/system/DualViewIcon";
 
 /**
  * Dual Sync (Taylor, step-03 iteration) — the door to filming one swing from two angles.
  *
- * Sits directly under the DTL/Front switcher on the right rail and is built to its exact
- * segment metrics, so the two read as one stack of angle controls rather than as a control
- * and an afterthought. Active state is the switcher's: an aqua fill, never an edge.
+ * Sits on the far right edge, opposite this phone's own controls, and is built to the
+ * DTL/Front switcher's exact segment metrics so the two read as one system across the
+ * screen. Active state is the switcher's: an aqua fill, never an edge.
  *
  * UI phase: opens the sync sheet, which is unwired. `paired` is the seam the
  * `dual-device-capture` track fills in.
@@ -37,8 +37,8 @@ export function DualSyncButton({ paired = false, onPress }: DualSyncButtonProps)
         ]}
         testID="capture-dual-sync"
       >
-        <CloudSync size={22} color={ink} strokeWidth={2.2} />
-        <Text style={[styles.label, { color: ink }]}>Dual Sync</Text>
+        <DualViewIcon size={20} color={ink} strokeWidth={1} />
+        <Text style={[styles.label, { color: ink }]}>Dual View</Text>
       </Pressable>
     </View>
   );
@@ -46,15 +46,15 @@ export function DualSyncButton({ paired = false, onPress }: DualSyncButtonProps)
 
 // Deliberately mirrors ViewToggle's metrics — edit both or neither.
 const styles = StyleSheet.create({
-  track: { padding: 3, borderRadius: 18, backgroundColor: "rgba(11,16,28,0.66)" },
+  track: { padding: 3, borderRadius: 16, backgroundColor: "rgba(11,16,28,0.66)" },
   segment: {
-    minWidth: 56,
-    borderRadius: 15,
+    minWidth: 46,
+    borderRadius: 13,
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    gap: 2,
+    paddingVertical: 5,
+    paddingHorizontal: 7,
+    gap: 1,
   },
   segmentActive: { backgroundColor: COLORS.aqua },
   label: {

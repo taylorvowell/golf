@@ -18,12 +18,17 @@ import { ANGLE_LABEL, MODE_LABEL, sessionAngles, type SwingSession } from "./ses
  *
  * A session with no known mode renders its views alone rather than guessing one — see
  * `SwingSession.sessionType`.
+ *
+ * The swing count LEADS the row, solid navy (Taylor 2026-08-19): how big the visit was is
+ * part of the same one-line fact, and it saves the golfer expanding a session just to see
+ * its size.
  */
 export function SessionTags({ session }: { session: SwingSession }) {
   const angles = sessionAngles(session);
-  if (!angles.length && session.sessionType == null) return null;
+  const count = session.swings.length;
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }} testID="session-tags">
+      <Tag label={`${count} ${count === 1 ? "swing" : "swings"}`} variant="count" compact />
       {session.sessionType ? (
         <Tag label={MODE_LABEL[session.sessionType]} variant="latest" compact />
       ) : null}

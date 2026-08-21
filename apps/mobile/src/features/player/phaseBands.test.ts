@@ -73,8 +73,8 @@ it("holds every boundary inside the window", () => {
 it("gives the backswing and downswing the colours their trace is drawn in", () => {
   // The band under the playhead and the line over the golfer have to be visibly the same thing.
   const bands = phaseBands(makeAnalysis(), undefined, WINDOW);
-  expect(bands.find((b) => b.key === "backswing")?.color).toBe("#8B7BFF");
-  expect(bands.find((b) => b.key === "downswing")?.color).toBe("#6FE5FF");
+  expect(bands.find((b) => b.key === "backswing")?.color).toBe("#0E7490");
+  expect(bands.find((b) => b.key === "downswing")?.color).toBe("#3FFFF5");
 });
 
 describe("activeBand", () => {

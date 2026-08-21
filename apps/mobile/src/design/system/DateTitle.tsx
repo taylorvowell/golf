@@ -1,6 +1,6 @@
 import { Text, View, type StyleProp, type ViewStyle } from "react-native";
 
-import { FONT_DISPLAY } from "./typography";
+import { displayLine, FONT_DISPLAY } from "./typography";
 import { useTheme } from "../../theme";
 
 /**
@@ -57,7 +57,10 @@ export function DateTitle({
       accessibilityLabel={`${main}${suffix}`}
       style={[{ flexDirection: "row", alignItems: "flex-start" }, style]}
     >
-      <Text style={{ color: ink, fontFamily: FONT_DISPLAY.extraBold, fontSize: size, lineHeight: size + 4 }}>
+      {/* `displayLine`, not a hand-picked leading — "Sunday" and "Aug" have descenders. The
+          suffix keeps its tighter box: "st/nd/rd/th" has none, and that shorter line box is
+          exactly what raises it. */}
+      <Text style={{ color: ink, fontFamily: FONT_DISPLAY.extraBold, fontSize: size, lineHeight: displayLine(size) }}>
         {main}
       </Text>
       <Text

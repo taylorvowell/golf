@@ -99,6 +99,20 @@
       "when": 1786700200000,
       "tag": "0013_notifications",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1786700300000,
+      "tag": "0014_trim_golfer_profile",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1786700400000,
+      "tag": "0015_six_answer_profile",
+      "breakpoints": true
     }
   ]
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Animated, Pressable, View } from "react-native";
 import { Menu } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -71,6 +71,7 @@ export function AppHeader({
   hero = false,
   chromePx,
   onProfile,
+  bell,
   profileTestID = "open-profile",
 }: {
   hero?: boolean;
@@ -84,6 +85,15 @@ export function AppHeader({
    * does nothing is worse than no door.
    */
   onProfile?: () => void;
+  /**
+   * The notifications door (§29) — a SLOT rather than a callback, because the bell carries the
+   * unread count and the count comes from a feature store. The design system stays a leaf: it
+   * owns where the bell sits (left of the profile door, same cluster), never what it knows.
+   *
+   * Same rule as the profile door: omitting it seals the bell, which is what session mode wants
+   * — an inbox opened mid-swing is a golfer who stopped recording.
+   */
+  bell?: ReactNode;
   profileTestID?: string;
 }) {
   const insets = useSafeAreaInsets();
@@ -150,6 +160,8 @@ export function AppHeader({
         }}
       >
         <BrandLogo height={26} color={hero ? "#FFFFFF" : undefined} />
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+        {bell}
         {onProfile ? (
         <Pressable
           testID={profileTestID}
@@ -163,8 +175,15 @@ export function AppHeader({
               height: 34,
               alignItems: "center",
               justifyContent: "center",
+              borderRadius: 17,
+              // Pressed is the round grey bed — a fill, never opacity. White-alpha on the
+              // hero screens because the glyph sits over footage there, not a themed surface.
+              backgroundColor: pressed
+                ? hero
+                  ? "rgba(255,255,255,0.22)"
+                  : t.pressBed
+                : "transparent",
             },
-            pressed && { opacity: 0.6 },
           ]}
         >
           {/* Bare glyph, no bed (Taylor, 2026-08-19) — ink matches the wordmark beside it:
@@ -172,6 +191,7 @@ export function AppHeader({
           <Menu size={22} color={hero ? "#FFFFFF" : t.text} strokeWidth={2.4} />
         </Pressable>
         ) : null}
+        </View>
       </View>
     </Animated.View>
   );

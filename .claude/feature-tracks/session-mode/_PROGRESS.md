@@ -2,6 +2,54 @@
 
 Append-only log. Spec: `DESIGN-session-mode.md`. Decision: ARCHIVE D61.
 
+## 04 - Capture, audio-seeded review, ingest (partial — NOT wired end to end)
+**Date:** 2026-08-20
+**Commit:** `66a3479` — everything below is in that one commit, so it reverts as a unit.
+**Summary:** Real recording and a confirm-before-save review screen exist and compile; the
+SessionScreen wiring that joins them does not. Read this before planning capture work.
+
+**Built and green** (Kotlin `BUILD SUCCESSFUL`; web tsc+lint clean, 232 tests; mobile tsc
+clean, 407 tests):
+- `HighSpeedCameraView` — ONE camera device, two session shapes. Idle is a repeating preview;
+  a take reconfigures the same device as a constrained high-speed session carrying BOTH the
+  preview and recorder surfaces. `startRecording(maxFps, maxSeconds)` / `stopRecording()` are
+  view methods via ref. Back-lens only. Rate first, resolution second (smallest size ≥720
+  short side). Hard cap via `MediaRecorder.setMaxDuration`, settled through a new
+  `onRecordingEnded` event; tap and cap route through one `settle` function.
+- Bitrate formula changed to `w*h*30*0.15*sqrt(fps/30)` — constants PROVISIONAL, pending a
+  sweep diffed with `compare_analysis.py` against club coverage.
+- Audio recording added (`CAMCORDER`, 44.1kHz mono) + `RECORD_AUDIO` in `app.json`.
+- `SwingClip.kt` — `detectImpacts()` (5ms peak envelope, picks on ATTACK TIME not loudness;
+  empty is a normal answer) and `trim()` (MediaMuxer remux, no re-encode, seeks to the
+  PREVIOUS sync frame so a cut never clips the takeaway).
+- `SwingReview.tsx` — loops a 6s window, scrubber slides the WHOLE window, candidate ticks,
+  seeds on the LAST plausible transient (practice swing comes first), defaults to clip end
+  when nothing is heard. Red Delete / green Save.
+- Web ingest is two-phase: `POST /api/v1/swings` → `UploadTarget`, client PUTs the bytes
+  directly, `POST /api/v1/swings/:id/source/complete` verifies and enqueues.
+  `MediaStore.signedUploadUrl` + `enqueueCapture`.
+
+**NOT wired — the flow cannot be walked yet:**
+1. `SessionScreen` still dispatches the stub `{type:"stop"}`; nothing calls `startRecording`
+   or `stopRecording`, and nothing routes a finished take to `SwingReview`.
+2. Save does not call `trimClip`, and no `uploadSwingVideo()` seam exists — nothing reaches
+   the ingest routes from the phone.
+3. No scrubber thumbnails (needs a `MediaMetadataRetriever` native function).
+4. No contract types or tests for the new ingest routes.
+
+**If a new capture spec supersedes this, the conflict surface is:**
+- `docs/decisions/mobile-client.md` → "Preview and recording share ONE camera device and one
+  session" (one-device/one-session, back-lens-only, rate-over-resolution, cap mechanism,
+  bitrate formula, audio-as-only-impact-signal).
+- `docs/decisions/media-storage.md` → "Ingest is two-phase and the client uploads directly to
+  storage".
+Both are edited IN PLACE per the register rule — never appended to with a "previously we…".
+The **web ingest layer is a different concern from capture flow** and probably survives a
+capture-spec rewrite; the native session shape and `SwingReview` are what a new flow would
+change or delete.
+
+---
+
 ## 03/04 - Live camera preview pulled forward (in progress)
 **Date:** 2026-08-18
 **Summary:** Taylor asked for the camera during UX iteration — the exact scenario step 03's

@@ -12,8 +12,8 @@ import { sessionStats, type SwingSession } from "./sessions";
 /**
  * The newest session as the log's featured card. Taylor 2026-08-17: the mockup's tinted
  * `.latest-wrap` bed and both LATEST pills are gone (its position at the top of the log
- * already says it), the head is title + one day·time line (no swing count — the timeline
- * below *is* the count), and swings are named "Swing N" with their date and time — golfers
+ * already says it), the head is title + one day·time line (the swing count rides in the
+ * SessionTags pill), and swings are named "Swing N" with their date and time — golfers
  * do not type titles, so `swing.label` never carried one worth showing.
  */
 export function LatestSessionCard({
@@ -54,7 +54,7 @@ export function LatestSessionCard({
       >
         <SessionThumb session={session} />
         <View style={{ flex: 1, minWidth: 0 }}>
-          <DateTitle ms={session.start} size={19} />
+          <DateTitle ms={session.start} size={15} />
           {/* How it was filmed, then when — one line under the date. */}
           <View
             style={{ flexDirection: "row", alignItems: "center", gap: 7, marginTop: 5 }}

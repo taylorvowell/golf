@@ -54,6 +54,20 @@ export const SEMANTIC = {
 /** Text/glyphs painted over a cobalt, hero or dark-photo fill — white in both themes. */
 export const ON_DARK = "#FFFFFF";
 
+/**
+ * Ink — the near-black ramp for surfaces that are dark in BOTH themes.
+ *
+ * Distinct from `DARK_SURFACES`, which is one theme's ground: these are for the pinned-dark
+ * cards (the Pro card) that must read the same on a white page and a navy one. Cooled toward
+ * the brand navy rather than neutral grey, so a black card sits in the same family as the hero
+ * gradient instead of looking like a different product.
+ */
+export const INK = {
+  900: "#04070F",
+  800: "#080D1D",
+  700: "#0D1428",
+} as const;
+
 /** The dark theme's shadow ink (the mockup's dark shadows are pure black rgba). */
 export const BLACK = "#000000";
 

@@ -624,7 +624,16 @@ Stated as fact, with no implied ordering or plan. See
   swing beside the first and holds it at the same *position in the swing* — mapped through the
   P-codes both artifacts carry, so five-fold differences in clip length and differing frame rates
   both work (D52); an unalignable pair says so rather than drifting. Whether two decoders are
-  affordable is **unmeasured**. No capture, no upload, and no iOS build has ever been compiled.
+  affordable is **unmeasured**. **Onboarding and the golfer profile are live** (2026-08-20):
+  a full-screen question sequence (role → handedness → style → handicap, handedness the only
+  required answer, every tap saved to `/api/v1/profile`, auto-opens after signup and from the
+  debug menu) and a one-page My profile — exactly SIX editable value tiles (handedness, swing
+  style, handicap, age, driver speed, 7-iron carry) from one registry
+  (`features/profile/profileFields.ts`); every other profile column and the goals machinery
+  were dropped from schema, API and contract (migrations 0014/0015 — goals belong to the
+  guidance features). Profile handedness mirrors the capture guide art and swaps the session
+  screen's control rails for a left-handed golfer. No capture, no upload, and no iOS build has ever
+  been compiled.
 - **KNOWN DEFECT — every swing-log thumbnail is a contact SHEET, not a frame.** `GET
   /api/v1/swings/:id/thumb` serves the analyzer's `contact.jpg`, and the route describes it as
   *"the contact-frame still"*. It is not: `contact.jpg` is a **24-up contact sheet** (1920×2272,
@@ -656,8 +665,11 @@ Stated as fact, with no implied ordering or plan. See
 - **No roles UI, no coach features, no messaging.** The notification BACKBONE exists
   (migration 0013: `notifications` table, `app.notify()` emitter with grouped delivery,
   `GET /api/v1/notifications` + `POST /api/v1/notifications/read`, RLS-proven by
-  `notificationsRls.test.ts`) — but nothing emits into it yet and no client surface reads it;
-  push and email do not exist.
+  `notificationsRls.test.ts`), and the mobile READ SURFACE now sits on it — a badged bell in
+  `AppHeader` on every tab, opening the inbox drawer (`NotificationsScreen`), which acks what
+  it showed. **Nothing emits into the table yet**, so the inbox is empty on a real account and
+  every state is only reachable through the `__DEV__` panel's forced seeds. Preferences, push
+  and email do not exist.
 - **No subscriptions, entitlements, or payments.**
 - **No drill library, no trends/history views, no goals, no equipment inventory.**
 - **No simulator/launch-monitor data** of any kind, manual or parsed — consequently no

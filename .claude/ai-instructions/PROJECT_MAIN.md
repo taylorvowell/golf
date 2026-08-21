@@ -2054,6 +2054,16 @@ Required tiers:
 - Coach Standard.
 - Coach Pro.
 
+> **AMENDED 2026-08-19 — the ladder is Free and Pro. Nothing else, and coaches are free.**
+> One paid tier. Prices and the analysis allowance are set in
+> `docs/decisions/commerce-entitlement.md` (Pro $119.99/yr or $16.99/mo, 100 analyses a
+> month, 21-day trial, a $9.99/50 consumable top-up as the safety valve).
+> `Coach Standard` and `Coach Pro` are **superseded**: a coach signs up free for directory
+> listing, communication and the tools to support their golfers. Coach monetization is a separate
+> later path, and **no money moves between golfer and coach inside the app** — paid instruction is
+> arranged and paid for locally. Coach-side entitlement dimensions below stay as named
+> capabilities that currently resolve to "allowed".
+
 Stripe is the requested billing platform.
 
 The build roadmap must ensure subscription behavior is compatible with the distribution requirements of the iPhone and Android applications.

@@ -27,7 +27,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Callable, Optional
 
-from . import (checkpoints, club, club_detect, contract, events, face, metrics,
+from . import (checkpoints, club, club_detect, clubpath, contract, events, face, metrics,
                pose, pose_rtm, postprocess, render, scoring, silhouette,
                source_timing, video)
 from .skeleton import KEYPOINT_NAMES, strip_derived
@@ -530,6 +530,41 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
                           detector_radius_smooth_win=1)),
                     ("model_rigid", "Model head + rigid length",
                      dict(detector_inject="both", detector_head_primary=True, use_rigid=True)),
+                    # --- the START/BOTTOM anchor dimension (Taylor, 2026-08-19) -----------------
+                    # Where the trace STARTS (takeaway refine vs the hand-based Address) and where
+                    # it BOTTOMS OUT at Impact (free vs anchored) are solver decisions, invisible
+                    # to the render-side pickers — so comparing them needs stored solves. All
+                    # three are the incumbent trajectory-gated solve (model_traj_raw) with exactly
+                    # one anchor knob changed, so what differs on screen is the anchor and nothing
+                    # else. ball_anchor's tradeoff is MEASURED and mixed (fixes pro_2 by 196px,
+                    # degrades perfect by 48px — see ClubConfig), which is precisely why it is
+                    # a stored comparison and not a default.
+                    ("model_traj_anchor", "Trajectory gate + impact anchored (Address landmark)",
+                     dict(detector_inject="both", detector_head_primary=True, use_rigid=False,
+                          detector_smooth=True, detector_traj_gate=True,
+                          detector_primary_min_conf=0.15, detector_smooth_win=1,
+                          detector_radius_smooth_win=1, ball_anchor=True)),
+                    ("model_traj_ball", "Trajectory gate + impact anchored (detected ball)",
+                     dict(detector_inject="both", detector_head_primary=True, use_rigid=False,
+                          detector_smooth=True, detector_traj_gate=True,
+                          detector_primary_min_conf=0.15, detector_smooth_win=1,
+                          detector_radius_smooth_win=1, ball_anchor=True, ball_detect=True)),
+                    ("model_traj_nostart", "Trajectory gate, hand-based start (no takeaway)",
+                     dict(detector_inject="both", detector_head_primary=True, use_rigid=False,
+                          detector_smooth=True, detector_traj_gate=True,
+                          detector_primary_min_conf=0.15, detector_smooth_win=1,
+                          detector_radius_smooth_win=1, takeaway_refine=False)),
+                    # --- the STRICT cross (Taylor, 2026-08-19) -----------------------------------
+                    # The incumbent's opposite bet: instead of admitting conf-0.15 detections and
+                    # letting the Hampel gate reject on trajectory, keep ONLY high-confidence
+                    # heads (0.5, well above the 0.35 default) AND gate them — so every kept
+                    # point is both sure and path-consistent, and the solver's trajectory
+                    # interpolation carries the gaps that stricter selection opens up.
+                    ("model_traj_strict", "Strict confidence + trajectory gate",
+                     dict(detector_inject="both", detector_head_primary=True, use_rigid=False,
+                          detector_smooth=True, detector_traj_gate=True,
+                          detector_primary_min_conf=0.5, detector_smooth_win=1,
+                          detector_radius_smooth_win=1)),
                 ]
                 # Trace-only variants share one solve. They differ purely in how the polyline is
                 # rebuilt from an identical set of head positions, so re-solving the club for each
@@ -570,6 +605,36 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
                     # this entry existed, without a re-run.
                     ("model_traj_moving", "Trajectory-gated head + trace: moving average",
                      "moving", "model_traj_raw", dict(trace_min_conf=0.0)),
+                    # The anchor solves above, each with the incumbent's moving-average trace, so
+                    # the anchored/unanchored comparison holds the trace method constant.
+                    ("model_traj_moving_anchor", "Anchored (landmark) + trace: moving average",
+                     "moving", "model_traj_anchor", dict(trace_min_conf=0.0)),
+                    ("model_traj_moving_ball", "Anchored (detected ball) + trace: moving average",
+                     "moving", "model_traj_ball", dict(trace_min_conf=0.0)),
+                    ("model_traj_moving_nostart", "Hand-based start + trace: moving average",
+                     "moving", "model_traj_nostart", dict(trace_min_conf=0.0)),
+                    # The strict solve, both ways of treating its (larger) gaps: the moving trace
+                    # includes the solver's trajectory fill; the measured trace draws only the
+                    # high-confidence detections and leaves honest dashed chords between them.
+                    ("model_traj_strict_moving", "Strict + gate + trace: trajectory-filled",
+                     "moving", "model_traj_strict", dict(trace_min_conf=0.0)),
+                    ("model_traj_strict_measured", "Strict + gate + trace: measured frames only",
+                     "savgol", "model_traj_strict", dict(trace_min_conf=0.0)),
+                    # Consensus-fit rejection over the gated solves (Taylor, 2026-08-19): the
+                    # around-the-body head jumps deviate from any plausible swing path, so fit
+                    # the path, DROP what deviates, and connect around it — reject, don't
+                    # average. Same construction as model_trace_robust, on the better solves.
+                    ("model_traj_robust", "Trajectory gate + trace: reject path outliers",
+                     "robust", "model_traj_raw", dict(trace_min_conf=0.0)),
+                    ("model_traj_strict_robust", "Strict + gate + trace: reject path outliers",
+                     "robust", "model_traj_strict", dict(trace_min_conf=0.0)),
+                    # Over the Viterbi path (built between the two loops below): its measured
+                    # trace is the chosen candidates only; the moving trace includes the
+                    # polar-space gap fill.
+                    ("model_viterbi_moving", "Viterbi path + trace: moving average",
+                     "moving", "model_viterbi", dict(trace_min_conf=0.0)),
+                    ("model_viterbi_measured", "Viterbi path + trace: chosen candidates only",
+                     "measured", "model_viterbi", dict(trace_min_conf=0.0)),
                 ]
 
                 for key, label, over in VARIANTS:
@@ -598,6 +663,40 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
                     }
                     vc = v.coverage
                     print(f"\r  variant    {key:<20} back {vc.get('backswing', 0)*100:3.0f}% / "
+                          f"down {vc.get('downswing', 0)*100:3.0f}% / "
+                          f"through {vc.get('followthrough', 0)*100:3.0f}%  ({time.time()-t:.1f}s)")
+
+                # --- the candidate-Viterbi path (2026-08-19 brainstorm) ----------------------
+                # A GLOBAL solve over the detector's candidates in grip-polar space, with
+                # anchored ends and bounded skipping — see swingsage/clubpath.py. A refinement
+                # over the trajectory-gated solve rather than a re-solve, so it costs
+                # milliseconds, not another 25s club pass.
+                if "model_traj_raw" in solves:
+                    t = time.time()
+                    vb, vb_cfg = solves["model_traj_raw"]
+                    v = clubpath.viterbi_refine(vb, det, ev, len(series.frames), vb_cfg)
+                    solves["model_viterbi"] = (v, vb_cfg)
+                    club_variants["model_viterbi"] = {
+                        "label": "Viterbi: global best path over detector candidates",
+                        "coverage": v.coverage,
+                        "club_len": round(v.club_len, 5),
+                        "butt_len": round(v.butt_len, 5),
+                        "notes": v.notes,
+                        "frames": [{"f": c.f,
+                                    "shaft": ([[round(x, 5) for x in p] for p in c.shaft]
+                                              if c.shaft else None),
+                                    "head": [round(x, 5) for x in c.head] if c.head else None,
+                                    "butt": [round(x, 5) for x in c.butt] if c.butt else None,
+                                    "conf": round(c.conf, 3),
+                                    "interp": c.interp,
+                                    "from_model": c.from_model,
+                                    "from_ball": c.from_ball}
+                                   for c in v.frames],
+                        "trace": v.trace,
+                        "trace_frames": v.trace_frames,
+                    }
+                    vc = v.coverage
+                    print(f"\r  variant    {'model_viterbi':<20} back {vc.get('backswing', 0)*100:3.0f}% / "
                           f"down {vc.get('downswing', 0)*100:3.0f}% / "
                           f"through {vc.get('followthrough', 0)*100:3.0f}%  ({time.time()-t:.1f}s)")
 

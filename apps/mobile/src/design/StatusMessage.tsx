@@ -1,7 +1,7 @@
 import { Text, View } from "react-native";
 
 import { Button } from "./system";
-import { FONT_BODY, FONT_DISPLAY } from "./system/typography";
+import { displayLine, FONT_BODY, FONT_DISPLAY } from "./system/typography";
 import { themedStyles } from "../theme";
 
 /**
@@ -43,7 +43,7 @@ const useStyles = themedStyles((t) => ({
     color: t.text,
     fontFamily: FONT_DISPLAY.extraBold,
     fontSize: 18,
-    lineHeight: 20,
+    lineHeight: displayLine(18),
     textAlign: "center",
   },
   detail: {

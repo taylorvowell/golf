@@ -3,7 +3,8 @@
  * Reference: `.claude/ideal-swing-design-system.html`; tokens in `src/theme/`.
  */
 export { BRAND } from "./brand";
-export { FONT_BODY, FONT_DISPLAY, TYPE } from "./typography";
+export { SCROLL_PRESS_DELAY_MS } from "./press";
+export { displayLine, DISPLAY_LINE_RATIO, FONT_BODY, FONT_DISPLAY, TYPE } from "./typography";
 export { DisplayText, TitleText, HeadingText, LabelText, Eyebrow, MetaText } from "./Text";
 export { Button, type ButtonVariant } from "./Button";
 export { RecordButton } from "./RecordButton";
@@ -37,11 +38,13 @@ export { SessionPillNav, type SessionPillItem } from "./SessionPillNav";
 export { NavVisibilityProvider, useNavVisibility, useChromeScroll } from "./navVisibility";
 export { FloatingBack } from "./FloatingBack";
 export { Skeleton } from "./Skeleton";
+export { PendingDots } from "./PendingDots";
 export { SheetOverBackdrop, HERO_PARALLAX, HERO_SHEET_GAP } from "./SheetOverBackdrop";
 export { SideDrawer, type DrawerClose } from "./SideDrawer";
 export { SheetHandle } from "./SheetHandle";
 export { Sheet, type SheetProps } from "./Sheet";
 export { PoseOutline } from "./PoseOutline";
+export { DualViewIcon } from "./DualViewIcon";
 export { CAPTURE_POSES } from "./capturePoses";
 export {
   StanceStage,

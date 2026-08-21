@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ArrowLeftRight, Layers2, Pause, Play } from "lucide-react-native";
+import { ArrowLeftRight, FlaskConical, Layers2, Pause, Play } from "lucide-react-native";
 import type { SwingSummary } from "@swingsage/schema/contract";
 
 import { FrameClockView } from "../../../modules/frame-clock/src";
@@ -33,6 +33,8 @@ import {
   type Toggles,
 } from "../player/overlay/overlays";
 import { playbackWindow } from "../player/overlay/playbackWindow";
+import { type SmoothingKey } from "../player/overlay/traceSmoothing";
+import { VariantLab } from "./VariantLab";
 import { useAnalysis } from "../player/useAnalysis";
 import { useCorrections } from "../player/useCorrections";
 import { useFramePlayer } from "../player/useFramePlayer";
@@ -320,6 +322,10 @@ export function ReportVideoLayer({
   const [panel, setPanel] = useState<Panel>(null);
   const [toggles, setToggles] = useState<Toggles>(DEFAULT_TOGGLES);
   const [angles, setAngles] = useState<string[]>([]);
+  /** Debug-menu club-solution override; null = the artifact's own default pick (production). */
+  const [clubVar, setClubVar] = useState<string | null>(null);
+  /** Debug-menu render-smoothing override; null = DEFAULT_SMOOTHING (production). */
+  const [smoothing, setSmoothing] = useState<SmoothingKey | null>(null);
   const [reference, setReference] = useState<SwingSummary | null>(null);
   const traceCost = useRef(0);
 
@@ -497,6 +503,36 @@ export function ReportVideoLayer({
       .filter((f): f is NonNullable<typeof f> => !!f);
   }, [analysis, angles]);
 
+  /**
+   * The VariantLab's pick handlers — selection CLEARS the drawn trace and replays the swing
+   * (Taylor, 2026-08-19): the club + trace overlays are forced on with grow, and the playhead
+   * returns to the window start, so every option is watched drawing itself from address rather
+   * than appearing fully-formed on a paused frame. Render-only, like the web Debug Menu — no
+   * number on the report can change. The panel itself replaced the debug-sheet chip rows,
+   * which closed on every tap — wrong shape for running through twenty solutions.
+   */
+  const restartForPick = useCallback(() => {
+    setToggles((t) => ({ ...t, club: true, trace: true, grow: true }));
+    seekTo(bounds.first);
+    play();
+  }, [bounds.first, play, seekTo]);
+  const pickClub = useCallback(
+    (key: string) => {
+      setClubVar(key);
+      restartForPick();
+    },
+    [restartForPick],
+  );
+  const pickSmoothing = useCallback(
+    (key: SmoothingKey) => {
+      setSmoothing(key);
+      restartForPick();
+    },
+    [restartForPick],
+  );
+  const [labOpen, setLabOpen] = useState(false);
+  const toggleLab = useCallback(() => setLabOpen((v) => !v), []);
+
   /** Sheet contents as stable elements — this component renders per presented frame. */
   const overlaysContent = useMemo(
     () =>
@@ -578,6 +614,8 @@ export function ReportVideoLayer({
                 corrections={corrections}
                 playerRef={player.ref}
                 traceCostRef={traceCost}
+                clubVar={clubVar}
+                smoothing={smoothing}
               />
             </ErrorBoundary>
           ) : null}
@@ -660,6 +698,10 @@ export function ReportVideoLayer({
             step-03 iteration). Overlays need the artifact's keypoints; Compare needs the swing's
             phases, which is the last thing detection produces — so an empty sheet is
             unreachable rather than merely disappointing. */}
+        {/* The score door rides the SAME top-right column, ABOVE the orbs (Taylor,
+            2026-08-19) — one stack of chrome in the corner instead of a circle floating
+            over the middle of the picture. */}
+        {cornerOverlay}
         {analysis ? (
           <OrbIn>
           <Pressable
@@ -694,12 +736,39 @@ export function ReportVideoLayer({
           </OrbIn>
         ) : null}
         {topRightExtras}
+        {/* The evaluation lab — __DEV__ ONLY, and it STAYS OPEN across picks. The orb is the
+            flask so it can never be mistaken for product chrome; the panel replaces the
+            debug-sheet chip rows, which closed on every tap. Retired by the club-solution
+            verdict (the HANDOFF row). */}
+        {__DEV__ && analysis ? (
+          <OrbIn>
+            <Pressable
+              testID="report-variant-lab-open"
+              accessibilityRole="button"
+              accessibilityLabel="Club solution lab"
+              accessibilityState={{ selected: labOpen }}
+              hitSlop={8}
+              onPress={toggleLab}
+              style={({ pressed }) => [
+                styles.layersOrb,
+                labOpen && styles.layersOrbOn,
+                pressed && styles.layersOrbPressed,
+              ]}
+            >
+              <FlaskConical size={19} color="#FFFFFF" strokeWidth={2.1} />
+            </Pressable>
+          </OrbIn>
+        ) : null}
+        {__DEV__ && labOpen && analysis ? (
+          <VariantLab
+            analysis={analysis}
+            clubVar={clubVar}
+            smoothing={smoothing}
+            onPickClub={pickClub}
+            onPickSmoothing={pickSmoothing}
+          />
+        ) : null}
       </View>
-
-      {/* The score door, ABOVE the scrub and right-aligned — laid out by the shell rather than
-          absolutely positioned, so it cannot overlap the transport at any screen height and it
-          arrives and leaves with video-open like every other control here. */}
-      {cornerOverlay ? <View style={styles.cornerRow}>{cornerOverlay}</View> : null}
 
       {/* .report-v2-stage-scrub — no heading: the phase labels say what it is, and a title plus
           a "drag through the motion" hint over a control the golfer is already dragging is the
@@ -899,8 +968,6 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(7,16,31,0.56)",
   },
   layersOrbPressed: { opacity: 0.7 },
-  // `SwingProfile` has a fixed height and NO intrinsic width — give it both or it collapses.
-  cornerRow: { alignItems: "flex-end", height: 118 },
   tapDisc: {
     width: 78,
     height: 78,

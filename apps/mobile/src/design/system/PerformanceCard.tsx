@@ -4,7 +4,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Circle, Defs, RadialGradient, Stop } from "react-native-svg";
 
 import { useTheme } from "../../theme";
-import { FONT_BODY, FONT_DISPLAY } from "./typography";
+import { displayLine, FONT_BODY, FONT_DISPLAY } from "./typography";
 
 /**
  * `.performance-card` (mockup §07): the hero gradient card — heroStart→heroMid(58%)→heroEnd,
@@ -73,7 +73,7 @@ export function PerformanceCard({
               color: t.onDark,
               fontFamily: FONT_DISPLAY.black,
               fontSize: 32,
-              lineHeight: 32,
+              lineHeight: displayLine(32),
               letterSpacing: -0.64,
             }}
           >

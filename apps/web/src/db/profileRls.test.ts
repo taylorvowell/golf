@@ -14,8 +14,6 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
  *   2. **The private profile is private.** §5.1 says sensitive fields are not automatically
  *      public; the schema says it by putting them in a different table from the public ones, and
  *      this proves the policy on that table matches.
- *   3. **The 2-3 goal cap is a database rule.** D54's whole argument is that an uncapped
- *      selection teaches the product nothing — a cap enforced only in a form is not enforced.
  *
  * **Requires a database and FAILS, not skips, without one** — same reasoning as `rls.test.ts`: a
  * security test that silently skips still reports the suite green.
@@ -67,9 +65,9 @@ beforeAll(async () => {
     on conflict (id) do nothing
   `;
   await sql`
-    insert into public.golfer_profiles (user_id, handedness, average_score)
+    insert into public.golfer_profiles (user_id, handedness, driver_swing_speed_mph)
     values (${GOLFER_A}, 'left', 92)
-    on conflict (user_id) do update set handedness = 'left', average_score = 92
+    on conflict (user_id) do update set handedness = 'left', driver_swing_speed_mph = 92
   `;
 });
 
@@ -187,16 +185,16 @@ describe("golfer_profiles — the private half of §5.1", () => {
   it("an approved coach cannot WRITE it — reading is not editing (§24.3)", async () => {
     await setLink("approved");
     await asUser(COACH_C, (tx) =>
-      tx.unsafe(`update public.golfer_profiles set average_score = 70 where user_id = $1`, [
+      tx.unsafe(`update public.golfer_profiles set driver_swing_speed_mph = 70 where user_id = $1`, [
         GOLFER_A,
       ]),
     );
     // No error — an UPDATE filtered to zero rows by `using` is a no-op, not a failure. What must
     // be true is that the value did not change.
-    const rows = await sql<{ average_score: number }[]>`
-      select average_score from public.golfer_profiles where user_id = ${GOLFER_A}
+    const rows = await sql<{ driver_swing_speed_mph: number }[]>`
+      select driver_swing_speed_mph from public.golfer_profiles where user_id = ${GOLFER_A}
     `;
-    expect(rows[0].average_score).toBe(92);
+    expect(rows[0].driver_swing_speed_mph).toBe(92);
   });
 
   it("cannot write a profile row for somebody else", async () => {
@@ -210,93 +208,33 @@ describe("golfer_profiles — the private half of §5.1", () => {
   });
 });
 
-describe("golfer_goals — §5.3's curated set, capped by the database (D54)", () => {
-  const clear = () => sql`delete from public.golfer_goals where user_id = ${GOLFER_A}`;
-
-  it("accepts up to three", async () => {
-    await clear();
-    await asUser(GOLFER_A, (tx) =>
-      tx.unsafe(
-        `insert into public.golfer_goals (user_id, goal, rank) values
-           ($1,'add_distance',1), ($1,'find_fairways',2), ($1,'smooth_tempo',3)`,
-        [GOLFER_A],
-      ),
-    );
-    const rows = await sql<{ n: string }[]>`
-      select count(*)::text as n from public.golfer_goals where user_id = ${GOLFER_A}
+describe("the six-answer profile (migration 0015)", () => {
+  it("golfer_profiles carries exactly the six answers plus bookkeeping", async () => {
+    const rows = await sql<{ column_name: string }[]>`
+      select column_name from information_schema.columns
+       where table_schema = 'public' and table_name = 'golfer_profiles'
+      order by column_name
     `;
-    expect(Number(rows[0].n)).toBe(3);
+    // The 2026-08-20 shape: what the product stops asking it stops storing. A column
+    // reappearing here without its question is the drift this test exists to catch.
+    expect(rows.map((r) => r.column_name)).toEqual([
+      "age_range", "created_at", "driver_swing_speed_mph", "handedness",
+      "handicap_range", "onboarding_completed_at", "self_reported_style",
+      "seven_iron_carry_yds", "updated_at", "user_id",
+    ]);
   });
 
-  it("REFUSES a fourth, added separately", async () => {
-    await expect(
-      asUser(GOLFER_A, (tx) =>
-        tx.unsafe(
-          `insert into public.golfer_goals (user_id, goal, rank) values ($1,'sharper_irons',3)`,
-          [GOLFER_A],
-        ),
-      ),
-    ).rejects.toThrow(/SS_TOO_MANY_GOALS/);
-  });
-
-  it("REFUSES four in ONE statement — the multi-row case a BEFORE trigger would miss", async () => {
-    await clear();
-    await expect(
-      asUser(GOLFER_A, (tx) =>
-        tx.unsafe(
-          `insert into public.golfer_goals (user_id, goal, rank) values
-             ($1,'add_distance',1), ($1,'find_fairways',2),
-             ($1,'smooth_tempo',3), ($1,'sharper_irons',3)`,
-          [GOLFER_A],
-        ),
-      ),
-    ).rejects.toThrow(/SS_TOO_MANY_GOALS/);
+  it("golfer_goals is gone — goals belong to the guidance features, not the profile", async () => {
     const rows = await sql<{ n: string }[]>`
-      select count(*)::text as n from public.golfer_goals where user_id = ${GOLFER_A}
+      select count(*)::text as n from information_schema.tables
+       where table_schema = 'public' and table_name = 'golfer_goals'
     `;
     expect(Number(rows[0].n)).toBe(0);
-  });
-
-  it("REFUSES a goal outside the curated eight", async () => {
-    await clear();
-    await expect(
-      asUser(GOLFER_A, (tx) =>
-        tx.unsafe(
-          `insert into public.golfer_goals (user_id, goal, rank) values ($1,'lower_my_scores',1)`,
-          [GOLFER_A],
-        ),
-      ),
-    ).rejects.toThrow();
-  });
-
-  it("an approved coach reads the golfer's goals but cannot change them", async () => {
-    await clear();
-    await asUser(GOLFER_A, (tx) =>
-      tx.unsafe(`insert into public.golfer_goals (user_id, goal, rank) values ($1,'strike_flush',1)`, [
-        GOLFER_A,
-      ]),
-    );
-    await setLink("approved");
-
-    const seen = await asUser(COACH_C, (tx) =>
-      tx.unsafe<{ goal: string }[]>(`select goal from public.golfer_goals where user_id = $1`, [
-        GOLFER_A,
-      ]),
-    );
-    expect(seen.map((r) => r.goal)).toEqual(["strike_flush"]);
-
-    await asUser(COACH_C, (tx) =>
-      tx.unsafe(`delete from public.golfer_goals where user_id = $1`, [GOLFER_A]),
-    );
-    const after = await sql<{ n: string }[]>`
-      select count(*)::text as n from public.golfer_goals where user_id = ${GOLFER_A}
-    `;
-    expect(Number(after[0].n)).toBe(1);
   });
 });
 
 describe("the handedness move (migration 0012)", () => {
-  it("users no longer carries handedness or height — the profile does", async () => {
+  it("users no longer carries handedness — the profile does", async () => {
     const rows = await sql<{ column_name: string }[]>`
       select column_name from information_schema.columns
        where table_schema = 'public' and table_name = 'users'
@@ -307,10 +245,9 @@ describe("the handedness move (migration 0012)", () => {
     const profile = await sql<{ column_name: string }[]>`
       select column_name from information_schema.columns
        where table_schema = 'public' and table_name = 'golfer_profiles'
-         and column_name in ('handedness', 'height_cm')
-      order by column_name
+         and column_name = 'handedness'
     `;
-    expect(profile.map((r) => r.column_name)).toEqual(["handedness", "height_cm"]);
+    expect(profile.map((r) => r.column_name)).toEqual(["handedness"]);
   });
 
   it("a swing still carries its own handedness — the profile is a default, not the truth", async () => {

@@ -20,12 +20,13 @@ import {
   Chip,
   Delta,
   PerformanceCard,
+  SCROLL_PRESS_DELAY_MS,
   StickThumb,
   formFigureFor,
   useChromeScroll,
   WAVE_NAV_CLEARANCE,
 } from "../design/system";
-import { FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
+import { displayLine, FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
 import { StatusMessage } from "../design/StatusMessage";
 import { useAuth } from "../features/auth/AuthProvider";
 import {
@@ -39,6 +40,7 @@ import {
 import { useSessionReports } from "../features/home/useSessionReports";
 import { dismissDeepIntro, useDeepIntro } from "../features/coach/useDeepIntro";
 import { dismissStanceIntro, useStanceIntro } from "../features/coach/useStanceIntro";
+import { NotificationBell } from "../features/notifications/NotificationBell";
 import { createdAtMs, sessionize } from "../features/swings/sessions";
 import { useSwings } from "../features/swings/useSwings";
 import { useAuthenticatedImage } from "../platform/useAuthenticatedImage";
@@ -175,7 +177,11 @@ export function HomeScreen() {
         </ScrollView>
       ) : null}
 
-      <AppHeader chromePx={chromePx} onProfile={() => navigation.navigate("Profile")} />
+      <AppHeader
+        chromePx={chromePx}
+        bell={<NotificationBell onPress={() => navigation.navigate("Notifications")} />}
+        onProfile={() => navigation.navigate("Profile")}
+      />
     </View>
   );
 }
@@ -371,6 +377,7 @@ function CompareStrip({
       accessibilityRole="button"
       accessibilityLabel={`You versus pro${at}. ${lead.cue}`}
       onPress={() => openOnSwing(navigation, lead)}
+      unstable_pressDelay={SCROLL_PRESS_DELAY_MS}
       style={({ pressed }) => [styles.compare, pressed && styles.pressed]}
     >
       <View style={overPhoto.compareRow}>
@@ -435,6 +442,7 @@ function FocusRail({ items, navigation }: { items: FocusItem[]; navigation: Navi
           accessibilityRole="button"
           accessibilityLabel={`${item.label}. ${item.cue}`}
           onPress={() => openOnSwing(navigation, item)}
+          unstable_pressDelay={SCROLL_PRESS_DELAY_MS}
           style={({ pressed }) => [styles.tipCard, pressed && styles.pressed]}
         >
           <View style={styles.tipHead}>
@@ -534,6 +542,7 @@ function SwingSlide({
         scored ? `, scored ${Math.round(swing.overallScore as number)}` : ", not scored"
       }${isBest ? ", best of the session" : ""}`}
       onPress={onPress}
+      unstable_pressDelay={SCROLL_PRESS_DELAY_MS}
       style={({ pressed }) => [styles.slide, pressed && styles.pressed]}
     >
       {thumb ? (
@@ -611,7 +620,7 @@ const useStyles = themedStyles((t) => ({
     color: t.onDark,
     fontFamily: FONT_DISPLAY.black,
     fontSize: 24,
-    lineHeight: 25,
+    lineHeight: displayLine(24),
     letterSpacing: -0.48,
   },
   heroFocusCue: {
@@ -651,7 +660,7 @@ const useStyles = themedStyles((t) => ({
     color: t.text,
     fontFamily: FONT_DISPLAY.extraBold,
     fontSize: 15,
-    lineHeight: 18,
+    lineHeight: displayLine(15),
   },
   stanceCopy: {
     marginTop: 4,
@@ -718,7 +727,7 @@ const useStyles = themedStyles((t) => ({
     color: t.text,
     fontFamily: FONT_DISPLAY.extraBold,
     fontSize: 15,
-    lineHeight: 18,
+    lineHeight: displayLine(15),
   },
   tipCue: { color: t.muted, fontFamily: FONT_BODY.regular, fontSize: 11.5, lineHeight: 16.5 },
 
@@ -734,7 +743,7 @@ const useStyles = themedStyles((t) => ({
     color: t.text,
     fontFamily: FONT_DISPLAY.extraBold,
     fontSize: 24,
-    lineHeight: 25,
+    lineHeight: displayLine(24),
     letterSpacing: -0.48,
   },
   sessionMeta: { color: t.muted, fontFamily: FONT_BODY.regular, fontSize: 11.5 },

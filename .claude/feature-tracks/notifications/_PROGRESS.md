@@ -1,5 +1,27 @@
 # notifications — progress
 
+## 02 - The Bell and the Inbox
+**Completed:** 2026-08-19 22:20 UTC
+**Phase:** Notification Infrastructure
+**Summary:** §29 has a read surface. A badged bell sits in `AppHeader` on all four tabs (a
+`bell?: ReactNode` slot, so the design system never imports a feature), opening
+`NotificationsScreen` — a right-side drawer that lists newest-first, renders D60 folds as
+"3 messages", and acks the unread rows it showed in one batch, taking the server's returned
+`unreadCount` as truth. One module-scope store with a single in-flight GET backs bell and
+drawer together. `notificationCopy.ts` holds the exhaustive kind→glyph map, relative ages and
+fold plurals, tested directly.
+**Notes:** Rows draw against "what was unread at open" rather than live `readAt` — otherwise
+the ack fired on open erases every dot a beat after the golfer arrives. `ProfileScreen`'s inert
+Notifications row now opens the inbox (its test moved from the inert list to the routed one).
+Gate: mobile 46 suites / 399 tests green; new files typecheck clean. **Named shortfall:**
+`pnpm --filter mobile exec tsc --noEmit` does NOT pass repo-wide — twelve pre-existing errors in
+UNTRACKED billing spike files (`features/billing/*`, `PlansScreen`, `SubscriptionScreen`:
+missing `elite` tier, missing `PURCHASABLE` export). None are in this step's files and none were
+touched; repairing another session's uncommitted work inside this step was declined. Decision
+recorded in `docs/decisions/mobile-client.md`; `docs/CURRENT-STATE.md` amended.
+
+---
+
 ## 01 - The Notification Backbone
 **Completed:** 2026-08-19 17:50 UTC
 **Phase:** Notification Infrastructure

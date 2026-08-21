@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Animated, Easing, StyleSheet, View, useWindowDimensions } from "react-native";
 
 import { useAppTheme } from "../../theme";
@@ -46,11 +46,13 @@ function makePieces(colors: string[], width: number, height: number): Piece[] {
 export function ConfettiBurst() {
   const t = useAppTheme();
   const { width, height } = useWindowDimensions();
-  const pieces = useMemo(
-    () => makePieces([t.cobalt, t.aqua, t.lavender, t.good], width, height),
-    [t, width, height],
-  );
-  const progress = useRef(pieces.map(() => new Animated.Value(0))).current;
+  // Frozen at mount, deliberately: a dimension change mid-burst (fold, split-screen) must not
+  // re-randomise pieces whose animations are already running — they'd visibly teleport. The
+  // parent remounts this component per toast (key), which is where freshness comes from.
+  const [{ pieces, progress }] = useState(() => {
+    const made = makePieces([t.cobalt, t.aqua, t.lavender, t.good], width, height);
+    return { pieces: made, progress: made.map(() => new Animated.Value(0)) };
+  });
   const [done, setDone] = useState(false);
 
   useEffect(() => {

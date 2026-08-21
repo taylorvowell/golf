@@ -10,9 +10,10 @@ import { OrientLayer } from "./OrientLayer";
 import { SkeletonLayer } from "./SkeletonLayer";
 import { TraceLayer } from "./TraceLayer";
 import { keypointIndex } from "./geometry";
-import { buildTrace, orientationHold, selectedClub, traceSpans } from "./model";
+import { defaultClubVar } from "./clubVariants";
+import { buildTraceFor, clubSolution, orientationHold, traceSpans } from "./model";
 import type { Toggles } from "./overlays";
-import { DEFAULT_SMOOTHING } from "./traceSmoothing";
+import { DEFAULT_SMOOTHING, type SmoothingKey } from "./traceSmoothing";
 
 /**
  * Everything drawn on top of the picture, for one frame.
@@ -59,6 +60,19 @@ export interface SwingOverlayProps {
   playerRef: React.RefObject<FrameClockHandle | null>;
   /** Written with the number of trace views drawn, for the sync panel to report. */
   traceCostRef?: { current: number };
+  /**
+   * Debug-menu override of WHICH club solution is drawn — a `club.variants` key, or `"primary"`.
+   * Absent/null draws the artifact's own default pick, byte-for-byte the previous behaviour.
+   * Render-only, same contract as the web Debug Menu: metrics, face and event refinement always
+   * read the primary block, so switching can never change a number, only the line.
+   */
+  clubVar?: string | null;
+  /**
+   * Debug-menu override of the render-time trace smoothing (`traceSmoothing.ts`). Absent/null
+   * draws with `DEFAULT_SMOOTHING` — production behaviour. Draw-only by construction: smoothing
+   * never touches the measured points, endpoints stay exact, bridges stay dashed chords.
+   */
+  smoothing?: SmoothingKey | null;
 }
 
 export function SwingOverlay({
@@ -71,6 +85,8 @@ export function SwingOverlay({
   corrections,
   playerRef,
   traceCostRef,
+  clubVar,
+  smoothing,
 }: SwingOverlayProps) {
   // All four are whole-clip passes over the artifact and none of them depends on the playhead.
   // Recomputing any of them per frame is the single easiest way to lose the frame budget.
@@ -79,14 +95,18 @@ export function SwingOverlay({
     () => traceSpans(analysis, corrections?.phases),
     [analysis, corrections?.phases],
   );
+  // The variant the artifact's own numbers select (or the debug override), not `primary` — see
+  // `defaultClubVar`. Chosen ONCE here and fed to both the trace build and the club layer, so the
+  // shaft, the head and the trace can never be three different solves.
+  const club = useMemo(
+    () => clubSolution(analysis, clubVar ?? defaultClubVar(analysis)),
+    [analysis, clubVar],
+  );
   const pieces = useMemo(
-    () => buildTrace(analysis, spans, DEFAULT_SMOOTHING, corrections?.marks),
-    [analysis, spans, corrections?.marks],
+    () => buildTraceFor(club, analysis, spans, smoothing ?? DEFAULT_SMOOTHING, corrections?.marks),
+    [club, analysis, spans, smoothing, corrections?.marks],
   );
   const tracks = useMemo(() => orientationHold(analysis, idx), [analysis, idx]);
-  // The variant the artifact's own numbers select, not `primary` — see `selectedClub`. Chosen once
-  // here so the shaft, the head and the trace can never be three different solves.
-  const club = useMemo(() => selectedClub(analysis), [analysis]);
 
   const committed = useRef(-1);
   useLayoutEffect(() => {

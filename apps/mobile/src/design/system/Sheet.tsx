@@ -50,6 +50,8 @@ export interface SheetProps {
   /** Called for every dismissal — backdrop, drag, hardware back, or the close cap. */
   onClose: () => void;
   title?: string;
+  /** Sits immediately before the title — a mark that names the panel faster than the word does. */
+  titleIcon?: ReactNode;
   /** A short line under the title — what this panel is for, not instructions. */
   subtitle?: string;
   /** Sits opposite the title in the drag header — a segmented control, a count, a reset. */
@@ -74,6 +76,7 @@ export function Sheet({
   visible,
   onClose,
   title,
+  titleIcon,
   subtitle,
   accessory,
   children,
@@ -270,6 +273,7 @@ export function Sheet({
             <View style={styles.grip} />
             {title ? (
               <View style={styles.titleRow}>
+                {titleIcon}
                 <View style={styles.titleText}>
                   <Text style={styles.title}>{title}</Text>
                   {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}

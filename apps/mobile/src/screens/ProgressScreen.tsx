@@ -17,7 +17,7 @@ import {
   useChromeScroll,
   WAVE_NAV_CLEARANCE,
 } from "../design/system";
-import { FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
+import { displayLine, FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
 import { StatusMessage } from "../design/StatusMessage";
 import { CoachFocusRow } from "../features/progress/CoachFocusRow";
 import { CompareThenNow } from "../features/progress/CompareThenNow";
@@ -30,6 +30,7 @@ import {
   PLACEHOLDER_TRENDS,
   progressViewModel,
 } from "../features/progress/viewModel";
+import { NotificationBell } from "../features/notifications/NotificationBell";
 import { useSwings } from "../features/swings/useSwings";
 import { useAppNavigation } from "../navigation";
 import { themedStyles, useTheme } from "../theme";
@@ -238,6 +239,7 @@ export function ProgressScreen() {
     <AppHeader
       hero
       chromePx={chromePx}
+      bell={<NotificationBell hero onPress={() => navigation.navigate("Notifications")} />}
       onProfile={() => navigation.navigate("Profile")}
       profileTestID="progress-profile"
     />
@@ -252,7 +254,7 @@ const useStyles = themedStyles((t) => ({
     color: t.onDark,
     fontFamily: FONT_DISPLAY.black,
     fontSize: 31,
-    lineHeight: 31,
+    lineHeight: displayLine(31),
     letterSpacing: -0.62,
   },
   /* .progress-meta-row — align-items flex-end in the mockup. */
@@ -276,7 +278,7 @@ const useStyles = themedStyles((t) => ({
     color: t.onDark,
     fontFamily: FONT_DISPLAY.black,
     fontSize: 26,
-    lineHeight: 27,
+    lineHeight: displayLine(26),
   },
   heroCopy: {
     marginTop: 8,

@@ -2,7 +2,7 @@ import { Text, View, type StyleProp, type ViewStyle } from "react-native";
 import type { ReactNode } from "react";
 
 import { useTheme } from "../../theme";
-import { FONT_BODY, FONT_DISPLAY } from "./typography";
+import { displayLine, FONT_BODY, FONT_DISPLAY } from "./typography";
 
 /**
  * `.coach-card` (mockup §08): aqua icon tile (52px, radius 8, navy glyph), aqua eyebrow,
@@ -74,7 +74,7 @@ export function CoachCard({
             color: t.text,
             fontFamily: FONT_DISPLAY.extraBold,
             fontSize: 15,
-            lineHeight: 17,
+            lineHeight: displayLine(15),
           }}
         >
           {title}

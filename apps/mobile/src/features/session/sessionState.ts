@@ -54,6 +54,18 @@ export function zoomIsAdjustable(range: ZoomRange): boolean {
   return range.max > range.min + 0.01;
 }
 
+/**
+ * Where the zoom sits when the golfer has not touched it (Taylor, 2026-08-19).
+ *
+ * Front view opens at the lens's WIDEST — filming face-on the golfer is close and needs the
+ * whole body plus the club in frame, and 1x on a modern phone crops that. Down the line opens
+ * at 1x: the ultra-wide's barrel distortion bends the shaft plane, which is the one thing that
+ * angle exists to show.
+ */
+export function defaultZoomFor(view: CaptureView, range: ZoomRange): CameraZoom {
+  return view === "face_on" ? range.min : Math.min(range.max, Math.max(range.min, 1));
+}
+
 /** Stub-grade swing record — the wiring replaces `id` with the server's and drives `status`
  * from the real job. Newest first. */
 export interface SessionSwing {
@@ -65,6 +77,11 @@ export interface SessionSwing {
   view: CaptureView;
   status: "analyzing" | "ready";
 }
+
+/** After a recording stops, shutter presses are ignored for this long — the double click on
+ * Stop must not immediately arm the next swing (Taylor: 3s). Cancelling a countdown carries
+ * no such hold; pressing again right away simply starts over. */
+export const SHUTTER_DEBOUNCE_MS = 3_000;
 
 export interface SessionState {
   /** The editable half of the name — "Session N". The date half is fixed (`dateLabel`). */
@@ -86,6 +103,8 @@ export interface SessionState {
    * both screens is what keeps "Record New Swing" one dispatch away.
    */
   reviewing: string | null;
+  /** When the last recording stopped — the anchor the shutter debounce measures from. */
+  stoppedAt: number | null;
 }
 
 export type SessionAction =
@@ -105,6 +124,10 @@ export type SessionAction =
   | { type: "disarm" }
   /** Stop pressed: countdown aborts to idle with nothing minted; recording mints a swing. */
   | { type: "stop"; swingId?: string; at?: number }
+  /** The Bluetooth shutter remote's one button (or the volume rocker): a press anywhere in
+   * the session starts the next swing (idle/reviewing → arm, countdown → cancel, recording →
+   * stop), except within SHUTTER_DEBOUNCE_MS of the last stop — the double click on Stop. */
+  | { type: "shutter-press"; at?: number }
   /** A swing's analysis stub/job finished. */
   | { type: "swing-ready"; swingId: string }
   /** Open a session swing on the post-recording screen. */
@@ -140,6 +163,7 @@ export function initialSessionState(
     zoomRange: NO_ZOOM,
     swings: [],
     reviewing: null,
+    stoppedAt: null,
   };
 }
 
@@ -160,7 +184,14 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
     // Camera choices only apply between recordings — mid-capture they would change what
     // the clip IS halfway through it.
     case "set-view":
-      return state.mode === "idle" ? { ...state, view: action.view } : state;
+      // The angle carries its own default zoom — switching views re-frames the shot.
+      return state.mode === "idle"
+        ? {
+            ...state,
+            view: action.view,
+            zoom: defaultZoomFor(action.view, state.zoomRange),
+          }
+        : state;
     case "flip-camera":
       // The new lens has its own range and its own 1x — reset both rather than carry a
       // ratio the other camera cannot reach.
@@ -180,7 +211,18 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
     case "set-zoom-range": {
       const { min, max } = action.range;
       if (!(min > 0) || !(max >= min)) return state;
-      return { ...state, zoomRange: { min, max }, zoom: Math.min(max, Math.max(min, state.zoom)) };
+      // An untouched zoom re-defaults to the new lens's answer — the real range only arrives
+      // once the preview opens, so Front view's "widest" is unknowable before this point. A
+      // zoom the golfer actually set is kept, clamped to what the lens can reach.
+      const untouched = state.zoom === defaultZoomFor(state.view, state.zoomRange);
+      const range = { min, max };
+      return {
+        ...state,
+        zoomRange: range,
+        zoom: untouched
+          ? defaultZoomFor(state.view, range)
+          : Math.min(max, Math.max(min, state.zoom)),
+      };
     }
     case "arm": {
       if (state.mode !== "idle") return state;
@@ -217,7 +259,27 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
         // Replay off is a session setting: the swing processes in the background and the
         // golfer stays on the capture screen, one tap from the next swing.
         reviewing: state.settings.videoReplay ? swing.id : null,
+        stoppedAt: swing.recordedAt,
       };
+    }
+    case "shutter-press": {
+      // One button the golfer presses from the ball, so the phone never has to be touched
+      // between swings: a press anywhere in the session means "record the next one" — except
+      // within SHUTTER_DEBOUNCE_MS of the last stop, which is the double click on Stop.
+      // Delegation — every rule the named actions enforce still holds.
+      const at = action.at ?? Date.now();
+      if (state.stoppedAt !== null && at - state.stoppedAt < SHUTTER_DEBOUNCE_MS) return state;
+      if (state.reviewing !== null) {
+        return sessionReducer({ ...state, reviewing: null }, { type: "arm" });
+      }
+      switch (state.mode) {
+        case "idle":
+          return sessionReducer(state, { type: "arm" });
+        case "countdown":
+          return sessionReducer(state, { type: "disarm" });
+        case "recording":
+          return sessionReducer(state, { type: "stop", at });
+      }
     }
     case "swing-ready":
       return {
@@ -240,6 +302,13 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
         reviewing: state.reviewing === action.swingId ? null : state.reviewing,
       };
     }
+    // Unreachable per the SessionAction union — but reachable in dev, where Fast Refresh can
+    // briefly pair a new dispatch site with an older reducer module. Falling off the switch
+    // would return undefined and destroy the whole session; keeping the state is the only
+    // acceptable failure.
+    default:
+      if (__DEV__) console.warn("sessionReducer: unknown action", JSON.stringify(action));
+      return state;
   }
 }
 

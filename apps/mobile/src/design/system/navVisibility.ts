@@ -3,12 +3,14 @@ import {
   createElement,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react";
 import { Animated, useWindowDimensions } from "react-native";
+import { NavigationContext } from "@react-navigation/native";
 
 /**
  * How screens hide the navigation chrome — and the ONLY way they may. The amended rule
@@ -32,9 +34,13 @@ import { Animated, useWindowDimensions } from "react-native";
  * (Taylor, 2026-08-18). `hidden` stays global — the tab bar is one bar for the whole shell.
  *
  * `useChromeScroll` is the one sanctioned driver (Taylor 2026-08-17): scrolling DOWN hides
- * both bars, any scroll UP brings them back, and the top of a screen always shows them. The
- * flag is global on purpose — the tab bar is only tappable while visible, so the screen a
- * tab switch lands on inherits a visible bar by construction.
+ * both bars, any scroll UP brings them back, and the top of a screen always shows them.
+ * **Landing on a screen always shows the tab bar too** (Taylor, 2026-08-19): the flag is
+ * global, and a screen left scrolled-down used to leave it latched `true` — so coming back to
+ * it through the swing page's own copy of the menu (which ignores the flag) or a `goBack`
+ * arrived with the menu already gone, and the only way to summon it was a scroll-up run. Every
+ * focus now resets the flag AND this screen's run anchor, so a fresh 15% down-run is required
+ * before the bar may hide again.
  */
 const NavVisibilityContext = createContext<{
   /** The TAB BAR's flag — run-gated, then animated. */
@@ -130,6 +136,21 @@ export function useChromeScroll(): {
   const scroll = useRef<ChromeScroll>({ y: 0, anchor: 0, hidden: false });
   // Mirrored, because an Animated.Value cannot be read back synchronously.
   const px = useRef(0);
+
+  // Landing on a screen shows the bar, whatever the restored scroll position says — see the
+  // note at the top of this file. `NavigationContext` read directly (not `useNavigation`, which
+  // throws) so screens still render outside a container, which is how every screen test mounts.
+  // The anchor moves to the current offset so the bar only re-hides after a fresh full down-run,
+  // not on the first pixel of a stale one.
+  const navigation = useContext(NavigationContext);
+  useEffect(() => {
+    if (!navigation) return;
+    return navigation.addListener("focus", () => {
+      const s = scroll.current;
+      scroll.current = { y: s.y, anchor: s.y, hidden: false };
+      setHidden(false);
+    });
+  }, [navigation, setHidden]);
 
   const onScroll = useCallback(
     (rawY: number) => {

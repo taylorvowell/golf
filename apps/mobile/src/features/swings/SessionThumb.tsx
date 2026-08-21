@@ -13,6 +13,9 @@ import type { SwingSession } from "./sessions";
  * another ball is hit gives the golfer nothing to recognise it by. It sits in the header so a
  * collapsed session is still identifiable at a glance, which is the whole reason it exists.
  *
+ * One flat square on purpose (Taylor 2026-08-19) — a stacked-cards treatment was tried for
+ * multi-swing sessions and cut; the swings pill already says how big the visit was.
+ *
  * `?poster=1` is one frame, not the contact sheet — noise at this size.
  */
 export function SessionThumb({ session, size = 56 }: { session: SwingSession; size?: number }) {

@@ -180,5 +180,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
     transform: [{ rotate: "-90deg" }],
   },
-  pressed: { opacity: 0.7 },
+  // Pressed is a FILL, never opacity (mobile-client register) — a deeper amber, same alpha.
+  pressed: { backgroundColor: "rgba(168,120,26,0.9)" },
 });

@@ -95,6 +95,7 @@ export function SessionPillNav({
                 backgroundColor: item.active ? "rgba(47,70,207,0.12)" : "transparent",
               }}
             >
+              {/* No pressed bed — Taylor tried one on the sticky bars (2026-08-19) and cut it. */}
               <View style={{ width: 18, height: 18, alignItems: "center", justifyContent: "center" }}>
                 {item.icon(item.tone === "latest" ? t.aqua : color)}
               </View>
@@ -121,6 +122,7 @@ export function SessionPillNav({
         onPress={onNew}
         style={{ position: "absolute", right: 10, top: "50%", marginTop: -31 }}
       >
+        {({ pressed }) => (
         <LinearGradient
           colors={["#57D7D8", "#43CDD0"]}
           start={{ x: 0, y: 0 }}
@@ -164,7 +166,20 @@ export function SessionPillNav({
               }}
             />
           </View>
+          {/* Pressed is a navy shade over the gradient — the only fill that shows on it. */}
+          {pressed ? (
+            <View
+              pointerEvents="none"
+              style={{
+                position: "absolute",
+                inset: 0,
+                borderRadius: 31,
+                backgroundColor: "rgba(16,32,74,0.18)",
+              }}
+            />
+          ) : null}
         </LinearGradient>
+        )}
       </Pressable>
     </Animated.View>
   );

@@ -1,31 +1,20 @@
 import { Award, Medal, Trophy } from "lucide-react-native";
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useCallback, useContext, useMemo, type ReactNode } from "react";
 
-import { CelebrationToast } from "./CelebrationToast";
-import { ConfettiBurst } from "./Confetti";
-import { advanceCelebration, enqueueCelebration, type Celebration } from "./celebration";
+import { celebrationToast, type Celebration } from "./celebration";
 import { useDebugGroups } from "../debug/DebugOverlay";
+import { useToast } from "../toast/ToastProvider";
 import type { DebugGroup } from "../session/sheets/DebugSheet";
 
 /**
- * The one mouth for toast-level celebrations, app-wide.
+ * The achievements layer's mouth: `useCelebrate()` translates a celebration into the app-wide
+ * toaster's voice (confetti, kind eyebrow, XP chip — see `celebration.ts`) and hands it to
+ * `useToast()`. Renders nothing itself — the `toast` feature owns the surface, this provider
+ * owns what a CELEBRATION means, plus the debug-sheet triggers.
  *
- * Mounted in `App.tsx` between `DebugProvider` and `Root` — below the debug registry because it
- * contributes the debug sheet's "Celebrations" group, above the navigator so a celebration
- * lands on whatever screen the golfer happens to be on. Every badge / rank-up / personal-best
- * moment calls `useCelebrate()`; nothing renders its own toast. (The focus-goal celebration is
- * a bigger, separate moment owned by `goal-progression` — it outranks these, D62.)
- *
- * Queue-serialised: one toast at a time, extras wait, duplicate ids dropped (see
- * `celebration.ts`). Toast and confetti are keyed by celebration id so each moment mounts
- * fresh — no animation state survives from the previous one.
+ * Mounted in `App.tsx` inside both `DebugProvider` (it contributes the Celebrations group)
+ * and `ToastProvider` (it speaks through it). The focus-goal celebration stays a bigger,
+ * separate moment owned by `goal-progression` — it outranks these (D62).
  */
 
 interface CelebrationApi {
@@ -41,7 +30,7 @@ export function useCelebrate(): (c: Celebration) => void {
 }
 
 /**
- * Sample moments for the debug sheet — one per kind, so the toast's three shapes (with points,
+ * Sample moments for the debug sheet — one per kind, so the toast's three shapes (with chip,
  * without, long detail) are all reachable on demand. Stable ids on purpose: pressing RUN twice
  * while one is on screen exercises the dedupe path rather than stacking twins.
  */
@@ -70,14 +59,12 @@ const SAMPLE_RECORD: Celebration = {
 };
 
 export function CelebrationProvider({ children }: { children: ReactNode }) {
-  const [queue, setQueue] = useState<Celebration[]>([]);
+  const showToast = useToast();
 
-  const celebrate = useCallback((c: Celebration) => {
-    setQueue((q) => enqueueCelebration(q, c));
-  }, []);
-  const dismiss = useCallback(() => {
-    setQueue((q) => advanceCelebration(q));
-  }, []);
+  const celebrate = useCallback(
+    (c: Celebration) => showToast(celebrationToast(c)),
+    [showToast],
+  );
   const api = useMemo<CelebrationApi>(() => ({ celebrate }), [celebrate]);
 
   const debugGroups = useMemo<DebugGroup[]>(
@@ -106,17 +93,5 @@ export function CelebrationProvider({ children }: { children: ReactNode }) {
   );
   useDebugGroups("celebrations", debugGroups);
 
-  const current = queue[0];
-
-  return (
-    <CelebrationContext.Provider value={api}>
-      {children}
-      {current ? (
-        <>
-          <ConfettiBurst key={`confetti-${current.id}`} />
-          <CelebrationToast key={current.id} celebration={current} onDismiss={dismiss} />
-        </>
-      ) : null}
-    </CelebrationContext.Provider>
-  );
+  return <CelebrationContext.Provider value={api}>{children}</CelebrationContext.Provider>;
 }

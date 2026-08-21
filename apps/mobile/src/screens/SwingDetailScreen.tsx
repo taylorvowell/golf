@@ -11,7 +11,7 @@ import { SwingDeleteSheet } from "../features/session/sheets/SwingDeleteSheet";
 import { useStarred } from "../features/swings/useStarred";
 import { deleteSwing, useSwing } from "../features/swings/useSwings";
 import { useAppNavigation, type TabParamList } from "../navigation";
-import { COLORS } from "../theme";
+import { AppTheme, COLORS, FixedDarkTheme } from "../theme";
 
 /**
  * One swing, ONE page (Taylor 2026-08-17 killed the second player surface; 2026-08-19 killed the
@@ -20,6 +20,10 @@ import { COLORS } from "../theme";
  * no session controls, no "record new swing" of its own beyond the menu's standing Record door —
  * and star/delete ride the video's top-right orb stack instead of a bar. Every door (log row,
  * Home's focus cards, Coach's scorecard link) lands here.
+ *
+ * The page is pinned DARK (Taylor, 2026-08-19) so the analysis card that slides over the video
+ * is the same surface as the after-swing one — one page reading as two was the whole complaint.
+ * The main menu escapes the pin the way every bar in the app does (`AppTheme`).
  */
 
 export interface SwingDetailScreenProps {
@@ -89,18 +93,22 @@ function StandaloneSwingPage({ swing }: { swing: SwingSummary }) {
     [navigation],
   );
 
-  return (
+  const page = (
     <SwingPage
       swing={swing}
       testID="report"
       // Static on purpose — `hidden` from the page's scroll latch is ignored: this is the main
       // menu, and the main menu does not leave (Taylor, 2026-08-19).
       menu={() => (
-        <WaveNav
-          items={tabs}
-          recordTestID="swing-tab-record"
-          onRecord={() => navigation.navigate("Record")}
-        />
+        // Out of the dark pin: every bar in the app is the same bar, so the main menu keeps
+        // the app's surface exactly as `SessionNav` does on the capture screen.
+        <AppTheme>
+          <WaveNav
+            items={tabs}
+            recordTestID="swing-tab-record"
+            onRecord={() => navigation.navigate("Record")}
+          />
+        </AppTheme>
       )}
       chromeTopInset={APP_HEADER_BAR}
       // The tab is there at page load, no slide-in — the entrance theatre belongs to the
@@ -150,6 +158,7 @@ function StandaloneSwingPage({ swing }: { swing: SwingSummary }) {
       }
     />
   );
+  return <FixedDarkTheme>{page}</FixedDarkTheme>;
 }
 
 const styles = StyleSheet.create({

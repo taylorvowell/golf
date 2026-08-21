@@ -8,12 +8,14 @@ import { FONT_DISPLAY } from "./typography";
  * swing-row metric variant (`.swing-copy .tag2`): min-height 17, font 6. The color-mix
  * fills become fixed rgba tints over the theme surface — named here, never inline.
  */
-export type TagVariant = "latest" | "best" | "good" | "issue" | "neutral";
+export type TagVariant = "latest" | "best" | "good" | "issue" | "neutral" | "count";
 
 function fills(t: Theme, variant: TagVariant) {
   switch (variant) {
     case "latest": // .tag-latest — the one solid tag
       return { bg: t.cobalt, fg: t.onDark };
+    case "count": // the session's swing count — solid navy, one step deeper than cobalt
+      return { bg: t.heroMid, fg: t.onDark };
     case "best": // .tag-best — aqua 18%
       return { bg: "rgba(67,205,208,0.18)", fg: t.mode === "dark" ? t.aqua : "#1D7E86" };
     case "good": // .tag-good — green 14%

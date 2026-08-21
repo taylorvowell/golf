@@ -111,6 +111,16 @@ along.
   which is why the build runs BEFORE the Metro check, not after.
 - **"Up" means it answered, not that the port is open.** Only `packager-status:running` in the
   body of `/status` proves Metro is alive; an open socket proves nothing here.
+- **The dev client falls back to a STALE CACHED BUNDLE when Metro's first build is slow — and
+  says nothing.** Metro's cold full build takes ~75 s on this machine; the client's fetch times
+  out around 60 (`[timeout] connection terminated with Device` in `.expo/dev/logs/start.log`),
+  and the app then boots the last bundle it downloaded, with Fast Refresh dead. Every symptom
+  reads as "my change has no effect" — new JS provably in the served bundle
+  (`curl http://127.0.0.1:8082/apps/mobile/index.bundle?platform=android&dev=true`) while the
+  screen renders old code. This cost an hour on 2026-08-20. After a Metro restart, the FIRST
+  app launch warms the graph and may be stale; force-stop and relaunch once Metro's graph is
+  warm (delta requests answer in <100 ms) and the fetch succeeds. When an edit seems inert,
+  prove which bundle is live with a visible one-line probe before debugging the feature.
 
 ## Native config (CNG)
 
@@ -178,6 +188,17 @@ along.
   legacy deck glyphs stay drawn until their surfaces are rebuilt.
 - **Nothing dev-only leaks into release**: `__DEV__`-gate instruments *and their layout
   accommodations* (padding reserved for the dev-client bubble counts).
+- **Transient top-of-screen moments go through the app toaster — never a second toast system.**
+  `useToast()` from `src/features/toast/ToastProvider` is the one queue (one at a time, extras
+  wait, duplicate `id`s dropped — safe to point replay-until-acked delivery at). Pass an
+  `AppToast`: `{ id, title, icon }` plus optional `eyebrow` (kicker line), `detail`, `chip`
+  (right-side pill text), `confetti: true` (celebration burst), `durationMs`, and `onPress`
+  (the deep link — runs on tap, then dismisses). A system with its own VOICE wraps the mapping
+  in an adapter the way achievements does (`features/achievements/celebration.ts` →
+  `useCelebrate()`): semantics live in the adapter, the surface stays generic. Layout, theming
+  and the two Yoga gotchas are recorded in `docs/decisions/mobile-client.md` ("One app-wide
+  toaster"); a toast never carries an action other than its own deep link — anything needing
+  buttons or persistence is a sheet or an inbox row, not a toast.
 - **A feature with forceable states ships with debug-menu toggles for them** (Taylor,
   2026-08-19). While building, any state worth testing that is expensive or impossible to
   reach on demand — connected/empty/error variants, a flag the server will own later — gets a

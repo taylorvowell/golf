@@ -3,7 +3,8 @@ import { Pressable, Text, View } from "react-native";
 import { ChevronRight } from "lucide-react-native";
 
 import { useTheme } from "../../theme";
-import { FONT_BODY, FONT_DISPLAY } from "./typography";
+import { SCROLL_PRESS_DELAY_MS } from "./press";
+import { displayLine, FONT_BODY, FONT_DISPLAY } from "./typography";
 
 /**
  * The settings-style list, composed from system pieces (the mockup has no settings screen —
@@ -41,7 +42,7 @@ export function ListRow({
             color: titleColor,
             fontFamily: FONT_DISPLAY.extraBold,
             fontSize: 14,
-            lineHeight: 17,
+            lineHeight: displayLine(14),
           }}
         >
           {title}
@@ -81,6 +82,7 @@ export function ListRow({
       accessibilityLabel={subtitle ? `${title}, ${subtitle}` : title}
       accessibilityState={selected === undefined ? undefined : { selected }}
       onPress={onPress}
+      unstable_pressDelay={SCROLL_PRESS_DELAY_MS}
       style={({ pressed }) => rowStyle(pressed)}
     >
       {body}

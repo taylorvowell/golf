@@ -1,33 +1,24 @@
-import type { ComponentType } from "react";
+import type { AppToast, ToastIcon } from "../toast/toast";
 
 /**
- * The celebration model and its queue — pure data, no awarding logic.
+ * The celebration model — the achievements layer's voice on the app-wide toaster.
  *
  * Nothing on the phone decides that something was EARNED (that is the server's evaluator,
- * track steps 02–03); this module only describes a moment the UI has been told to play and
- * keeps the order honest when several arrive at once.
+ * track steps 02–03); this module only describes a moment and translates it into the generic
+ * toast the `toast` feature plays. What makes a toast a CELEBRATION is fixed here in one
+ * place: confetti on, kind-fixed eyebrow, points as the chip.
  */
-
-/** The glyph slot — any `lucide-react-native` icon component satisfies this. */
-export type CelebrationIcon = ComponentType<{
-  size?: number;
-  color?: string;
-  strokeWidth?: number;
-}>;
 
 export type CelebrationKind = "badge" | "rank" | "record";
 
 export interface Celebration {
-  /**
-   * Stable per award (the achievement id, once real data feeds this). A second enqueue of an
-   * id already waiting is dropped — the replay-until-acked delivery model means the same award
-   * can arrive twice, and a golfer must never sit through the same toast twice in a row.
-   */
+  /** Stable per award (the achievement id once real data feeds this) — the toast queue
+   *  dedupes on it, which is what makes replay-until-acked delivery safe to point here. */
   id: string;
   kind: CelebrationKind;
   title: string;
   detail?: string;
-  icon: CelebrationIcon;
+  icon: ToastIcon;
   /** XP granted — shown as a chip when present, omitted when the moment isn't about points. */
   points?: number;
 }
@@ -39,13 +30,15 @@ export const KIND_EYEBROW: Record<CelebrationKind, string> = {
   record: "Personal best",
 };
 
-/** Append unless that id is already waiting (or currently showing — the head is index 0). */
-export function enqueueCelebration(queue: Celebration[], next: Celebration): Celebration[] {
-  if (queue.some((c) => c.id === next.id)) return queue;
-  return [...queue, next];
-}
-
-/** Drop the head — the toast that just dismissed. The next item (if any) plays after. */
-export function advanceCelebration(queue: Celebration[]): Celebration[] {
-  return queue.slice(1);
+/** A celebration IS a toast with the celebration voice applied. */
+export function celebrationToast(c: Celebration): AppToast {
+  return {
+    id: c.id,
+    eyebrow: KIND_EYEBROW[c.kind],
+    title: c.title,
+    detail: c.detail,
+    icon: c.icon,
+    chip: c.points != null ? `+${c.points} XP` : undefined,
+    confetti: true,
+  };
 }

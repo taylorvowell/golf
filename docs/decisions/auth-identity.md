@@ -80,14 +80,16 @@ holder, not by an approved coach: which roles an account holds is not part of wh
 
 **Decision:** §5.1's "sensitive information is not automatically public" is expressed as shape, not
 as a flag. `public.users` is the public face — display name, avatar, bio, region — and is already
-readable by an approved coach; `golfer_profiles` holds everything §5.2/§5.4/§5.5 collects and is
-owner-or-approved-coach read, owner-only write. A per-column `is_public` boolean would have put the
-answer in application code where every future reader has to remember to ask; two tables make
-putting a field in the wrong one a visible design mistake. §5.3's goals are `golfer_goals` rows
-from the curated eight, ranked, **capped at 3 by a database trigger** (AFTER ROW, so a four-row
-single insert cannot slip past a per-row count). `handedness` and `height_cm` moved off `users` onto
-the profile in migration 0012 — a golfer's handedness is a property of the golfer — while
-`swings.handedness` stays NOT NULL so an old swing keeps the answer it was analysed under.
+readable by an approved coach; `golfer_profiles` holds the SIX answers the product asks a golfer
+(2026-08-20 final shape — handedness, swing style, handicap, age, driver speed, 7-iron carry; see
+mobile-client.md "The profile is six answers"; migrations 0014/0015 dropped every unasked column
+rather than parking them, and `golfer_goals` was dropped with the goal questions — goals belong to
+the guidance features, not the profile) and is owner-or-approved-coach read, owner-only write. A
+per-column `is_public` boolean would have put the answer in application code where every future
+reader has to remember to ask; two tables make putting a field in the wrong one a visible design
+mistake. `handedness` moved off `users` onto the profile in migration 0012 — a golfer's handedness
+is a property of the golfer — while `swings.handedness` stays NOT NULL so an old swing keeps the
+answer it was analysed under.
 
 These are §43's questions, answered: **minimum supported age is 13**, self-attested, matching the
 store baseline; **age is stored as a RANGE, never a birthdate**, because age only feeds tolerance

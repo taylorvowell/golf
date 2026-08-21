@@ -22,28 +22,37 @@ import { AuthProvider } from "./src/features/auth/AuthProvider";
 import { ErrorBoundary } from "./src/platform/ErrorBoundary";
 import { VersionGate } from "./src/platform/VersionGate";
 import { TabBar } from "./src/design/TabBar";
+import { BillingDebug } from "./src/features/billing/BillingDebug";
+import { EntitlementProvider } from "./src/features/billing/entitlement";
 import { CoachScreen } from "./src/screens/CoachScreen";
 import { DeleteAccountRoute } from "./src/screens/DeleteAccountRoute";
-import { GoalsScreen } from "./src/screens/GoalsScreen";
 import { HomeScreen } from "./src/screens/HomeScreen";
 import { InstructorChatScreen } from "./src/screens/InstructorChatScreen";
 import { InstructorScreen } from "./src/screens/InstructorScreen";
+import { NotificationsScreen } from "./src/screens/NotificationsScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
+import { MyProfileScreen } from "./src/screens/MyProfileScreen";
+import { OnboardingScreen } from "./src/features/onboarding/OnboardingScreen";
+import { OnboardingLauncher } from "./src/features/onboarding/OnboardingLauncher";
 import { DeepAnalysisScreen } from "./src/screens/DeepAnalysisScreen";
 import { StanceAnalysisScreen } from "./src/screens/StanceAnalysisScreen";
 import { ProgressScreen } from "./src/screens/ProgressScreen";
 import { RecordScreen } from "./src/screens/RecordScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
+import { SubscriptionScreen } from "./src/screens/SubscriptionScreen";
+import { UpgradeScreen } from "./src/screens/UpgradeScreen";
 import { SwingDetailRoute } from "./src/screens/SwingDetailRoute";
 import { SwingLogScreen } from "./src/screens/SwingLogScreen";
 import { SystemGalleryScreen } from "./src/screens/SystemGalleryScreen";
-import type { RootStackParamList, TabParamList } from "./src/navigation";
+import { navigationRef, type RootStackParamList, type TabParamList } from "./src/navigation";
 import { NavVisibilityProvider } from "./src/design/system/navVisibility";
 import { COLORS, FixedDarkTheme, ThemeProvider, useTheme } from "./src/theme";
 import { DebugProvider } from "./src/features/debug/DebugOverlay";
 import { CelebrationProvider } from "./src/features/achievements/CelebrationProvider";
+import { ToastProvider } from "./src/features/toast/ToastProvider";
 import { InstructorDebug } from "./src/features/instructor/InstructorDebug";
 import { CoachDebug } from "./src/features/coach/CoachDebug";
+import { VariantGridHost } from "./src/features/report/VariantGrid";
 import { SubjectDebug } from "./src/features/coach/subjectSwing";
 
 /**
@@ -156,8 +165,9 @@ function Root() {
             <AuthGate>
               {/* Debug-only registrar; needs the swing list, hence inside the gate. */}
               <SubjectDebug />
+              <EntitlementProvider>
               <NavVisibilityProvider>
-                <NavigationContainer theme={navTheme}>
+                <NavigationContainer ref={navigationRef} theme={navTheme}>
                   <Stack.Navigator
                   screenOptions={{
                     headerStyle: { backgroundColor: t.bg },
@@ -212,15 +222,44 @@ function Root() {
                       contentStyle: { backgroundColor: "transparent" },
                     }}
                   />
+                  {/* The inbox rides the same rails as the profile drawer — both are chrome
+                      opened from the header bar, and both slide themselves. */}
+                  <Stack.Screen
+                    name="Notifications"
+                    component={NotificationsScreen}
+                    options={{
+                      headerShown: false,
+                      presentation: "transparentModal",
+                      animation: "none",
+                      contentStyle: { backgroundColor: "transparent" },
+                    }}
+                  />
                   <Stack.Screen
                     name="Settings"
                     component={SettingsScreen}
                     options={{ title: "Settings" }}
                   />
                   <Stack.Screen
-                    name="Goals"
-                    component={GoalsScreen}
-                    options={{ title: "Goals" }}
+                    name="MyProfile"
+                    component={MyProfileScreen}
+                    options={{ title: "My profile" }}
+                  />
+                  {/* Full-bleed question sequence — draws its own top row, and no swipe-back:
+                      the flow's own back control is the way backwards through the questions. */}
+                  <Stack.Screen
+                    name="Onboarding"
+                    component={OnboardingScreen}
+                    options={{ headerShown: false, gestureEnabled: false }}
+                  />
+                  <Stack.Screen
+                    name="Upgrade"
+                    component={UpgradeScreen}
+                    options={{ title: "SwingSage Pro" }}
+                  />
+                  <Stack.Screen
+                    name="Subscription"
+                    component={SubscriptionScreen}
+                    options={{ title: "Subscription" }}
                   />
                   <Stack.Screen
                     name="Instructor"
@@ -257,8 +296,13 @@ function Root() {
                     />
                   )}
                 </Stack.Navigator>
+                {/* Inside the container: its sheet navigates to Upgrade. */}
+                <BillingDebug />
+                {/* Auto-opens onboarding while it is unfinished; contributes the debug door. */}
+                <OnboardingLauncher />
                 </NavigationContainer>
               </NavVisibilityProvider>
+              </EntitlementProvider>
             </AuthGate>
           </AuthProvider>
         </VersionGate>
@@ -292,11 +336,18 @@ export default function App() {
         <DebugProvider>
           <InstructorDebug />
           <CoachDebug />
-          {/* Below the debug registry (it contributes the Celebrations group), above the
-              navigator (a toast must land on whatever screen is up). */}
-          <CelebrationProvider>
-            <Root />
-          </CelebrationProvider>
+          {/* The toaster is the app-wide surface (celebrations, notification alerts — one
+              queue); it renders above the navigator so a toast lands on whatever screen is
+              up. CelebrationProvider is a client of it and sits below the debug registry
+              because it contributes the Celebrations group. */}
+          <ToastProvider>
+            <CelebrationProvider>
+              <Root />
+            </CelebrationProvider>
+          </ToastProvider>
+          {/* After Root so its full-screen page paints ABOVE the navigator. The host renders
+              nothing in release (__DEV__ gate inside) and nothing until its DEBUG action fires. */}
+          <VariantGridHost />
         </DebugProvider>
       </ThemeProvider>
     </SafeAreaProvider>

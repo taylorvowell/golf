@@ -8,6 +8,7 @@ import { posePlacement } from "../../../design/system/capturePoses";
 import { Sheet } from "../../../design/system/Sheet";
 import { FONT_BODY, FONT_DISPLAY } from "../../../design/system/typography";
 import { appStyles, useAppTheme } from "../../../theme";
+import { useHandedness } from "../../profile/useProfile";
 import { ANALYSIS_ERRORS, type AnalysisErrorKind } from "../analysisError";
 import type { CaptureView } from "../sessionState";
 
@@ -58,12 +59,15 @@ export function AnalysisErrorSheet({
     const { width, height } = e.nativeEvent.layout;
     setPane((prev) => (prev.w === width && prev.h === height ? prev : { w: width, h: height }));
   };
+  // "Aim for this" must show THIS golfer's stance — mirrored for a lefty, like the live guide.
+  // Above the early return: hooks must run on every render path.
+  const mirrored = useHandedness() === "left";
   const copy = kind ? ANALYSIS_ERRORS[kind] : null;
   if (!copy) return null;
 
   // Portrait phone video unless the recording says otherwise — never a square, which would crop.
   const ratio = aspectRatio && aspectRatio > 0 ? aspectRatio : 9 / 16;
-  const place = pane.w > 0 ? posePlacement(view, pane.w, pane.h) : null;
+  const place = pane.w > 0 ? posePlacement(view, pane.w, pane.h, mirrored) : null;
 
   return (
     <Sheet visible={visible} onClose={onClose} title={copy.title} testID="analysis-error-sheet">
@@ -107,6 +111,7 @@ export function AnalysisErrorSheet({
                     height={place.height}
                     color={t.good}
                     strokeWidth={1}
+                    mirrored={mirrored}
                   />
                 </View>
               ) : null}

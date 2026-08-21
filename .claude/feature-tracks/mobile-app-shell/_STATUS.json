@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "featureName": "mobile-app-shell",
-  "currentStep": "02",
+  "currentStep": "03",
   "phase": "Core Golfer Experience",
-  "lastUpdated": "2026-08-12T03:55:00Z",
+  "lastUpdated": "2026-08-20T19:58:47Z",
   "steps": {
     "01": {
       "status": "complete",
@@ -11,7 +11,9 @@
       "note": "Expo Router adopted, built, then REVERSED on evidence (D47) - it peers on react-native-gesture-handler whose C++ codegen paths exceed the Android SDK ninja 260-char limit, and removing expo-router does not remove the package because it is a peer of @expo/cli under pnpm hoisting. Excluded from autolinking instead; navigation is React Navigation 7 native-stack. Also found and fixed: db:claim-fixtures reassigned ten swings without moving their media, and D33 keys lead with the owner id, so every artifact resolved to an empty namespace - caught by multiView.test.ts, fixed with MediaStore.movePrefix and an unconditional sweep so re-running is the repair. Verified: mobile tsc, 41 jest, web tsc/lint, 167 vitest, 100 schema vitest, Android assembleDebug BUILD SUCCESSFUL, APK installed on the S25+, and the served bundle carries every swing-log string. Not looked at on the device screen - the phone was in its owner hands."
     },
     "02": {
-      "status": "not-started"
+      "status": "complete",
+      "completedAt": "2026-08-20T19:58:00Z",
+      "note": "RECONCILE 2026-08-20: the step's scope (onboarding, role, profile) shipped under platform-foundation step 05's mobile half, built in one session with the backend it wires to. Evidence: apps/mobile/src/features/onboarding/OnboardingScreen.tsx + OnboardingLauncher.tsx (role -> handedness -> style -> goals -> skill, auto-open after signup, debug relaunch), apps/mobile/src/features/profile/useProfile.ts + profileFields.ts + FieldEditorSheet.tsx + GoalPicker.tsx, apps/mobile/src/screens/MyProfileScreen.tsx + GoalsScreen.tsx (rebuilt live), routes MyProfile/Onboarding in src/navigation.ts + App.tsx, contract types in packages/schema. Gates: mobile tsc + 411 jest, web tsc/lint + 235 vitest, schema 100 vitest. Role claiming reuses POST /api/v1/roles; §41 usability and the design-system absorption remain step 03."
     },
     "03": {
       "status": "not-started"

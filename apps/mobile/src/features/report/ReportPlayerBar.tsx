@@ -144,7 +144,7 @@ const styles = StyleSheet.create({
     gap: 5,
     padding: 4,
     borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.06)",
+    backgroundColor: "rgba(255,255,255,0.14)",
   },
   speedButton: {
     minHeight: 28,
@@ -153,15 +153,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  speedButtonOn: { backgroundColor: "rgba(255,255,255,0.12)" },
+  // Selection is the play cap's aqua with its dark navy glyph colour — a white-on-white tint
+  // was invisible over bright footage, which is the whole point of this control.
+  speedButtonOn: { backgroundColor: "#43CDD0" },
   speedText: {
-    color: "rgba(255,255,255,0.64)",
+    color: "rgba(255,255,255,0.78)",
     fontFamily: FONT_DISPLAY.black,
-    fontSize: 8,
+    fontSize: 9,
     letterSpacing: 0.64,
     textTransform: "uppercase",
   },
-  speedTextOn: { color: "#FFFFFF" },
+  speedTextOn: { color: "#10204A" },
 
   playCap: {
     width: 44,

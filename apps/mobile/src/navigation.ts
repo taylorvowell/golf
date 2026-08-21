@@ -1,7 +1,10 @@
 import type { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import type { CompositeNavigationProp, NavigatorScreenParams } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { useNavigation as useRNNavigation } from "@react-navigation/native";
+import {
+  createNavigationContainerRef,
+  useNavigation as useRNNavigation,
+} from "@react-navigation/native";
 
 /**
  * The app's route map, in one place.
@@ -31,8 +34,14 @@ export type RootStackParamList = {
   /** The capture surface — a full-screen modal until the capture release fills it in. */
   Record: undefined;
   Profile: undefined;
+  /** The §29 inbox — a drawer from the right, opened by the header bell on any tab. */
+  Notifications: undefined;
   Settings: undefined;
-  Goals: undefined;
+  /** §5.2 — the golfer's six profile answers, one page, two columns. */
+  MyProfile: undefined;
+  /** §4.4/§5.4 — role, handedness, style, handicap. Auto-opens after signup while
+   *  `onboardingCompletedAt` is null; relaunchable from the debug menu. */
+  Onboarding: undefined;
   /** The human professional's pages — placeholders until the instructor platform lands.
    *  One route serves connected and not-connected states (the store decides). */
   Instructor: undefined;
@@ -43,6 +52,10 @@ export type RootStackParamList = {
    *  annotate; the golfer scrubs the ANALYSIS, never the video (coach-surface step 06). */
   DeepAnalysis: undefined;
   DeleteAccount: undefined;
+  /** The paywall. One paid plan; the purchase itself is the platform's native sheet. */
+  Upgrade: undefined;
+  /** What you are on, what you have left, how to change it. */
+  Subscription: undefined;
   /** Dev-only: the design-system living spec (registered under `__DEV__` in App.tsx). */
   SystemGallery: undefined;
 };
@@ -62,3 +75,11 @@ export type Navigation = CompositeNavigationProp<
 export function useAppNavigation(): Navigation {
   return useRNNavigation<Navigation>();
 }
+
+/**
+ * The container's own ref — for the things that navigate but are not screens (the onboarding
+ * auto-launch, debug actions). A component inside `NavigationContainer` but outside every
+ * navigator has no `useNavigation` context, and threading a prop down to it would put the
+ * navigator's wiring in `App.tsx`'s render tree; the ref is React Navigation's own answer.
+ */
+export const navigationRef = createNavigationContainerRef<RootStackParamList>();

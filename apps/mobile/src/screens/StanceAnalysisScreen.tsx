@@ -18,7 +18,7 @@ import {
   STANCE_STAGGER_MS,
   StanceStage,
 } from "../design/system";
-import { FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
+import { displayLine, FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
 import { useForcePoseArt } from "../features/coach/CoachDebug";
 import { addressFrame, personalizedAnnotations } from "../features/coach/stanceAnchors";
 import { STANCE_SCRIPT, WRAP_NO_FRONT_NARRATION } from "../features/coach/stanceScript";
@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
     color: COLORS.text,
     fontFamily: FONT_DISPLAY.black,
     fontSize: 22,
-    lineHeight: 25,
+    lineHeight: displayLine(22),
     letterSpacing: -0.44,
   },
   narration: {

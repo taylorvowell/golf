@@ -91,12 +91,14 @@ export const WAVE_NAV_CLEARANCE = BAR_HEIGHT;
 /**
  * A sticky bar's share of the bottom inset — CAPPED (Taylor, 2026-08-19): stacking the full
  * system inset under the row made the bar an enormous blank band over phones with on-screen
- * nav buttons. The row keeps at most this sliver above the screen's edge; the bar's fill still
- * runs all the way down behind the system bar. One function so every bottom bar (this one,
- * `SessionNav`) shrinks together, and so does everything that must clear them.
+ * nav buttons. The row keeps at most this sliver above the screen's edge, plus a fixed 15px
+ * resting pad (Taylor, 2026-08-19 — the row sat too tight against the screen's bottom edge);
+ * the bar's fill still runs all the way down behind the system bar. One function so every
+ * bottom bar (this one, `SessionNav`) moves together, and so does everything that must clear
+ * them.
  */
 export function navBarBottomInset(bottomInset: number): number {
-  return Math.min(bottomInset, 10);
+  return Math.min(bottomInset, 10) + 15;
 }
 
 export function WaveNav({
@@ -152,6 +154,8 @@ export function WaveNav({
           alignSelf: "flex-end",
         }}
       >
+        {/* No pressed bed here — Taylor tried one (2026-08-19) and cut it; the tab switching
+            is the feedback. */}
         {/* `.wave-icon` — a 24px box holding a 21px glyph, so glyphs of differing aspect all
             sit on the same baseline instead of shifting the label under them. */}
         <View style={{ width: 24, height: 24, alignItems: "center", justifyContent: "center" }}>
@@ -166,7 +170,9 @@ export function WaveNav({
             color,
             fontFamily: FONT_DISPLAY.black,
             fontSize: 7,
-            lineHeight: 7,
+            // Taller than the font size on purpose: Android clips a glyph to its line box, so
+            // lineHeight 7 shaved the descenders off g/y/p in the labels.
+            lineHeight: 10,
             letterSpacing: 0.175,
           }}
         >

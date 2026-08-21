@@ -19,6 +19,14 @@ analysed fixtures now belong to a real Google account rather than the developmen
 
 ---
 
+## 02 - Onboarding, Role, and Profile
+**Reconciled:** 2026-08-20 19:58 UTC  →  complete
+**Phase:** Core Golfer Experience
+**Evidence:** apps/mobile/src/features/onboarding/ (OnboardingScreen, OnboardingLauncher), apps/mobile/src/features/profile/ (useProfile, profileFields, FieldEditorSheet, GoalPicker), apps/mobile/src/screens/MyProfileScreen.tsx, apps/mobile/src/screens/GoalsScreen.tsx, routes in src/navigation.ts + App.tsx, profile wire types in packages/schema. Built under platform-foundation step 05's mobile half (its backend and this UI are one feature); gates green there.
+**Notes:** Onboarding auto-opens once per launch while onboardingCompletedAt is null and is relaunchable from the debug menu. Handedness is the only unskippable answer; every tap saves, so the flow is resumable by construction. My profile renders every §5.2/§5.4/§5.5 field from one registry — expanding the profile is one entry there. §41 usability and the design-system pass remain step 03.
+
+---
+
 ## 01 — Navigation and the Swing Log ✅ 2026-08-12
 
 **Completed:** 2026-08-12 03:55 UTC

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Animated, StyleSheet, Text, View } from "react-native";
 
 import { FONT_DISPLAY } from "../../design/system/typography";
+import { playCountdownTick } from "./useRecordSounds";
 
 /**
  * The delayed-start countdown (§9.5): a number big enough to read from the ball, several
@@ -42,6 +43,20 @@ export function CountdownOverlay({ seconds, onDone }: CountdownOverlayProps) {
     pulse.setValue(0);
     Animated.timing(pulse, { toValue: 1, duration: 220, useNativeDriver: true }).start();
   }, [pulse, remaining]);
+
+  // The final 3-2-1 gets a quiet tick (then the record cue lands from the mode change), so
+  // the golfer at the ball can time the start without watching the screen. Longer delays are
+  // silent until 3 — the tick means "now", not "still waiting". The number shown AT MOUNT is
+  // skipped: the click-acknowledgment tone already sounded for that instant, and two tones at
+  // once read as a glitch. Deduped per number so the seconds-reset effect can't double-fire.
+  const ticked = useRef<number | null>(null);
+  useEffect(() => {
+    if (remaining === seconds) return;
+    if (remaining <= 3 && remaining >= 1 && ticked.current !== remaining) {
+      ticked.current = remaining;
+      playCountdownTick();
+    }
+  }, [remaining, seconds]);
 
   return (
     <View pointerEvents="none" style={styles.root} testID="countdown-overlay">

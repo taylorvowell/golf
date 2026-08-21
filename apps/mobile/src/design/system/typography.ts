@@ -15,6 +15,19 @@ import type { TextStyle } from "react-native";
  * (e.g. 32 × -0.02 ≈ -0.64).
  */
 
+/**
+ * Sora's own line box, as a multiple of the font size: ascent 0.970 + descent 0.290.
+ *
+ * **An explicit `lineHeight` below this clips descenders on Android** — Android sizes the text
+ * layer to `lineHeight`, not to the font's metrics, so `p`, `g`, `y` and `q` lose their tails
+ * with no overflow to catch. The mockup's CSS leading (~1.05×) is safe in a browser and is not
+ * safe here. Any `FONT_DISPLAY` style that sets `lineHeight` must pass it through `displayLine`.
+ */
+export const DISPLAY_LINE_RATIO = 1.26;
+
+/** The tightest non-clipping line height for a Sora size. */
+export const displayLine = (fontSize: number) => Math.ceil(fontSize * DISPLAY_LINE_RATIO);
+
 /** Display face — titles, scores, labels, eyebrows. Keys keep the old weight names so call
  *  sites did not need a sweep; each maps one step lighter on purpose (see above). */
 export const FONT_DISPLAY = {
@@ -39,27 +52,27 @@ export const TYPE = {
   display: {
     fontFamily: FONT_DISPLAY.black,
     fontSize: 32,
-    lineHeight: 34,
+    lineHeight: displayLine(32),
     letterSpacing: -0.64,
   },
   /** Session headers, card heroes. 24 / -2%. */
   title: {
     fontFamily: FONT_DISPLAY.extraBold,
     fontSize: 24,
-    lineHeight: 27,
+    lineHeight: displayLine(24),
     letterSpacing: -0.48,
   },
   /** Section and finding headings. 18 / 800. */
   heading: {
     fontFamily: FONT_DISPLAY.extraBold,
     fontSize: 18,
-    lineHeight: 20,
+    lineHeight: displayLine(18),
   },
   /** Control and row labels. 14 / 800. */
   label: {
     fontFamily: FONT_DISPLAY.extraBold,
     fontSize: 14,
-    lineHeight: 17,
+    lineHeight: displayLine(14),
   },
   /** Uppercase kickers above content. 11 / 900 / +8%. */
   eyebrow: {

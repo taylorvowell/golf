@@ -13,8 +13,10 @@ import {
 } from "lucide-react-native";
 
 import { SideDrawer, type DrawerClose } from "../design/system";
-import { FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
+import { displayLine, FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
 import { Avatar } from "../features/profile/Avatar";
+import { useEntitlement } from "../features/billing/entitlement";
+import { ProCard } from "../features/billing/ProCard";
 import { useInstructor } from "../features/instructor/useInstructor";
 import { useAuth } from "../features/auth/AuthProvider";
 import { useAppNavigation } from "../navigation";
@@ -47,6 +49,7 @@ export function ProfileScreen() {
   const navigation = useAppNavigation();
   const { email, firstName, signOut } = useAuth();
   const instructor = useInstructor();
+  const { tier } = useEntitlement();
   const t = useTheme();
   const styles = useStyles();
   const [signingOut, setSigningOut] = useState(false);
@@ -95,6 +98,20 @@ export function ProfileScreen() {
                 </Text>
               </View>
             </View>
+
+            {/* The upgrade door. Directly under identity because that is where a golfer looks
+                to answer "what am I on" — and it is the only paid decision in the product, so it
+                gets one card rather than a badge on every locked control. On Pro it becomes a
+                quiet status line: continuing to sell to someone who already bought is the
+                clutter rule's second test failing. */}
+            {tier === "pro" ? (
+              <View style={styles.planRow}>
+                <Text style={styles.microLabel}>Plan</Text>
+                <Text style={styles.planName}>SwingSage Pro</Text>
+              </View>
+            ) : (
+              <ProCard onPress={() => close(() => navigation.navigate("Upgrade"))} />
+            )}
 
             <Text style={styles.section}>Instructor</Text>
 
@@ -177,6 +194,7 @@ export function ProfileScreen() {
                 icon={UserRound}
                 title="My profile"
                 subtitle="Personal info and golfer details"
+                onPress={() => close(() => navigation.navigate("MyProfile"))}
               />
               <MenuRow
                 testID="profile-lesson-history"
@@ -184,11 +202,14 @@ export function ProfileScreen() {
                 title="Lesson history"
                 subtitle="Sessions, notes, and instructor activity"
               />
+              {/* Points at the INBOX, not at preferences — preferences are notifications
+                  step 04. The nearer of the two surfaces beats an inert row. */}
               <MenuRow
                 testID="profile-notifications"
                 icon={Bell}
                 title="Notifications"
                 subtitle="Practice reminders and coach updates"
+                onPress={() => close(() => navigation.navigate("Notifications"))}
               />
               <MenuRow
                 testID="profile-settings"
@@ -336,7 +357,7 @@ const useStyles = themedStyles((t) => ({
     color: t.text,
     fontFamily: FONT_DISPLAY.black,
     fontSize: 17,
-    lineHeight: 18,
+    lineHeight: displayLine(17),
     marginTop: 4,
   },
   accountSub: {
@@ -355,6 +376,22 @@ const useStyles = themedStyles((t) => ({
     textTransform: "uppercase",
     marginTop: 24,
     marginBottom: 8,
+  },
+
+  /** Already Pro — a status line, not a second sell. */
+  planRow: {
+    marginTop: 18,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 14,
+    gap: 3,
+    backgroundColor: t.surface,
+  },
+  planName: {
+    color: t.text,
+    fontFamily: FONT_DISPLAY.black,
+    fontSize: 14,
+    lineHeight: displayLine(14),
   },
 
   instructorCard: { padding: 16, borderRadius: 16 },
@@ -377,7 +414,7 @@ const useStyles = themedStyles((t) => ({
     color: t.text,
     fontFamily: FONT_DISPLAY.black,
     fontSize: 16,
-    lineHeight: 19,
+    lineHeight: displayLine(16),
     marginTop: 4,
   },
   instructorBlurb: {
@@ -428,7 +465,7 @@ const useStyles = themedStyles((t) => ({
     color: t.text,
     fontFamily: FONT_DISPLAY.black,
     fontSize: 17,
-    lineHeight: 20,
+    lineHeight: displayLine(17),
     marginTop: 4,
   },
   directoryCopy: {

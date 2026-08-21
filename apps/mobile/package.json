@@ -32,6 +32,7 @@
   },
   "devDependencies": {
     "@testing-library/react-native": "^14.0.1",
+    "expo-dev-menu": "~57.0.11",
     "@types/jest": "^30.0.0",
     "@types/node": "^26.2.0",
     "@types/react": "~19.2.2",
@@ -61,7 +62,7 @@
       "<rootDir>/jest.setup.js"
     ],
     "transformIgnorePatterns": [
-      "node_modules/(?!.*(react-native|@react-native|expo|@expo|@testing-library|lucide-react-native))"
+      "node_modules/(?!.*(react-native|@react-native|@react-navigation|expo|@expo|@testing-library|lucide-react-native))"
     ],
     "moduleNameMapper": {
       "^lucide-react-native$": "<rootDir>/../../node_modules/lucide-react-native/dist/cjs/lucide-react-native.js"

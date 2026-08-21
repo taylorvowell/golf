@@ -20,6 +20,30 @@ closing.
 
 ---
 
+## 05 - Roles, Onboarding, and Profiles — amendment 2: the six-answer profile
+**Logged:** 2026-08-20 23:59 UTC
+**Phase:** Platform Foundation
+**Summary:** Final shape (Taylor): the profile asks exactly SIX things — handedness, swing style, handicap, age, driver speed, 7-iron carry — on one page, two columns. Goals left the profile entirely (the guidance features own them later): GoalPicker, the Goals screen/route, the golfer_goals table, its D54 cap trigger and the wire fields are all deleted, and migration 0015 dropped the eleven other columns (skill level, average score, injuries, practice access/frequency, rounds, height, years playing, working-with-coach, coaching style, feedback depth) plus the table. Onboarding is now role → handedness → style → handicap. profileFields.test.ts pins the six; profileRls.test.ts pins the table's exact columns and golfer_goals' absence. Gates: mobile tsc + 407 jest, web tsc/lint + 232 vitest, schema 100 vitest, migration applied locally.
+**Notes:** Contract changes (removing the goal fields and the eleven properties) are still net-additive against the last commit — nothing shipped between, so no client ever saw them. The D54 curated-eight goal set remains a product decision for goal-progression; only its residence in the profile is gone.
+
+---
+
+## 05 - Roles, Onboarding, and Profiles — amendment: the 2026-08-20 profile trim
+**Logged:** 2026-08-20 23:05 UTC
+**Phase:** Platform Foundation
+**Summary:** Taylor rejected both the full field set and the hub redesign: My profile is back to ONE page with two groups — The essentials (handedness, style, skill, handicap, goals, driver speed, 7-iron carry, average score) and More about you (height, age, years playing, injuries, practice access/frequency, rounds, coach status, coaching style, feedback depth). Thirteen §5.5 fields (both misses, shot shape, grip, fitting+year, launch monitor, climate, altitude, wingspan, wrist-to-floor, mobility screen, swing-change) were removed from the app, the API writable list, the shared contract AND the database in one change — migration 0014 drops the columns ('no tech debt'); all were hours old and NULL everywhere. profileFields.test.ts pins the cut list. Gates: mobile tsc + 411 jest, web tsc/lint + 235 vitest, schema 100 vitest, migration applied locally.
+**Notes:** Found while applying: the HOSTED Supabase project stops at migration 0009a — 0010-0013 (queue runner/heartbeat, roles/profiles/goals, notifications) were only ever applied to the local Docker Postgres, so golfer_profiles does not exist hosted and 0014 had nothing to drop there. Recorded in ENVIRONMENT.md; syncing hosted belongs to step 10 (environments), not this trim.
+
+---
+
+## 05 - Roles, Onboarding, and Profiles
+**Completed:** 2026-08-20 19:58 UTC
+**Phase:** Platform Foundation
+**Summary:** The mobile half lands and closes the step. Profile wire types joined the shared contract (api.schema.json definitions + generated types; shape-lock relocked, purely additive), and the app grew a profile data layer (useProfile — module cache, optimistic PATCH with revert-on-failure, cleared at the auth boundary), a field registry covering every §5.2/§5.4/§5.5 field in golfer language (a future field is one registry entry — tiles, editor and completeness all derive from it), the FieldEditorSheet (choice/number/multi/mobility), a ranked GoalPicker (rank = tap order, cap 3), the rebuilt GoalsScreen, MyProfileScreen behind the profile drawer's My profile row, and the onboarding sequence (role → handedness → style → goals → skill; handedness the only unskippable answer; every tap saves so the profile row is the draft; auto-opens once per launch while onboardingCompletedAt is null; debug-menu "Run onboarding" reruns it).
+**Notes:** Same-session bonus scope (Taylor): left-handed mirroring — PoseOutline/posePlacement gained a mirrored mode, the alignment ghost, view switcher icons, dual-sync pip and "aim for this" reference all follow profile handedness, and the session screen swaps its control/sync rails so zoom + camera flip sit on the right edge for a lefty. Named shortfall: the enqueue-path handedness default has no seam yet (no client enqueue path exists — import door is session-mode step 06); it moves there rather than holding this step open. Gates: mobile tsc + 411 jest, web tsc/lint + 235 vitest, schema 100 vitest.
+
+---
+
 ## 04 — Passwordless Authentication (in progress) — account lifecycle 2026-08-12
 
 **Logged:** 2026-08-12 03:17 UTC

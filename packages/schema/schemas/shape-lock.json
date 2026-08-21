@@ -1327,6 +1327,70 @@
   "api#/definitions/deprecation/properties/version": {
     "ref": "#/definitions/apiVersion"
   },
+  "api#/definitions/golferProfilePrivate": {
+    "type": "object"
+  },
+  "api#/definitions/golferProfilePrivate/properties/ageRange": {
+    "type": "null|string",
+    "enum": [
+      "\"18_29\"",
+      "\"30_39\"",
+      "\"40_49\"",
+      "\"50_59\"",
+      "\"60_69\"",
+      "\"70_plus\"",
+      "\"under_18\"",
+      "null"
+    ]
+  },
+  "api#/definitions/golferProfilePrivate/properties/driverSwingSpeedMph": {
+    "type": "null|number"
+  },
+  "api#/definitions/golferProfilePrivate/properties/handedness": {
+    "type": "null|string",
+    "enum": [
+      "\"left\"",
+      "\"right\"",
+      "null"
+    ]
+  },
+  "api#/definitions/golferProfilePrivate/properties/handicapRange": {
+    "type": "null|string",
+    "enum": [
+      "\"11_15\"",
+      "\"16_20\"",
+      "\"21_28\"",
+      "\"29_plus\"",
+      "\"6_10\"",
+      "\"plus\"",
+      "\"scratch_5\"",
+      "null"
+    ]
+  },
+  "api#/definitions/golferProfilePrivate/properties/onboardingCompletedAt": {
+    "type": "null|string"
+  },
+  "api#/definitions/golferProfilePrivate/properties/selfReportedStyle": {
+    "type": "null|string",
+    "enum": [
+      "\"sty_01\"",
+      "\"sty_02\"",
+      "\"sty_03\"",
+      "\"sty_04\"",
+      "\"unsure\"",
+      "null"
+    ]
+  },
+  "api#/definitions/golferProfilePrivate/properties/sevenIronCarryYds": {
+    "type": "null|number"
+  },
+  "api#/definitions/handedness": {
+    "type": "string",
+    "enum": [
+      "\"left\"",
+      "\"right\""
+    ]
+  },
   "api#/definitions/headMarker": {
     "type": "object",
     "required": [
@@ -1564,6 +1628,83 @@
   },
   "api#/definitions/notificationListResponse/properties/unreadCount": {
     "type": "integer"
+  },
+  "api#/definitions/profilePatchRequest": {
+    "type": "object"
+  },
+  "api#/definitions/profilePatchRequest/properties/completeOnboarding": {
+    "type": "boolean"
+  },
+  "api#/definitions/profilePatchRequest/properties/private": {
+    "ref": "#/definitions/golferProfilePrivate"
+  },
+  "api#/definitions/profilePatchRequest/properties/public": {
+    "type": "object"
+  },
+  "api#/definitions/profilePatchRequest/properties/public/properties/avatarUrl": {
+    "type": "null|string"
+  },
+  "api#/definitions/profilePatchRequest/properties/public/properties/bio": {
+    "type": "null|string"
+  },
+  "api#/definitions/profilePatchRequest/properties/public/properties/displayName": {
+    "type": "string"
+  },
+  "api#/definitions/profilePatchRequest/properties/public/properties/region": {
+    "type": "null|string"
+  },
+  "api#/definitions/profilePublic": {
+    "type": "object",
+    "required": [
+      "avatarUrl",
+      "bio",
+      "displayName",
+      "region"
+    ]
+  },
+  "api#/definitions/profilePublic/properties/avatarUrl": {
+    "type": "null|string"
+  },
+  "api#/definitions/profilePublic/properties/bio": {
+    "type": "null|string"
+  },
+  "api#/definitions/profilePublic/properties/displayName": {
+    "type": "string"
+  },
+  "api#/definitions/profilePublic/properties/region": {
+    "type": "null|string"
+  },
+  "api#/definitions/profileResponse": {
+    "type": "object",
+    "required": [
+      "private",
+      "public"
+    ]
+  },
+  "api#/definitions/profileResponse/properties/private": {
+    "ref": "#/definitions/golferProfilePrivate"
+  },
+  "api#/definitions/profileResponse/properties/public": {
+    "ref": "#/definitions/profilePublic"
+  },
+  "api#/definitions/rolesResponse": {
+    "type": "object",
+    "required": [
+      "claimable",
+      "roles"
+    ]
+  },
+  "api#/definitions/rolesResponse/properties/claimable": {
+    "type": "array"
+  },
+  "api#/definitions/rolesResponse/properties/claimable/items": {
+    "type": "string"
+  },
+  "api#/definitions/rolesResponse/properties/roles": {
+    "type": "array"
+  },
+  "api#/definitions/rolesResponse/properties/roles/items": {
+    "type": "string"
   },
   "api#/definitions/stageListResponse": {
     "type": "object",

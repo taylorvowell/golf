@@ -29,6 +29,7 @@ machine-level faults that have already cost time.
 | App package | `com.swingsage.spike` |
 | APK is universal | `gradle.properties` builds all four ABIs (`armeabi-v7a,arm64-v8a,x86,x86_64`), so the **same** `app-debug.apk` installs on the phone and the emulator — no separate build. |
 | Last known address | `10.0.1.123:39593` (2026-08-12; was .125 the day before — the IP moves too, just rarely). **The port changes on every reboot** — the IP usually does not. |
+| Bluetooth shutter remote | Taylor owns an **Autumn tech Bluetooth shutter button** (camera-remote style). Pairs as a Bluetooth HID keyboard and sends volume-key presses; the session screen claims those keys via `modules/shutter-remote` so a press starts/stops recording. The phone's own volume rocker triggers the same path, and `adb shell input keyevent 24` simulates a press for testing. |
 
 **Connecting.** Pairing survives reboots, so this is normally one command:
 
@@ -40,10 +41,11 @@ adb devices -l                   # must say `device`, not `unauthorized`
 Read `IP:PORT` off *Developer options → Wireless debugging* — the number on the **main** screen,
 not the pairing dialog's (that one is single-use and disappears).
 
-**Do not hunt for it.** `adb mdns services` returns nothing on this network, a `/24` ping sweep plus
-a port scan of 5555/5037 finds nothing, and the wireless-debugging port is random in the 30000–49999
-range. All three were tried on 2026-08-11 and all three failed. If the probe says the phone is not
-connected, the only way forward is someone reading two numbers off the screen.
+**Try `adb mdns services` first.** On 2026-08-11 it returned nothing (along with a `/24` ping sweep
+and a 5555/5037 port scan), but on 2026-08-20 it resolved the phone (`adb-R3CY10EZ19E-…_adb-tls-connect._tcp
+10.0.1.123:42323`) and the connection came up without reading anything off the screen — so it works
+at least sometimes. If mdns is silent and the probe says the phone is not connected, the fallback
+is still someone reading the two numbers off *Developer options → Wireless debugging*.
 
 ---
 
@@ -89,6 +91,7 @@ number.
 | Publishable key | `sb_publishable_y76ZD3rEE38_yt-gW34Z6Q_aZ6a3d4q` — public by design |
 | Secret key | `apps/web/.env` only. Never in a client bundle, never printed. |
 | One project, not three | D10 — dev/staging/prod separation is money and belongs to step 10. |
+| **Hosted schema LAGS local** | Hosted migrations stop at `0009a` (2026-08-20): 0010–0014 (queue runner/heartbeat, roles/profiles/goals, notifications, profile trim) exist only on the local Docker Postgres, which is the dev database of record. `golfer_profiles` does not exist hosted. Sync belongs to platform-foundation step 10. |
 
 **Which auth providers are actually on** is a dashboard setting, so read it from the project rather
 than from a doc:
