@@ -210,6 +210,24 @@ it("shutter press arms from idle and cancels a countdown — but never stops a r
   expect(sessionReducer(s, { type: "shutter-press", at: 8_000 })).toBe(s);
 });
 
+it("the REMOTE arms from the after-swing screen and from capture — the tripod loop", () => {
+  // The on-screen "Record New Swing" only navigates (SessionScreen), because a thumb on the
+  // screen means the phone is in hand. A remote press means the golfer is at the ball, so it
+  // must start the swing outright or the remote is pointless. Pinning the divergence.
+  let s = recordSwing(base(), "a", 0);
+  expect(s.reviewing).toBe("a");
+
+  s = sessionReducer(s, { type: "shutter-press", at: 20_000 });
+  expect(s.reviewing).toBeNull();
+  expect(s.mode).toBe("countdown");
+
+  // And again from the capture screen itself, mid-session.
+  s = sessionReducer(s, { type: "disarm" });
+  expect(s.mode).toBe("idle");
+  s = sessionReducer(s, { type: "shutter-press", at: 21_000 });
+  expect(s.mode).toBe("countdown");
+});
+
 it("shutter press within 3s of a stop is the double click on Stop — ignored", () => {
   let s = sessionReducer(base(), { type: "arm" });
   s = sessionReducer(s, { type: "countdown-done" });

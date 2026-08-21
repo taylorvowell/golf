@@ -314,6 +314,13 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
       // between swings: a press anywhere in the session means "record the next one" — except
       // within SHUTTER_DEBOUNCE_MS of the last stop, which is the double click on Stop.
       // Delegation — every rule the named actions enforce still holds.
+      //
+      // **The remote ARMS from the after-swing screen; the on-screen button does not**
+      // (Taylor, 2026-08-21). That divergence is the point, not an inconsistency: a remote
+      // press can only come from someone standing at the ball with the phone on a tripod,
+      // and making them walk back to tap Record defeats the remote entirely. A thumb on the
+      // screen means the phone is in their hand, where a countdown starting by itself is
+      // the wrong answer. Same session, two different physical situations.
       const at = action.at ?? Date.now();
       if (state.stoppedAt !== null && at - state.stoppedAt < SHUTTER_DEBOUNCE_MS) return state;
       // An unreviewed take owns the surface — a remote press must not arm over the only
