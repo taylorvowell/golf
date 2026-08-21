@@ -8,15 +8,16 @@ import {
   View,
 } from "react-native";
 import { Image } from "expo-image";
-import { Check, Trash2 } from "lucide-react-native";
+import { Check, Trash2, Undo2 } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import FrameClockView from "../../../modules/frame-clock/src/FrameClockView";
 import type { FrameClockHandle } from "../../../modules/frame-clock/src/FrameClock.types";
 import HighSpeedCamera from "../../../modules/high-speed-camera/src";
-import { FONT_DISPLAY } from "../../design/system/typography";
+import { FONT_BODY, FONT_DISPLAY } from "../../design/system/typography";
 import { COLORS, SEMANTIC } from "../../theme";
 import { PRE_ROLL_SEC, REVIEW_WINDOW_S } from "./captureConstants";
+import { ChoiceSheet } from "./sheets/ChoiceSheet";
 
 /**
  * Confirm the take before it becomes a swing.
@@ -82,6 +83,12 @@ export function SwingReview({ take, onSave, onDelete, saving = false }: SwingRev
   const [impactSec, setImpactSec] = useState<number | null>(null);
   const [trackWidth, setTrackWidth] = useState(0);
   const [strip, setStrip] = useState<string[]>([]);
+  /**
+   * Delete asks first (Taylor, 2026-08-21). The take is the ONLY copy of that swing — it was
+   * never uploaded and there is no undo behind it — and the bin sits a thumb's width from
+   * Save on a screen used one-handed, outdoors, between shots.
+   */
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   /**
    * Read by the pan responder, which runs outside React's render cycle. A gesture that read
@@ -191,7 +198,13 @@ export function SwingReview({ take, onSave, onDelete, saving = false }: SwingRev
       </View>
 
       <View style={[styles.controls, { paddingBottom: insets.bottom + 18 }]}>
-        <Text style={styles.hint}>Slide to where you hit the ball</Text>
+        <View style={styles.hintBlock}>
+          <Text style={styles.hint}>Slide to where you hit the ball</Text>
+          {/* Says the quiet part out loud (Taylor, 2026-08-21). Without it the golfer assumes
+              the mark has to be frame-perfect and spends thirty seconds on a job that has a
+              second of tolerance — the analyzer finds the real impact frame regardless. */}
+          <Text style={styles.hintSub}>Doesn&rsquo;t have to be exact — just get close</Text>
+        </View>
 
         {/* Deliberately tall: this is the only precision the screen asks for, and a thin track
             would make it the hardest thing on the page. */}
@@ -222,8 +235,8 @@ export function SwingReview({ take, onSave, onDelete, saving = false }: SwingRev
             accessibilityRole="button"
             accessibilityLabel="Delete this take"
             disabled={saving}
-            onPress={onDelete}
-            style={({ pressed }) => [styles.delete, pressed && styles.pressed]}
+            onPress={() => setConfirmingDelete(true)}
+            style={({ pressed }) => [styles.delete, pressed && styles.pressedHard]}
           >
             <Trash2 size={26} color={COLORS.text} strokeWidth={2.2} />
           </Pressable>
@@ -242,7 +255,7 @@ export function SwingReview({ take, onSave, onDelete, saving = false }: SwingRev
                 endSec: Math.min(durationS, at - PRE_ROLL_SEC + REVIEW_WINDOW_S),
               });
             }}
-            style={({ pressed }) => [styles.save, pressed && styles.pressed]}
+            style={({ pressed }) => [styles.save, pressed && styles.pressedHard]}
           >
             {saving ? (
               <ActivityIndicator color={COLORS.text} />
@@ -255,6 +268,34 @@ export function SwingReview({ take, onSave, onDelete, saving = false }: SwingRev
           </Pressable>
         </View>
       </View>
+
+      <ChoiceSheet
+        visible={confirmingDelete}
+        onClose={() => setConfirmingDelete(false)}
+        title="Delete this recording?"
+        subtitle="It hasn't been saved anywhere yet, so this can't be undone."
+        testID="take-delete-confirm"
+        choices={[
+          {
+            key: "delete",
+            icon: Trash2,
+            title: "Delete recording",
+            detail: "Bin it and go back to filming",
+            tone: "danger",
+            onPress: () => {
+              setConfirmingDelete(false);
+              onDelete();
+            },
+          },
+          {
+            key: "keep",
+            icon: Undo2,
+            title: "Keep it",
+            detail: "Back to the swing",
+            onPress: () => setConfirmingDelete(false),
+          },
+        ]}
+      />
     </View>
   );
 }
@@ -270,12 +311,19 @@ const styles = StyleSheet.create({
   },
 
   controls: { paddingHorizontal: 18, paddingTop: 16, gap: 14 },
+  hintBlock: { gap: 3 },
   hint: {
-    color: COLORS.muted,
+    color: COLORS.text,
     fontFamily: FONT_DISPLAY.black,
     fontSize: 11,
     letterSpacing: 0.8,
     textTransform: "uppercase",
+    textAlign: "center",
+  },
+  hintSub: {
+    color: COLORS.muted,
+    fontFamily: FONT_BODY.regular,
+    fontSize: 12,
     textAlign: "center",
   },
 
@@ -338,5 +386,8 @@ const styles = StyleSheet.create({
     fontSize: 17,
     letterSpacing: -0.2,
   },
-  pressed: { opacity: 0.82 },
+  /** A press you can see from arm's length (Taylor, 2026-08-21): the control shrinks and
+   * dims together. Scale is what carries — an opacity change alone is invisible outdoors in
+   * sunlight, which is exactly where this screen is used. */
+  pressedHard: { transform: [{ scale: 0.94 }], opacity: 0.85 },
 });

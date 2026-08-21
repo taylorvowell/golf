@@ -184,8 +184,8 @@ along.
   named exception: controls floating over the CAMERA PICTURE** (Taylor, 2026-08-21). Those sit on
   live footage rather than a themed surface, so nothing behind them separates them from a
   background that changes colour shot to shot; a glass control over a white shirt or a bright sky
-  has no edge at all. They wear `CONTROL_EDGE` from `features/session/controlEdge.ts` — 1 px at
-  30 % white, faint enough to define and never to frame. Use that constant, never a hand-written
+  has no edge at all. They wear `CONTROL_EDGE` from `features/session/controlEdge.ts` — 1 px of the
+  aqua highlight at 20 %, faint enough to define and never to frame. Use that constant, never a hand-written
   border, so the whole capture surface stays one decision. The edge tokens
   AND the five shadow tokens (`shadowSm|Md|Lg|Cobalt|Aqua`, with `ShadowStyle`) were deleted — the
   `Theme` type carries neither, so reintroducing one is a type error, and hand-writing
