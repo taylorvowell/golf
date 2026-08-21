@@ -18,7 +18,7 @@ import type {
 import { FONT_BODY, FONT_DISPLAY } from "../../design/system/typography";
 import { COLORS } from "../../theme";
 import { AlignmentGhost } from "./AlignmentGhost";
-import type { CameraFacing, CameraZoom, ZoomRange } from "./sessionState";
+import type { CameraZoom, ZoomRange } from "./sessionState";
 
 /**
  * The capture screen's picture layer: the live Camera2 preview
@@ -36,7 +36,6 @@ export interface CameraStageProps {
   ghostVisible: boolean;
   /** Which address pose the ghost suggests — follows the DTL/Front view toggle. */
   view: "dtl" | "face_on";
-  facing: CameraFacing;
   zoom: CameraZoom;
   /** The open lens's real zoom range, straight from Camera2 — the zoom slider's bounds. */
   onZoomRange?: (range: ZoomRange) => void;
@@ -55,7 +54,6 @@ type Permission = "checking" | "granted" | "denied";
 export function CameraStage({
   ghostVisible,
   view,
-  facing,
   zoom,
   onZoomRange,
   cameraRef,
@@ -99,7 +97,6 @@ export function CameraStage({
       {permission === "granted" ? (
         <HighSpeedCameraView
           ref={cameraRef}
-          facing={facing}
           zoom={zoom}
           onZoomRange={(e) => onZoomRange?.({ min: e.nativeEvent.min, max: e.nativeEvent.max })}
           onRecordingEnded={onRecordingEnded}

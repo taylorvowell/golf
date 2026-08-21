@@ -82,7 +82,6 @@ class HighSpeedCameraModule : Module() {
       // onCaptureConfig: the probed rate/size this lens will record at — the FPS pill's only
       // source, so the number on screen is never a request.
       Events("onZoomRange", "onRecordingEnded", "onCaptureConfig")
-      Prop("facing") { view: HighSpeedCameraView, facing: String -> view.setFacing(facing) }
       Prop("zoom") { view: HighSpeedCameraView, zoom: Double -> view.setZoom(zoom.toFloat()) }
 
       /**

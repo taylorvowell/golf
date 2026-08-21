@@ -1,20 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { PanResponder, Pressable, StyleSheet, Text, View } from "react-native";
-import { SwitchCamera } from "lucide-react-native";
+import { PanResponder, StyleSheet, Text, View } from "react-native";
 
 import { FONT_DISPLAY } from "../../design/system/typography";
 import { COLORS } from "../../theme";
-import {
-  zoomIsAdjustable,
-  type CameraFacing,
-  type CameraZoom,
-  type ZoomRange,
-} from "./sessionState";
+import { zoomIsAdjustable, type CameraZoom, type ZoomRange } from "./sessionState";
 
 /**
- * The camera's own controls (Taylor, step-03 iteration), stacked on the LEFT edge above the
- * bar: the front/back flip orb on top, a continuous zoom slider beneath it. Glass over
- * footage — the help orb's language, mirrored side.
+ * The camera's own controls (Taylor, step-03 iteration), on the LEFT edge above the bar: a
+ * continuous zoom slider. Glass over footage — the help orb's language, mirrored side.
+ *
+ * There is no front/back flip (Taylor, 2026-08-20). SwingSage films with the back lens,
+ * full stop: high-speed capture is a rear-sensor feature, so the front camera could never
+ * have recorded a swing — only framed one.
  *
  * Continuous, not stops (Taylor, 2026-08-18): Camera2 takes an arbitrary
  * `CONTROL_ZOOM_RATIO`, so stops were only ever a stand-in. The rail spans the lens's
@@ -52,15 +49,13 @@ function label(zoom: number): string {
 }
 
 export interface CameraControlsProps {
-  facing: CameraFacing;
   zoom: CameraZoom;
   /** What the open lens actually supports, reported by the native preview. */
   zoomRange: ZoomRange;
-  onFlip: () => void;
   onZoom: (zoom: CameraZoom) => void;
 }
 
-export function CameraControls({ facing, zoom, zoomRange, onFlip, onZoom }: CameraControlsProps) {
+export function CameraControls({ zoom, zoomRange, onZoom }: CameraControlsProps) {
   const [height, setHeight] = useState(TRACK_HEIGHT);
 
   // The pan responder is built once; it reads the live range and callback through a ref so
@@ -101,16 +96,6 @@ export function CameraControls({ facing, zoom, zoomRange, onFlip, onZoom }: Came
 
   return (
     <View style={styles.stack} pointerEvents="box-none">
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={facing === "back" ? "Switch to front camera" : "Switch to back camera"}
-        onPress={onFlip}
-        style={({ pressed }) => [styles.orb, pressed && styles.pressed]}
-        testID="camera-flip"
-      >
-        <SwitchCamera size={20} color="rgba(255,255,255,0.85)" strokeWidth={2.2} />
-      </Pressable>
-
       {adjustable ? (
         <View style={styles.zoomGroup} pointerEvents="box-none">
           <View

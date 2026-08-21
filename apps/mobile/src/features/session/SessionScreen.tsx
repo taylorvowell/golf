@@ -125,23 +125,13 @@ export function SessionScreen() {
   // ---- The take itself -------------------------------------------------------------------
   const cameraRef = useRef<HighSpeedCameraViewRef | null>(null);
   const toast = useToast();
-  // Read at failure time, not captured — the flip that caused the failure already happened.
-  const facingRef = useRef(state.facing);
-  useEffect(() => {
-    facingRef.current = state.facing;
-  }, [state.facing]);
   const onRecordError = useCallback(
     (message: string) => {
       if (__DEV__) console.warn("recording failed:", message);
       toast({
         id: `record-failed-${Date.now()}`,
         title: "Couldn't record",
-        // The one predictable cause gets its own words: only the back lens publishes
-        // high-speed configurations, and the native side refuses rather than degrading.
-        detail:
-          facingRef.current === "front"
-            ? "Only the back camera records high-speed video. Flip the camera and try again."
-            : "The camera couldn't record. Try again.",
+        detail: "The camera couldn't start. Try again.",
         icon: VideoOff,
       });
     },
@@ -149,7 +139,7 @@ export function SessionScreen() {
   );
 
   /** The probed capture rate — what the FPS pill shows, straight from the camera (Taylor,
-   * 2026-08-20). Null until the lens answers; re-fires on a flip. */
+   * 2026-08-20). Null until the camera answers. */
   const [capture, setCapture] = useState<{ fps: number; highSpeed: boolean } | null>(null);
 
   const { stop: stopTake, onRecordingEnded } = useTakeRecorder(
@@ -417,7 +407,6 @@ export function SessionScreen() {
           <CameraStage
             ghostVisible={idle}
             view={state.view}
-            facing={state.facing}
             zoom={state.zoom}
             onZoomRange={(range) => dispatch({ type: "set-zoom-range", range })}
             cameraRef={cameraRef}
@@ -482,10 +471,8 @@ export function SessionScreen() {
                 pointerEvents="box-none"
               >
                 <CameraControls
-                  facing={state.facing}
                   zoom={state.zoom}
                   zoomRange={state.zoomRange}
-                  onFlip={() => dispatch({ type: "flip-camera" })}
                   onZoom={(zoom) => dispatch({ type: "set-zoom", zoom })}
                 />
                 <ViewToggle

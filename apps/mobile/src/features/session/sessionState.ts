@@ -35,8 +35,6 @@ export type CaptureMode = "idle" | "countdown" | "recording";
 /** Which angle is being filmed — the analyzer's own view enum ("Front View" in the UI). */
 export type CaptureView = "dtl" | "face_on";
 
-export type CameraFacing = "back" | "front";
-
 /** A continuous CONTROL_ZOOM_RATIO, not a stop — the slider spans the device's real range. */
 export type CameraZoom = number;
 
@@ -115,7 +113,6 @@ export interface SessionState {
   mode: CaptureMode;
   /** The angle the NEXT recording captures — per swing, not per session, so never locked. */
   view: CaptureView;
-  facing: CameraFacing;
   zoom: CameraZoom;
   /** Probed per lens — a flip re-reports it, so the slider never outlives its camera. */
   zoomRange: ZoomRange;
@@ -141,7 +138,6 @@ export type SessionAction =
   | { type: "set-type"; sessionType: SessionType }
   | { type: "set-settings"; settings: Partial<SessionSettings> }
   | { type: "set-view"; view: CaptureView }
-  | { type: "flip-camera" }
   | { type: "set-zoom"; zoom: CameraZoom }
   /** The native preview reporting CONTROL_ZOOM_RATIO_RANGE for the lens it just opened. */
   | { type: "set-zoom-range"; range: ZoomRange }
@@ -199,7 +195,6 @@ export function initialSessionState(
     settings,
     mode: "idle",
     view: "dtl",
-    facing: "back",
     zoom: 1,
     zoomRange: NO_ZOOM,
     swings: [],
@@ -232,17 +227,6 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
             ...state,
             view: action.view,
             zoom: defaultZoomFor(action.view, state.zoomRange),
-          }
-        : state;
-    case "flip-camera":
-      // The new lens has its own range and its own 1x — reset both rather than carry a
-      // ratio the other camera cannot reach.
-      return state.mode === "idle"
-        ? {
-            ...state,
-            facing: state.facing === "back" ? "front" : "back",
-            zoom: 1,
-            zoomRange: NO_ZOOM,
           }
         : state;
     case "set-zoom": {

@@ -107,7 +107,6 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
   private var thread: HandlerThread? = null
   private var handler: Handler? = null
   private var previewSize: Size? = null
-  private var facing: String = "back"
   private var zoom: Float = 1f
   /** The open lens's CONTROL_ZOOM_RATIO_RANGE, read once per open and reused by every
    * zoom apply — re-reading characteristics on each slider tick is a syscall per frame. */
@@ -152,6 +151,11 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
    * buffer is fixed to `first` so entering the constrained session resizes nothing. */
   private var takeConfig: Pair<Size, List<Range<Int>>>? = null
 
+  /** The buffer size last asked of the holder — the size `surfaceChanged` must report before
+   * the camera may open. Distinct from `takeConfig` because a lens with no high-speed mode
+   * still has a preview size. */
+  private var wantedSize: Size? = null
+
   init {
     // The parent clips the oversized child — that IS the centre-crop; see onLayout.
     clipChildren = true
@@ -164,7 +168,7 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
       }
 
       override fun surfaceChanged(holder: SurfaceHolder, format: Int, w: Int, h: Int) {
-        val want = takeConfig?.first ?: return
+        val want = wantedSize ?: return
         // Only once the buffers are the size the session will use — surfaceChanged fires
         // first with the VIEW's size, before setFixedSize takes effect.
         if (w == want.width && h == want.height && device == null) openCamera()
@@ -176,18 +180,6 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
     })
   }
 
-  fun setFacing(next: String) {
-    if (next == facing) return
-    // Never mid-take: swapping the lens would abandon a MediaRecorder holding an open file.
-    if (recording) { Log.w(TAG, "ignoring facing change while recording"); return }
-    facing = next
-    if (surface.holder.surface?.isValid == true) {
-      closeCamera()
-      // The new lens has its own configuration; the resize re-enters through surfaceChanged.
-      applyBufferSize(surface.holder)
-    }
-  }
-
   /**
    * Choose the lens's recording configuration and fix the preview buffers to it.
    *
@@ -196,7 +188,7 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
    * surface.
    */
   private fun applyBufferSize(holder: SurfaceHolder) {
-    val id = cameraId() ?: run { Log.w(TAG, "no $facing camera"); return }
+    val id = cameraId() ?: run { Log.w(TAG, "no back camera"); return }
     val config = bestHighSpeed(id, MAX_USEFUL_FPS)
     takeConfig = config
     val size = config?.first
@@ -206,7 +198,13 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
       ?: ordinaryPreviewSize(id)
     previewSize = size
     requestLayout()
+    // `setFixedSize` only calls back when the size CHANGES. A flip between two lenses whose
+    // chosen size is identical (both 1080p here) fires nothing, and the camera would never
+    // reopen — the frozen preview after a camera flip, 2026-08-20.
+    val unchanged = wantedSize == size && holder.surface?.isValid == true
+    wantedSize = size
     holder.setFixedSize(size.width, size.height)
+    if (unchanged) openCamera()
 
     // `highSpeed: false` is a real answer, not an error — the front lens is a framing aid and
     // the pill must say so rather than quoting a rate nothing will record at.
@@ -230,12 +228,15 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
 
   private val manager get() = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
 
-  private fun cameraId(): String? {
-    val want = if (facing == "front") CameraCharacteristics.LENS_FACING_FRONT
-    else CameraCharacteristics.LENS_FACING_BACK
-    return manager.cameraIdList.firstOrNull {
-      manager.getCameraCharacteristics(it).get(CameraCharacteristics.LENS_FACING) == want
-    }
+  /**
+   * The back lens, always (Taylor, 2026-08-20 — the front camera is gone from the product).
+   * High-speed configurations are a rear-sensor feature, so a front-facing capture could only
+   * ever have been a framing aid, and carrying the lens choice cost a whole class of session
+   * teardown bugs for a mode nothing could record with.
+   */
+  private fun cameraId(): String? = manager.cameraIdList.firstOrNull {
+    manager.getCameraCharacteristics(it)
+      .get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_BACK
   }
 
   // ---------------------------------------------------------------- capabilities
@@ -291,7 +292,7 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
 
   @SuppressLint("MissingPermission") // JS gates mounting on the CAMERA grant.
   private fun openCamera() {
-    val id = cameraId() ?: run { Log.w(TAG, "no $facing camera"); return }
+    val id = cameraId() ?: run { Log.w(TAG, "no back camera"); return }
     val gen = ++generation
     // A reopen (error recovery, camera flip) replaces the thread — quit the old one or every
     // recovery leaks a live HandlerThread.
@@ -399,9 +400,23 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
    */
   @SuppressLint("MissingPermission")
   fun startRecording(maxFps: Int, maxSeconds: Int, promise: (Result<Map<String, Any>>) -> Unit) {
+    val h = handler ?: return promise(Result.failure(IllegalStateException("no camera thread")))
+    // EVERYTHING below runs on the camera thread. Expo dispatches a VIEW AsyncFunction on the
+    // MAIN thread, and `MediaRecorder.prepare()` — like `stop()` — blocks for hundreds of
+    // milliseconds. On the main thread that is a frozen screen with a dead Stop button, which
+    // is exactly how the record freeze presented (2026-08-20).
+    h.post { beginTake(maxFps, maxSeconds, h, promise) }
+  }
+
+  @SuppressLint("MissingPermission")
+  private fun beginTake(
+    maxFps: Int,
+    maxSeconds: Int,
+    h: Handler,
+    promise: (Result<Map<String, Any>>) -> Unit,
+  ) {
     if (recording) return promise(Result.failure(IllegalStateException("already recording")))
     val cam = device ?: return promise(Result.failure(IllegalStateException("camera is not open")))
-    val h = handler ?: return promise(Result.failure(IllegalStateException("no camera thread")))
 
     // The size was fixed at open and the preview buffers are already it (`applyBufferSize`);
     // the ceiling only chooses among the RATES that size offers. Refusing here is what keeps
@@ -519,10 +534,17 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
                 // golfer set still applies: zoom is a sensor crop that persists across the
                 // session swap.
               }.build()
+              // ENCODER FIRST, THEN FRAMES. `MediaRecorder.start()` takes 100-300 ms to spin
+              // its encoder up, and until it does nothing dequeues buffers from the recorder
+              // surface. Start the burst first and the camera pumps 240 fps into a surface
+              // that cannot return buffers: the HAL runs out, its fences never clear, and it
+              // triggers its own recovery — measured at reqId 34, which is ~140 ms at 240 fps,
+              // exactly the encoder's start-up window (2026-08-20). At 30 fps the same bug
+              // takes a second to bite and nobody notices; at 240 it is instant.
+              rec.start()
               // Mandatory: a constrained session rejects a plain repeating request, because the
               // frames are delivered in batches.
               highSpeed.setRepeatingBurst(highSpeed.createHighSpeedRequestList(request), null, h)
-              rec.start()
               settleOnce {
                 recording = true
                 recordStartedAtMs = System.currentTimeMillis()
@@ -565,8 +587,13 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
 
   /** Stop by tap. The cap path settles through `setOnInfoListener` instead, never through here. */
   fun stopRecording(promise: (Result<Map<String, Any>>) -> Unit) {
-    if (!recording) return promise(Result.failure(IllegalStateException("not recording")))
-    promise(settleRecording())
+    // Off the main thread for the same reason as the start — `MediaRecorder.stop()` blocks,
+    // and a Stop button that freezes the app is worse than no Stop button.
+    val h = handler ?: return promise(Result.failure(IllegalStateException("no camera thread")))
+    h.post {
+      if (!recording) promise(Result.failure(IllegalStateException("not recording")))
+      else promise(settleRecording())
+    }
   }
 
   /**
@@ -582,6 +609,8 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
     val file = recordFile
     val durationMs = System.currentTimeMillis() - recordStartedAtMs
 
+    // Frames off BEFORE the encoder stops — the mirror of the start order. Stopping the
+    // encoder first leaves the camera pumping into a surface nothing drains.
     runCatching { (session as? CameraConstrainedHighSpeedCaptureSession)?.stopRepeating() }
     val stopped = runCatching { recorder?.stop() }
     teardownRecorder()
@@ -667,7 +696,9 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
       runCatching { recorder?.stop() }
     }
     teardownRecorder()
-    runCatching { session?.close() }
+    // No explicit session close — closing the DEVICE abandons its sessions, while
+    // `CameraCaptureSession.close()` forces a pipeline drain this device times out on
+    // ("Error waiting to drain", then a fatal device error on the next open).
     session = null
     // The Surface belongs to the holder, not to us — releasing it here would destroy the
     // view's own picture. The holder tears it down in surfaceDestroyed.

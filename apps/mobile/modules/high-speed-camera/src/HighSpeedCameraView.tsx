@@ -15,14 +15,6 @@ export interface RecordingResult {
 }
 
 export interface HighSpeedCameraViewProps {
-  /**
-   * Which lens.
-   *
-   * **Only the back lens can record.** High-speed configurations are a rear-sensor feature on
-   * essentially every Android — front cameras publish none — so the front lens is a framing aid,
-   * not a capture mode. Changing this tears down and reopens the preview session.
-   */
-  facing: "back" | "front";
   /** CONTROL_ZOOM_RATIO, clamped natively to the device's real range. */
   zoom: number;
   /** Fires once per camera open with that lens's real zoom range — drive the UI from this,
@@ -83,9 +75,12 @@ export interface HighSpeedCameraViewRef {
 /**
  * The live Camera2 capture surface (Android) — preview AND recording on one device.
  *
- * Mount ONLY behind a granted CAMERA permission; the native side assumes the grant. Recording
- * reconfigures this same session as a constrained high-speed one carrying both the preview and the
- * recorder surface, so the picture stays live at the capture rate.
+ * **The back lens, always** (Taylor, 2026-08-20): high-speed capture is a rear-sensor feature, so
+ * a front-facing mode could only ever have framed a swing, never recorded one.
+ *
+ * Mount ONLY behind granted CAMERA and RECORD_AUDIO permissions; the native side assumes both.
+ * Recording reconfigures this same session as a constrained high-speed one carrying both the
+ * preview and the recorder surface, so the picture stays live at the capture rate.
  */
 // Cast because `requireNativeView`'s return type cannot express view-ref methods — the
 // interface above is the contract the native `View { AsyncFunction … }` block implements.
