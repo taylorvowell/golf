@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import FrameClockView from "../../../modules/frame-clock/src/FrameClockView";
 import type { FrameClockHandle } from "../../../modules/frame-clock/src/FrameClock.types";
-import HighSpeedCamera, { type ImpactCandidate } from "../../../modules/high-speed-camera/src";
+import HighSpeedCamera from "../../../modules/high-speed-camera/src";
 import { FONT_DISPLAY } from "../../design/system/typography";
 import { COLORS, SEMANTIC } from "../../theme";
 import { PRE_ROLL_SEC, REVIEW_WINDOW_S } from "./captureConstants";
@@ -21,21 +21,27 @@ import { PRE_ROLL_SEC, REVIEW_WINDOW_S } from "./captureConstants";
 /**
  * Confirm the take before it becomes a swing.
  *
- * The screen loops a **6-second window** — three seconds either side of where the strike was heard
- * — and the scrubber slides that whole window rather than moving a playhead. That is the one
- * decision the rest of this file follows from: a swing is 1–2 frames at impact and a 20-second clip
- * is roughly eight frames per pixel of track, so asking a golfer to land on a frame is asking for
- * precision the interaction cannot deliver. Sliding a window has one degree of freedom and a
- * tolerance of about a second, which a finger can do.
+ * **The golfer marks ONE moment: the bottom of the downswing.** Not a range, not a start and
+ * an end (Taylor, 2026-08-21). The clip is then cut around that point, and the golfer never
+ * sees or thinks about where it begins or ends — because the moment they can be asked to
+ * judge is "that is where I hit the ball", and the moment they cannot is "that is a good
+ * place for a clip to start". Every second of thought this screen costs is a second between
+ * swings, and it is asked once per ball.
  *
- * **Detection only has to be roughly right.** The seed comes from the loudest sharp transient in
- * the clip; when it is wrong the cost is one drag, and when it finds nothing the window simply
- * starts at a sensible default. Nothing here is a measurement — the analyzer locates the true
- * Impact frame from the club-head low point, and a hand-dragged window never overrides it.
+ * So the picture stays **paused** and the scrub moves the frame. A looping clip invites the
+ * golfer to referee the loop's edges, which is precisely the judgement being taken off them,
+ * and a still frame is also the only way to actually see the bottom of a downswing — at 240
+ * fps it is over in the time a loop takes to restart.
  *
- * **The last candidate wins, not the loudest.** A golfer takes a practice swing before the real
- * one, so the strike that matters is the later of two similar transients — ordering by time and
- * taking the last plausible one is what stops the window seeding on the rehearsal.
+ * **Detection only has to be roughly right.** The seed comes from the sharpest transient in
+ * the recorded audio; when it is wrong the cost is one drag, and when it finds nothing the
+ * handle simply starts at a sensible place. Nothing here is a measurement — the analyzer
+ * locates the true Impact frame from the club-head low point, and a hand-dragged mark never
+ * overrides it. Candidates are not drawn on the track: a row of ticks asks the golfer to
+ * choose between the app's guesses, which is a harder question than the one being asked.
+ *
+ * **The last candidate wins, not the loudest.** A golfer takes a practice swing before the
+ * real one, so the strike that matters is the later of two similar transients.
  */
 
 /** A candidate this far below the strongest is noise, not a second swing. */
@@ -45,6 +51,9 @@ const CANDIDATE_FLOOR = 0.45;
 const STRIP_FRAMES = 12;
 /** Decode width per frame. The strip is ~64pt tall on a 3x screen — 160px is already generous. */
 const STRIP_PX = 160;
+
+/** The handle's width. Small — it marks an instant now, not a span of time. */
+const HANDLE_W = 26;
 
 export interface SwingTake {
   /** Absolute path to the untrimmed take, as the native recorder wrote it. */
@@ -56,7 +65,7 @@ export interface SwingTake {
 
 export interface SwingReviewProps {
   take: SwingTake;
-  /** Keep it: the window in seconds, for the trim that follows. */
+  /** Keep it: the window in seconds, cut around the marked strike. */
   onSave: (window: { startSec: number; endSec: number }) => void;
   /** Bin it. Nothing has been created server-side, so this costs nothing but the take. */
   onDelete: () => void;
@@ -67,57 +76,55 @@ export interface SwingReviewProps {
 export function SwingReview({ take, onSave, onDelete, saving = false }: SwingReviewProps) {
   const insets = useSafeAreaInsets();
   const player = useRef<FrameClockHandle>(null);
-  const durationS = Math.max(take.durationMs / 1000, REVIEW_WINDOW_S);
-  const maxStart = Math.max(0, durationS - REVIEW_WINDOW_S);
+  const durationS = Math.max(take.durationMs / 1000, 0.1);
 
-  const [startSec, setStartSec] = useState<number | null>(null);
-  const [candidates, setCandidates] = useState<ImpactCandidate[]>([]);
+  /** Where the golfer says they hit the ball. Null until detection has had its say. */
+  const [impactSec, setImpactSec] = useState<number | null>(null);
   const [trackWidth, setTrackWidth] = useState(0);
   const [strip, setStrip] = useState<string[]>([]);
 
   /**
-   * Read by the pan responder and the loop, both of which run outside React's render cycle. A
-   * gesture that read `startSec` through a closure would drag from wherever the window was when
-   * the responder was created, which is the frame the finger went down and not the frame it moved.
+   * Read by the pan responder, which runs outside React's render cycle. A gesture that read
+   * `impactSec` through a closure would drag from wherever the mark was when the responder
+   * was created — the frame the finger went down, not the frame it moved.
    */
-  const startRef = useRef(0);
-  const draggingRef = useRef(false);
+  const markRef = useRef(0);
 
-  const setStart = useCallback((next: number) => {
-    const clamped = Math.min(Math.max(next, 0), maxStart);
-    startRef.current = clamped;
-    setStartSec(clamped);
-  }, [maxStart]);
+  const setMark = useCallback((next: number) => {
+    const clamped = Math.min(Math.max(next, 0), durationS);
+    markRef.current = clamped;
+    setImpactSec(clamped);
+  }, [durationS]);
 
-  // Seed the window. Detection runs off the recorded audio track and takes a few hundred
-  // milliseconds; the video is already on screen and playing by then, so the window animates into
+  /** Seek without playing — every path here leaves the picture parked on a frame. */
+  const seekTo = useCallback((sec: number) => {
+    void player.current?.seekToFrame(Math.round(sec * take.fps));
+  }, [take.fps]);
+
+  // Seed the mark. Detection runs off the recorded audio track and takes a few hundred
+  // milliseconds; the first frame is already on screen by then, so the handle animates into
   // place rather than the screen waiting on it. A failure is silent by design.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      let found: ImpactCandidate[] = [];
-      try {
-        found = await HighSpeedCamera.detectImpacts(take.path, 3);
-      } catch {
-        found = [];
-      }
+      const found = await HighSpeedCamera.detectImpacts(take.path, 3).catch(() => []);
       if (cancelled) return;
-      setCandidates(found);
       // The LAST plausible strike, not the strongest — the practice swing comes first.
       const best = found.length ? Math.max(...found.map((c) => c.score)) : 0;
       const real = found
         .filter((c) => c.score >= best * CANDIDATE_FLOOR)
         .sort((a, b) => a.timeSec - b.timeSec)
         .at(-1);
-      // Nothing heard → the end of the clip, which is where a swing sits when the golfer walked
-      // back to stop the recording. Never an error, never an empty state.
-      setStart(real ? real.timeSec - PRE_ROLL_SEC : maxStart);
+      // Nothing heard → near the end, which is where a swing sits when the golfer walked back
+      // to stop the recording. Never an error, never an empty state.
+      setMark(real ? real.timeSec : Math.max(0, durationS - PRE_ROLL_SEC));
+      seekTo(markRef.current);
     })();
     return () => { cancelled = true; };
-  }, [take.path, maxStart, setStart]);
+  }, [take.path, durationS, setMark, seekTo]);
 
   // The filmstrip. Extracted off the main thread and rendered as it arrives — the screen is
-  // already playing by then, so the pictures fill in under a scrubber that already works.
+  // already showing the swing by then, so the pictures fill in under a scrubber that works.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -128,28 +135,12 @@ export function SwingReview({ take, onSave, onDelete, saving = false }: SwingRev
     return () => { cancelled = true; };
   }, [take.path]);
 
-  const endSec = (startSec ?? 0) + REVIEW_WINDOW_S;
-
-  /**
-   * The loop.
-   *
-   * Driven off the frame callback rather than a timer because a timer and a decoder disagree, and
-   * the disagreement shows as the clip running a little past the window before snapping back.
-   */
-  const onFrameRendered = useCallback((e: { nativeEvent: { frame: number } }) => {
-    if (draggingRef.current) return;
-    const t = e.nativeEvent.frame / take.fps;
-    if (t >= startRef.current + REVIEW_WINDOW_S || t < startRef.current - 0.25) {
-      void player.current?.seekToFrame(Math.round(startRef.current * take.fps));
-    }
-  }, [take.fps]);
-
   const onReady = useCallback(() => {
-    void player.current?.seekToFrame(Math.round(startRef.current * take.fps));
-    void player.current?.play();
-  }, [take.fps]);
+    // Park on the seeded frame. Deliberately no play() — see the file comment.
+    seekTo(markRef.current);
+  }, [seekTo]);
 
-  /** Where the window sat when the finger went down — the anchor every move measures from. */
+  /** Where the mark sat when the finger went down — the anchor every move measures from. */
   const grabbedAt = useRef(0);
 
   const pan = useMemo(
@@ -158,33 +149,29 @@ export function SwingReview({ take, onSave, onDelete, saving = false }: SwingRev
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,
         onPanResponderGrant: () => {
-          draggingRef.current = true;
-          grabbedAt.current = startRef.current;
-          // Keyframe-fast seeks while the finger is down; the window is being chosen, not read.
+          grabbedAt.current = markRef.current;
+          // Keyframe-fast seeks while the finger is down, so the picture keeps up with the
+          // drag; the exact frame lands on release.
           void player.current?.setScrubbing(true);
         },
         onPanResponderMove: (_, gesture) => {
           if (trackWidth <= 0) return;
           // `dx` is the TOTAL travel since the finger went down, so it is applied to where the
-          // window was THEN. Adding it to the live position instead re-applied the whole
-          // gesture on every event, which accelerated the window away from the finger and is
-          // what made the drag feel like it was fighting back (Taylor, 2026-08-21).
-          const perPx = durationS / trackWidth;
-          setStart(grabbedAt.current + gesture.dx * perPx);
-          void player.current?.seekToFrame(Math.round(startRef.current * take.fps));
+          // mark was THEN. Adding it to the live position instead re-applies the whole gesture
+          // on every event, which accelerates the handle away from the finger.
+          setMark(grabbedAt.current + (gesture.dx * durationS) / trackWidth);
+          seekTo(markRef.current);
         },
         onPanResponderRelease: () => {
-          draggingRef.current = false;
           void player.current?.setScrubbing(false);
-          void player.current?.seekToFrame(Math.round(startRef.current * take.fps));
-          void player.current?.play();
+          seekTo(markRef.current);
         },
       }),
-    [durationS, trackWidth, setStart, take.fps],
+    [durationS, trackWidth, setMark, seekTo],
   );
 
-  const windowLeft = trackWidth > 0 ? ((startSec ?? 0) / durationS) * trackWidth : 0;
-  const windowWidth = trackWidth > 0 ? (REVIEW_WINDOW_S / durationS) * trackWidth : 0;
+  const handleLeft =
+    trackWidth > 0 ? ((impactSec ?? 0) / durationS) * trackWidth - HANDLE_W / 2 : 0;
 
   return (
     <View style={styles.root} testID="swing-review">
@@ -193,12 +180,10 @@ export function SwingReview({ take, onSave, onDelete, saving = false }: SwingRev
           ref={player}
           source={`file://${take.path}`}
           fps={take.fps}
-          emitFrames
           onReady={onReady}
-          onFrameRendered={onFrameRendered}
           style={StyleSheet.absoluteFill}
         />
-        {startSec === null ? (
+        {impactSec === null ? (
           <View style={styles.seeding} pointerEvents="none">
             <ActivityIndicator color={COLORS.text} />
           </View>
@@ -206,7 +191,7 @@ export function SwingReview({ take, onSave, onDelete, saving = false }: SwingRev
       </View>
 
       <View style={[styles.controls, { paddingBottom: insets.bottom + 18 }]}>
-        <Text style={styles.hint}>Slide the box to your swing</Text>
+        <Text style={styles.hint}>Slide to where you hit the ball</Text>
 
         {/* Deliberately tall: this is the only precision the screen asks for, and a thin track
             would make it the hardest thing on the page. */}
@@ -215,40 +200,20 @@ export function SwingReview({ take, onSave, onDelete, saving = false }: SwingRev
           onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}
           {...pan.panHandlers}
         >
-          {/* The swing, along the track. Finding your strike by SEEING it beats finding it by
-              remembering when you swung — and it is why the window rarely needs a drag at all. */}
+          {/* The swing, along the track. Finding the strike by SEEING it beats finding it by
+              remembering when you swung. */}
           <View style={styles.strip} pointerEvents="none">
             {strip.map((uri) => (
               <Image key={uri} source={{ uri }} style={styles.frame} contentFit="cover" />
             ))}
           </View>
-          {/* Everything outside the window is dimmed, so the box reads as a selection over the
-              film rather than a bar floating above it (§01.5.5). */}
+
+          {/* The mark. The frame on screen is whatever sits under its centre line. */}
           {trackWidth > 0 ? (
-            <>
-              <View
-                pointerEvents="none"
-                style={[styles.shade, { left: 0, width: windowLeft }]}
-              />
-              <View
-                pointerEvents="none"
-                style={[styles.shade, { left: windowLeft + windowWidth, right: 0 }]}
-              />
-            </>
+            <View pointerEvents="none" style={[styles.handle, { left: handleLeft }]}>
+              <View style={styles.handleLine} />
+            </View>
           ) : null}
-          {/* Every candidate the detector heard, so a wrong seed is a glance and a nudge rather
-              than a hunt. Suggestions, never claims. */}
-          {trackWidth > 0 && candidates.map((c) => (
-            <View
-              key={c.timeSec}
-              pointerEvents="none"
-              style={[styles.tick, { left: (c.timeSec / durationS) * trackWidth - 1 }]}
-            />
-          ))}
-          <View
-            pointerEvents="none"
-            style={[styles.window, { left: windowLeft, width: windowWidth }]}
-          />
         </View>
 
         <View style={styles.actions}>
@@ -267,8 +232,16 @@ export function SwingReview({ take, onSave, onDelete, saving = false }: SwingRev
             testID="swing-review-save"
             accessibilityRole="button"
             accessibilityLabel="Save this swing"
-            disabled={saving || startSec === null}
-            onPress={() => onSave({ startSec: startSec ?? 0, endSec })}
+            disabled={saving || impactSec === null}
+            onPress={() => {
+              // The clip is built AROUND the mark. The golfer never chose these edges and is
+              // never shown them — that is the whole point of asking for one moment.
+              const at = impactSec ?? 0;
+              onSave({
+                startSec: Math.max(0, at - PRE_ROLL_SEC),
+                endSec: Math.min(durationS, at - PRE_ROLL_SEC + REVIEW_WINDOW_S),
+              });
+            }}
             style={({ pressed }) => [styles.save, pressed && styles.pressed]}
           >
             {saving ? (
@@ -306,7 +279,8 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  /** 64pt of track: the window is dragged, so the target is the whole bar, not a thumb. */
+  /** 64pt of track: the handle is small, so the TARGET is the whole bar — the finger can go
+   * down anywhere and drag from there. */
   track: {
     height: 64,
     borderRadius: 14,
@@ -318,25 +292,25 @@ const styles = StyleSheet.create({
   /** Equal cells across the whole track — the strip IS the timeline, so the nth picture has
    * to sit at the nth slice of time. */
   frame: { flex: 1, height: "100%" },
-  shade: { position: "absolute", top: 0, bottom: 0, backgroundColor: "rgba(6,10,20,0.62)" },
-  tick: {
-    position: "absolute",
-    top: 8,
-    bottom: 8,
-    width: 2,
-    borderRadius: 1,
-    backgroundColor: "rgba(255,255,255,0.45)",
-  },
-  /** Over film, the selection is an OPENING, not a wash: the frames inside must stay readable,
-   * so the box is drawn as an aqua edge (a border that draws a shape) with the dimming done
-   * outside it instead. */
-  window: {
+  /** The frame-box styling of the old window, kept, at the width of a marker: an aqua edge
+   * around the film rather than a wash over it, so the frame under the mark stays readable. */
+  handle: {
     position: "absolute",
     top: 0,
     bottom: 0,
-    borderRadius: 12,
+    width: HANDLE_W,
+    borderRadius: 9,
     borderWidth: 3,
     borderColor: COLORS.aqua,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  /** The centre line IS the mark — the box says "around here", the line says "exactly here". */
+  handleLine: {
+    width: 2,
+    height: "62%",
+    borderRadius: 1,
+    backgroundColor: COLORS.aqua,
   },
 
   actions: { flexDirection: "row", alignItems: "center", gap: 14 },

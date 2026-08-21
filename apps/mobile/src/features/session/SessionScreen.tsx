@@ -539,7 +539,7 @@ export function SessionScreen() {
             {stopping ? (
               <View style={styles.stopping} pointerEvents="auto">
                 <ActivityIndicator size="large" color="#FFFFFF" />
-                <Text style={styles.stoppingText}>Saving your swing</Text>
+                <Text style={styles.stoppingText}>Processing</Text>
               </View>
             ) : null}
 
