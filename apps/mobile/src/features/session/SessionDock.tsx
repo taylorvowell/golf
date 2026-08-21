@@ -43,8 +43,6 @@ export interface SessionDockProps {
   sessionType: SessionType;
   /** A session is ONE type: the selector locks the moment the first swing exists. */
   typeLocked: boolean;
-  /** 0 swings → "Cancel" (nothing is stored); >0 → the same slot reads "End". */
-  hasSwings: boolean;
   onCancel: () => void;
   onRecord: () => void;
   onStop: () => void;
@@ -60,7 +58,6 @@ export function SessionDock({
   delaySeconds,
   sessionType,
   typeLocked,
-  hasSwings,
   onCancel,
   onRecord,
   onStop,
@@ -139,7 +136,7 @@ export function SessionDock({
         leftItems={[
           {
             key: "cancel",
-            label: hasSwings ? "End" : "Cancel",
+            label: "Cancel",
             onPress: onCancel,
             testID: "session-cancel",
             icon: (c) => <X size={23} color={c} strokeWidth={2.2} />,

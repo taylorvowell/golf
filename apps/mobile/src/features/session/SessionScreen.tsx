@@ -36,6 +36,7 @@ import { AUTOSTOP_COUNTDOWN_SEC, MAX_TAKE_SEC, SAVE_PAD_S } from "./captureConst
 import { ViewToggle } from "./ViewToggle";
 import { RecordingFrame } from "./RecordingFrame";
 import { SessionDock } from "./SessionDock";
+import { SessionHeading } from "./SessionHeading";
 import { SESSION_NAV_CLEARANCE } from "./SessionNav";
 import { SessionTitle } from "./SessionTitle";
 import { SwingExitSheet } from "./sheets/SwingExitSheet";
@@ -453,20 +454,34 @@ export function SessionScreen() {
                 style={[styles.scrim, { paddingTop: insets.top + APP_HEADER_BAR + 6 }]}
                 pointerEvents="box-none"
               >
-                <View style={styles.titleRow}>
-                  <View style={styles.newPill}>
-                    <Text style={styles.newPillText}>New Session</Text>
+                {/* Once a session exists it announces WHERE you are, not that it is new
+                    (Taylor, 2026-08-21) — the same heading the after-swing screen carries, so
+                    moving between the two never costs a re-orientation. */}
+                {state.swings.length > 0 ? (
+                  <SessionHeading
+                    title={state.title}
+                    swingNumber={state.swings.length + 1}
+                    onRename={(title) => {
+                      renamed.current = true;
+                      dispatch({ type: "rename", title });
+                    }}
+                  />
+                ) : (
+                  <View style={styles.titleRow}>
+                    <View style={styles.newPill}>
+                      <Text style={styles.newPillText}>New Session</Text>
+                    </View>
+                    <View style={styles.titleSlot}>
+                      <SessionTitle
+                        title={state.title}
+                        onRename={(title) => {
+                          renamed.current = true;
+                          dispatch({ type: "rename", title });
+                        }}
+                      />
+                    </View>
                   </View>
-                  <View style={styles.titleSlot}>
-                    <SessionTitle
-                      title={state.title}
-                      onRename={(title) => {
-                        renamed.current = true;
-                        dispatch({ type: "rename", title });
-                      }}
-                    />
-                  </View>
-                </View>
+                )}
               </LinearGradient>
 
               {/* Controls rail — everything you touch while FRAMING THIS phone, in one column:
@@ -534,12 +549,15 @@ export function SessionScreen() {
               delaySeconds={state.settings.delaySeconds}
               sessionType={state.sessionType}
               typeLocked={state.swings.length > 0}
-              hasSwings={state.swings.length > 0}
-              // With no swings recorded nothing exists to keep — plain exit. With swings,
-              // the same slot ends the session, landing on the log like the post-swing door.
-              onCancel={
-                state.swings.length > 0 ? endSession : () => leave(() => navigation.goBack())
-              }
+              // Mid-session, Cancel means "not this swing" and returns to the one the golfer
+              // came from (Taylor, 2026-08-21) — ENDING the session lives on the after-swing
+              // dock, where it cannot be hit by someone who only meant to back out of a shot.
+              // With nothing recorded there is no session to go back to, so it plainly exits.
+              onCancel={() => {
+                const last = state.swings[0];
+                if (last) dispatch({ type: "review", swingId: last.id });
+                else leave(() => navigation.goBack());
+              }}
               onRecord={() => {
                 touched.current = true;
                 dispatch({ type: "arm" });

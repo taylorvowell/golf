@@ -33,6 +33,16 @@ const STOP = Math.round(SIZE * 0.32);
 // through itself and reads as disabled, not held (Taylor, 2026-08-19).
 const REC_FACE = ["#F0546A", "#E03144"] as const;
 const REC_FACE_PRESSED = ["#CE4159", "#B72636"] as const;
+/**
+ * The "record another" face is BLUE, not red (Taylor, 2026-08-21).
+ *
+ * Red is the app's word for "filming, right now". This button does not start a recording —
+ * it walks back to the capture screen — so wearing red made it the loudest thing on a screen
+ * where nothing was being recorded, and taught the golfer that red sometimes means "go to
+ * the place where you record". Cobalt keeps it the primary action without the promise.
+ */
+const NEW_FACE = ["#5B8DEF", "#2F6BE0"] as const;
+const NEW_FACE_PRESSED = ["#4A78D2", "#2557BE"] as const;
 const STOP_FACE = ["#3A4358", "#2B3345"] as const;
 const STOP_FACE_PRESSED = ["#2D3546", "#1F2532"] as const;
 
@@ -63,9 +73,13 @@ export function SessionRecordButton({
                 ? pressed
                   ? STOP_FACE_PRESSED
                   : STOP_FACE
-                : pressed
-                  ? REC_FACE_PRESSED
-                  : REC_FACE
+                : plus
+                  ? pressed
+                    ? NEW_FACE_PRESSED
+                    : NEW_FACE
+                  : pressed
+                    ? REC_FACE_PRESSED
+                    : REC_FACE
             }
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}

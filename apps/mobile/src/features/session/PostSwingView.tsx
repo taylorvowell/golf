@@ -13,6 +13,7 @@ import { COLORS } from "../../theme";
 import { AnalysisCompleteOverlay } from "./AnalysisCompleteOverlay";
 import { AnalyzingBar } from "./AnalyzingBar";
 import { LocalClipPlayer } from "./LocalClipPlayer";
+import { SessionHeading } from "./SessionHeading";
 import { SessionSwingDock } from "./SessionSwingDock";
 import type { SessionAction, SessionState, SessionSwing } from "./sessionState";
 import { SessionSwingListSheet } from "./sheets/SessionSwingListSheet";
@@ -110,9 +111,10 @@ export function PostSwingView({ state, dispatch, swing, onEndSession }: PostSwin
         remove();
         onEndSession({ stage: false });
       }}
+      // Same rule as the dock's Record: land on the capture screen, do not start a timer.
       onDeleteAndRecord={() => {
         remove();
-        dispatch({ type: "arm" });
+        dispatch({ type: "back-to-capture" });
       }}
     />
   );
@@ -163,7 +165,6 @@ export function PostSwingView({ state, dispatch, swing, onEndSession }: PostSwin
       onRecordAgain={() => {
         setErrorKind(null);
         dispatch({ type: "back-to-capture" });
-        dispatch({ type: "arm" });
       }}
     />
   );
@@ -179,15 +180,12 @@ export function PostSwingView({ state, dispatch, swing, onEndSession }: PostSwin
       // and this callback's first argument is the staging option.
       onEndSession={() => onEndSession()}
       onSwingList={() => setListOpen(true)}
-      // Record here ARMS, it does not merely navigate (Taylor, step-03 iteration). On the
-      // capture screen the button starts a swing; on this screen it used to mean "go find the
-      // button that starts a swing", which cost the golfer a second tap between every ball.
-      // Both dispatches land in one render, so the capture screen arrives already counting
-      // down (or recording, when the delay is 0).
-      onRecordNew={() => {
-        dispatch({ type: "back-to-capture" });
-        dispatch({ type: "arm" });
-      }}
+      // Back to the capture screen, NOT straight into a countdown (Taylor, 2026-08-21 —
+      // reversing the step-03 behaviour). Arming from here started a timer while the golfer
+      // was still holding the phone and reading a scorecard: they have to walk to the ball,
+      // and the framing may need a nudge for the next club. The capture screen's own Record
+      // is where a swing starts.
+      onRecordNew={() => dispatch({ type: "back-to-capture" })}
       onDelete={() => setDeleteOpen(true)}
       onToggleFavorite={toggle}
     />
@@ -220,6 +218,12 @@ export function PostSwingView({ state, dispatch, swing, onEndSession }: PostSwin
           style={[styles.localBack, { top: insets.top + 8 }]}
           testID="post-swing-back"
         />
+        {/* Which swing of which session — the same heading the capture screen carries, so
+            the two read as one place (Taylor, 2026-08-21). Not editable here: renaming
+            belongs where the session is being set up, not where a swing is being watched. */}
+        <View style={[styles.heading, { top: insets.top + 10 }]} pointerEvents="none">
+          <SessionHeading title={state.title} swingNumber={swing.number} />
+        </View>
         {!analyzed ? (
           <View
             style={[styles.analyzingSlot, { bottom: navBarBottomInset(insets.bottom) + 74 }]}
@@ -299,6 +303,8 @@ const styles = StyleSheet.create({
   // Full-bleed local playback: video is the ground, chrome floats — same shape as capture.
   localRoot: { flex: 1, backgroundColor: "#000" },
   localBack: { position: "absolute", left: 16 },
+  // Centred across the screen, clear of the back orb on the left.
+  heading: { position: "absolute", left: 68, right: 68 },
   fallback: { flex: 1, backgroundColor: COLORS.bg, justifyContent: "center", padding: 24, gap: 8 },
   fallbackTitle: {
     color: COLORS.text,

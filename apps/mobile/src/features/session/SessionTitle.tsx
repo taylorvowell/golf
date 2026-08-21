@@ -17,9 +17,12 @@ import { COLORS } from "../../theme";
 export interface SessionTitleProps {
   title: string;
   onRename: (title: string) => void;
+  /** The in-session heading: bigger and centred, because it is the page's title rather than
+   * one item in a row of chrome. */
+  hero?: boolean;
 }
 
-export function SessionTitle({ title, onRename }: SessionTitleProps) {
+export function SessionTitle({ title, onRename, hero = false }: SessionTitleProps) {
   const [draft, setDraft] = useState<string | null>(null);
   const editing = draft !== null;
 
@@ -29,7 +32,7 @@ export function SessionTitle({ title, onRename }: SessionTitleProps) {
   };
 
   return (
-    <View style={styles.row}>
+    <View style={[styles.row, hero && styles.rowHero]}>
       {editing ? (
         <TextInput
           value={draft}
@@ -44,7 +47,11 @@ export function SessionTitle({ title, onRename }: SessionTitleProps) {
           testID="session-title-input"
         />
       ) : (
-        <Text style={styles.title} numberOfLines={1} testID="session-title">
+        <Text
+          style={[styles.title, hero && styles.titleHero]}
+          numberOfLines={1}
+          testID="session-title"
+        >
           {title}
         </Text>
       )}
@@ -78,6 +85,8 @@ export function SessionTitle({ title, onRename }: SessionTitleProps) {
 
 const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center", gap: 10 },
+  rowHero: { justifyContent: "center" },
+  titleHero: { fontSize: 24, textAlign: "center" },
   title: {
     flexShrink: 1,
     color: "#FFFFFF",
