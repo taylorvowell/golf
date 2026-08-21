@@ -73,9 +73,12 @@ export function useTakeRecorder(
         dispatch({ type: "record-failed" });
       }
     } catch {
-      // Most often the cap won the race and already finalized the take; `take-ready` is
-      // idempotent so the loser of the race must simply not report a failure over it.
       active.current = false;
+      // Either the cap won the race (its `take-ready` already moved the mode, making this a
+      // no-op) or the take is genuinely dead — and then the screen MUST come back to idle: a
+      // Stop button that swallows a failure leaves "Recording…" frozen on a closed file,
+      // which is how the HAL wedge locked the whole screen on 2026-08-20.
+      dispatch({ type: "record-failed" });
     }
   }, [camera, dispatch]);
 

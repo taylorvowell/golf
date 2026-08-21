@@ -45,6 +45,8 @@ export interface CameraStageProps {
   cameraRef?: Ref<HighSpeedCameraViewRef>;
   /** A take that ended without `stopRecording` — the hard cap, or a mid-take failure. */
   onRecordingEnded?: HighSpeedCameraViewProps["onRecordingEnded"];
+  /** The probed capture rate — what the FPS pill shows. */
+  onCaptureConfig?: HighSpeedCameraViewProps["onCaptureConfig"];
   children?: ReactNode;
 }
 
@@ -58,6 +60,7 @@ export function CameraStage({
   onZoomRange,
   cameraRef,
   onRecordingEnded,
+  onCaptureConfig,
   children,
 }: CameraStageProps) {
   const [box, setBox] = useState({ width: 0, height: 0 });
@@ -100,6 +103,7 @@ export function CameraStage({
           zoom={zoom}
           onZoomRange={(e) => onZoomRange?.({ min: e.nativeEvent.min, max: e.nativeEvent.max })}
           onRecordingEnded={onRecordingEnded}
+          onCaptureConfig={onCaptureConfig}
           style={StyleSheet.absoluteFill}
         />
       ) : (

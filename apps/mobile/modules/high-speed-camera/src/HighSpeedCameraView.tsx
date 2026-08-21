@@ -43,6 +43,14 @@ export interface HighSpeedCameraViewProps {
         | { reason: "error"; error: string };
     },
   ) => void;
+  /**
+   * The rate and size this lens will actually record at, fired once the camera is probed
+   * (and again on a lens change). `highSpeed: false` means the lens cannot record a take at
+   * all — the front camera on essentially every Android.
+   */
+  onCaptureConfig?: (event: {
+    nativeEvent: { fps: number; width: number; height: number; highSpeed: boolean };
+  }) => void;
   /** The take handle (`startRecording`/`stopRecording`) — methods live on the VIEW because
    * the take shares the preview's camera device; see `HighSpeedCameraViewRef`. */
   ref?: Ref<HighSpeedCameraViewRef>;

@@ -32,6 +32,7 @@ import { DualSyncConnectOverlay } from "./DualSyncConnectOverlay";
 import { DualSyncPip } from "./DualSyncPip";
 import { PostSwingView } from "./PostSwingView";
 import { CountdownOverlay } from "./CountdownOverlay";
+import { FpsPill } from "./FpsPill";
 import { ViewToggle } from "./ViewToggle";
 import { RecordingFrame } from "./RecordingFrame";
 import { SessionDock } from "./SessionDock";
@@ -146,6 +147,10 @@ export function SessionScreen() {
     },
     [toast],
   );
+
+  /** The probed capture rate — what the FPS pill shows, straight from the camera (Taylor,
+   * 2026-08-20). Null until the lens answers; re-fires on a flip. */
+  const [capture, setCapture] = useState<{ fps: number; highSpeed: boolean } | null>(null);
 
   const { stop: stopTake, onRecordingEnded } = useTakeRecorder(
     state.mode,
@@ -417,8 +422,25 @@ export function SessionScreen() {
             onZoomRange={(range) => dispatch({ type: "set-zoom-range", range })}
             cameraRef={cameraRef}
             onRecordingEnded={onRecordingEnded}
+            onCaptureConfig={(e) =>
+              setCapture({ fps: e.nativeEvent.fps, highSpeed: e.nativeEvent.highSpeed })
+            }
           >
             {state.mode === "recording" ? <RecordingFrame /> : null}
+
+            {/* The capture rate, framing AND recording (Taylor, 2026-08-20). Outside the
+                chrome fade on purpose — a rate that vanishes the moment you start filming
+                cannot tell you what you filmed at. */}
+            <View
+              pointerEvents="none"
+              style={[styles.fpsSlot, { top: insets.top + APP_HEADER_BAR + 10 }]}
+            >
+              <FpsPill
+                fps={capture?.fps ?? null}
+                highSpeed={capture?.highSpeed ?? true}
+                recording={state.mode === "recording"}
+              />
+            </View>
 
             {/* Top scrim + header chrome — all of it gone while armed. */}
             <Animated.View
@@ -622,6 +644,7 @@ const styles = StyleSheet.create({
     paddingBottom: 34,
     gap: 12,
   },
+  fpsSlot: { position: "absolute", right: 16, alignItems: "flex-end" },
   titleRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   titleSlot: { flex: 1, minWidth: 0 },
   newPill: {

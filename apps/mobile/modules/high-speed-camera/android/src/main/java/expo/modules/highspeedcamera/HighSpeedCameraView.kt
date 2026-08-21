@@ -2,8 +2,6 @@ package expo.modules.highspeedcamera
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.graphics.Matrix
-import android.graphics.SurfaceTexture
 import android.hardware.camera2.CameraCaptureSession
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraConstrainedHighSpeedCaptureSession
@@ -18,7 +16,8 @@ import android.util.Log
 import android.util.Range
 import android.util.Size
 import android.view.Surface
-import android.view.TextureView
+import android.view.SurfaceHolder
+import android.view.SurfaceView
 import expo.modules.kotlin.AppContext
 import expo.modules.kotlin.viewevent.EventDispatcher
 import expo.modules.kotlin.views.ExpoView
@@ -33,7 +32,7 @@ import kotlin.math.sqrt
  * mean tearing the preview down, and the golfer's picture went black at the exact moment they
  * needed to see themselves in frame.
  *
- * **Idle** is an ordinary repeating preview onto the `TextureView`. **Recording** is a
+ * **Idle** is an ordinary repeating preview onto the `SurfaceView`. **Recording** is a
  * `CameraConstrainedHighSpeedCaptureSession` over TWO surfaces — the same preview surface plus the
  * recorder's — so the picture stays live at the capture rate. Two is not a design choice: a
  * constrained high-speed session accepts at most two outputs, which is also why nothing can sample
@@ -44,6 +43,19 @@ import kotlin.math.sqrt
  * `createConstrainedHighSpeedCaptureSession(surfaces, callback, handler)` — the DEPRECATED overload.
  * `SessionConfiguration(SESSION_HIGH_SPEED, …)` is *swallowed* on the S25+: the camera opens and
  * then neither `onConfigured` nor `onConfigureFailed` ever fires. Silence, not refusal (D38/D39).
+ *
+ * **The preview is a `SurfaceView`, never a `TextureView`.** A TextureView's SurfaceTexture is
+ * consumed by the app's GL thread; at 240 fps it cannot drain, the queue backs up, and this HAL
+ * leaks fences and triggers its own recovery — the app frozen mid-countdown with the camera dead
+ * (2026-08-20). A SurfaceView's buffer queue goes straight to SurfaceFlinger and drops frames it
+ * cannot show, which is what Samsung's own slow-motion mode and CameraX's PERFORMANCE preview both
+ * rely on. The cost is that the picture cannot be matrix-transformed, so the centre-crop is done by
+ * laying the child out larger than this view and letting the parent clip it (`onLayout`).
+ *
+ * **The buffer size is fixed ONCE, at open, to the size the take will record at.** Resizing a
+ * preview surface to enter the constrained session tears the buffers down underneath the HAL; a
+ * size mismatch between the two outputs is invalid outright. Deciding both at open means the
+ * session swap changes only the shape of the session, never its surfaces.
  *
  * `createHighSpeedRequestList` + `setRepeatingBurst` — a constrained session rejects a plain
  * repeating request, because frames are delivered in batches.
@@ -83,6 +95,10 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
 
     /** Ceiling on any computed bitrate — a guard against a pathological size/rate combination. */
     const val MAX_BITRATE = 200_000_000
+
+    /** The rate the preview buffers are sized for at open. A `startRecording` ceiling below
+     * this picks a slower RANGE at the same size, never a different size — see takeConfig. */
+    const val MAX_USEFUL_FPS = 240
   }
 
   // -- State (declared before the init block that adds the TextureView; see class comment) --
@@ -118,26 +134,46 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
    * after the recorder stopped is the worst of the available failures.
    */
   private val onRecordingEnded by EventDispatcher()
+  /**
+   * What this lens will actually record at, published as soon as it is known — the PROBED
+   * truth, never a request. The FPS pill renders this and nothing else: §2.3 forbids
+   * degrading silently, so a lens that can only manage 120 must say 120 on screen.
+   */
+  private val onCaptureConfig by EventDispatcher()
   /** Generation counter: a callback from a superseded open must not resurrect a session. */
   private var generation = 0
 
-  private val texture = TextureView(context)
+  private val surface = SurfaceView(context)
+
+  /** Bounded error-recovery reopens (see openCamera's onError); reset on a good open. */
+  private var reopenAttempts = 0
+
+  /** The high-speed configuration this lens will record at, chosen once per open. The preview
+   * buffer is fixed to `first` so entering the constrained session resizes nothing. */
+  private var takeConfig: Pair<Size, List<Range<Int>>>? = null
 
   init {
-    addView(texture, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
-    texture.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
-      override fun onSurfaceTextureAvailable(st: SurfaceTexture, width: Int, height: Int) {
-        openCamera()
+    // The parent clips the oversized child — that IS the centre-crop; see onLayout.
+    clipChildren = true
+    addView(surface)
+    surface.holder.addCallback(object : SurfaceHolder.Callback {
+      override fun surfaceCreated(holder: SurfaceHolder) {
+        // Size the buffers BEFORE opening: the session is built on this surface, and a
+        // resize afterwards pulls the buffers out from under the HAL.
+        applyBufferSize(holder)
       }
-      override fun onSurfaceTextureSizeChanged(st: SurfaceTexture, width: Int, height: Int) {
-        applyTransform(width, height)
+
+      override fun surfaceChanged(holder: SurfaceHolder, format: Int, w: Int, h: Int) {
+        val want = takeConfig?.first ?: return
+        // Only once the buffers are the size the session will use — surfaceChanged fires
+        // first with the VIEW's size, before setFixedSize takes effect.
+        if (w == want.width && h == want.height && device == null) openCamera()
       }
-      override fun onSurfaceTextureDestroyed(st: SurfaceTexture): Boolean {
+
+      override fun surfaceDestroyed(holder: SurfaceHolder) {
         closeCamera()
-        return true
       }
-      override fun onSurfaceTextureUpdated(st: SurfaceTexture) = Unit
-    }
+    })
   }
 
   fun setFacing(next: String) {
@@ -145,10 +181,41 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
     // Never mid-take: swapping the lens would abandon a MediaRecorder holding an open file.
     if (recording) { Log.w(TAG, "ignoring facing change while recording"); return }
     facing = next
-    if (texture.isAvailable) {
+    if (surface.holder.surface?.isValid == true) {
       closeCamera()
-      openCamera()
+      // The new lens has its own configuration; the resize re-enters through surfaceChanged.
+      applyBufferSize(surface.holder)
     }
+  }
+
+  /**
+   * Choose the lens's recording configuration and fix the preview buffers to it.
+   *
+   * Reading characteristics needs no open device, so this settles the size before the camera
+   * is touched — the ordering that keeps the idle preview and the take on ONE unchanging
+   * surface.
+   */
+  private fun applyBufferSize(holder: SurfaceHolder) {
+    val id = cameraId() ?: run { Log.w(TAG, "no $facing camera"); return }
+    val config = bestHighSpeed(id, MAX_USEFUL_FPS)
+    takeConfig = config
+    val size = config?.first
+      // No high-speed configuration at all (the front lens, on most devices): the preview
+      // still has to work, so fall back to an ordinary 16:9 output size. `startRecording`
+      // refuses separately — it never silently degrades.
+      ?: ordinaryPreviewSize(id)
+    previewSize = size
+    requestLayout()
+    holder.setFixedSize(size.width, size.height)
+
+    // `highSpeed: false` is a real answer, not an error — the front lens is a framing aid and
+    // the pill must say so rather than quoting a rate nothing will record at.
+    onCaptureConfig(mapOf(
+      "fps" to (config?.second?.firstOrNull()?.upper ?: 0),
+      "width" to size.width,
+      "height" to size.height,
+      "highSpeed" to (config != null),
+    ))
   }
 
   fun setZoom(next: Float) {
@@ -176,34 +243,44 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
   /**
    * The best high-speed configuration at or below `maxFps`, or null when the lens offers none.
    *
-   * Rate first, resolution second — the deliberate inversion of the old `record()` helper, which
-   * took the LARGEST size offering an exact rate. Frames are what the club detector is starved of
-   * (a head travels ~0.75 m between frames at 60fps and ~0.19 m at 240), while everything above 720
-   * on the short side is discarded by the analyzer's own downscale before a keypoint is computed.
-   * So spend the budget on time and take the smallest size that still clears 720.
+   * Rate first, then the LARGEST size at that rate. Smallest-≥720 was tried (the analyzer
+   * downscales above 720 anyway) and 720p240+preview wedged this device's HAL — fence leak in
+   * `RealTimePreviewVideoHFR`, recovery, frozen app. Samsung's own slow-motion records 1080p240
+   * with a live preview, so the largest size is the configuration the OEM actually exercises,
+   * and off the OEM path this HAL wedges rather than refuses (D38's lesson, again).
    */
-  private fun bestHighSpeed(id: String, maxFps: Int): Pair<Size, Range<Int>>? {
+  private fun bestHighSpeed(id: String, maxFps: Int): Pair<Size, List<Range<Int>>>? {
     val map = manager.getCameraCharacteristics(id)
       .get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP) ?: return null
-    var best: Pair<Size, Range<Int>>? = null
+    var bestSize: Size? = null
+    var bestRate = 0
     for (size in map.highSpeedVideoSizes) {
-      // 720 short side is the analyzer's own CV input (video.py). Below it we would be throwing
-      // away detail the pipeline WOULD have used; above it we are paying for detail it discards.
-      if (minOf(size.width, size.height) < 720) continue
       for (range in map.getHighSpeedVideoFpsRangesFor(size)) {
         if (range.upper > maxFps) continue
-        val current = best
-        if (current == null ||
-          range.upper > current.second.upper ||
-          (range.upper == current.second.upper &&
-            size.width * size.height < current.first.width * current.first.height)
-        ) {
-          best = size to range
+        val better = range.upper > bestRate ||
+          (range.upper == bestRate && bestSize != null &&
+            size.width * size.height > bestSize!!.width * bestSize!!.height)
+        if (bestSize == null || better) {
+          bestSize = size
+          bestRate = maxOf(bestRate, range.upper)
         }
       }
     }
-    return best
+    val size = bestSize ?: return null
+    // Every range this size offers, so a lower `startRecording` ceiling picks a slower rate at
+    // the SAME size — the surfaces never have to change.
+    return size to map.getHighSpeedVideoFpsRangesFor(size).sortedByDescending { it.upper }
   }
+
+  /** A plain preview size for a lens with no high-speed configuration — the front camera on
+   * most devices. Largest 16:9 at or under 1080p: a viewfinder, not a capture format. */
+  private fun ordinaryPreviewSize(id: String): Size =
+    manager.getCameraCharacteristics(id)
+      .get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
+      ?.getOutputSizes(SurfaceHolder::class.java)
+      ?.filter { it.width * 9 == it.height * 16 && it.height <= 1080 }
+      ?.maxByOrNull { it.width * it.height }
+      ?: Size(1920, 1080)
 
   private fun bitrateFor(size: Size, fps: Int): Int {
     val base = size.width.toDouble() * size.height.toDouble() * 30.0 * BPP_AT_30
@@ -216,6 +293,9 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
   private fun openCamera() {
     val id = cameraId() ?: run { Log.w(TAG, "no $facing camera"); return }
     val gen = ++generation
+    // A reopen (error recovery, camera flip) replaces the thread — quit the old one or every
+    // recovery leaks a live HandlerThread.
+    thread?.quitSafely()
     val t = HandlerThread("swingsage-preview").apply { start() }
     thread = t
     handler = Handler(t.looper)
@@ -233,17 +313,11 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
     }
     onZoomRange(mapOf("min" to zoomRange.first.toDouble(), "max" to zoomRange.second.toDouble()))
 
-    // 16:9 preview buffer, largest at or under 1080p — plenty for a viewfinder, cheap to draw.
-    val map = chars.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP)
-    previewSize = map?.getOutputSizes(SurfaceTexture::class.java)
-      ?.filter { it.width * 9 == it.height * 16 && it.height <= 1080 }
-      ?.maxByOrNull { it.width * it.height }
-      ?: Size(1920, 1080)
-
     try {
       manager.openCamera(id, object : CameraDevice.StateCallback() {
         override fun onOpened(cam: CameraDevice) {
           if (gen != generation) { cam.close(); return }
+          reopenAttempts = 0
           device = cam
           startPreview(cam, gen)
         }
@@ -253,6 +327,14 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
           cam.close()
           if (gen == generation) device = null
           failRecording("camera error $error")
+          // A fatal device error (4) or a wedged service leaves a DEAD device object; the
+          // documented recovery is to reopen. Bounded so a genuinely broken camera does not
+          // reopen-loop — two tries, then the golfer re-enters the screen to try again.
+          if (gen == generation && reopenAttempts < 2) {
+            reopenAttempts += 1
+            Log.w(TAG, "reopening camera after error $error (attempt $reopenAttempts)")
+            handler?.postDelayed({ if (gen == generation) openCamera() }, 1_200)
+          }
         }
       }, handler)
     } catch (e: Throwable) {
@@ -260,19 +342,19 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
     }
   }
 
-  private fun previewSurface(): Surface? {
-    val st = texture.surfaceTexture ?: return null
-    val size = previewSize ?: Size(1920, 1080)
-    st.setDefaultBufferSize(size.width, size.height)
-    return Surface(st)
-  }
+  /**
+   * The view's own Surface — ONE object for the view's whole life, owned by the SurfaceHolder
+   * and already fixed to the take's size (`applyBufferSize`). Both session shapes and every
+   * request target this exact instance: a second wrapper over the same buffer queue leaves
+   * un-signalled fences behind, which is the HAL's "fences not cleared" wedge.
+   */
+  private fun previewSurface(): Surface? = surface.holder.surface?.takeIf { it.isValid }
 
   private fun startPreview(cam: CameraDevice, gen: Int) {
-    val surface = previewSurface() ?: return
-    post { applyTransform(texture.width, texture.height) }
+    val out = previewSurface() ?: return
     try {
       @Suppress("DEPRECATION") // Consistent with the recording path; see the class comment.
-      cam.createCaptureSession(listOf(surface), object : CameraCaptureSession.StateCallback() {
+      cam.createCaptureSession(listOf(out), object : CameraCaptureSession.StateCallback() {
         override fun onConfigured(s: CameraCaptureSession) {
           if (gen != generation) { runCatching { s.close() }; return }
           session = s
@@ -293,7 +375,8 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
     val s = session ?: return
     try {
       val request = cam.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply {
-        addTarget(Surface(texture.surfaceTexture ?: return))
+        // The holder's own Surface, never a second wrapper — see previewSurface().
+        addTarget(previewSurface() ?: return)
         if (Build.VERSION.SDK_INT >= 30) {
           set(CaptureRequest.CONTROL_ZOOM_RATIO, zoom.coerceIn(zoomRange.first, zoomRange.second))
         }
@@ -318,12 +401,18 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
   fun startRecording(maxFps: Int, maxSeconds: Int, promise: (Result<Map<String, Any>>) -> Unit) {
     if (recording) return promise(Result.failure(IllegalStateException("already recording")))
     val cam = device ?: return promise(Result.failure(IllegalStateException("camera is not open")))
-    val id = cameraId() ?: return promise(Result.failure(IllegalStateException("no $facing camera")))
     val h = handler ?: return promise(Result.failure(IllegalStateException("no camera thread")))
 
-    val (size, range) = bestHighSpeed(id, maxFps)
+    // The size was fixed at open and the preview buffers are already it (`applyBufferSize`);
+    // the ceiling only chooses among the RATES that size offers. Refusing here is what keeps
+    // the front lens from silently recording at 30 (§2.3).
+    val config = takeConfig ?: return promise(Result.failure(IllegalStateException(
+      "this lens offers no high-speed configuration — only the back camera records"
+    )))
+    val size = config.first
+    val range = config.second.firstOrNull { it.upper <= maxFps }
       ?: return promise(Result.failure(IllegalStateException(
-        "this lens offers no high-speed configuration at or below ${maxFps}fps"
+        "this lens offers no high-speed rate at or below ${maxFps}fps"
       )))
     val fps = range.upper
 
@@ -369,6 +458,7 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
     }
 
     val recSurface = rec.surface
+    // Already the take's size, already the session's surface — nothing to resize or rewrap.
     val preview = previewSurface() ?: run {
       runCatching { rec.reset(); rec.release() }
       return promise(Result.failure(IllegalStateException("preview surface is gone")))
@@ -379,11 +469,33 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
     recordSurface = recSurface
     achievedFps = fps
 
-    // The idle preview session must go before a constrained one can take the device.
-    runCatching { session?.close() }
+    // Drop the idle session's reference WITHOUT close(): creating the next session
+    // supersedes the old one atomically, while an explicit close() forces a full pipeline
+    // drain that this device times out on ("Error waiting to drain: Connection timed out"
+    // → fatal ERROR_CAMERA_DEVICE, 2026-08-20) when the create follows immediately.
     session = null
 
     Log.i(TAG, "record: ${size.width}x${size.height} @ $fps, cap ${maxSeconds}s, ${bitrateFor(size, fps)}bps")
+
+    // This HAL's failure mode of choice is a session that never configures (it wedges rather
+    // than refuses — D38, and the 2026-08-20 fence-leak freeze). First answer wins; the
+    // watchdog turns "frozen forever, Stop dead" into a reported failure with preview back.
+    var settled = false
+    val settleOnce = fun(action: () -> Unit) {
+      if (settled) return
+      settled = true
+      action()
+    }
+    h.postDelayed({
+      settleOnce {
+        Log.w(TAG, "high-speed session never configured — watchdog fired")
+        teardownRecorder()
+        promise(Result.failure(IllegalStateException(
+          "the camera stalled starting the high-speed session — try again"
+        )))
+        restorePreview()
+      }
+    }, 8_000)
 
     try {
       @Suppress("DEPRECATION") // The modern overload is swallowed on this device; see the class comment.
@@ -391,6 +503,7 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
         listOf(preview, recSurface),
         object : CameraCaptureSession.StateCallback() {
           override fun onConfigured(s: CameraCaptureSession) {
+            if (settled) { runCatching { s.close() }; return }
             try {
               session = s
               val highSpeed = s as CameraConstrainedHighSpeedCaptureSession
@@ -400,46 +513,53 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
                 addTarget(preview)
                 addTarget(recSurface)
                 set(CaptureRequest.CONTROL_AE_TARGET_FPS_RANGE, range)
-                if (Build.VERSION.SDK_INT >= 30) {
-                  set(
-                    CaptureRequest.CONTROL_ZOOM_RATIO,
-                    zoom.coerceIn(zoomRange.first, zoomRange.second),
-                  )
-                }
+                // NOTHING else. `createHighSpeedRequestList` accepts a restricted key set, and
+                // a key outside it is another silent-misbehaviour risk on this HAL — Samsung's
+                // own slow-motion offers no zoom while recording either. The framing the
+                // golfer set still applies: zoom is a sensor crop that persists across the
+                // session swap.
               }.build()
               // Mandatory: a constrained session rejects a plain repeating request, because the
               // frames are delivered in batches.
               highSpeed.setRepeatingBurst(highSpeed.createHighSpeedRequestList(request), null, h)
               rec.start()
-              recording = true
-              recordStartedAtMs = System.currentTimeMillis()
-              promise(Result.success(mapOf(
-                "fps" to fps,
-                "width" to size.width,
-                "height" to size.height,
-                "maxSeconds" to maxSeconds,
-              )))
+              settleOnce {
+                recording = true
+                recordStartedAtMs = System.currentTimeMillis()
+                promise(Result.success(mapOf(
+                  "fps" to fps,
+                  "width" to size.width,
+                  "height" to size.height,
+                  "maxSeconds" to maxSeconds,
+                )))
+              }
             } catch (e: Throwable) {
-              teardownRecorder()
-              promise(Result.failure(e))
-              restorePreview()
+              settleOnce {
+                teardownRecorder()
+                promise(Result.failure(e))
+                restorePreview()
+              }
             }
           }
 
           override fun onConfigureFailed(s: CameraCaptureSession) {
-            teardownRecorder()
-            promise(Result.failure(IllegalStateException(
-              "device REFUSED a high-speed session at ${size.width}x${size.height}@$fps"
-            )))
-            restorePreview()
+            settleOnce {
+              teardownRecorder()
+              promise(Result.failure(IllegalStateException(
+                "device REFUSED a high-speed session at ${size.width}x${size.height}@$fps"
+              )))
+              restorePreview()
+            }
           }
         },
         h,
       )
     } catch (e: Throwable) {
-      teardownRecorder()
-      promise(Result.failure(e))
-      restorePreview()
+      settleOnce {
+        teardownRecorder()
+        promise(Result.failure(e))
+        restorePreview()
+      }
     }
   }
 
@@ -500,28 +620,44 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
   /** Back to the idle repeating preview after a take, so the next swing can be framed. */
   private fun restorePreview() {
     val cam = device ?: return
-    runCatching { session?.close() }
+    // No close() — see startRecording: the new session supersedes the constrained one, and
+    // an explicit close forces the drain this device times out on.
     session = null
     startPreview(cam, generation)
   }
 
   // ---------------------------------------------------------------- teardown
 
-  /** Centre-crop: preserve the buffer's aspect and fill the view, never stretch the golfer. */
-  private fun applyTransform(viewW: Int, viewH: Int) {
-    if (viewW == 0 || viewH == 0) return
-    val size = previewSize ?: return
-    // Portrait-locked app: the sensor buffer displays rotated, so its on-screen aspect is
-    // height:width.
-    val displayedAspect = size.height.toFloat() / size.width.toFloat()
-    val viewAspect = viewW.toFloat() / viewH.toFloat()
-    val m = Matrix()
-    if (displayedAspect > viewAspect) {
-      m.setScale(displayedAspect / viewAspect, 1f, viewW / 2f, viewH / 2f)
-    } else {
-      m.setScale(1f, viewAspect / displayedAspect, viewW / 2f, viewH / 2f)
+  /**
+   * Centre-crop, by LAYOUT rather than by matrix: a SurfaceView's picture cannot be
+   * transformed, so the child is laid out large enough to fill this view on both axes,
+   * centred, and the parent clips the overflow. Preserving the aspect is the point — a
+   * stretched golfer is a wrong picture, not a cosmetic one.
+   */
+  override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+    val viewW = r - l
+    val viewH = b - t
+    if (viewW <= 0 || viewH <= 0) return
+    val size = previewSize
+    if (size == null) {
+      surface.layout(0, 0, viewW, viewH)
+      return
     }
-    texture.setTransform(m)
+    // Portrait-locked app: the sensor buffer is landscape and displays rotated, so its
+    // on-screen width:height is the buffer's height:width.
+    val displayedAspect = size.height.toFloat() / size.width.toFloat()
+    val childW: Int
+    val childH: Int
+    if (viewW < viewH * displayedAspect) {
+      childH = viewH
+      childW = (viewH * displayedAspect).toInt()
+    } else {
+      childW = viewW
+      childH = (viewW / displayedAspect).toInt()
+    }
+    val x = (viewW - childW) / 2
+    val y = (viewH - childH) / 2
+    surface.layout(x, y, x + childW, y + childH)
   }
 
   private fun closeCamera() {
@@ -533,6 +669,8 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
     teardownRecorder()
     runCatching { session?.close() }
     session = null
+    // The Surface belongs to the holder, not to us — releasing it here would destroy the
+    // view's own picture. The holder tears it down in surfaceDestroyed.
     runCatching { device?.close() }
     device = null
     thread?.quitSafely()

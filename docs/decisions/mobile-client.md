@@ -181,6 +181,22 @@ there rather than dropping to 30fps unannounced.
 ceiling, then the SMALLEST size still at or above 720 on the short side — because frames are what
 the club detector is starved of, while everything above 720 is discarded by the analyzer's own
 downscale (`video.py`) before a keypoint is computed.
+**The preview is a `SurfaceView`, and the buffer size is fixed at open to the take's size.** A
+TextureView's SurfaceTexture is drained by the app's GL thread; at high speed it cannot keep up, the
+queue backs up, and this HAL leaks fences and triggers its own recovery — the app frozen
+mid-countdown with the camera dead, then `waitUntilIdle … Error waiting to drain` on every retry
+(2026-08-20). A SurfaceView's queue goes straight to SurfaceFlinger and drops what it cannot show,
+which is what Samsung's slow-motion and CameraX's PERFORMANCE preview both rely on. Consequences
+that are load-bearing: the centre-crop is done by laying the child out oversized and letting the
+parent clip (no matrix on a SurfaceView); the recording size is chosen at camera-open so entering
+the constrained session resizes nothing; every session and request targets the holder's ONE Surface
+(a second wrapper over the same queue leaves un-signalled fences); the session swap does **not**
+`close()` the old session (an explicit close forces a drain this device times out on — supersede it
+instead); and the high-speed request carries the AE fps range and nothing else — no zoom key, which
+`createHighSpeedRequestList` does not promise to accept and Samsung's own slow-mo does not offer.
+Recording is **1080p**, the largest size at the chosen rate: the OEM's own slow-motion shape, and
+off that path this HAL wedges rather than refusing. A watchdog settles a session that never
+configures, so a stall is a readable failure and never a frozen screen.
 **Gotchas:** The two-surface limit is the API's, and it is why nothing can sample frames for motion
 detection during a high-speed take — impact detection is audio-only by construction, not by choice.
 The hard cap is `MediaRecorder.setMaxDuration`, never a posted runnable: the recorder finalises the
@@ -231,9 +247,14 @@ type, alignment ghost, countdown, red recording treatment — and while armed th
 to the stop button alone) and the post-recording screen (the one-shape report player in
 session chrome with a floating staged analyzing bar and the session bar). Both session bars
 are the tab bar's wave construction with a **bigger red record button always at the exact
-screen centre**; no settings pills and no FPS readout on screen (Taylor withdrew the FPS
-exception in the step-03 iteration — honest-rate surfacing is a degrade message in the
-capture wiring, never a standing readout).
+screen centre**; no settings pills. **The FPS pill is back and permanent** (Taylor,
+2026-08-20, reversing his step-03 withdrawal): the capture rate shows while framing AND
+through the whole take, top-right, outside the chrome fade. It renders only what the camera
+probe reported (`onCaptureConfig`) — never a request — and a lens with no high-speed
+configuration reads "preview only" rather than a meaningless number. This is the one
+instrument the no-instruments rule admits on a golfer's screen, because §2.3's
+never-degrade-silently promise is only keepable if the golfer can see the rate before they
+hit a ball.
 Build order is UI-stubbed-first; **wiring starts only after Taylor signs off the UX** — his
 explicit gate, an exception to the no-approval-gates rule. A session row is minted **only when
 the first swing is recorded**; sessions carry a name and a type (Swing Analysis / Practice
