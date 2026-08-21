@@ -496,10 +496,12 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
     recordSurface = recSurface
     achievedFps = fps
 
-    // Drop the idle session's reference WITHOUT close(): creating the next session
-    // supersedes the old one atomically, while an explicit close() forces a full pipeline
-    // drain that this device times out on ("Error waiting to drain: Connection timed out"
-    // → fatal ERROR_CAMERA_DEVICE, 2026-08-20) when the create follows immediately.
+    // STOP THE OLD REQUEST FIRST. Creating a session waits for the device to go idle, and a
+    // repeating request left running never lets it — the create blocks ~11 s and then fails
+    // with "Error waiting to drain", which is what every record attempt did on 2026-08-20.
+    // `stopRepeating()` is what makes the device idle; `close()` is the heavier hammer that
+    // forces a full drain and times out on this HAL, so it is deliberately not used here.
+    runCatching { session?.stopRepeating() }
     session = null
 
     Log.i(TAG, "record: ${size.width}x${size.height} @ $fps, cap ${maxSeconds}s, " +
@@ -532,9 +534,13 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
       }
     }
 
+    // The watchdog runs on the MAIN handler, never on `h`. Creating a session blocks the
+    // camera thread — for eleven seconds when the device will not idle — so a watchdog posted
+    // to `h` sits in the queue behind the very call it exists to time out, and fires only
+    // after the thing it was guarding has already failed (2026-08-20: it never fired at all).
     // 4s, not 8: with a fallback behind it the ladder must not keep the golfer waiting
     // through two full timeouts before anything records.
-    h.postDelayed({ fallBackOrFail("never configured — watchdog fired") }, 4_000)
+    postDelayed({ h.post { fallBackOrFail("never configured — watchdog fired") } }, 4_000)
 
     try {
       @Suppress("DEPRECATION") // The modern overload is swallowed on this device; see the class comment.
@@ -663,8 +669,9 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
   /** Back to the idle repeating preview after a take, so the next swing can be framed. */
   private fun restorePreview() {
     val cam = device ?: return
-    // No close() — see startRecording: the new session supersedes the constrained one, and
-    // an explicit close forces the drain this device times out on.
+    // Same rule as entering the take: stop the burst so the device can idle, then build the
+    // next session. Not close() — that forces the drain this HAL times out on.
+    runCatching { session?.stopRepeating() }
     session = null
     startPreview(cam, generation)
   }
