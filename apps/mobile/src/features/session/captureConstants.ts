@@ -5,32 +5,41 @@
  * subsystem; the section references below point into it.
  */
 
-/** §00.6 — the longest the app waits for a shot before ending the attempt. */
-export const MAX_IMPACT_WAIT_SEC = 20;
-
-/** §01.4.4 — "about three seconds left" tone, distinct from countdown and stop cues. */
-export const WARNING_AT_SEC = 17;
-
-/** §00.5 — the retained clip is impact − PRE_ROLL … impact + POST_ROLL, always. */
-export const PRE_ROLL_SEC = 3;
-export const POST_ROLL_SEC = 3;
-
-/** The fixed review-window width. Slid as a whole, never resized (§01.5.6). */
-export const REVIEW_WINDOW_S = PRE_ROLL_SEC + POST_ROLL_SEC;
+/**
+ * The recorder's hard cap — the longest a single take can run (Taylor, 2026-08-21).
+ *
+ * Enforced by `MediaRecorder.setMaxDuration`, so the file is finalised by the recorder itself
+ * and a cap reached while JS is busy still yields a playable MP4.
+ */
+export const MAX_TAKE_SEC = 30;
 
 /**
- * The recorder's hard cap: the impact-detection window plus the post-roll. Without live
- * impact detection (auto-stop is iceboxed; audio runs post-hoc — the spec's Tier C), the
- * app cannot know whether a shot near second 19 still needs its follow-through, and losing
- * one is the worst failure the spec names (§00.5: never lose a valid swing) — so the cap
- * always allows the late-impact extension. When live detection lands, an impact-free take
- * ends at MAX_IMPACT_WAIT_SEC instead.
+ * The take's last seconds are counted down on screen (Taylor, 2026-08-21) — the golfer is
+ * standing at the ball, away from the phone, and a recording that simply stops is
+ * indistinguishable from one that failed.
  */
-export const MAX_TAKE_SEC = MAX_IMPACT_WAIT_SEC + POST_ROLL_SEC;
+export const AUTOSTOP_COUNTDOWN_SEC = 5;
+
+/** The fixed review-window width. Slid as a whole, never resized (§01.5.6). */
+export const REVIEW_WINDOW_S = 5;
+
+/** Half of it, either side of the heard strike — where the window seeds. */
+export const PRE_ROLL_SEC = REVIEW_WINDOW_S / 2;
+
+/**
+ * Slack added to each end of the SAVED clip, beyond the window the golfer sees.
+ *
+ * The box on screen is the promise — everything inside it is kept — and the golfer lands it by
+ * dragging, not by frame-counting. A tenth of a second either side absorbs the difference
+ * between where they meant to put the edge and where their finger left it, so a takeaway or a
+ * finish is never clipped by a pixel of drag. It is invisible by design: showing the padding
+ * would just make the box they are aiming with less honest.
+ */
+export const SAVE_PAD_S = 0.1;
 
 /**
  * The rate ceiling handed to the recorder — §02.4's priority order (240 → 120 → 60) is
- * implemented natively as "highest offered rate at or below this", and the session resolves
- * with the rate the device actually configured, never this number.
+ * implemented natively as a ladder of real configurations, and the session resolves with the
+ * rate the device actually configured, never this number.
  */
 export const MAX_FPS_REQUEST = 240;

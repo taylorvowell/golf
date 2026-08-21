@@ -7,6 +7,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { Image } from "expo-image";
 import { Check, Trash2 } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -40,6 +41,11 @@ import { PRE_ROLL_SEC, REVIEW_WINDOW_S } from "./captureConstants";
 /** A candidate this far below the strongest is noise, not a second swing. */
 const CANDIDATE_FLOOR = 0.45;
 
+/** Enough pictures to recognise a swing along the track, few enough to decode instantly. */
+const STRIP_FRAMES = 12;
+/** Decode width per frame. The strip is ~64pt tall on a 3x screen — 160px is already generous. */
+const STRIP_PX = 160;
+
 export interface SwingTake {
   /** Absolute path to the untrimmed take, as the native recorder wrote it. */
   path: string;
@@ -67,6 +73,7 @@ export function SwingReview({ take, onSave, onDelete, saving = false }: SwingRev
   const [startSec, setStartSec] = useState<number | null>(null);
   const [candidates, setCandidates] = useState<ImpactCandidate[]>([]);
   const [trackWidth, setTrackWidth] = useState(0);
+  const [strip, setStrip] = useState<string[]>([]);
 
   /**
    * Read by the pan responder and the loop, both of which run outside React's render cycle. A
@@ -109,6 +116,18 @@ export function SwingReview({ take, onSave, onDelete, saving = false }: SwingRev
     return () => { cancelled = true; };
   }, [take.path, maxStart, setStart]);
 
+  // The filmstrip. Extracted off the main thread and rendered as it arrives — the screen is
+  // already playing by then, so the pictures fill in under a scrubber that already works.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const frames = await HighSpeedCamera.clipThumbnails(take.path, STRIP_FRAMES, STRIP_PX)
+        .catch(() => []);
+      if (!cancelled) setStrip(frames.map((f) => `file://${f.path}`));
+    })();
+    return () => { cancelled = true; };
+  }, [take.path]);
+
   const endSec = (startSec ?? 0) + REVIEW_WINDOW_S;
 
   /**
@@ -130,6 +149,9 @@ export function SwingReview({ take, onSave, onDelete, saving = false }: SwingRev
     void player.current?.play();
   }, [take.fps]);
 
+  /** Where the window sat when the finger went down — the anchor every move measures from. */
+  const grabbedAt = useRef(0);
+
   const pan = useMemo(
     () =>
       PanResponder.create({
@@ -137,13 +159,18 @@ export function SwingReview({ take, onSave, onDelete, saving = false }: SwingRev
         onMoveShouldSetPanResponder: () => true,
         onPanResponderGrant: () => {
           draggingRef.current = true;
+          grabbedAt.current = startRef.current;
           // Keyframe-fast seeks while the finger is down; the window is being chosen, not read.
           void player.current?.setScrubbing(true);
         },
         onPanResponderMove: (_, gesture) => {
           if (trackWidth <= 0) return;
+          // `dx` is the TOTAL travel since the finger went down, so it is applied to where the
+          // window was THEN. Adding it to the live position instead re-applied the whole
+          // gesture on every event, which accelerated the window away from the finger and is
+          // what made the drag feel like it was fighting back (Taylor, 2026-08-21).
           const perPx = durationS / trackWidth;
-          setStart(startRef.current + gesture.dx * perPx * 0.5);
+          setStart(grabbedAt.current + gesture.dx * perPx);
           void player.current?.seekToFrame(Math.round(startRef.current * take.fps));
         },
         onPanResponderRelease: () => {
@@ -179,7 +206,7 @@ export function SwingReview({ take, onSave, onDelete, saving = false }: SwingRev
       </View>
 
       <View style={[styles.controls, { paddingBottom: insets.bottom + 18 }]}>
-        <Text style={styles.hint}>Slide to the swing</Text>
+        <Text style={styles.hint}>Slide the box to your swing</Text>
 
         {/* Deliberately tall: this is the only precision the screen asks for, and a thin track
             would make it the hardest thing on the page. */}
@@ -188,6 +215,27 @@ export function SwingReview({ take, onSave, onDelete, saving = false }: SwingRev
           onLayout={(e) => setTrackWidth(e.nativeEvent.layout.width)}
           {...pan.panHandlers}
         >
+          {/* The swing, along the track. Finding your strike by SEEING it beats finding it by
+              remembering when you swung — and it is why the window rarely needs a drag at all. */}
+          <View style={styles.strip} pointerEvents="none">
+            {strip.map((uri) => (
+              <Image key={uri} source={{ uri }} style={styles.frame} contentFit="cover" />
+            ))}
+          </View>
+          {/* Everything outside the window is dimmed, so the box reads as a selection over the
+              film rather than a bar floating above it (§01.5.5). */}
+          {trackWidth > 0 ? (
+            <>
+              <View
+                pointerEvents="none"
+                style={[styles.shade, { left: 0, width: windowLeft }]}
+              />
+              <View
+                pointerEvents="none"
+                style={[styles.shade, { left: windowLeft + windowWidth, right: 0 }]}
+              />
+            </>
+          ) : null}
           {/* Every candidate the detector heard, so a wrong seed is a glance and a nudge rather
               than a hunt. Suggestions, never claims. */}
           {trackWidth > 0 && candidates.map((c) => (
@@ -266,6 +314,11 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     justifyContent: "center",
   },
+  strip: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, flexDirection: "row" },
+  /** Equal cells across the whole track — the strip IS the timeline, so the nth picture has
+   * to sit at the nth slice of time. */
+  frame: { flex: 1, height: "100%" },
+  shade: { position: "absolute", top: 0, bottom: 0, backgroundColor: "rgba(6,10,20,0.62)" },
   tick: {
     position: "absolute",
     top: 8,
@@ -274,12 +327,16 @@ const styles = StyleSheet.create({
     borderRadius: 1,
     backgroundColor: "rgba(255,255,255,0.45)",
   },
+  /** Over film, the selection is an OPENING, not a wash: the frames inside must stay readable,
+   * so the box is drawn as an aqua edge (a border that draws a shape) with the dimming done
+   * outside it instead. */
   window: {
     position: "absolute",
     top: 0,
     bottom: 0,
-    borderRadius: 14,
-    backgroundColor: "rgba(67,205,208,0.34)",
+    borderRadius: 12,
+    borderWidth: 3,
+    borderColor: COLORS.aqua,
   },
 
   actions: { flexDirection: "row", alignItems: "center", gap: 14 },

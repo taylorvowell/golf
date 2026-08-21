@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Animated,
   BackHandler,
   Easing,
-  Pressable,
   StyleSheet,
   Text,
   View,
@@ -33,6 +33,7 @@ import { DualSyncPip } from "./DualSyncPip";
 import { PostSwingView } from "./PostSwingView";
 import { CountdownOverlay } from "./CountdownOverlay";
 import { FpsPill } from "./FpsPill";
+import { AUTOSTOP_COUNTDOWN_SEC, MAX_TAKE_SEC, SAVE_PAD_S } from "./captureConstants";
 import { ViewToggle } from "./ViewToggle";
 import { RecordingFrame } from "./RecordingFrame";
 import { SessionDock } from "./SessionDock";
@@ -146,6 +147,35 @@ export function SessionScreen() {
    * the screen says so instead of showing a still frame that reads as a crash. */
   const [previewLive, setPreviewLive] = useState(true);
 
+  /**
+   * Seconds until the take stops itself, inside the last few (null the rest of the time).
+   * A one-second tick, alive only while recording — nothing here runs on an idle screen.
+   */
+  const [autoStopIn, setAutoStopIn] = useState<number | null>(null);
+  useEffect(() => {
+    if (state.mode !== "recording") {
+      setAutoStopIn(null);
+      return;
+    }
+    const startedAt = Date.now();
+    const tick = setInterval(() => {
+      const left = Math.ceil(MAX_TAKE_SEC - (Date.now() - startedAt) / 1000);
+      setAutoStopIn(left <= AUTOSTOP_COUNTDOWN_SEC ? Math.max(0, left) : null);
+    }, 250);
+    return () => clearInterval(tick);
+  }, [state.mode]);
+
+  /**
+   * The gap between the tap and the review screen — finalising an MP4 and closing the
+   * recorder takes a moment, and an unexplained pause on a screen that still says
+   * "recording" reads as a hang (Taylor, 2026-08-21). Cleared by the mode leaving
+   * `recording`, whichever way the take ended.
+   */
+  const [stopping, setStopping] = useState(false);
+  useEffect(() => {
+    if (state.mode !== "recording") setStopping(false);
+  }, [state.mode]);
+
   const { stop: stopTake, onRecordingEnded } = useTakeRecorder(
     state.mode,
     cameraRef,
@@ -162,11 +192,11 @@ export function SessionScreen() {
       if (!take || savingTake) return;
       setSavingTake(true);
       try {
-        const { path } = await HighSpeedCamera.trimClip(
-          take.path,
-          window.startSec,
-          window.endSec,
-        );
+        // The box on screen is the promise; the pad is slack around it (see SAVE_PAD_S), so
+        // a finger that stopped a hair early never clips the takeaway.
+        const startSec = Math.max(0, window.startSec - SAVE_PAD_S);
+        const endSec = Math.min(take.durationMs / 1000, window.endSec + SAVE_PAD_S);
+        const { path } = await HighSpeedCamera.trimClip(take.path, startSec, endSec);
         // The trimmed clip is now the retained copy; the untrimmed source has served its
         // purpose. (The upload-acceptance half of the deletion contract arrives with step
         // 06 — locally, a successful trim IS acceptance.)
@@ -174,11 +204,7 @@ export function SessionScreen() {
         dispatch({
           type: "save-take",
           at: Date.now(),
-          clip: {
-            path,
-            fps: take.fps,
-            durationMs: Math.round((window.endSec - window.startSec) * 1000),
-          },
+          clip: { path, fps: take.fps, durationMs: Math.round((endSec - startSec) * 1000) },
         });
       } catch {
         // Trim failed: the take is the ONLY copy of the swing, so it becomes the clip
@@ -357,6 +383,7 @@ export function SessionScreen() {
     useCallback(() => {
       touched.current = true;
       if (modeRef.current === "recording") {
+        setStopping(true);
         void stopTake();
         return;
       }
@@ -507,6 +534,15 @@ export function SessionScreen() {
 
             </Animated.View>
 
+            {/* The take is closing its file. Covers the whole stage so the recording
+                treatment cannot flash back for the frame between stop and review. */}
+            {stopping ? (
+              <View style={styles.stopping} pointerEvents="auto">
+                <ActivityIndicator size="large" color="#FFFFFF" />
+                <Text style={styles.stoppingText}>Saving your swing</Text>
+              </View>
+            ) : null}
+
             {state.mode === "countdown" ? (
               <CountdownOverlay
                 seconds={state.settings.delaySeconds}
@@ -532,9 +568,12 @@ export function SessionScreen() {
               // Stopping a countdown is the reducer's abort; stopping a RECORDING goes to
               // the native recorder, and state moves when the finalized file comes back.
               onStop={() => {
-                if (state.mode === "recording") void stopTake();
-                else dispatch({ type: "stop" });
+                if (state.mode === "recording") {
+                  setStopping(true);
+                  void stopTake();
+                } else dispatch({ type: "stop" });
               }}
+              autoStopIn={autoStopIn}
               onDisarm={() => dispatch({ type: "disarm" })}
               // Backing out of a held countdown lands where the golfer came FROM: the swing
               // they were reviewing mid-session, or the plain capture screen on a fresh one.
@@ -637,6 +676,25 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   fpsSlot: { position: "absolute", right: 16, alignItems: "flex-end" },
+  stopping: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 14,
+    backgroundColor: "rgba(6,10,20,0.72)",
+    zIndex: 3,
+  },
+  stoppingText: {
+    color: "#FFFFFF",
+    fontFamily: FONT_DISPLAY.black,
+    fontSize: 12,
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+  },
   titleRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   titleSlot: { flex: 1, minWidth: 0 },
   newPill: {

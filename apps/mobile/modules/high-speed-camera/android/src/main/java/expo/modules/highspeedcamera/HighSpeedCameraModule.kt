@@ -127,6 +127,20 @@ class HighSpeedCameraModule : Module() {
       }
     }
 
+    /**
+     * The filmstrip under the review scrubber: `count` evenly spaced frames as JPEG paths.
+     *
+     * Runs on the module's own queue, never the main thread — decoding even a dozen frames
+     * takes long enough to drop the review screen's first animation.
+     */
+    AsyncFunction("clipThumbnails") { path: String, count: Int, width: Int, promise: Promise ->
+      try {
+        promise.resolve(SwingClip.thumbnails(path, count, width, context.cacheDir))
+      } catch (e: Throwable) {
+        promise.reject("CLIP_THUMBNAILS", e.message ?: "thumbnail extraction failed", e)
+      }
+    }
+
     /** Remux a window out of a take — no re-encode, so it costs milliseconds and loses nothing. */
     AsyncFunction("trimClip") { path: String, startSec: Double, endSec: Double, promise: Promise ->
       try {

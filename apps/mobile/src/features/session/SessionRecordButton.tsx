@@ -69,10 +69,13 @@ export function SessionRecordButton({
             }
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={styles.face}
+            // Pressed presses IN, visibly (Taylor, 2026-08-21): the golfer taps Stop from
+            // arm's length, often without hearing the cue, and a face that only darkens a
+            // shade leaves them unsure whether the tap landed — so they tap again.
+            style={[styles.face, pressed && styles.facePressed]}
           >
             {stop ? (
-              <View style={styles.stopSquare} />
+              <View style={[styles.stopSquare, pressed && styles.stopSquarePressed]} />
             ) : (
               <View style={styles.ring}>
                 {plus ? <Plus size={RING - 14} color="rgba(255,255,255,0.9)" strokeWidth={2.8} /> : null}
@@ -112,7 +115,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  /** A real, felt press: the face shrinks by a tenth. Scale, not opacity — a control over
+   * footage that fades reads as disabled rather than held. */
+  facePressed: { transform: [{ scale: 0.9 }] },
   stopSquare: { width: STOP, height: STOP, borderRadius: 5, backgroundColor: "#FFFFFF" },
+  /** The square shrinks further and rounds off, so the glyph moves too — motion at the centre
+   * of the control is what the eye actually catches. */
+  stopSquarePressed: { transform: [{ scale: 0.78 }], borderRadius: 8 },
   label: {
     fontFamily: FONT_DISPLAY.black,
     fontSize: 8,

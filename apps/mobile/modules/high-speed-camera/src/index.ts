@@ -29,6 +29,15 @@ interface HighSpeedCameraModule {
    * it to the club-head low point and beats any scrubber drag.
    */
   detectImpacts(path: string, limit: number): Promise<ImpactCandidate[]>;
+  /**
+   * Evenly spaced frames across a take, as JPEG file paths — the review scrubber's filmstrip.
+   * An empty array is a normal answer for an unreadable clip; the strip just stays plain.
+   */
+  clipThumbnails(
+    path: string,
+    count: number,
+    width: number,
+  ): Promise<Array<{ path: string; timeSec: number; width: number; height: number }>>;
   /** Remux a window out of a take. No re-encode — milliseconds, and no quality lost. */
   trimClip(path: string, startSec: number, endSec: number): Promise<{ path: string }>;
   /** Remove a recording the flow is finished with (a trimmed-away source, a binned take).

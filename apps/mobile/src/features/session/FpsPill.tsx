@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View } from "react-native";
 
 import { FONT_DISPLAY } from "../../design/system/typography";
-import { COLORS } from "../../theme";
+import { SEMANTIC } from "../../theme";
 
 /**
  * The capture rate, on the capture screen and through the whole take (Taylor, 2026-08-20).
@@ -50,18 +50,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
     paddingVertical: 5,
     borderRadius: 999,
-    backgroundColor: "rgba(11,16,28,0.66)",
+    backgroundColor: SEMANTIC.good,
   },
   // Matches the REC chip's red while a take runs, so the two read as one treatment.
-  recording: { backgroundColor: "rgba(224,49,68,0.82)" },
+  recording: { backgroundColor: "rgba(224,49,68,0.9)" },
   value: {
     color: "#FFFFFF",
     fontFamily: FONT_DISPLAY.black,
     fontSize: 13,
     letterSpacing: -0.2,
   },
+  // White too, not muted: on a green pill a grey unit reads as disabled (Taylor, 2026-08-21).
   unit: {
-    color: COLORS.muted,
+    color: "#FFFFFF",
     fontFamily: FONT_DISPLAY.black,
     fontSize: 9,
     letterSpacing: 1,

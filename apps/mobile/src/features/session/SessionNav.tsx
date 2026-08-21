@@ -54,6 +54,7 @@ export function SessionNav({
   leftItems,
   rightItems,
   center,
+  centerAbove,
   sidesHidden = false,
   hidden = false,
 }: {
@@ -61,6 +62,8 @@ export function SessionNav({
   rightItems: SessionNavItem[];
   /** The raised centre — the session record/stop button. */
   center: ReactNode;
+  /** Floats directly above the centre button, clear of the bar — the auto-stop countdown. */
+  centerAbove?: ReactNode;
   sidesHidden?: boolean;
   /**
    * Slides the WHOLE bar away, exactly as `WaveNav` does on a tab screen — same transform, same
@@ -305,6 +308,17 @@ export function SessionNav({
           {leftItems.map(item)}
         </Animated.View>
         <View style={{ width: RECORD_SLOT, alignItems: "center", marginBottom: RECORD_LIFT }}>
+          {/* Floated above the raised button rather than stacked in the slot: the slot's
+              height is what puts the button on the bar's centre line, and growing it would
+              shift the one control that must never move. */}
+          {centerAbove ? (
+            <View
+              pointerEvents="none"
+              style={{ position: "absolute", bottom: "100%", marginBottom: 6 }}
+            >
+              {centerAbove}
+            </View>
+          ) : null}
           {center}
         </View>
         <Animated.View

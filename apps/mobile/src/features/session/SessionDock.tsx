@@ -55,6 +55,8 @@ export interface SessionDockProps {
   onAbort: () => void;
   onTypeChange: (sessionType: SessionType) => void;
   onOpenSettings: () => void;
+  /** Seconds until the take stops itself, once inside the countdown window — null otherwise. */
+  autoStopIn?: number | null;
 }
 
 export function SessionDock({
@@ -71,6 +73,7 @@ export function SessionDock({
   onAbort,
   onTypeChange,
   onOpenSettings,
+  autoStopIn = null,
 }: SessionDockProps) {
   const insets = useSafeAreaInsets();
   const [delayOpen, setDelayOpen] = useState(false);
@@ -239,6 +242,16 @@ export function SessionDock({
             icon: (c) => <Settings size={23} color={c} strokeWidth={2.2} />,
           },
         ]}
+        // Directly above the stop button, where the thumb already is: a recording that simply
+        // ends looks identical to one that failed, and the golfer is out at the ball where
+        // they cannot read anything larger than a number (Taylor, 2026-08-21).
+        centerAbove={
+          autoStopIn != null ? (
+            <View style={styles.autoStop} pointerEvents="none">
+              <Text style={styles.autoStopText}>{`Stopping in ${autoStopIn}`}</Text>
+            </View>
+          ) : null
+        }
         center={
           <SessionRecordButton
             stop={busy}
@@ -316,6 +329,18 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
+  },
+  autoStop: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: "rgba(224,49,68,0.9)",
+  },
+  autoStopText: {
+    color: "#FFFFFF",
+    fontFamily: FONT_DISPLAY.black,
+    fontSize: 11,
+    letterSpacing: 0.4,
   },
   delayOptionActive: { backgroundColor: COLORS.aqua },
   delayOptionText: {

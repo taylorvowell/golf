@@ -4,7 +4,7 @@ import type {
   HighSpeedCameraViewProps,
   HighSpeedCameraViewRef,
 } from "../../../modules/high-speed-camera/src/HighSpeedCameraView";
-import { MAX_FPS_REQUEST, MAX_TAKE_SEC, WARNING_AT_SEC } from "./captureConstants";
+import { AUTOSTOP_COUNTDOWN_SEC, MAX_FPS_REQUEST, MAX_TAKE_SEC } from "./captureConstants";
 import type { CaptureMode, SessionAction } from "./sessionState";
 import { playWarningTone } from "./useRecordSounds";
 
@@ -58,11 +58,14 @@ export function useTakeRecorder(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
-  // The 17-second warning (§01.4.4): recording still running with no way to know a shot
-  // happened (detection is post-hoc, Tier C) — tell the golfer the attempt is about to end.
+  // The warning (§01.4.4), fired as the on-screen countdown begins: the take is about to end
+  // and the golfer is out at the ball, where a tone carries and a screen does not.
   useEffect(() => {
     if (mode !== "recording") return;
-    const timer = setTimeout(playWarningTone, WARNING_AT_SEC * 1000);
+    const timer = setTimeout(
+      playWarningTone,
+      (MAX_TAKE_SEC - AUTOSTOP_COUNTDOWN_SEC) * 1000,
+    );
     return () => clearTimeout(timer);
   }, [mode]);
 

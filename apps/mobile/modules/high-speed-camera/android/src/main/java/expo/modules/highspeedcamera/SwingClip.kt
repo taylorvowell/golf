@@ -1,11 +1,14 @@
 package expo.modules.highspeedcamera
 
+import android.graphics.Bitmap
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
+import android.media.MediaMetadataRetriever
 import android.media.MediaMuxer
 import android.util.Log
 import java.io.File
+import java.io.FileOutputStream
 import java.nio.ByteBuffer
 import kotlin.math.abs
 import kotlin.math.max
@@ -193,6 +196,66 @@ object SwingClip {
       if (merged.size >= limit) break
     }
     return merged
+  }
+
+  // ------------------------------------------------------------------ thumbnails
+
+  /**
+   * Evenly spaced frames across a take, written as JPEGs and returned as file paths.
+   *
+   * The filmstrip is what makes the scrubber a picture of the swing rather than a grey bar
+   * (capture spec §04.3): the golfer finds their strike by SEEING it, and a plain track asks
+   * them to find it by memory of when they swung.
+   *
+   * Deliberately cheap. `OPTION_CLOSEST_SYNC` snaps to keyframes, so each grab is a decode of
+   * one already-independent frame instead of a seek-and-replay, and the strip is a coarse map
+   * — being a few frames off the requested time costs nothing at this size. Never decode every
+   * frame of a 240 fps take for this.
+   */
+  fun thumbnails(path: String, count: Int, width: Int, outDir: File): List<Map<String, Any>> {
+    val source = File(path)
+    require(source.exists()) { "no such clip: $path" }
+    require(count > 0) { "count must be positive" }
+
+    val retriever = MediaMetadataRetriever()
+    val out = mutableListOf<Map<String, Any>>()
+    try {
+      retriever.setDataSource(source.absolutePath)
+      val durationMs = retriever
+        .extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+      if (durationMs <= 0L) return emptyList()
+
+      val stem = source.nameWithoutExtension
+      for (i in 0 until count) {
+        // Sample at the MIDDLE of each cell, not its edge: a strip of N pictures represents N
+        // spans of time, and the frame at a span's midpoint is the one that represents it.
+        val atMs = (durationMs * (i + 0.5) / count).toLong()
+        val frame = runCatching {
+          retriever.getScaledFrameAtTime(
+            atMs * 1000L,
+            MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+            width,
+            // Height from the source's own aspect; the caller lays out to whatever comes back.
+            (width * 9 / 16).coerceAtLeast(1),
+          )
+        }.getOrNull() ?: continue
+
+        val file = File(outDir, "thumb_${stem}_$i.jpg")
+        runCatching {
+          FileOutputStream(file).use { frame.compress(Bitmap.CompressFormat.JPEG, 70, it) }
+        }.onFailure { frame.recycle(); return@onFailure }
+        out.add(mapOf(
+          "path" to file.absolutePath,
+          "timeSec" to atMs / 1000.0,
+          "width" to frame.width,
+          "height" to frame.height,
+        ))
+        frame.recycle()
+      }
+    } finally {
+      runCatching { retriever.release() }
+    }
+    return out
   }
 
   // ------------------------------------------------------------------ trim
