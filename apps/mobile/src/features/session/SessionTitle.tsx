@@ -6,18 +6,20 @@ import { FONT_DISPLAY } from "../../design/system/typography";
 import { COLORS } from "../../theme";
 
 /**
- * The session's name line: `Session N | Aug 18`. Only the `Session N` half edits — the date
- * is a fact, not a field (D61). The pencil swaps the text for an input seeded with the
- * current title; save commits through the reducer (which drops an all-whitespace rename).
+ * The session's name. The pencil swaps the text for an input seeded with the current title;
+ * save commits through the reducer (which drops an all-whitespace rename).
+ *
+ * No date (Taylor, 2026-08-21). The session is happening now, and the golfer standing at the
+ * mat does not need telling what day it is — the date belongs to the log, where sessions are
+ * told apart from each other. It is still stored on the session; it just is not chrome.
  */
 
 export interface SessionTitleProps {
   title: string;
-  dateLabel: string;
   onRename: (title: string) => void;
 }
 
-export function SessionTitle({ title, dateLabel, onRename }: SessionTitleProps) {
+export function SessionTitle({ title, onRename }: SessionTitleProps) {
   const [draft, setDraft] = useState<string | null>(null);
   const editing = draft !== null;
 
@@ -44,7 +46,6 @@ export function SessionTitle({ title, dateLabel, onRename }: SessionTitleProps) 
       ) : (
         <Text style={styles.title} numberOfLines={1} testID="session-title">
           {title}
-          <Text style={styles.date}>{`  |  ${dateLabel}`}</Text>
         </Text>
       )}
 
@@ -84,7 +85,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     letterSpacing: -0.3,
   },
-  date: { color: "rgba(255,255,255,0.6)", fontFamily: FONT_DISPLAY.bold, fontSize: 15 },
   input: {
     flex: 1,
     color: "#FFFFFF",

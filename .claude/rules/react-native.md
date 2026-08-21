@@ -180,7 +180,13 @@ along.
   flat: separation is fill, radius and spacing, selection is background tint + text colour, a
   divider is spacing, and elevation is the surface ramp (`bg` → `bgElevated` → `surface` →
   `surface2` → `surface3`), never a cast shadow. `border*` styles are legal only when they *draw a
-  shape* (View-drawn glyphs, overlay markers, gauge dots, the scrub thumb's ring). The edge tokens
+  shape* (View-drawn glyphs, overlay markers, gauge dots, the scrub thumb's ring) — **plus one
+  named exception: controls floating over the CAMERA PICTURE** (Taylor, 2026-08-21). Those sit on
+  live footage rather than a themed surface, so nothing behind them separates them from a
+  background that changes colour shot to shot; a glass control over a white shirt or a bright sky
+  has no edge at all. They wear `CONTROL_EDGE` from `features/session/controlEdge.ts` — 1 px at
+  30 % white, faint enough to define and never to frame. Use that constant, never a hand-written
+  border, so the whole capture surface stays one decision. The edge tokens
   AND the five shadow tokens (`shadowSm|Md|Lg|Cobalt|Aqua`, with `ShadowStyle`) were deleted — the
   `Theme` type carries neither, so reintroducing one is a type error, and hand-writing
   `shadowColor`/`shadowOffset`/`shadowOpacity`/`elevation` or a non-`inset` `boxShadow` is the same

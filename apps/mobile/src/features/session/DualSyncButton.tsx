@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { FONT_DISPLAY } from "../../design/system/typography";
 import { COLORS } from "../../theme";
 import { DualViewIcon } from "../../design/system/DualViewIcon";
+import { CONTROL_EDGE } from "./controlEdge";
 
 /**
  * Dual Sync (Taylor, step-03 iteration) — the door to filming one swing from two angles.
@@ -46,7 +47,12 @@ export function DualSyncButton({ paired = false, onPress }: DualSyncButtonProps)
 
 // Deliberately mirrors ViewToggle's metrics — edit both or neither.
 const styles = StyleSheet.create({
-  track: { padding: 3, borderRadius: 16, backgroundColor: "rgba(11,16,28,0.66)" },
+  track: {
+    padding: 3,
+    borderRadius: 16,
+    backgroundColor: "rgba(11,16,28,0.66)",
+    ...CONTROL_EDGE,
+  },
   segment: {
     minWidth: 46,
     borderRadius: 13,

@@ -449,19 +449,21 @@ export function SessionScreen() {
           >
             {state.mode === "recording" ? <RecordingFrame paused={!previewLive} /> : null}
 
-            {/* The capture rate, framing AND recording (Taylor, 2026-08-20). Outside the
-                chrome fade on purpose — a rate that vanishes the moment you start filming
-                cannot tell you what you filmed at. */}
-            <View
-              pointerEvents="none"
-              style={[styles.fpsSlot, { top: insets.top + APP_HEADER_BAR + 10 }]}
-            >
-              <FpsPill
-                fps={capture?.fps ?? null}
-                highSpeed={capture?.highSpeed ?? true}
-                recording={state.mode === "recording"}
-              />
-            </View>
+            {/* The capture rate, while FILMING only (Taylor, 2026-08-21). Framing a shot is
+                not the moment to think about frame rates; the moment it matters is the one
+                where the number describes what is actually being written to disk. */}
+            {state.mode === "recording" ? (
+              <View
+                pointerEvents="none"
+                style={[styles.fpsSlot, { top: insets.top + APP_HEADER_BAR + 10 }]}
+              >
+                <FpsPill
+                  fps={capture?.fps ?? null}
+                  highSpeed={capture?.highSpeed ?? true}
+                  recording
+                />
+              </View>
+            ) : null}
 
             {/* Top scrim + header chrome — all of it gone while armed. */}
             <Animated.View
@@ -480,7 +482,6 @@ export function SessionScreen() {
                   <View style={styles.titleSlot}>
                     <SessionTitle
                       title={state.title}
-                      dateLabel={state.dateLabel}
                       onRename={(title) => {
                         renamed.current = true;
                         dispatch({ type: "rename", title });

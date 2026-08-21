@@ -4,6 +4,7 @@ import { PoseOutline } from "../../design/system/PoseOutline";
 import { FONT_DISPLAY } from "../../design/system/typography";
 import { useHandedness } from "../profile/useProfile";
 import { COLORS } from "../../theme";
+import { CONTROL_EDGE } from "./controlEdge";
 import type { CaptureView } from "./sessionState";
 
 /**
@@ -59,6 +60,7 @@ const styles = StyleSheet.create({
     gap: 3,
     borderRadius: 16,
     backgroundColor: "rgba(11,16,28,0.66)",
+    ...CONTROL_EDGE,
   },
   segment: {
     minWidth: 46,

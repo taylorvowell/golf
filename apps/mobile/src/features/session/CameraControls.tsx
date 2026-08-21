@@ -3,6 +3,7 @@ import { PanResponder, StyleSheet, Text, View } from "react-native";
 
 import { FONT_DISPLAY } from "../../design/system/typography";
 import { COLORS } from "../../theme";
+import { CONTROL_EDGE } from "./controlEdge";
 import { zoomIsAdjustable, type CameraZoom, type ZoomRange } from "./sessionState";
 
 /**
@@ -167,6 +168,7 @@ const styles = StyleSheet.create({
     // Barely-there glass (Taylor): at full width the old opacity read as a solid bar over the
     // footage, and the framing behind it is what the golfer is actually looking at.
     backgroundColor: "rgba(11,16,28,0.28)",
+    ...CONTROL_EDGE,
   },
   trackFill: {
     position: "absolute",
@@ -186,6 +188,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: COLORS.aqua,
+    ...CONTROL_EDGE,
   },
   thumbText: { color: COLORS.onAqua, fontFamily: FONT_DISPLAY.black, fontSize: 10 },
   pressed: { opacity: 0.6 },
