@@ -77,8 +77,87 @@ export async function enqueueReanalysis(
   const detector = requireEnv("WORKER_CLUB_DETECTOR");
   const clubDetector = detector === "none" ? null : detector;
 
+  return publishJob(tx, {
+    actorId,
+    view,
+    // Re-analysis writes the NEXT revision alongside the one a player may be mid-scrub on;
+    // object storage has no rename-into-place, so overwriting is a real failure, not a theory.
+    targetRevision: view.revision + 1,
+    type: "reanalyze",
+    analysis: {
+      view: analysis.video.view,
+      handedness: analysis.video.handedness,
+      club_detector: clubDetector,
+    },
+  });
+}
+
+/**
+ * Enqueue the FIRST analysis of a freshly captured clip.
+ *
+ * The sibling of `enqueueReanalysis`, and the difference is entirely in where the two facts the
+ * worker needs come from. Re-analysis reads `view` and `handedness` back out of the stored
+ * artifact, which is right there precisely because a previous run wrote it. A capture has no
+ * artifact yet, so they come from the rows the ingest just created — the capture screen's view
+ * toggle and the golfer's profile handedness, both stated rather than inferred. Nothing here
+ * guesses: `handedness` is `NOT NULL` on the swing and `view` is `NOT NULL` on the view row.
+ *
+ * `targetRevision` is the view's CURRENT revision, not the next one. A fresh view is revision 1
+ * with nothing published under it, so the first run fills that revision rather than skipping to 2
+ * and leaving an empty prefix behind forever.
+ */
+export async function enqueueCapture(
+  tx: DbTx,
+  actorId: string,
+  view: ResolvedView,
+  handedness: "right" | "left",
+): Promise<Job> {
+  const rows = await tx.select({ rawMediaKey: viewsTable.rawMediaKey })
+    .from(viewsTable).where(eq(viewsTable.id, view.viewId)).limit(1);
+  const rawMediaKey = rows[0]?.rawMediaKey;
+  if (!rawMediaKey) {
+    throw new Error("this view has no uploaded source yet — complete the upload first");
+  }
+  const store = await getMediaStore();
+  if (!(await store.exists(SOURCE_BUCKET, rawMediaKey))) {
+    throw new Error(`stored source is missing from the store: ${rawMediaKey}`);
+  }
+
+  const detector = requireEnv("WORKER_CLUB_DETECTOR");
+  return publishJob(tx, {
+    actorId,
+    view,
+    targetRevision: view.revision,
+    type: "analyze",
+    analysis: {
+      view: view.view,
+      handedness,
+      club_detector: detector === "none" ? null : detector,
+    },
+  });
+}
+
+/**
+ * The half both enqueue paths share: mint the job row and its token, then hand QStash a spec that
+ * names only URLs.
+ *
+ * Extracted rather than duplicated because the properties that make the queue path safe all live
+ * in here — the row is written before dispatch, the worker receives no credential, and flow
+ * control plus the failure callback are attached to every publish. A second copy is a second place
+ * for one of those to be quietly omitted.
+ */
+async function publishJob(
+  tx: DbTx,
+  opts: {
+    actorId: string;
+    view: ResolvedView;
+    targetRevision: number;
+    type: "analyze" | "reanalyze";
+    analysis: QueueJobSpec["analysis"];
+  },
+): Promise<Job> {
+  const { actorId, view, targetRevision, type } = opts;
   const jobId = randomUUID();
-  const targetRevision = view.revision + 1;
   const token = signJobToken({
     jobId,
     viewId: view.viewId,
@@ -97,11 +176,7 @@ export async function enqueueReanalysis(
       artifact_base_url: `${base}/api/internal/jobs/${jobId}/artifacts`,
       events_url: `${base}/api/internal/jobs/${jobId}/events`,
     },
-    analysis: {
-      view: analysis.video.view,
-      handedness: analysis.video.handedness,
-      club_detector: clubDetector,
-    },
+    analysis: opts.analysis,
   };
 
   const job: Job = {
@@ -119,7 +194,7 @@ export async function enqueueReanalysis(
   };
 
   await tx.insert(jobsTable).values({
-    id: jobId, viewId: view.viewId, type: "reanalyze",
+    id: jobId, viewId: view.viewId, type,
     status: "queued", stage: "queued", progressPct: 0, message: job.message, log: [],
     runner: "queue", targetRevision,
   });

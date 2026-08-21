@@ -117,6 +117,30 @@ export function supabaseStore(): MediaStore {
       return data.signedUrl;
     },
 
+    /**
+     * Storage's own signed upload endpoint, so a ~300 MB phone clip goes phone → Supabase and
+     * never touches this server. Proxying it is not merely wasteful — a serverless function
+     * cannot accept a body that size at all, so this is the only shape that works in production.
+     *
+     * **The two-hour lifetime is Storage's, not a parameter.** `createSignedUploadUrl` has no TTL
+     * argument, so it is reported here rather than chosen; an upload that outruns it re-requests
+     * a target instead of failing silently.
+     */
+    async signedUploadUrl(bucket, key, contentType) {
+      const { data, error } = await storageClient()
+        .storage.from(bucket)
+        .createSignedUploadUrl(key);
+      if (error || !data) return null;
+      return {
+        url: data.signedUrl,
+        method: "PUT",
+        // Exactly what `uploadToSignedUrl` sends for a non-Blob body. `x-upsert` stays false: a
+        // source key is minted per view and a second write to one means a bug, not a retry.
+        headers: { "content-type": contentType },
+        expiresIn: 2 * 60 * 60,
+      };
+    },
+
     async removePrefix(bucket, prefix) {
       // Storage has no recursive delete: list the tree, then remove by explicit key. Depth is
       // bounded (a view prefix holds revision folders holding flat artifact names), so a simple

@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, RefreshControl, Text, View } from "react-native";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { ActivityIndicator, Pressable, RefreshControl, Text, View } from "react-native";
+import { Plus, Upload } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CountUp } from "../features/session/CountUp";
@@ -17,8 +18,9 @@ import {
   useChromeScroll,
   WAVE_NAV_CLEARANCE,
 } from "../design/system";
-import { FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
+import { displayLine, FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
 import { StatusMessage } from "../design/StatusMessage";
+import { NotificationBell } from "../features/notifications/NotificationBell";
 import { LatestSessionCard } from "../features/swings/LatestSessionCard";
 import { SessionRow } from "../features/swings/SessionRow";
 import { logStats, sessionStats, sessionize } from "../features/swings/sessions";
@@ -54,6 +56,12 @@ export function SwingLogScreen() {
     [state],
   );
   const older = sessions.slice(1);
+  /**
+   * The import door's seam. Picking clips, confirming view/handedness and minting the session
+   * they land in are session-mode step 06 — this holds the shape so the button's placement is
+   * settled before the flow behind it exists.
+   */
+  const onImport = () => {};
   const log = useMemo(() => logStats(sessions), [sessions]);
 
   // A session just ended (D61): play the arrival — a saving beat, then the card springs in
@@ -99,8 +107,27 @@ export function SwingLogScreen() {
         }}
       >
         {/* The brand + profile door live in the floating AppHeader above; the hero keeps
-            only the screen's own title. */}
-        <Text style={styles.heroTitle}>Swing Log</Text>
+            the screen's own title and the log's two capture doors (Taylor 2026-08-20).
+            They sit on the TITLE row rather than in the header because they belong to this
+            screen, not to the app chrome — and because the log is where a golfer arrives
+            holding clips they have not put anywhere yet. */}
+        <View style={styles.heroTitleRow}>
+          <Text style={styles.heroTitle}>Swings</Text>
+          <View style={styles.heroActions}>
+            <HeroAction
+              testID="swing-log-record"
+              label="Record"
+              icon={(c) => <Plus size={15} color={c} strokeWidth={2.6} />}
+              onPress={() => navigation.navigate("Record")}
+            />
+            <HeroAction
+              testID="swing-log-upload"
+              label="Upload"
+              icon={(c) => <Upload size={14} color={c} strokeWidth={2.4} />}
+              onPress={onImport}
+            />
+          </View>
+        </View>
         {/* .log-v2-summary — the whole log's story (Taylor 2026-08-17): session + swing
             counts left, the all-swings average in the ring. The latest session's own numbers
             live in the card below; repeating them here was the repetition rule's case. */}
@@ -229,6 +256,7 @@ export function SwingLogScreen() {
     <AppHeader
       hero
       chromePx={chromePx}
+      bell={<NotificationBell hero onPress={() => navigation.navigate("Notifications")} />}
       onProfile={() => navigation.navigate("Profile")}
       profileTestID="swing-log-profile"
     />
@@ -236,15 +264,76 @@ export function SwingLogScreen() {
   );
 }
 
+/**
+ * A hero glass pill — the log's capture doors, in the stat tiles' white-10 glass so the title
+ * row reads as one material. Icon AND word: two adjacent doors that both add a swing are only
+ * distinguishable if each says which one it is, and a bare "+" beside a bare arrow does not.
+ */
+function HeroAction({
+  icon,
+  label,
+  onPress,
+  testID,
+}: {
+  icon: (color: string) => ReactNode;
+  label: string;
+  onPress: () => void;
+  testID: string;
+}) {
+  const styles = useStyles();
+  const t = useTheme();
+  return (
+    <Pressable
+      testID={testID}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      hitSlop={8}
+      style={({ pressed }) => [styles.heroAction, pressed && styles.heroActionPressed]}
+    >
+      {icon(t.onDark)}
+      <Text style={styles.heroActionLabel}>{label}</Text>
+    </Pressable>
+  );
+}
+
 const useStyles = themedStyles((t) => ({
   heroContent: { paddingHorizontal: 18 },
+  heroTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+  },
   /* .log-v2-top h3 — 30 at Sora's -2% */
   heroTitle: {
+    flexShrink: 1,
+    minWidth: 0,
     color: t.onDark,
     fontFamily: FONT_DISPLAY.black,
     fontSize: 30,
-    lineHeight: 32,
+    lineHeight: displayLine(30),
     letterSpacing: -0.6,
+  },
+  heroActions: { flexDirection: "row", gap: 7 },
+  heroAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    height: 31,
+    paddingLeft: 9,
+    paddingRight: 11,
+    borderRadius: 11,
+    backgroundColor: "rgba(255,255,255,0.10)",
+  },
+  heroActionPressed: { backgroundColor: "rgba(255,255,255,0.18)" },
+  heroActionLabel: {
+    color: t.onDark,
+    fontFamily: FONT_DISPLAY.black,
+    fontSize: 11,
+    // Taller than the size on purpose — Android clips descenders to the line box (SessionNav).
+    lineHeight: 14,
+    letterSpacing: 0.1,
   },
   /* .log-v2-summary */
   heroSummary: {

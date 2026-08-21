@@ -139,6 +139,17 @@ export function localStore(): MediaStore {
       return null;
     },
 
+    /**
+     * Null by construction: this driver holds no credential, so there is nothing for it to sign.
+     *
+     * The ingest route reads that as "hand the client my own upload route" — which is why the
+     * whole capture loop runs with no cloud account while the client-side flow stays byte-for-byte
+     * the production one.
+     */
+    async signedUploadUrl() {
+      return null;
+    },
+
     async removePrefix(bucket, prefix) {
       const dir = resolveKey(bucket, prefix);
       let count = 0;

@@ -16,9 +16,31 @@ export interface HighSpeedRecording {
   api: string;
 }
 
+/** A candidate ball strike found in a recorded take. */
+export interface ImpactCandidate {
+  /** Seconds from the start of the clip. */
+  timeSec: number;
+  /** Relative strength. Only meaningful for ordering candidates within one clip. */
+  score: number;
+}
+
 interface HighSpeedCameraModule {
   camera2Capabilities(): Promise<Camera2Capabilities>;
   camera2Record(fps: number, seconds: number): Promise<HighSpeedRecording>;
+  /**
+   * Candidate strike times, strongest first.
+   *
+   * **An empty array is a normal answer** — an indoor mat, wind, a muted take — and callers fall
+   * back to a default window rather than surfacing an error. This seeds a window the golfer can
+   * slide; it is never a measurement. The real Impact frame comes from the analyzer, which snaps
+   * it to the club-head low point and beats any scrubber drag.
+   */
+  detectImpacts(path: string, limit: number): Promise<ImpactCandidate[]>;
+  /** Remux a window out of a take. No re-encode — milliseconds, and no quality lost. */
+  trimClip(path: string, startSec: number, endSec: number): Promise<{ path: string }>;
+  playRecordSound(start: boolean): Promise<void>;
+  playCountdownTick(): Promise<void>;
+  playClickSound(): Promise<void>;
 }
 
 /**

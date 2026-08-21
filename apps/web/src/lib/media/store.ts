@@ -29,6 +29,29 @@ export interface OpenedObject {
   range: { start: number; end: number } | null;
 }
 
+/**
+ * Where a client sends the bytes of an upload, and how.
+ *
+ * The whole point of this shape is that **the client never branches on the driver**. It asks the
+ * API for a target, then sends the file exactly as described — a Supabase signed-storage URL and
+ * the local driver's own upload route are the same three fields to the caller. That is what keeps
+ * the resumable transport `media-pipeline` adds later a swap of *how* the bytes travel rather than
+ * a second ingest design, and it is why the upload never proxies through a serverless function:
+ * a phone video is far past what one can accept as a request body.
+ */
+export interface UploadTarget {
+  /**
+   * Absolute for a driver that signs (the bytes go straight to storage, never through the API);
+   * app-relative for the local driver, whose only upload path is a route on this server.
+   */
+  url: string;
+  method: "PUT";
+  /** Sent verbatim by the client. `content-type` is always present. */
+  headers: Record<string, string>;
+  /** Seconds from issue until the target stops working. */
+  expiresIn: number;
+}
+
 export interface MediaStore {
   readonly kind: "local" | "supabase";
   /** Whether this driver can mint a URL the browser fetches directly (a CDN/signed-URL path). */
@@ -46,6 +69,20 @@ export interface MediaStore {
   putFile(bucket: string, key: string, filePath: string, contentType: string): Promise<void>;
   /** A URL the browser can fetch directly, or null on a driver that has none. */
   signedUrl(bucket: string, key: string, ttlSeconds: number): Promise<string | null>;
+  /**
+   * A one-shot target the client can PUT an object to WITHOUT holding a storage credential, or
+   * null on a driver that cannot mint one (the local driver, which has no credentials at all).
+   *
+   * A null is not a failure — it is the ingest route's signal to hand back its own upload route
+   * instead, which is how the same two-phase flow works with no cloud account. Callers must treat
+   * the returned key as **claimed but not yet written**: nothing has been uploaded when this
+   * resolves, so the completion half still has to verify the object really landed.
+   */
+  signedUploadUrl(
+    bucket: string,
+    key: string,
+    contentType: string,
+  ): Promise<UploadTarget | null>;
   /** Everything under a prefix. Returns how many objects went — the deletion cascade (D24). */
   removePrefix(bucket: string, prefix: string): Promise<number>;
   /**

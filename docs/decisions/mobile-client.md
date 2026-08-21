@@ -60,6 +60,50 @@ overload; the modern `SessionConfiguration(SESSION_HIGH_SPEED, …)` is silently
 S25+ with no callback and no error. **Do not "fix" that deprecation** — it removes 240 fps.
 **See:** ARCHIVE D21, D39, D44.
 
+### Bluetooth shutter remotes drive recording via `modules/shutter-remote`
+
+**Decision:** A Bluetooth camera shutter remote (Taylor owns one) starts and stops recording on
+the session screen. These remotes pair as a one-key Bluetooth HID keyboard and send plain key
+events (VOLUME_UP on virtually all of them; ENTER from some models' second button), so
+`modules/shutter-remote` attaches an `OnUnhandledKeyEventListener` to the activity's decor view —
+volume keys fall through the React view tree unhandled, and this listener runs **before** the
+window's fallback volume handling, so the app both sees and consumes the press. The claim is
+scoped: `useShutterRemote` holds it only while the session screen is mounted, so volume behaves
+normally everywhere else. A press dispatches the reducer's `shutter-press` action, which resolves
+by context — reviewing → next swing armed, idle → arm, countdown → cancel, recording → stop — so
+the golfer never touches the phone between swings. Presses within `SHUTTER_DEBOUNCE_MS` (3s) of
+the last stop are ignored: that is the double click on Stop, and it must not arm the next swing.
+Cancelling a countdown carries no hold — pressing again immediately starts over. The phone's own
+volume rocker is deliberately the same trigger (stock-camera convention, and it makes the path
+testable without the remote: `adb -s <target> shell input keyevent 24`).
+**Gotchas:** Android-only (`requireOptionalNativeModule` returns null elsewhere — callers no-op).
+The listener API is API 28+. MainActivity is never patched — CNG stays intact. **iOS, when it
+becomes buildable (blocked on D5/D12):** Apple exposes no volume-key event API; the established
+technique these remotes rely on is observing `AVAudioSession.outputVolume` (KVO) and restoring
+the level — the same JS seam (`shutter-press`) stands, only the native module needs a twin.
+
+### Record start/stop sounds are the system camera's own, behind a Settings toggle
+
+**Decision:** Recording start and stop play an audible cue — Android's `MediaActionSound`
+`START_VIDEO_RECORDING` / `STOP_VIDEO_RECORDING`, exposed as `playRecordSound(start)` on the
+`high-speed-camera` module. No bundled audio assets: golfers hear exactly what their stock
+camera plays. The cue fires in `useRecordSounds` on entering/leaving the reducer's `recording`
+mode — a cancelled countdown stays silent — and is gated by Settings → Recording → "Play record
+and stop sound" (default on). Around it, two `ToneGenerator` tones at volume 40/100, quieter
+than the record cue: a **press acknowledgment** (PROP_ACK) the instant an arming click lands,
+and the countdown's **3-2-1 ticks** (PROP_BEEP) — the number shown at the moment of arming is
+skipped because the acknowledgment already sounded for it. A cancelled countdown plays the
+**stop-recording cue** — one sound means "not recording", however you got there. The ticks
+alone have their own sub-toggle ("Countdown
+beeps", default on) which is disabled unless the master sound toggle is on; the acknowledgment
+and cancel tones ride the master toggle. That toggle is the first **app-level preference**:
+`features/settings/appPrefs.ts`, AsyncStorage-backed with a module-level cache + subscribers so
+Settings and the capture screen read the same value, device-local like the session defaults.
+**Gotchas:** every native sound call is `?.`-guarded per METHOD — a fresh bundle on a
+not-yet-reinstalled APK lacks the newer functions, and that mismatch once crashed the capture
+screen ("undefined is not a function") the moment recording started. iOS twin, when buildable,
+is `AudioServicesPlaySystemSound` (1117/1118 are the system's begin/end video record sounds).
+
 ### The overlay stays in TypeScript
 
 **Decision:** Do not draw the overlay natively. Plain rotated `View`s drawing 49 keypoints reach
@@ -121,6 +165,35 @@ every seek. Seeking is 100% frame-exact once the target is right, and seeking ov
 must be probed at runtime and never assumed; the S25+ is a flagship and a mid-range Android may
 differ. 231 vs 240 is 3.6% short and unexplained — check before relying on an exact rate.
 **See:** ARCHIVE D37, D38, D39.
+
+### Preview and recording share ONE camera device and one session
+
+**Decision:** `HighSpeedCameraView` owns the camera. Idle is an ordinary repeating preview onto its
+`TextureView`; a take reconfigures the same device as a `CameraConstrainedHighSpeedCaptureSession`
+carrying **both** the preview surface and the recorder's, so the picture stays live at the capture
+rate. `startRecording(maxFps, maxSeconds)` / `stopRecording()` are view methods (a ref), not module
+functions — a module-level record would need a second `CameraDevice`, and two owners of one camera
+is what made recording black the preview out.
+**Recording is back-lens only.** High-speed configurations are a rear-sensor feature on essentially
+every Android; the front lens publishes none, so it is a framing aid and `startRecording` refuses
+there rather than dropping to 30fps unannounced.
+**Rate first, resolution second.** The chooser takes the highest rate at or below the requested
+ceiling, then the SMALLEST size still at or above 720 on the short side — because frames are what
+the club detector is starved of, while everything above 720 is discarded by the analyzer's own
+downscale (`video.py`) before a keypoint is computed.
+**Gotchas:** The two-surface limit is the API's, and it is why nothing can sample frames for motion
+detection during a high-speed take — impact detection is audio-only by construction, not by choice.
+The hard cap is `MediaRecorder.setMaxDuration`, never a posted runnable: the recorder finalises the
+file itself, so a cap reached while JS is busy still yields a playable MP4. It settles through
+`onRecordingEnded`, because JS cannot poll for it and a screen still reading "Recording…" after the
+file closed is the worst available failure. Both endings (tap, cap) route through one `settle`
+function so they cannot diverge. A `MediaRecorder.stop()` that throws means the take was too short
+to write a valid MP4 — reported, never left as a zero-byte file.
+**Bitrate is `w × h × 30 × 0.15 × sqrt(fps/30)`,** replacing `w × h × fps × 0.25`. The old flat
+per-frame allowance asks 124 Mbps at 1080p240 and roughly triples what the encoder needs: at high
+rates adjacent frames are nearly identical, so bits-per-pixel should FALL as the rate rises. The
+constants are provisional until a bitrate sweep is diffed with `scripts/compare_analysis.py`,
+watching **club coverage**, which degrades long before pose does.
 
 ### Session mode is the capture surface, built UI-first behind Taylor's sign-off gate
 
@@ -226,6 +299,24 @@ translucent wedge behind each angle arc is dropped — a wedge is not expressibl
 needs `Path2D` + even-odd fill to put its holes back, which is why the analyzer stores rings with
 no outer/hole distinction. They stay web-only until something else draws them.
 **See:** ARCHIVE D23, D36.
+
+### The mobile trace draws in one style: bulge width, aquaDeep shades, silk joins
+
+**Decision:** The club-head trace renders as a single-hue teal gradient (near-black teal at
+address → bright aqua at the strike, `traceColorAt` in `traceStyles.ts`), with width following a
+Gaussian bulge centred just past mid-downswing (slim at address, fattest where the club is
+fastest, slim again by impact), the path resampled to uniform ~3px strokes with capsule-extended
+round joins ("silk"). Chosen by Taylor from live comparison rounds on real swings (styles ×
+exaggerations × palettes × join treatments, mixed on-device through the debug menu); the losing
+options were deleted the same day — git history holds the comparison harness.
+**Gotchas:** Bridges still draw as dashed chords and the capsule extension is skipped on each
+piece's terminal ends — the honesty rules survive the styling. `TRACE_COLOR` in the byte-locked
+`skeleton.ts` twins now holds this gradient's endpoints so the scrub's phase bands and the menu
+tiles stay visibly the same system as the drawn line. Uniform resampling means the trace's view
+count is bounded by path length ÷ 3px, not by sample density.
+**Scope:** Mobile only. The WEB player still draws the legacy two-colour phase trace (dashed
+backswing / solid downswing, now in the teal endpoints) from the same artifact — a named
+divergence pending a canvas port of the gradient style.
 
 ### The mobile overlay draws the transport's frame — except mid-drag, when it draws the picture's
 
@@ -374,7 +465,13 @@ wordmark constant in `src/design/system/brand.ts`. Fonts load in `App.tsx` befor
 + **Inter** body, bundled via expo-font — Bahnschrift is Windows-licensed and cannot ship, and the
 condensed stand-in (Barlow Semi Condensed) read as bulky and hard to scan on device, so the display
 face is deliberately non-condensed: each `FONT_DISPLAY` key maps one weight lighter than its name
-and display tracking sits near -2% (typography.ts holds the mapping and the why); glass surfaces
+and display tracking sits near -2% (typography.ts holds the mapping and the why); **the mockup's
+CSS leading does not survive the port** — Sora's line box is 1.26× its font size, and Android sizes
+a text layer to an explicit `lineHeight` rather than to the font's metrics, so the mockup's ~1.05×
+leading cut the tails off `p`, `g`, `y` and `q` with no overflow to catch. Every `FONT_DISPLAY`
+style that sets `lineHeight` takes it from `displayLine(size)` (`typography.ts`), never a
+hand-picked number; numerals-only and uppercase styles keep their tight leading because neither
+can render a descender; glass surfaces
 are near-opaque theme fills, not backdrop blur (`expo-blur` stays out
 until a fill provably fails); conic-gradient score rings render as SVG arcs; and every
 "Ideal Swing" string in the mockups renders as **SwingSage** — settled by the real logo Taylor
@@ -514,6 +611,30 @@ bg-coloured mask ring — none of which read as an outline.
 edge alone leaves an invisible control. `Panel`'s `elevated` prop went with the
 shadows — it only ever chose between two of them, and it had no call sites.
 
+### Every tappable surface shows a pressed state, and it is always a fill
+
+**Decision (Taylor, 2026-08-19):** Tap feedback is mandatory on every interactive element, and it
+is drawn as a **fill, never opacity** — dimming reads as "disabled" and washes content out over
+imagery. The shapes, by control kind:
+
+- **Cards and rows** step up the surface ramp while pressed (`surface2` → `surface3`, `surface` →
+  `surface2`) — plus a slight compression (`scale 0.98`, `Button`'s translateY idiom) where the
+  ramp step alone is too subtle to read.
+- **Sticky-bar items** (tab bar, session bar, pill dock) show **no pressed state at all** — a
+  round grey bed was tried and cut (Taylor, 2026-08-19); the navigation happening is the
+  feedback. The header's menu glyph keeps its `pressBed` circle — a round translucent-grey bed,
+  deliberately translucent so it reads on any ground in both themes without joining the opaque
+  surface ramp.
+- **Imagery** (video thumbs, the floating back orb's glass) takes a dark shade **over** the
+  picture — a surface swap has nothing to show through a photograph.
+- **Selection controls** (`Segmented`, toggles, tab switches) need no extra pressed state — the
+  selection moving *is* the feedback.
+
+**Pressables inside anything that scrolls set `unstable_pressDelay` to `SCROLL_PRESS_DELAY_MS`**
+(`design/system/press.ts`, 90 ms): `pressIn` fires the instant a finger lands and only then does
+the ScrollView claim the gesture, so without the delay every scroll that starts on a card flashes
+that card's pressed state. Fixed chrome keeps instant feedback — nothing competes for its gesture.
+
 ### The app is pinned light; the video surfaces are pinned dark
 
 **Decision (Taylor, 2026-08-14):** The app is themed, light-first. `src/theme/` is three layers:
@@ -537,7 +658,11 @@ it), the original acid `#A3E635` on dark ones — same brand, contrast-matched t
 **What stays dark in both themes:** capture (pinned via `FixedDarkTheme`) and the report's
 video-open chrome, plus anything drawn **over a photograph or video frame** (Home's hero and
 swing slides, compare chips, thumbnail grounds) — footage is its own dark surface, and those
-layers use the fixed `COLORS` palette and the accent's acid exposure deliberately.
+layers use the fixed `COLORS` palette and the accent's acid exposure deliberately. **The Pro
+card** (`features/billing/ProCard.tsx`) joins them: it is the product's single upgrade sell, and
+a card that flips to white on the light theme stops being an accent and becomes another row. It
+reads `palette` directly — the `INK` ramp, named there rather than hand-mixed — and gets its
+depth from an ink gradient plus two off-canvas radial washes, never a border or a cast shadow.
 **The sticky navigation bars are the ONE exception, and they escape the pin on purpose** (Taylor,
 2026-08-18): every bar in the app is the same bar, so session mode's `SessionNav` wears the home
 tab bar's light fill over footage rather than being a second, darker nav. `useAppTheme()` is the
@@ -828,9 +953,11 @@ three ways — the X, a tap on the dimmed strip, or a drag to the right — and 
 before it navigates**, so coming back from Settings lands on the tab rather than on a drawer
 left hanging open. Contents, in Taylor's order: identity, the coach block (the connected coach
 card over the local-directory card, whose CTA is the Coach tab), then the menu — My profile,
-Lesson history, Notifications, Settings, Privacy, Help — then Appearance and Sign out. **Only
-Settings has a screen behind it**; the other five are drawn as designed and inert until their
-screens exist, which `ProfileScreen.test.tsx` pins so that wiring one is a deliberate edit. The
+Lesson history, Notifications, Settings, Privacy, Help — then Appearance and Sign out. **Settings
+and Notifications have screens behind them** (Notifications opens the §29 inbox drawer, not a
+preferences screen — preferences do not exist yet); the other four are drawn as designed and
+inert until their screens exist, which `ProfileScreen.test.tsx` pins so that wiring one is a
+deliberate edit. The
 connected-coach state reads `useConnectedCoach`, which is sample data under `__DEV__` and null
 in release until the coach platform lands. The design's navy/white button pair maps to
 `cobalt`/`surface`, because a navy fill on the dark theme's navy card is an invisible button.
@@ -857,23 +984,78 @@ runtime while typechecking fine — the profile tests pin the nested form. The `
 is a composite of both param lists for exactly this reason. The dev-client bubble owns the
 top-right corner in development builds, so the avatar steps 56 px left under `__DEV__` only.
 
-### Celebrations are one app-wide queue behind a top toaster — never the bottom sheet
+### One app-wide toaster behind one queue — celebrations and alerts are its clients
 
-**Decision:** All toast-level celebration moments (badge earned, rank-up, personal best — the
-achievements layer, D62) flow through `CelebrationProvider`
-(`apps/mobile/src/features/achievements/`), mounted in `App.tsx` above the navigator so a
-celebration lands on whatever screen the golfer is on. It renders a **top toaster** that slides
-down under the top inset with a one-shot confetti burst, queue-serialised: one at a time,
-extras wait, duplicate ids dropped. `useCelebrate()` is the only way to show one. Animation is
-core `Animated` on the native driver — reanimated is not a dependency and a toast does not
-justify the APK weight. The toaster floats on the `glass` token (flat — no border, no shadow);
-confetti pieces are the theme's accent tokens only.
-**Gotchas:** The provider sits *below* `DebugProvider` (it contributes the debug sheet's
-"Celebrations" group) and *above* `Root` (the toast must cover navigation). The focus-goal
+**Decision:** Transient top-of-screen moments all flow through the generic toast system
+(`apps/mobile/src/features/toast/`): `ToastProvider` + `useToast()` own the queue
+(one at a time, extras wait, duplicate ids dropped), `ToastCard` is the surface — slides down
+under the top inset, full width inside the app's 16pt content gutters, themed on the elevated
+surface (light by default), opaque, slide-only (no fade), tap runs the toast's optional
+`onPress` deep link then dismisses. A toast may carry an eyebrow, a detail line, a right-side
+chip, and `confetti: true` for the one-shot burst. **Systems speak through adapters that own
+their voice:** the achievements layer's `useCelebrate()`
+(`features/achievements/CelebrationProvider.tsx`) maps a `Celebration` to a toast — kind-fixed
+eyebrow, XP chip, confetti always on — and the notifications track's alerts point here too
+rather than growing a second toaster. Never the bottom sheet system. Animation is core
+`Animated` on the native driver — reanimated is not a dependency and a toast does not justify
+the APK weight.
+**Gotchas:** `ToastProvider` mounts in `App.tsx` above the navigator (a toast lands on
+whatever screen is up); `CelebrationProvider` sits inside it and below `DebugProvider` (it
+contributes the debug sheet's "Celebrations" group). In `ToastCard`, the host must NOT set
+`alignItems` (the animated wrapper shrink-wraps and the card's stretch has nothing to fill)
+and the card must use `alignSelf: "stretch"`, never `width: "100%"` (Yoga resolves percentages
+against the parent's full width, padding included — the full-bleed bug). The focus-goal
 celebration (§16.3.5) is a bigger, separate moment owned by `goal-progression` — it outranks
-badge toasts and they queue behind it. Award logic and persistence are server-side (track
-steps 02–03); nothing on the phone decides that something was earned.
+toasts. Award logic and persistence are server-side; nothing on the phone decides that
+something was earned.
 **See:** ARCHIVE D62; `.claude/feature-tracks/achievements/DESIGN.md`.
+
+### Onboarding is a saved-per-tap question sequence, and state decides when it opens
+
+**Decision:** Onboarding (`features/onboarding/`) is §4.4 + §5.4 as one full-screen question at
+a time — role → handedness → style → handicap. Handedness is the only unskippable step;
+every other question has Skip in the corner. **Every answer PATCHes the profile the moment it
+is tapped** — the profile row is the draft, so backing out loses nothing and "resumable" needs
+no extra state. Every step advances itself on the tap (no Continue under a tapped card).
+Finishing stamps `completeOnboarding`.
+`OnboardingLauncher` auto-opens the flow **once per app launch** while
+`onboardingCompletedAt` is null — the check is "is onboarding complete", never "did signup
+just happen", so a killed app resumes into it — and contributes the debug menu's
+"Run onboarding" action, which reopens the same flow prefilled at any time. Role taps claim
+via `POST /api/v1/roles` (idempotent, fire-and-forget).
+
+### The profile is six answers — one page, one registry, no goals
+
+**Decision:** The product asks a golfer exactly SIX things (Taylor, 2026-08-20, after three
+iterations): **handedness, swing style, handicap, age, driver speed, 7-iron carry**. My profile
+is one page — an identity card (tap to edit name + region) over a two-column grid of six value
+tiles; `features/profile/profileFields.ts` is the asking surface and the screen renders
+whatever it says. **Goals are not profile data** — they belong to the guidance features
+(focus/goal system), and the profile's goal machinery (`GoalPicker`, the Goals screen, the
+`golfer_goals` table, the D54 cap trigger, the wire fields) was removed outright. Everything
+else ever considered (§5.5's misses, shot shape, grip/fitting/launch-monitor, climate/altitude,
+height/wingspan/wrist-to-floor, mobility screen, skill level, average score, practice life,
+coach status, coaching style, feedback depth) was removed from product, API, shared contract
+AND database together (migrations 0014/0015) — what the product stops asking it stops storing.
+`profileFields.test.ts` pins the six; `profileRls.test.ts` pins the table's exact columns.
+Re-adding a field is an additive migration plus one registry entry. `FieldEditorSheet` is the
+one editor (choice rows / hold-to-repeat number stepper). Choices save-and-close on the tap; a
+second tap on the current value clears it ("actually, don't score me on that" stays
+expressible). Writes go through `saveProfile` — optimistic against the module cache, reconciled
+from the server's response, reverted with one toast on failure. Onboarding asks role →
+handedness → style → handicap (handedness the only unskippable step); the other two profile
+answers live on the profile screen, not in signup's way.
+
+### Capture mirrors for a left-handed golfer — the art and the rails both
+
+**Decision:** Profile handedness (default right until loaded) drives every capture surface
+that shows the golfer themself, via `useHandedness()`. `PoseOutline` takes `mirrored` and
+`posePlacement` reflects its composition about the artboard centre, so the alignment ghost,
+the view-switcher icons, the dual-sync pip and the analysis-error "aim for this" reference all
+show a lefty their own setup in the mirrored spot. The session screen's rails swap sides with
+it: zoom + camera flip + the view switcher move to the RIGHT edge for a lefty, and the Dual
+View column takes the left. This is the UI half of the handedness rule — analysis geometry
+still arrives pre-resolved from the analyzer and is never computed on the phone.
 
 ## Data and networking
 
@@ -999,3 +1181,25 @@ flagged placeholder block of `features/progress/viewModel.ts` — the single swa
 gain) stay real and absent-when-unmeasured.
 **Scope:** amends the earlier no-canned-numbers rendering on this screen — Taylor chose the
 pixel-exact sample for the stub phase (2026-08-19); honesty returns with the engines.
+
+### The bell is header chrome; the inbox is a drawer that acks what it showed
+
+**Decision:** §29's read surface is a badged bell in `AppHeader`, left of the profile door on
+every tab, opening `NotificationsScreen` — a right-side `SideDrawer`, the same surface class as
+Profile because both are reached from the persistent header. `AppHeader` takes the bell as a
+`bell?: ReactNode` **slot**, not a callback: the count comes from a feature store and the design
+system stays a leaf that owns placement, never knowledge. One module-scope store
+(`useNotifications.ts`) with a single in-flight GET backs both surfaces, so four mounted bells
+cannot hold four different counts. Opening the drawer acks the unread rows it showed in ONE
+batch — never per row-tap — and takes the server's returned `unreadCount` as truth rather than
+decrementing locally; rows keep their unread dots for that viewing by rendering against
+"what was unread at open". Freshness is mount + app-foreground + open, with **no poller** —
+push (step 05) is the answer to "tell me immediately". A failed ack is silent; a failed list
+degrades to the last confirmed inbox, and `unreachable`/`signed-out`/empty are three distinct
+screens because "nothing arrived" is a claim about the golfer's coach.
+**Gotchas:** the taxonomy→glyph map is `Record<Notification["kind"], …>` on purpose — a kind
+added to the contract enum must be a compile error, not a row that renders blank. Nothing emits
+into the table yet, so every state is reachable only through the `__DEV__` "Notifications" debug
+group.
+**See:** `.claude/feature-tracks/notifications/02 - The Bell and the Inbox.md`;
+`docs/decisions/platform-data.md` (the backbone).

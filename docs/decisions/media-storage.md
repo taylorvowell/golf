@@ -11,6 +11,29 @@ published from the analyzer's working directory.
 relevant to `media-pipeline`. Range requests are verified over the network path (206 responses).
 **See:** ARCHIVE D8, D33.
 
+### Ingest is two-phase and the client uploads directly to storage
+
+**Decision:** A captured or imported clip becomes a swing in two calls, never one.
+`POST /api/v1/swings` creates the swing + view and answers with an `UploadTarget`
+(`{url, method, headers, expiresIn}`); the client sends the bytes to that target itself;
+`POST /api/v1/swings/:id/source/complete` verifies the object landed and enqueues the analysis.
+The bytes never pass through the API — a serverless function cannot accept a request body the size
+of a phone video, so proxying is not a slow path but an impossible one. `lib/ingest.ts` owns both
+phases; `MediaStore.signedUploadUrl` mints the target.
+**Gotchas:** A driver that cannot sign returns `null`, and the ingest hands back
+`PUT /api/v1/swings/:id/source` on this server instead — that is how the whole capture loop runs
+with no cloud account, and **the client never branches on the driver**: it sends the file exactly as
+the target describes. That route refuses when the driver *can* sign, so an object never has two ways
+to arrive. Supabase signed upload URLs live **2 hours, fixed** — Storage exposes no TTL parameter, so
+the value is reported rather than chosen. The stored name is derived (`original.<ext>` from a closed
+content-type set), never the client's filename, so nothing in a request body can steer where an
+object lands — and completion re-derives it, so there is no pending-upload state to persist.
+Completion **verifies** rather than believes: the client uploaded to a different host, so an
+unchecked claim becomes a worker failure minutes later that no golfer can act on.
+**What this leaves to `media-pipeline`:** transport only — resumable/chunked upload, background
+survival, wifi policy, the offline queue. All of it swaps *how* the bytes travel behind
+`uploadSwingVideo()`; neither phase has an opinion about the transport.
+
 ### A storage key is derived from identity, never stored as an address
 
 **Decision:** Keys are **derived** from a swing's identity at read time. `media_key` was
