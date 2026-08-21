@@ -273,6 +273,60 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
     return size to map.getHighSpeedVideoFpsRangesFor(size).sortedByDescending { it.upper }
   }
 
+  /**
+   * One configuration to attempt: a rate range, and whether the preview rides along.
+   *
+   * A device publishes BOTH a variable range and a fixed one at the same top rate — the S25+
+   * offers 1080p `[30,240]` (batch 8) and `[240,240]` (batch 4) — and they are NOT
+   * interchangeable. `CameraConstrainedHighSpeedCaptureSession`'s contract is explicit:
+   *
+   * > "If both preview and recording Surfaces are specified in the request, the target FPS
+   * > range in the input request must be a fixed frame rate FPS range, where the minimal
+   * > FPS == maximum FPS."
+   *
+   * The framework then interleaves the batch itself — preview is fed at ~30 fps while the
+   * encoder takes all 240. Handing it the VARIABLE range with a preview attached is the
+   * invalid combination, and this HAL answers invalid combinations with silence rather than
+   * an exception (2026-08-20: every preview+record attempt hung, while record-only at the
+   * fixed range measured 231 fps in D39). Both ranges report `upper == 240`, so sorting by
+   * rate tie-breaks between valid and invalid arbitrarily — which is what this type ends.
+   *
+   * Variable ranges are not used at all: a rate that floats between 30 and 240 writes
+   * timestamps that disagree with `setCaptureRate`, and a file whose frame timing lies is the
+   * one outcome worse than failing (D37's amendment).
+   */
+  private data class TakeAttempt(
+    val range: Range<Int>,
+    val withPreview: Boolean,
+  ) {
+    val fps get() = range.upper
+    /** For the log — the whole point is knowing WHICH configuration the device accepted. */
+    override fun toString() = "${range.lower}-${range.upper}${if (withPreview) " +preview" else " record-only"}"
+  }
+
+  /**
+   * The configurations to try, best first, for a requested ceiling.
+   *
+   * This is a LADDER, not a choice, because no amount of reading capability tables predicts
+   * which shape a given HAL will actually run — this one accepts an invalid combination and
+   * then never answers instead of refusing (D38, and every record attempt on 2026-08-20). So
+   * the device is asked, in the order we would prefer, and the first configuration that
+   * actually configures wins. The rate is never degraded silently: every rung at the top rate
+   * is exhausted before a slower one is considered, and the resolved rate is what the FPS
+   * pill shows.
+   */
+  private fun attemptLadder(ranges: List<Range<Int>>, maxFps: Int): List<TakeAttempt> =
+    ranges
+      // FIXED ranges only — see TakeAttempt. A variable range is invalid with a preview
+      // attached and dishonest without one.
+      .filter { it.lower == it.upper && it.upper <= maxFps }
+      .sortedByDescending { it.upper }
+      .flatMap {
+        // Preview first at each rate, then record-only: the rate is never traded for the
+        // viewfinder. 240 record-only beats 120 with a live picture, every time.
+        listOf(TakeAttempt(it, withPreview = true), TakeAttempt(it, withPreview = false))
+      }
+
   /** A plain preview size for a lens with no high-speed configuration — the front camera on
    * most devices. Largest 16:9 at or under 1080p: a viewfinder, not a capture format. */
   private fun ordinaryPreviewSize(id: String): Size =
@@ -405,41 +459,54 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
     // MAIN thread, and `MediaRecorder.prepare()` — like `stop()` — blocks for hundreds of
     // milliseconds. On the main thread that is a frozen screen with a dead Stop button, which
     // is exactly how the record freeze presented (2026-08-20).
-    h.post { beginTake(maxFps, maxSeconds, h, previewLive = true, promise = promise) }
+    h.post {
+      // The size was fixed at open and the preview buffers are already it
+      // (`applyBufferSize`); the ceiling only chooses among the RATES that size offers.
+      val config = takeConfig
+      if (config == null) {
+        promise(Result.failure(IllegalStateException(
+          "this camera offers no high-speed configuration"
+        )))
+        return@post
+      }
+      val ladder = attemptLadder(config.second, maxFps)
+      if (ladder.isEmpty()) {
+        promise(Result.failure(IllegalStateException(
+          "this camera offers no high-speed rate at or below ${maxFps}fps"
+        )))
+        return@post
+      }
+      Log.i(TAG, "take ladder: ${ladder.joinToString(" -> ")}")
+      beginTake(config.first, ladder, 0, maxSeconds, h, promise)
+    }
   }
 
   /**
-   * @param previewLive Carry the preview surface into the constrained session, so the golfer
-   *   keeps seeing themselves at the capture rate. Some devices — the S25+ among them —
-   *   accept the two-output configuration and then never answer: no `onConfigured`, no
-   *   `onConfigureFailed`, and the HAL leaks fences until it triggers its own recovery
-   *   (2026-08-20). The watchdog catches that silence and retries ONCE with the recorder
-   *   alone, which is the configuration D39 measured at 231 fps on this phone. A frozen
-   *   picture for three seconds is a real cost; not recording the swing is a bigger one.
+   * Try `ladder[rung]`; on silence or refusal, move to the next rung.
+   *
+   * Every rung is a real question to the HAL rather than a prediction about it, because this
+   * class of device answers an unsupported combination with silence — no `onConfigured`, no
+   * `onConfigureFailed` — and leaks fences until it triggers its own recovery (D38, and every
+   * record attempt on 2026-08-20). The watchdog turns that silence into the next rung, and the
+   * log names the configuration that finally ran.
    */
   @SuppressLint("MissingPermission")
   private fun beginTake(
-    maxFps: Int,
+    size: Size,
+    ladder: List<TakeAttempt>,
+    rung: Int,
     maxSeconds: Int,
     h: Handler,
-    previewLive: Boolean,
     promise: (Result<Map<String, Any>>) -> Unit,
   ) {
     if (recording) return promise(Result.failure(IllegalStateException("already recording")))
     val cam = device ?: return promise(Result.failure(IllegalStateException("camera is not open")))
-
-    // The size was fixed at open and the preview buffers are already it (`applyBufferSize`);
-    // the ceiling only chooses among the RATES that size offers. Refusing here is what keeps
-    // the front lens from silently recording at 30 (§2.3).
-    val config = takeConfig ?: return promise(Result.failure(IllegalStateException(
-      "this lens offers no high-speed configuration — only the back camera records"
+    val attempt = ladder.getOrNull(rung) ?: return promise(Result.failure(IllegalStateException(
+      "the camera would not start a high-speed session in any supported configuration"
     )))
-    val size = config.first
-    val range = config.second.firstOrNull { it.upper <= maxFps }
-      ?: return promise(Result.failure(IllegalStateException(
-        "this lens offers no high-speed rate at or below ${maxFps}fps"
-      )))
-    val fps = range.upper
+    val range = attempt.range
+    val fps = attempt.fps
+    val previewLive = attempt.withPreview
 
     val file = File(context.cacheDir, "swing_${fps}fps_${System.currentTimeMillis()}.mp4")
     val rec = try {
@@ -504,8 +571,8 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
     runCatching { session?.stopRepeating() }
     session = null
 
-    Log.i(TAG, "record: ${size.width}x${size.height} @ $fps, cap ${maxSeconds}s, " +
-      "${bitrateFor(size, fps)}bps, preview=${previewLive}")
+    Log.i(TAG, "take rung $rung: ${size.width}x${size.height} @ $attempt, " +
+      "cap ${maxSeconds}s, ${bitrateFor(size, fps)}bps")
 
     // This HAL's failure mode of choice is a session that never configures (it wedges rather
     // than refuses — D38, and the 2026-08-20 fence-leak freeze). First answer wins.
@@ -516,18 +583,16 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
       action()
     }
 
-    /** Silence or refusal at this configuration — drop the preview and try again, once. */
+    /** Silence or refusal at this rung — clean up and ask the device the next question. */
     val fallBackOrFail = fun(why: String) {
       settleOnce {
-        Log.w(TAG, "high-speed session $why (preview=$previewLive)")
+        Log.w(TAG, "rung $rung ($attempt) $why")
         teardownRecorder()
-        if (previewLive) {
-          // The picture will freeze for the take. That is the honest trade against not
-          // recording the swing at all, and JS says so on screen.
-          beginTake(maxFps, maxSeconds, h, previewLive = false, promise = promise)
+        if (rung + 1 < ladder.size) {
+          beginTake(size, ladder, rung + 1, maxSeconds, h, promise)
         } else {
           promise(Result.failure(IllegalStateException(
-            "the camera could not start a high-speed session — try again"
+            "the camera would not start a high-speed session in any supported configuration"
           )))
           restorePreview()
         }
@@ -577,6 +642,7 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
               settleOnce {
                 recording = true
                 recordStartedAtMs = System.currentTimeMillis()
+                Log.i(TAG, "take RUNNING on rung $rung ($attempt)")
                 promise(Result.success(mapOf(
                   "fps" to fps,
                   "width" to size.width,

@@ -181,6 +181,20 @@ there rather than dropping to 30fps unannounced.
 ceiling, then the SMALLEST size still at or above 720 on the short side — because frames are what
 the club detector is starved of, while everything above 720 is discarded by the analyzer's own
 downscale (`video.py`) before a keypoint is computed.
+**A preview in the take REQUIRES the FIXED fps range, and the range is chosen deliberately, never
+by a sort.** `CameraConstrainedHighSpeedCaptureSession`'s contract: *"If both preview and recording
+Surfaces are specified in the request, the target FPS range in the input request must be a fixed
+frame rate FPS range, where the minimal FPS == maximum FPS."* The framework interleaves the batch
+itself — preview at ~30 fps, encoder at the full rate. The S25+ publishes 1080p at **both**
+`[30,240]` (batch 8) and `[240,240]` (batch 4), and both report `upper == 240`, so ordering
+candidates by rate tie-breaks between the valid and the invalid combination arbitrarily — which is
+how a variable range reached a preview-bearing session and hung the HAL for a day (2026-08-20).
+Variable ranges are now never used at all: a rate floating between 30 and 240 writes timestamps
+that disagree with `setCaptureRate`, and a file whose frame timing lies is worse than no file
+(D37's amendment). **Capture is a LADDER, not a choice** — fixed 240 with preview, then 240
+record-only, then 120 with preview, then 120 record-only; the first configuration the device
+actually configures wins, a 4 s watchdog treats silence as a refusal, and the log names the rung
+that ran. Reading a capability table does not predict what a HAL will run; asking it does.
 **The preview is a `SurfaceView`, and the buffer size is fixed at open to the take's size.** A
 TextureView's SurfaceTexture is drained by the app's GL thread; at high speed it cannot keep up, the
 queue backs up, and this HAL leaks fences and triggers its own recovery — the app frozen
