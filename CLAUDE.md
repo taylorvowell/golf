@@ -371,7 +371,8 @@ or a narration of the steps taken — the code and the commit are that.
 
 ## Replying
 
-**Way less words. Straight to the point.** Lead with the answer or the action; no preamble,
+**Way less words. Straight to the point. Simple and straightforward** (Taylor, 2026-08-20 —
+repeated because it keeps slipping). Lead with the answer or the action; no preamble,
 no closing summary, no "what this means" section. A few bullets or one short table — not both.
 State *what* changed and *where*; the *why* goes in code comments or `docs/decisions/`, not in
 the reply. Don't explain reasoning unless asked, don't recap rejected options, don't restate what

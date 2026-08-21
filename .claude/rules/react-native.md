@@ -93,6 +93,9 @@ along.
 
 ## Getting the app onto a device
 
+- **Claude runs the install itself, when the work calls for it** (Taylor, 2026-08-20): after a
+  native change with the phone/emulator connected, run `phone:native`/`emu:native` and report —
+  never hand Taylor the command.
 - **`pnpm --filter mobile phone` is the ONLY way to install and launch.** Add `:restart` when it
   stops hot refreshing (Metro still answers `/status`; the HMR socket is what died). Add `:native` after a
   Kotlin or `app.json` change; `emu` / `emu:native` for the AVD. It is

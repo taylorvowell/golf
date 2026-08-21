@@ -74,8 +74,17 @@ export function CameraStage({
       setPermission("denied");
       return;
     }
-    const result = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA);
-    setPermission(result === PermissionsAndroid.RESULTS.GRANTED ? "granted" : "denied");
+    // BOTH, together: the recorder captures audio (impact detection seeds from it), and a
+    // missing RECORD_AUDIO grant fails the take at `setAudioSource` — after the camera
+    // permission alone let the preview open and the Record button look ready.
+    const results = await PermissionsAndroid.requestMultiple([
+      PermissionsAndroid.PERMISSIONS.CAMERA,
+      PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+    ]);
+    const granted = Object.values(results).every(
+      (r) => r === PermissionsAndroid.RESULTS.GRANTED,
+    );
+    setPermission(granted ? "granted" : "denied");
   }, []);
 
   useEffect(() => {
@@ -97,9 +106,10 @@ export function CameraStage({
         <View style={styles.feed}>
           {permission === "denied" ? (
             <View style={styles.denied}>
-              <Text style={styles.deniedTitle}>SwingSage needs the camera</Text>
+              <Text style={styles.deniedTitle}>SwingSage needs the camera and mic</Text>
               <Text style={styles.deniedDetail}>
-                Recording a swing starts with seeing one. Allow camera access to film.
+                The camera films your swing; the mic is how the app hears the strike and
+                finds it for you. Allow both to record.
               </Text>
               <Pressable
                 accessibilityRole="button"
