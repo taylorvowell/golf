@@ -28,6 +28,18 @@ export function playCountdownTick(): void {
 }
 
 /**
+ * The "about three seconds left" cue (capture spec §01.4.4) — the take is nearing its hard
+ * cap with no shot detected. Reuses the ACK two-tone: distinct from the countdown's single
+ * beep and both record cues, and the press-ack it shares a sound with played twenty seconds
+ * earlier. A dedicated tone can land with the audio polish pass.
+ */
+export function playWarningTone(): void {
+  const prefs = getAppPrefs();
+  if (!prefs.recordSounds) return;
+  void HighSpeedCamera?.playClickSound?.();
+}
+
+/**
  * The audible record cue — the system camera's own start/stop sounds, gated by the Settings
  * toggle. Keyed on entering and leaving `recording` so a cancelled countdown stays silent:
  * nothing was recorded, so nothing should say it was. The enabled flag rides in a ref so a

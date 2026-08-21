@@ -1,14 +1,28 @@
 {
   "schemaVersion": 1,
   "featureName": "session-mode",
-  "currentStep": "03",
-  "phase": "Session Mode — UI",
-  "lastUpdated": "2026-08-18T00:00:00Z",
+  "currentStep": "05",
+  "phase": "Session Mode — Wiring",
+  "lastUpdated": "2026-08-20T21:00:00Z",
   "steps": {
     "01": { "status": "complete", "completedAt": "2026-08-18T00:00:00Z" },
     "02": { "status": "complete", "completedAt": "2026-08-18T00:00:00Z" },
-    "03": { "status": "not-started" },
-    "04": { "status": "not-started" },
+    "03": {
+      "status": "in-progress",
+      "startedAt": "2026-08-18T00:00:00Z",
+      "note": "RECONCILE 2026-08-20: the UX iteration half shipped across b426ce9/90dfe56/331f976/1420ab3/38b7854 (capture chrome, post-swing dock, sheets, dual-sync stubs, controls rails). What keeps it in-progress is the step's actual gate: Taylor's walk-and-sign-off, an OPEN HANDOFF row. Not blocking the wiring steps — 04 built on it and completed.",
+      "humanReview": "Waiting on Taylor's sign-off walk (HANDOFF row 'Walk the session-mode UI'). His D61 gate — do not self-complete."
+    },
+    "04": {
+      "status": "complete",
+      "completedAt": "2026-08-20T21:00:00Z",
+      "partial": true,
+      "pendingEnvActions": [
+        "S25+ device pass: configured fps on real glass, back-to-back take reliability, audio seed accuracy outdoors, trimmed-clip playback (HANDOFF row filed 2026-08-20)",
+        "Emulator/device walk of the full record → review → save → replay flow (native rebuild required: module functions changed)"
+      ],
+      "note": "RECONCILE 2026-08-20: native half shipped in 66a3479 (HighSpeedCameraView dual-session recording, SwingClip detectImpacts/trim, SwingReview screen); the joining wiring shipped this session under the capture spec package (.claude/golf_swing_capture_spec/ — the governing contract, see mobile-client.md 'The record chain is take → review → trim'): sessionState pendingTake stage + take-ready/save-take/discard-take actions, useTakeRecorder (240 ceiling, 23s cap, 17s warning), SwingReview rendered from SessionScreen, Save → trimClip → swing minted with clip, PostSwingView plays the trimmed clip via LocalClipPlayer, dead camera2Record path deleted, deleteClip added. Oracles green: mobile tsc clean, 411 jest tests, :app:compileDebugKotlin BUILD SUCCESSFUL. FPS pill dropped from this step per Taylor's step-03 withdrawal (honest-rate surfacing is a failure message only)."
+    },
     "05": { "status": "not-started" },
     "06": { "status": "not-started" },
     "07": { "status": "not-started" }

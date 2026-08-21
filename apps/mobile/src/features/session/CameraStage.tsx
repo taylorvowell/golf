@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode, type Ref } from "react";
 import {
   Linking,
   PermissionsAndroid,
@@ -11,6 +11,10 @@ import {
 } from "react-native";
 
 import HighSpeedCameraView from "../../../modules/high-speed-camera/src/HighSpeedCameraView";
+import type {
+  HighSpeedCameraViewProps,
+  HighSpeedCameraViewRef,
+} from "../../../modules/high-speed-camera/src/HighSpeedCameraView";
 import { FONT_BODY, FONT_DISPLAY } from "../../design/system/typography";
 import { COLORS } from "../../theme";
 import { AlignmentGhost } from "./AlignmentGhost";
@@ -23,8 +27,8 @@ import type { CameraFacing, CameraZoom, ZoomRange } from "./sessionState";
  *
  * Permission is a real screen state, not an alert: denied renders a readable explanation
  * with a door to Settings, and the preview mounts only behind a grant — the native view
- * assumes it. Recording is still the stub (`sessionReducer`); binding the record path to
- * this same session is the rest of step 04.
+ * assumes it. The take itself is driven through `cameraRef` by the session screen — this
+ * component only owns the picture and the permission gate.
  */
 
 export interface CameraStageProps {
@@ -36,6 +40,11 @@ export interface CameraStageProps {
   zoom: CameraZoom;
   /** The open lens's real zoom range, straight from Camera2 — the zoom slider's bounds. */
   onZoomRange?: (range: ZoomRange) => void;
+  /** The session screen's handle on the take (`startRecording`/`stopRecording`). Null until
+   * the permission grant mounts the native view — callers must tolerate that. */
+  cameraRef?: Ref<HighSpeedCameraViewRef>;
+  /** A take that ended without `stopRecording` — the hard cap, or a mid-take failure. */
+  onRecordingEnded?: HighSpeedCameraViewProps["onRecordingEnded"];
   children?: ReactNode;
 }
 
@@ -47,6 +56,8 @@ export function CameraStage({
   facing,
   zoom,
   onZoomRange,
+  cameraRef,
+  onRecordingEnded,
   children,
 }: CameraStageProps) {
   const [box, setBox] = useState({ width: 0, height: 0 });
@@ -75,9 +86,11 @@ export function CameraStage({
     <View style={styles.root} onLayout={onLayout} testID="camera-stage">
       {permission === "granted" ? (
         <HighSpeedCameraView
+          ref={cameraRef}
           facing={facing}
           zoom={zoom}
           onZoomRange={(e) => onZoomRange?.({ min: e.nativeEvent.min, max: e.nativeEvent.max })}
+          onRecordingEnded={onRecordingEnded}
           style={StyleSheet.absoluteFill}
         />
       ) : (

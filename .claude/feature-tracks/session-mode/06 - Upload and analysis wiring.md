@@ -88,3 +88,14 @@ the local clip for the analyzed swing — phase markers, scores, report sheet an
 The direct-upload seam and its named shortfalls (no resumability, no background survival,
 no wifi policy) are `media-pipeline`'s to close — log the seam in `docs/decisions/`
 media-storage register when built.
+
+**Aligned to the capture spec package (2026-08-20):** `.claude/golf_swing_capture_spec/`
+governs. This step's upload client feeds the EXISTING two-phase ingest
+(`apps/web/src/lib/ingest.ts` + `POST /api/v1/swings` → signed target or dev PUT →
+`/source/complete`), which already implements the spec's direct-to-storage rule (§04.11) —
+do not build a second path. Three additions from the spec: (1) upload the TRIMMED clip the
+save path produced (`swing.clip`), never the source; (2) the create payload carries the
+detector's candidates and the golfer's chosen window (spec §06.8/§06.11 — the
+predicted-vs-corrected telemetry that trains the detector); (3) the local source-deletion
+contract completes here — server acceptance is the second half (spec §04.13); until
+acceptance the trimmed clip is never deleted locally.

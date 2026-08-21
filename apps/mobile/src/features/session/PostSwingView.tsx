@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { navBarBottomInset } from "../../design/system";
+import { FloatingBack, navBarBottomInset } from "../../design/system";
 import { FONT_BODY, FONT_DISPLAY } from "../../design/system/typography";
 import { useAuthenticatedImage } from "../../platform/useAuthenticatedImage";
 import { SwingPage, swingAspectRatio } from "../report/SwingPage";
@@ -12,6 +12,7 @@ import { useSwings } from "../swings/useSwings";
 import { COLORS } from "../../theme";
 import { AnalysisCompleteOverlay } from "./AnalysisCompleteOverlay";
 import { AnalyzingBar } from "./AnalyzingBar";
+import { LocalClipPlayer } from "./LocalClipPlayer";
 import { SessionSwingDock } from "./SessionSwingDock";
 import type { SessionAction, SessionState, SessionSwing } from "./sessionState";
 import { SessionSwingListSheet } from "./sheets/SessionSwingListSheet";
@@ -26,9 +27,10 @@ import { ANALYSIS_ERRORS, type AnalysisErrorKind } from "./analysisError";
  * centre is the next recording. Everything about how the swing plays and how the scorecard
  * behaves lives in `SwingPage`; this file owns only what a SESSION adds.
  *
- * UI phase: the recorded clip does not exist yet, so the newest REAL swing stands in for
- * playback and the report (`__DEV__`-grade stubbing — the wiring swaps who mints the swing
- * id and nothing about this screen moves).
+ * A swing minted through the record flow carries its trimmed local clip and plays exactly
+ * that. The stand-in path below it survives only for legacy stub swings (a `__DEV__` flow
+ * with no clip); step 06 replaces local playback with the served, artifact-backed report
+ * once analysis completes.
  */
 
 export interface PostSwingViewProps {
@@ -206,6 +208,35 @@ export function PostSwingView({ state, dispatch, swing, onEndSession }: PostSwin
     />
   );
 
+  if (swing.clip) {
+    // The recorded truth: the trimmed local clip loops full-bleed with the session chrome
+    // over it. Step 06 swaps this for the served, artifact-backed report when analysis
+    // lands; until then the local file is the honest picture of the swing that was hit.
+    return (
+      <View style={styles.localRoot} testID="post-swing-local">
+        <LocalClipPlayer clip={swing.clip} />
+        <FloatingBack
+          onPress={() => dispatch({ type: "back-to-capture" })}
+          style={[styles.localBack, { top: insets.top + 8 }]}
+          testID="post-swing-back"
+        />
+        {!analyzed ? (
+          <View
+            style={[styles.analyzingSlot, { bottom: navBarBottomInset(insets.bottom) + 74 }]}
+            pointerEvents="none"
+          >
+            <AnalyzingBar recordedAt={swing.recordedAt} />
+          </View>
+        ) : null}
+        {dock(false)}
+        {celebrating ? <AnalysisCompleteOverlay /> : null}
+        {swingListSheet}
+        {deleteSheet}
+        {errorSheet}
+      </View>
+    );
+  }
+
   if (standIn == null) {
     // No real swing exists to stand in (fresh install / unreachable): the loop must still
     // work, so the bar renders over a quiet stage instead of the player.
@@ -265,6 +296,9 @@ const styles = StyleSheet.create({
   // Left of the raised record button, above the session bar. `right: 64%` is what keeps it
   // clear of the centre slot on every width — the slot is a fixed 86 and always centred.
   analyzingSlot: { position: "absolute", left: 12, right: "64%" },
+  // Full-bleed local playback: video is the ground, chrome floats — same shape as capture.
+  localRoot: { flex: 1, backgroundColor: "#000" },
+  localBack: { position: "absolute", left: 16 },
   fallback: { flex: 1, backgroundColor: COLORS.bg, justifyContent: "center", padding: 24, gap: 8 },
   fallbackTitle: {
     color: COLORS.text,

@@ -107,3 +107,15 @@ stub 0.5/1/2 stops with the device's probed zoom range), and the **DTL/Front vie
 (`state.view`, stamped per swing and threaded to the analyzer's `--view` when the pipeline
 wires up in step 06). Camera choices are reducer-gated to idle; the native session should
 apply them on preview restart, not mid-recording.
+
+**Superseded in part by the capture spec package (2026-08-20):**
+`.claude/golf_swing_capture_spec/` is now the governing contract for this subsystem (decision
+logged in `docs/decisions/mobile-client.md`, "The record chain is take → review → trim").
+Two changes to this step as written: (1) a recording never becomes a swing directly — a
+finalized take enters review (`SwingReview`, fixed six-second window seeded by post-hoc audio
+detection) and only Save mints the swing, so "Stop → post-swing plays the file" gained a
+review stage in between; (2) the FPS pill was already withdrawn by Taylor in step 03 —
+honest-rate surfacing is a failure message, never a standing readout. Recording requests the
+240 ceiling with a 23 s hard cap and a 17 s warning tone (`captureConstants.ts`). Shipped
+2026-08-20 across commits `38b7854`, `66a3479`, and the record-chain wiring; the S25+ device
+pass (real fps, frame-lock, reliability) is the named shortfall on the HANDOFF register.

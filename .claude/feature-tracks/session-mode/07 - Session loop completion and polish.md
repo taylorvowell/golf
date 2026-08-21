@@ -77,3 +77,10 @@ What this track leaves for others, restated so nothing silently drops: focus car
 feedback + spoken feedback (`practice-loop`), capability messaging + manual trim
 (`in-app-capture`), resumable upload (`media-pipeline`), auto-stop impact detection
 (icebox), entitlement gating of session types (`billing-iap` reads the seam).
+
+**Aligned to the capture spec package (2026-08-20):** two spec items join this step's sweep —
+a short **Undo after deleting a take** on the review screen (spec §01.6.2: the file survives
+until the undo window expires; today Delete is immediate) and an **orphaned-take cleanup**
+sweep for recordings stranded in cache by a crash mid-review (spec §02.12). Filmstrip
+thumbnails on the review track remain a named deviation (skinning-pass upgrade), not this
+step's work.

@@ -1,4 +1,5 @@
 import { requireNativeView } from "expo";
+import type { ComponentType, Ref } from "react";
 import type { StyleProp, ViewStyle } from "react-native";
 
 /** Why a take ended without `stopRecording` being called. */
@@ -42,6 +43,9 @@ export interface HighSpeedCameraViewProps {
         | { reason: "error"; error: string };
     },
   ) => void;
+  /** The take handle (`startRecording`/`stopRecording`) — methods live on the VIEW because
+   * the take shares the preview's camera device; see `HighSpeedCameraViewRef`. */
+  ref?: Ref<HighSpeedCameraViewRef>;
   style?: StyleProp<ViewStyle>;
 }
 
@@ -75,4 +79,8 @@ export interface HighSpeedCameraViewRef {
  * reconfigures this same session as a constrained high-speed one carrying both the preview and the
  * recorder surface, so the picture stays live at the capture rate.
  */
-export default requireNativeView<HighSpeedCameraViewProps>("HighSpeedCamera");
+// Cast because `requireNativeView`'s return type cannot express view-ref methods — the
+// interface above is the contract the native `View { AsyncFunction … }` block implements.
+export default requireNativeView(
+  "HighSpeedCamera",
+) as ComponentType<HighSpeedCameraViewProps>;

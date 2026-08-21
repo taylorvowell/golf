@@ -5,16 +5,30 @@ import {
   sessionDisplayName,
   sessionReducer,
   type SessionState,
+  type SwingClipRef,
 } from "./sessionState";
 
 /**
  * The rules that protect the golfer live in the reducer, so they are pinned here: the type
- * locks once a swing exists, an aborted countdown mints nothing, and a session's swings
- * only ever appear through a completed recording.
+ * locks once a swing exists, an aborted countdown mints nothing, a recording only becomes a
+ * swing through review (take-ready → save-take, capture spec §01.5), and an unreviewed take
+ * — the only copy of that swing — can never be recorded over or destroyed by a stray press.
  */
 
 const base = (): SessionState =>
   initialSessionState(3, new Date(2026, 7, 18), DEFAULT_SESSION_SETTINGS);
+
+const TAKE: SwingClipRef = { path: "/cache/take.mp4", fps: 240, durationMs: 20_000 };
+const CLIP: SwingClipRef = { path: "/cache/clip.mp4", fps: 240, durationMs: 6_000 };
+
+/** The full happy path: arm → countdown → recording → finalized take → reviewed → saved. */
+function recordSwing(s: SessionState, id: string, at = 1): SessionState {
+  s = sessionReducer(s, { type: "arm" });
+  s = sessionReducer(s, { type: "countdown-done" });
+  s = sessionReducer(s, { type: "take-ready", take: TAKE, at });
+  s = sessionReducer(s, { type: "save-take", swingId: id, clip: CLIP, at });
+  return s;
+}
 
 it("names the session from its number and date", () => {
   const s = base();
@@ -34,9 +48,7 @@ it("changes type while empty and locks it after the first swing", () => {
   let s = sessionReducer(base(), { type: "set-type", sessionType: "video_only" });
   expect(s.sessionType).toBe("video_only");
 
-  s = sessionReducer(s, { type: "arm" });
-  s = sessionReducer(s, { type: "countdown-done" });
-  s = sessionReducer(s, { type: "stop", swingId: "a", at: 1 });
+  s = recordSwing(s, "a");
   expect(s.swings).toHaveLength(1);
 
   s = sessionReducer(s, { type: "set-type", sessionType: "swing_analysis" });
@@ -59,13 +71,57 @@ it("aborts a countdown to idle without minting a swing", () => {
   expect(s.swings).toHaveLength(0);
 });
 
-it("mints a numbered swing on stop, newest first, and marks it ready later", () => {
+it("a finalized take opens review; only save-take mints the swing", () => {
+  let s = sessionReducer(base(), { type: "arm" });
+  s = sessionReducer(s, { type: "countdown-done" });
+  s = sessionReducer(s, { type: "take-ready", take: TAKE, at: 10 });
+  expect(s.mode).toBe("idle");
+  expect(s.pendingTake).toMatchObject(TAKE);
+  expect(s.swings).toHaveLength(0);
+  expect(s.stoppedAt).toBe(10);
+
+  s = sessionReducer(s, { type: "save-take", swingId: "a", clip: CLIP, at: 12 });
+  expect(s.pendingTake).toBeNull();
+  expect(s.swings).toHaveLength(1);
+  expect(s.swings[0]).toMatchObject({ id: "a", number: 1, clip: CLIP });
+});
+
+it("take-ready is idempotent against the tap/hard-cap race", () => {
+  let s = sessionReducer(base(), { type: "arm" });
+  s = sessionReducer(s, { type: "countdown-done" });
+  s = sessionReducer(s, { type: "take-ready", take: TAKE, at: 10 });
+  // The loser of the race answers late — it must not re-open review or move anything.
+  expect(sessionReducer(s, { type: "take-ready", take: CLIP, at: 11 })).toBe(s);
+});
+
+it("nothing arms over an unreviewed take, and discard mints nothing", () => {
+  let s = sessionReducer(base(), { type: "arm" });
+  s = sessionReducer(s, { type: "countdown-done" });
+  s = sessionReducer(s, { type: "take-ready", take: TAKE, at: 10 });
+
+  // The take is the only copy of that swing — arm and the remote are both sealed.
+  expect(sessionReducer(s, { type: "arm" })).toBe(s);
+  expect(sessionReducer(s, { type: "shutter-press", at: 99_000 })).toBe(s);
+
+  s = sessionReducer(s, { type: "discard-take" });
+  expect(s.pendingTake).toBeNull();
+  expect(s.swings).toHaveLength(0);
+  expect(s.mode).toBe("idle");
+});
+
+it("record-failed returns to idle with nothing minted", () => {
+  let s = sessionReducer(base(), { type: "set-settings", settings: { delaySeconds: 0 } });
+  s = sessionReducer(s, { type: "arm" });
+  expect(s.mode).toBe("recording");
+  s = sessionReducer(s, { type: "record-failed" });
+  expect(s.mode).toBe("idle");
+  expect(s.pendingTake).toBeNull();
+  expect(s.swings).toHaveLength(0);
+});
+
+it("numbers swings in hit order, newest first, and marks them ready later", () => {
   let s = base();
-  for (const id of ["a", "b"]) {
-    s = sessionReducer(s, { type: "arm" });
-    s = sessionReducer(s, { type: "countdown-done" });
-    s = sessionReducer(s, { type: "stop", swingId: id, at: 1 });
-  }
+  for (const id of ["a", "b"]) s = recordSwing(s, id);
   expect(s.swings.map((sw) => sw.id)).toEqual(["b", "a"]);
   expect(s.swings.map((sw) => sw.number)).toEqual([2, 1]);
   expect(s.swings.every((sw) => sw.status === "analyzing")).toBe(true);
@@ -75,38 +131,26 @@ it("mints a numbered swing on stop, newest first, and marks it ready later", () 
   expect(s.swings.find((sw) => sw.id === "b")?.status).toBe("analyzing");
 });
 
-it("reviews the new swing after stop, or stays on capture with replay off", () => {
-  let s = sessionReducer(base(), { type: "arm" });
-  s = sessionReducer(s, { type: "countdown-done" });
-  s = sessionReducer(s, { type: "stop", swingId: "a", at: 1 });
+it("reviews the new swing after save, or stays on capture with replay off", () => {
+  const s = recordSwing(base(), "a");
   expect(s.reviewing).toBe("a");
-
-  s = sessionReducer(s, { type: "back-to-capture" });
-  expect(s.reviewing).toBeNull();
+  expect(sessionReducer(s, { type: "back-to-capture" }).reviewing).toBeNull();
 
   let off = sessionReducer(base(), { type: "set-settings", settings: { videoReplay: false } });
-  off = sessionReducer(off, { type: "arm" });
-  off = sessionReducer(off, { type: "countdown-done" });
-  off = sessionReducer(off, { type: "stop", swingId: "b", at: 1 });
+  off = recordSwing(off, "b");
   expect(off.reviewing).toBeNull();
   expect(off.swings).toHaveLength(1);
 });
 
 it("mints video-only and AI-off swings born ready — nothing will ever analyze them", () => {
   let s = sessionReducer(base(), { type: "set-type", sessionType: "video_only" });
-  s = sessionReducer(s, { type: "arm" });
-  s = sessionReducer(s, { type: "countdown-done" });
-  s = sessionReducer(s, { type: "stop", swingId: "a", at: 1 });
+  s = recordSwing(s, "a");
   expect(s.swings[0].status).toBe("ready");
 });
 
 it("navigates between session swings and deletes back to capture", () => {
   let s = base();
-  for (const id of ["a", "b"]) {
-    s = sessionReducer(s, { type: "arm" });
-    s = sessionReducer(s, { type: "countdown-done" });
-    s = sessionReducer(s, { type: "stop", swingId: id, at: 1 });
-  }
+  for (const id of ["a", "b"]) s = recordSwing(s, id);
   expect(s.reviewing).toBe("b");
   expect(previousSwing(s, "b")?.id).toBe("a");
   expect(previousSwing(s, "a")).toBeNull();
@@ -136,7 +180,10 @@ it("holds camera choices between recordings and stamps the view on the swing", (
   expect(sessionReducer(s, { type: "flip-camera" }).facing).toBe("front");
 
   s = sessionReducer(s, { type: "countdown-done" });
-  s = sessionReducer(s, { type: "stop", swingId: "a", at: 1 });
+  // The view is stamped when the take finalizes, and it survives through the save.
+  s = sessionReducer(s, { type: "take-ready", take: TAKE, at: 1 });
+  expect(s.pendingTake?.view).toBe("face_on");
+  s = sessionReducer(s, { type: "save-take", swingId: "a", clip: CLIP, at: 2 });
   expect(s.swings[0].view).toBe("face_on");
 });
 
@@ -147,7 +194,7 @@ it("ignores arm while busy and countdown-done while not counting", () => {
   expect(sessionReducer(s, { type: "countdown-done" })).toBe(s);
 });
 
-it("shutter press arms from idle, cancels a countdown, and stops a recording", () => {
+it("shutter press arms from idle and cancels a countdown — but never stops a recording", () => {
   let s = sessionReducer(base(), { type: "shutter-press", at: 0 });
   expect(s.mode).toBe("countdown");
 
@@ -159,15 +206,16 @@ it("shutter press arms from idle, cancels a countdown, and stops a recording", (
   expect(s.mode).toBe("countdown");
 
   s = sessionReducer(s, { type: "countdown-done" });
-  s = sessionReducer(s, { type: "shutter-press", at: 8_000 });
-  expect(s.mode).toBe("idle");
-  expect(s.swings).toHaveLength(1);
+  // Ending a recording is the native recorder's to do — the screen routes that press to
+  // `stopRecording()` and the reducer waits for `take-ready`. A press here changes nothing.
+  expect(sessionReducer(s, { type: "shutter-press", at: 8_000 })).toBe(s);
 });
 
 it("shutter press within 3s of a stop is the double click on Stop — ignored", () => {
   let s = sessionReducer(base(), { type: "arm" });
   s = sessionReducer(s, { type: "countdown-done" });
-  s = sessionReducer(s, { type: "stop", swingId: "a", at: 10_000 });
+  s = sessionReducer(s, { type: "take-ready", take: TAKE, at: 10_000 });
+  s = sessionReducer(s, { type: "save-take", swingId: "a", clip: CLIP, at: 10_500 });
   expect(s.reviewing).toBe("a");
 
   expect(sessionReducer(s, { type: "shutter-press", at: 11_000 })).toBe(s);

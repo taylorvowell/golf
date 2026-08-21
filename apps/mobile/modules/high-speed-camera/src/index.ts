@@ -10,12 +10,6 @@ export interface Camera2Capabilities {
   reason?: string;
 }
 
-export interface HighSpeedRecording {
-  path: string;
-  requestedFps: number;
-  api: string;
-}
-
 /** A candidate ball strike found in a recorded take. */
 export interface ImpactCandidate {
   /** Seconds from the start of the clip. */
@@ -26,7 +20,6 @@ export interface ImpactCandidate {
 
 interface HighSpeedCameraModule {
   camera2Capabilities(): Promise<Camera2Capabilities>;
-  camera2Record(fps: number, seconds: number): Promise<HighSpeedRecording>;
   /**
    * Candidate strike times, strongest first.
    *
@@ -38,6 +31,9 @@ interface HighSpeedCameraModule {
   detectImpacts(path: string, limit: number): Promise<ImpactCandidate[]>;
   /** Remux a window out of a take. No re-encode — milliseconds, and no quality lost. */
   trimClip(path: string, startSec: number, endSec: number): Promise<{ path: string }>;
+  /** Remove a recording the flow is finished with (a trimmed-away source, a binned take).
+   * Resolves false when the file was already gone — never an error. */
+  deleteClip(path: string): Promise<boolean>;
   playRecordSound(start: boolean): Promise<void>;
   playCountdownTick(): Promise<void>;
   playClickSound(): Promise<void>;

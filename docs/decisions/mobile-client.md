@@ -37,12 +37,12 @@ fails with `ERR_PNPM_ENOENT` while Metro or `pnpm dev` holds files — stop both
 
 ## Native modules
 
-### Two local Expo modules are load-bearing; `high-speed-camera` has no consumer in the tree
+### Two local Expo modules are load-bearing
 
 **Decision:** `modules/frame-clock` and `modules/high-speed-camera` are permanent, not spike
 leftovers. They were the step 02 spike's actual deliverable. `frame-clock` gained its consumer with
-the player (below); `high-speed-camera` still has none and **will read as dead code to any sweep.**
-Do not delete it.
+the player (below); `high-speed-camera` gained its consumers with the session record chain
+(`CameraStage` preview, `useTakeRecorder`, `SwingReview` detection, save-path trim).
 
 - **`frame-clock`** wraps Media3's `VideoFrameMetadataListener`. No Expo/RN video component
   surfaces a per-frame presented-frame callback, and the whole overlay depends on one.
@@ -194,6 +194,33 @@ per-frame allowance asks 124 Mbps at 1080p240 and roughly triples what the encod
 rates adjacent frames are nearly identical, so bits-per-pixel should FALL as the rate rises. The
 constants are provisional until a bitrate sweep is diffed with `scripts/compare_analysis.py`,
 watching **club coverage**, which degrades long before pose does.
+
+### The record chain is take → review → trim, governed by the capture spec package
+
+**Decision:** `.claude/golf_swing_capture_spec/` (00–12) is the governing contract for the capture
+subsystem — capture, detection, review, trim, upload, backend. Where an older step file or comment
+disagrees with it, the spec wins. The wired chain: Record drives the native session through
+`useTakeRecorder` (requests the 240 ceiling; the device's configured rate is the truth); a
+finalized take enters `pendingTake` and **review owns the surface** — a recording never becomes a
+swing except through `save-take`, and nothing (arm, shutter remote, hardware back) can touch an
+unreviewed take, because it is the only copy of that swing. Save trims to the golfer's six-second
+window (remux, no re-encode) and mints the swing with its `clip`; Delete discards take and file.
+The post-swing screen plays the trimmed clip until step 06 swaps in the analyzed swing.
+**Constants live in `features/session/captureConstants.ts`** (spec §11.7): 20 s impact window,
+17 s warning tone, 3 s pre/post-roll, 240 fps ceiling. The hard cap is 23 s — without live
+detection the app cannot know a shot at second 19 still needs its follow-through, and a lost swing
+is the worst failure the spec names; when live detection lands (auto-stop, iceboxed), an
+impact-free take ends at 20 s.
+**Source-deletion contract, local half:** the untrimmed source is deleted only after a successful
+trim (locally, a successful trim is acceptance; the upload half arrives with step 06). A failed
+trim saves the take **untrimmed** as the swing's clip — never lose the only copy.
+**Named deviations from the spec, deliberate:** the review scrubber is a plain track that slides
+the fixed window, not a thumbnail filmstrip (the interaction contract — fixed six-second window,
+one degree of freedom — is the spec's; thumbnails are a skinning-pass upgrade). Delete on review
+is immediate, with no Undo yet. Detection is post-hoc audio only (the spec's Tier C — the
+two-surface limit forbids live sampling), so candidate markers seed from `detectImpacts` after
+recording. Capture-attempt telemetry (predicted vs corrected window) waits for the step 06 create
+API.
 
 ### Session mode is the capture surface, built UI-first behind Taylor's sign-off gate
 

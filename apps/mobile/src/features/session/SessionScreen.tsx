@@ -11,7 +11,11 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect } from "@react-navigation/native";
+import { VideoOff } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import HighSpeedCamera from "../../../modules/high-speed-camera/src";
+import type { HighSpeedCameraViewRef } from "../../../modules/high-speed-camera/src/HighSpeedCameraView";
 
 import { AppHeader, APP_HEADER_BAR, useNavVisibility } from "../../design/system";
 import { FONT_DISPLAY } from "../../design/system/typography";
@@ -44,16 +48,20 @@ import {
 import { DualSyncSheet } from "./sheets/DualSyncSheet";
 import { SessionSettingsSheet } from "./sheets/SessionSettingsSheet";
 import { SessionTypeInfoSheet } from "./sheets/SessionTypeInfoSheet";
+import { SwingReview } from "./SwingReview";
 import { useRecordSounds } from "./useRecordSounds";
 import { useShutterRemote } from "./useShutterRemote";
+import { useTakeRecorder } from "./useTakeRecorder";
+import { useToast } from "../toast/ToastProvider";
 
 /**
  * Session mode (D61) — the capture surface behind the tab bar's Record door.
  *
- * UI phase: everything on screen is real client state driven by `sessionReducer`; nothing
- * records or persists. The camera is `CameraStage`'s stub and Stop mints a stub swing —
- * the post-swing view takes over from there, and the wiring steps replace the seams
- * without moving the chrome.
+ * The record chain is real (capture spec §00.3, step 04): Record drives the native
+ * high-speed session through `useTakeRecorder`, a finalized take opens `SwingReview`'s
+ * six-second window, Save trims and mints the swing, and the post-swing view plays the
+ * trimmed clip. Not yet real: upload + analysis (step 06 — the analyzing bar is still the
+ * stub driver below) and session persistence (step 05).
  *
  * The route is a TRANSPARENT modal and this screen animates its own entrance (Taylor,
  * step-03 iteration): the session surface slides up over the still-visible previous screen
@@ -112,6 +120,88 @@ export function SessionScreen() {
     swingsRef.current = state.swings;
   }, [locked, state.swings]);
   const [sheet, setSheet] = useState<SheetName>(null);
+
+  // ---- The take itself -------------------------------------------------------------------
+  const cameraRef = useRef<HighSpeedCameraViewRef | null>(null);
+  const toast = useToast();
+  // Read at failure time, not captured — the flip that caused the failure already happened.
+  const facingRef = useRef(state.facing);
+  useEffect(() => {
+    facingRef.current = state.facing;
+  }, [state.facing]);
+  const onRecordError = useCallback(
+    (message: string) => {
+      if (__DEV__) console.warn("recording failed:", message);
+      toast({
+        id: `record-failed-${Date.now()}`,
+        title: "Couldn't record",
+        // The one predictable cause gets its own words: only the back lens publishes
+        // high-speed configurations, and the native side refuses rather than degrading.
+        detail:
+          facingRef.current === "front"
+            ? "Only the back camera records high-speed video. Flip the camera and try again."
+            : "The camera couldn't record. Try again.",
+        icon: VideoOff,
+      });
+    },
+    [toast],
+  );
+
+  const { stop: stopTake, onRecordingEnded } = useTakeRecorder(
+    state.mode,
+    cameraRef,
+    dispatch,
+    onRecordError,
+  );
+
+  /** Save on the review screen: trim to the chosen window, then mint the swing. */
+  const [savingTake, setSavingTake] = useState(false);
+  const saveTake = useCallback(
+    async (window: { startSec: number; endSec: number }) => {
+      const take = state.pendingTake;
+      if (!take || savingTake) return;
+      setSavingTake(true);
+      try {
+        const { path } = await HighSpeedCamera.trimClip(
+          take.path,
+          window.startSec,
+          window.endSec,
+        );
+        // The trimmed clip is now the retained copy; the untrimmed source has served its
+        // purpose. (The upload-acceptance half of the deletion contract arrives with step
+        // 06 — locally, a successful trim IS acceptance.)
+        void HighSpeedCamera.deleteClip?.(take.path);
+        dispatch({
+          type: "save-take",
+          at: Date.now(),
+          clip: {
+            path,
+            fps: take.fps,
+            durationMs: Math.round((window.endSec - window.startSec) * 1000),
+          },
+        });
+      } catch {
+        // Trim failed: the take is the ONLY copy of the swing, so it becomes the clip
+        // untrimmed rather than being lost (capture spec §00.10 — never lose the only copy).
+        dispatch({
+          type: "save-take",
+          at: Date.now(),
+          clip: { path: take.path, fps: take.fps, durationMs: take.durationMs },
+        });
+      } finally {
+        setSavingTake(false);
+      }
+    },
+    [savingTake, state.pendingTake],
+  );
+
+  /** Delete on the review screen: the golfer said bin it, so the file goes too. */
+  const discardTake = useCallback(() => {
+    const take = state.pendingTake;
+    if (!take) return;
+    void HighSpeedCamera.deleteClip?.(take.path);
+    dispatch({ type: "discard-take" });
+  }, [state.pendingTake]);
 
   // ---- Entrance / exit ------------------------------------------------------------------
   // 0 = on screen, 1 = parked below. Entrance runs on mount; every way out goes through
@@ -202,9 +292,16 @@ export function SessionScreen() {
   // the exit sheet over the wrong page.
   const reviewingRef = useRef(state.reviewing);
   reviewingRef.current = state.reviewing;
+  const pendingTakeRef = useRef(state.pendingTake);
+  pendingTakeRef.current = state.pendingTake;
   useFocusEffect(
     useCallback(() => {
       const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+        if (pendingTakeRef.current !== null) {
+          // An unreviewed take is the only copy of that swing. Back must not decide its
+          // fate — the golfer chooses Save or Delete on the review screen.
+          return true;
+        }
         if (reviewingRef.current !== null) {
           // Back is ambiguous on the post-swing screen — "another swing" and "end the session"
           // are both plausible and both destructive of the other. Ask.
@@ -249,12 +346,22 @@ export function SessionScreen() {
   );
 
   // The Bluetooth shutter remote (or the volume rocker) — live for the whole session, both
-  // screens; the reducer resolves what a press means from where the golfer is.
+  // screens; the reducer resolves what a press means from where the golfer is. Except one
+  // case: ending a RECORDING is the native module's to do, so that press routes to the
+  // recorder and the reducer moves only when the finalized file arrives.
+  const modeRef = useRef(state.mode);
+  useEffect(() => {
+    modeRef.current = state.mode;
+  }, [state.mode]);
   useShutterRemote(
     useCallback(() => {
       touched.current = true;
+      if (modeRef.current === "recording") {
+        void stopTake();
+        return;
+      }
       dispatch({ type: "shutter-press" });
-    }, []),
+    }, [stopTake]),
   );
 
   // Audible record start/stop cue (Settings → "Play record and stop sound").
@@ -285,7 +392,16 @@ export function SessionScreen() {
     <View style={styles.root}>
       {/* Everything that IS the page slides; the header (below) does not. */}
       <Animated.View style={[styles.sliding, { transform: [{ translateY }] }]}>
-        {reviewingSwing ? (
+        {state.pendingTake ? (
+          // The finished take, unconfirmed: review owns the whole surface (capture spec
+          // §01.5 — verification before anything becomes a swing). Save trims; Delete bins.
+          <SwingReview
+            take={state.pendingTake}
+            saving={savingTake}
+            onSave={(w) => void saveTake(w)}
+            onDelete={discardTake}
+          />
+        ) : reviewingSwing ? (
           <PostSwingView
             state={state}
             dispatch={dispatch}
@@ -299,6 +415,8 @@ export function SessionScreen() {
             facing={state.facing}
             zoom={state.zoom}
             onZoomRange={(range) => dispatch({ type: "set-zoom-range", range })}
+            cameraRef={cameraRef}
+            onRecordingEnded={onRecordingEnded}
           >
             {state.mode === "recording" ? <RecordingFrame /> : null}
 
@@ -397,7 +515,12 @@ export function SessionScreen() {
                 touched.current = true;
                 dispatch({ type: "arm" });
               }}
-              onStop={() => dispatch({ type: "stop" })}
+              // Stopping a countdown is the reducer's abort; stopping a RECORDING goes to
+              // the native recorder, and state moves when the finalized file comes back.
+              onStop={() => {
+                if (state.mode === "recording") void stopTake();
+                else dispatch({ type: "stop" });
+              }}
               onDisarm={() => dispatch({ type: "disarm" })}
               // Backing out of a held countdown lands where the golfer came FROM: the swing
               // they were reviewing mid-session, or the plain capture screen on a fresh one.
@@ -420,8 +543,9 @@ export function SessionScreen() {
       </Animated.View>
 
       {/* The stationary header — the page slides under it (Taylor). Capture only: the
-          post-swing view carries its own FloatingBack chrome instead. */}
-      {!reviewingSwing ? (
+          post-swing view carries its own FloatingBack chrome, and the take-review screen
+          deliberately has NO other doors — Save or Delete is the whole decision. */}
+      {!reviewingSwing && !state.pendingTake ? (
         <Animated.View
           pointerEvents={idle ? "box-none" : "none"}
           style={[StyleSheet.absoluteFill, { opacity: chromeFade }]}

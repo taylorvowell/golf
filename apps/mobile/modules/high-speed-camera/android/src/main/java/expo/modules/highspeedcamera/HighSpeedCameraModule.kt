@@ -7,6 +7,7 @@ import android.media.ToneGenerator
 import expo.modules.kotlin.Promise
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import java.io.File
 
 /**
  * True high-frame-rate capture. **1080p at 231fps measured on a Galaxy S25+** (D39).
@@ -134,30 +135,21 @@ class HighSpeedCameraModule : Module() {
       }
     }
 
+    /**
+     * Remove a recording the flow is finished with — a source the trim replaced, or a take
+     * the golfer binned. `false` (already gone) is a normal answer, never an error: the
+     * caller's goal is "not on disk", and it isn't.
+     */
+    AsyncFunction("deleteClip") { path: String ->
+      File(path).delete()
+    }
+
     /** What the constrained-high-speed map offers, read from CameraCharacteristics directly. */
     AsyncFunction("camera2Capabilities") { promise: Promise ->
       try {
         promise.resolve(Camera2HighSpeed(context).capabilities())
       } catch (e: Throwable) {
         promise.reject("CAMERA2_QUERY", e.message ?: "failed to read camera2 characteristics", e)
-      }
-    }
-
-    /** Record `seconds` at exactly `fps`. Fails loudly rather than degrading. */
-    AsyncFunction("camera2Record") { fps: Int, seconds: Int, promise: Promise ->
-      try {
-        Camera2HighSpeed(context).record(fps, seconds) { result ->
-          result.fold(
-            onSuccess = { path ->
-              promise.resolve(mapOf("path" to path, "requestedFps" to fps, "api" to "camera2"))
-            },
-            onFailure = { e ->
-              promise.reject("CAMERA2_RECORD", e.message ?: "high-speed record failed", null)
-            },
-          )
-        }
-      } catch (e: Throwable) {
-        promise.reject("CAMERA2_RECORD", e.message ?: "high-speed record failed", e)
       }
     }
   }

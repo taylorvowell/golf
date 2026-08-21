@@ -15,6 +15,7 @@ import type { FrameClockHandle } from "../../../modules/frame-clock/src/FrameClo
 import HighSpeedCamera, { type ImpactCandidate } from "../../../modules/high-speed-camera/src";
 import { FONT_DISPLAY } from "../../design/system/typography";
 import { COLORS, SEMANTIC } from "../../theme";
+import { PRE_ROLL_SEC, REVIEW_WINDOW_S } from "./captureConstants";
 
 /**
  * Confirm the take before it becomes a swing.
@@ -35,10 +36,6 @@ import { COLORS, SEMANTIC } from "../../theme";
  * one, so the strike that matters is the later of two similar transients — ordering by time and
  * taking the last plausible one is what stops the window seeding on the rehearsal.
  */
-
-/** Half-width of the review window. A swing is fast; three seconds either side is generous. */
-const HALF_WINDOW_S = 3;
-export const REVIEW_WINDOW_S = HALF_WINDOW_S * 2;
 
 /** A candidate this far below the strongest is noise, not a second swing. */
 const CANDIDATE_FLOOR = 0.45;
@@ -107,7 +104,7 @@ export function SwingReview({ take, onSave, onDelete, saving = false }: SwingRev
         .at(-1);
       // Nothing heard → the end of the clip, which is where a swing sits when the golfer walked
       // back to stop the recording. Never an error, never an empty state.
-      setStart(real ? real.timeSec - HALF_WINDOW_S : maxStart);
+      setStart(real ? real.timeSec - PRE_ROLL_SEC : maxStart);
     })();
     return () => { cancelled = true; };
   }, [take.path, maxStart, setStart]);

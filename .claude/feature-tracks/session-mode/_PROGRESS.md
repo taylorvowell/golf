@@ -1,6 +1,34 @@
 # session-mode — Progress
 
 Append-only log. Spec: `DESIGN-session-mode.md`. Decision: ARCHIVE D61.
+**2026-08-20:** `.claude/golf_swing_capture_spec/` (00–12) adopted as the governing contract
+for the capture subsystem — where it and older notes disagree, the spec wins.
+
+## 04 - Camera preview and real recording
+**Reconciled:** 2026-08-20 21:00 UTC  →  complete (partial — device pass pending)
+**Phase:** Session Mode — Wiring
+**Evidence:** Native half in commit `66a3479` (`HighSpeedCameraView` dual-session recording,
+`SwingClip.kt` detect/trim, `SwingReview.tsx`); the joining wiring this session:
+`sessionState.ts` (`pendingTake` stage; `take-ready`/`save-take`/`discard-take`;
+review-before-mint per capture spec §01.5), `useTakeRecorder.ts` (240 ceiling, 23 s cap, 17 s
+warning tone), `captureConstants.ts` (spec §11.7 values in one home), `SessionScreen.tsx`
+(records for real, renders `SwingReview`, Save → `trimClip` → swing minted with its clip,
+Delete discards take+file), `LocalClipPlayer.tsx` + `PostSwingView.tsx` (post-swing plays the
+trimmed clip), `CameraStage.tsx` (camera ref + `onRecordingEnded` passthrough). Dead
+`camera2Record` standalone path deleted (`Camera2HighSpeed.kt` is capabilities-only now);
+`deleteClip` added. Oracles: mobile tsc clean, 411 jest tests green,
+`:app:compileDebugKotlin` BUILD SUCCESSFUL.
+**Notes:** Named shortfalls — S25+ device pass (HANDOFF row filed: real fps, take
+reliability, audio-seed accuracy, trim playback); emulator flow walk needs a native rebuild
+(module functions changed — `pnpm --filter mobile emu:native`). Source-deletion contract's
+local half: untrimmed source deleted only after a successful trim; a failed trim saves the
+take untrimmed (never lose the only copy). Deviations logged in `mobile-client.md`: plain
+track not thumbnail filmstrip, no delete-Undo yet, detection post-hoc audio only (Tier C),
+telemetry waits for step 06. Step 03 stays in-progress on Taylor's sign-off gate only — its
+build half shipped; the wiring did not wait on it (his ask for the live camera authorized
+pulling wiring forward, recorded 2026-08-18).
+
+---
 
 ## 04 - Capture, audio-seeded review, ingest (partial — NOT wired end to end)
 **Date:** 2026-08-20
