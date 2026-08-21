@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Settings, SlidersHorizontal, Timer, X } from "lucide-react-native";
@@ -49,10 +49,6 @@ export interface SessionDockProps {
   onRecord: () => void;
   onStop: () => void;
   onDelayChange: (delay: RecordingDelay) => void;
-  /** Abort the countdown but STAY on the capture screen — Stop's exit mid-countdown. */
-  onDisarm: () => void;
-  /** Leave the held countdown entirely — back to the swing being reviewed, or to plain capture. */
-  onAbort: () => void;
   onTypeChange: (sessionType: SessionType) => void;
   onOpenSettings: () => void;
   /** Seconds until the take stops itself, once inside the countdown window — null otherwise. */
@@ -69,8 +65,6 @@ export function SessionDock({
   onRecord,
   onStop,
   onDelayChange,
-  onDisarm,
-  onAbort,
   onTypeChange,
   onOpenSettings,
   autoStopIn = null,
@@ -78,23 +72,8 @@ export function SessionDock({
   const insets = useSafeAreaInsets();
   const [delayOpen, setDelayOpen] = useState(false);
   const [modeOpen, setModeOpen] = useState(false);
-  /**
-   * Stop was pressed DURING a countdown (Taylor, step-03 iteration). The countdown ends, the
-   * centre turns back into a red Record, and the screen stays exactly where it is with two
-   * controls at the foot — cancel out, or change the delay and go again. Interrupting a
-   * countdown almost always means "not yet", not "not at all", and snapping back to full chrome
-   * loses the thing the golfer was in the middle of.
-   */
-  const [holding, setHolding] = useState(false);
   const modeLabel = MODES.find((m) => m.type === sessionType)?.label ?? "Analysis";
   const busy = mode !== "idle";
-  /** The held state only — a running countdown shows nothing but its own timer and Stop. */
-  const counting = holding;
-  // In an effect, never the render body — a state write during render is the rule this repo
-  // keeps for refs and it applies doubly to setState.
-  useEffect(() => {
-    if (mode === "recording") setHolding(false);
-  }, [mode]);
 
   return (
     <>
@@ -155,50 +134,8 @@ export function SessionDock({
         </View>
       ) : null}
 
-      {counting ? (
-        <>
-          {/* Subtle, white, over the footage — the countdown strips the bar's own controls, so
-              these two are the only things on screen besides the swing and the timer. */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Cancel the countdown"
-            onPress={() => {
-              setHolding(false);
-              setDelayOpen(false);
-              onAbort();
-            }}
-            style={({ pressed }) => [
-              styles.corner,
-              { left: 18, bottom: insets.bottom + 16 },
-              pressed && styles.cornerPressed,
-            ]}
-            testID="countdown-cancel"
-          >
-            <X size={22} color="rgba(255,255,255,0.9)" strokeWidth={2.2} />
-            <Text style={styles.cornerLabel}>Cancel</Text>
-          </Pressable>
-
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Change the recording delay"
-            onPress={() => setDelayOpen((open) => !open)}
-            style={({ pressed }) => [
-              styles.corner,
-              { right: 18, bottom: insets.bottom + 16 },
-              pressed && styles.cornerPressed,
-            ]}
-            testID="countdown-delay"
-          >
-            <Timer size={22} color="rgba(255,255,255,0.9)" strokeWidth={2.2} />
-            <Text style={styles.cornerLabel}>
-              {delaySeconds === 0 ? "No delay" : `${delaySeconds}s delay`}
-            </Text>
-          </Pressable>
-        </>
-      ) : null}
-
       <SessionNav
-        sidesHidden={busy || counting}
+        sidesHidden={busy}
         leftItems={[
           {
             key: "cancel",
@@ -257,19 +194,15 @@ export function SessionDock({
             stop={busy}
             label={busy ? "Stop" : "Record Swing"}
             onPress={
-              // Interrupting a countdown means "not yet" ONLY once the session is underway
-              // (Taylor, step-03 iteration): mid-session there is a swing to go back to, so the
-              // screen holds and offers the two ways on. On the FIRST swing there is no session
-              // yet — stopping is just backing out, and it returns to the new-session screen.
-              mode === "countdown" && hasSwings
-                ? () => {
-                    onDisarm();
-                    setHolding(true);
-                  }
-                : busy
+              // Stopping a countdown puts the golfer back where they came FROM (Taylor,
+              // 2026-08-21). Mid-session that is the swing they were just looking at; on the
+              // first swing of a session there is nothing behind it, so it is the capture
+              // screen. The reducer already resolves which — this button only has to say
+              // "stop". (It replaces a held-countdown state that offered two corner controls:
+              // an extra decision in the one moment the golfer has already decided.)
+              busy
                 ? onStop
                 : () => {
-                    setHolding(false);
                     setDelayOpen(false);
                     onRecord();
                   }

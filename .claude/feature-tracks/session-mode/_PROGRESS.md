@@ -4,6 +4,58 @@ Append-only log. Spec: `DESIGN-session-mode.md`. Decision: ARCHIVE D61.
 **2026-08-20:** `.claude/golf_swing_capture_spec/` (00–12) adopted as the governing contract
 for the capture subsystem — where it and older notes disagree, the spec wins.
 
+## 04 - Recording WORKS on the S25+ — 1080p240 with a live preview
+**Date:** 2026-08-21
+**Phase:** Session Mode — Wiring
+**Summary:** The record chain runs end to end on the phone. Confirmed in logcat:
+`take RUNNING on rung 0 (240-240 +preview)` — 1920x1080 at **240 fps with the preview live
+through the take**, which is the configuration this project had assumed was impossible here.
+
+**What actually fixed it, after a day of wrong guesses.** The binding rule is in
+`CameraConstrainedHighSpeedCaptureSession`'s own contract: *"If both preview and recording
+Surfaces are specified in the request, the target FPS range in the input request must be a
+fixed frame rate FPS range, where the minimal FPS == maximum FPS."* The S25+ publishes 1080p
+at BOTH `[30,240]` (batch 8) and `[240,240]` (batch 4) — read off `dumpsys media.camera` — and
+both report `upper == 240`, so ordering candidates by rate tie-broke between the VALID and the
+INVALID combination arbitrarily. The invalid one does not throw on this HAL; it hangs, leaks
+fences in `RealTimePreviewVideoHFR`, and triggers the HAL's own recovery. Every "the camera
+froze" symptom traces to that one coin flip.
+
+**Now: capture is a LADDER, asked of the device, never predicted** — fixed 240+preview → 240
+record-only → 120+preview → 120 record-only, first configuration that actually configures
+wins, 4s watchdog treats silence as refusal, and the log names the rung that ran. Variable
+ranges are gone entirely (a floating rate writes timestamps that disagree with
+`setCaptureRate` — D37's amendment).
+
+**Four other real bugs found on the way, each worth keeping in mind:**
+1. **Everything camera-related ran on the MAIN thread.** Expo dispatches a VIEW AsyncFunction
+   on the UI thread, so `MediaRecorder.prepare()`/`.stop()` froze the whole screen including
+   Stop. The `record:` log line coming from `tid == pid` is what gave it away.
+2. **`stopRepeating()` was missing on the session swap.** Creating a session waits for the
+   device to idle; a repeating request nobody stopped meant an 11-second block and a drain
+   timeout. `close()` is the wrong tool here — it forces a drain this HAL times out on.
+3. **The watchdog was posted to the camera thread**, queued behind the blocking call it
+   existed to time out, so it never fired. It runs on the main handler now.
+4. **`app.json` → manifest drift** shipped a build with no RECORD_AUDIO, and Android denies an
+   undeclared permission instantly with no prompt. `dev-device.mjs` now auto-prebuilds on an
+   app.json hash change, and also warms the bundle before launch (the white-screen race) and
+   actually kills the port squatter (its taskkill flags were git-bash-escaped and silently
+   failed from Node).
+
+**Also shipped this session:** front camera removed entirely (high-speed is a rear-sensor
+feature); FPS pill (probed rate only, shown while filming); review screen rebuilt as a
+**mark-the-strike** interaction — paused frame, scrub moves the frame, a small handle instead
+of a range box, filmstrip from a new native `clipThumbnails`, delete confirms; 30s cap with a
+5s on-screen countdown; `CONTROL_EDGE` (20% aqua) on capture controls as a named exception to
+the no-borders rule.
+**Notes:** Orphan recovery added after a Fast Refresh remount mid-take desynced JS from
+native and left "already recording" forever — native now abandons an unclaimable take rather
+than refusing Record. Remaining shortfalls are in `_STATUS.json`: an outdoor pass (audio-seed
+accuracy against real strikes, reliability over a bucket, thermals) and the provisional
+bitrate constants.
+
+---
+
 ## 04 - Camera preview and real recording
 **Reconciled:** 2026-08-20 21:00 UTC  →  complete (partial — device pass pending)
 **Phase:** Session Mode — Wiring

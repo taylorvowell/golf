@@ -108,6 +108,13 @@ along.
   specific-address bind beats Metro's wildcard for loopback, which poisons the emulator). The
   port is written in `dev-device.mjs` and `scripts/env-probe.mjs`; change both or the session
   probe reports a lie.
+- **Metro must OUTLIVE the command that started it, and `dev-device.mjs` is what guarantees
+  that.** `spawn(detached)` is not enough on Windows — a child stays in the caller's job object,
+  so when an automation harness cleans up the shell after a command, the job dies and Metro goes
+  with it. That is why Metro kept disappearing between commands (2026-08-21). The script now
+  launches it through `cmd /c start`, which puts it outside the job, and captures its console to
+  `apps/mobile/.expo/metro-console.log` so a startup failure is readable instead of silent.
+  **Never hand-roll a `npx expo start` from a tool call** — it dies with the call; run the script.
 - **Metro must be restarted after any native build.** `expo prebuild --clean` regenerates the
   whole `android/` tree and gradle writes thousands more files under it; that watcher storm wedges
   Metro, which then keeps listening and stops answering. The script forces the restart for you,

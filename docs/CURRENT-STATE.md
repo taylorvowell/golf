@@ -550,10 +550,18 @@ anyone wanting a larger sample should take it before quoting a percentage.
 
 - **`modules/frame-clock`** — Media3 `VideoFrameMetadataListener`. `mobile-player` needs the same
   frame callback, and no Expo/RN video component surfaces one.
-- **`modules/high-speed-camera`** — `Camera2HighSpeed`. The **deprecated**
+- **`modules/high-speed-camera`** — Camera2 constrained high-speed. The **deprecated**
   `createConstrainedHighSpeedCaptureSession(surfaces, callback, handler)` is the call that works;
   the modern `SessionConfiguration(SESSION_HIGH_SPEED, …)` is silently swallowed on this device
   (no callback at all). Do not "fix" that deprecation — it removes 240 fps with no error.
+  **As of 2026-08-21 it records 1080p at 240 fps WITH the preview live through the take** on the
+  S25+ (`take RUNNING on rung 0 (240-240 +preview)` in logcat), driven by the session-mode capture
+  screen. Two rules make that work and both are easy to break from a distance: a session carrying
+  **both** preview and recorder must use the **fixed** `[240,240]` range, never the variable
+  `[30,240]` the device also publishes (the invalid pairing does not throw here — it hangs the HAL
+  and leaks fences); and **all recorder work runs on the camera thread**, because Expo dispatches a
+  view's async functions on the UI thread where `MediaRecorder.prepare()`/`.stop()` freeze the
+  screen. Capture is a **ladder** of real configurations tried in order, not a predicted choice.
 
 ### What does NOT work, and is not worth retrying
 
@@ -572,6 +580,12 @@ anyone wanting a larger sample should take it before quoting a percentage.
 
 - **231 fps against a requested 240** is 3.6% short (~50 frames over 5.8 s) — probably encoder ramp
   or the stop edge, not a rate cap. Needs one look before `in-app-capture` relies on an exact rate.
+  (That figure is from the old recorder-only path; the session-mode take now configures at a fixed
+  240 and the achieved rate has not been re-measured.)
+- **Capture's encoder bitrate is unmeasured.** `BPP_AT_30 = 0.15` scaled by `sqrt(fps/30)` is a
+  reasoned guess, never validated. The test is a bitrate sweep diffed with `compare_analysis.py`
+  watching **club coverage**, which degrades long before pose does — so an under-specified bitrate
+  would surface as a worsening club trace, not as video that looks bad.
 - **Scrubbing is unmeasured.** Four instrument revisions could not measure it honestly; a seeked
   frame is displayed on arrival so there is **no lead** on that path, unlike playback's 49 ms. Any
   scrub design must draw for a target it already knows. The instrument that was to verify it

@@ -32,7 +32,6 @@ import { DualSyncConnectOverlay } from "./DualSyncConnectOverlay";
 import { DualSyncPip } from "./DualSyncPip";
 import { PostSwingView } from "./PostSwingView";
 import { CountdownOverlay } from "./CountdownOverlay";
-import { FpsPill } from "./FpsPill";
 import { AUTOSTOP_COUNTDOWN_SEC, MAX_TAKE_SEC, SAVE_PAD_S } from "./captureConstants";
 import { ViewToggle } from "./ViewToggle";
 import { RecordingFrame } from "./RecordingFrame";
@@ -139,9 +138,6 @@ export function SessionScreen() {
     [toast],
   );
 
-  /** The probed capture rate — what the FPS pill shows, straight from the camera (Taylor,
-   * 2026-08-20). Null until the camera answers. */
-  const [capture, setCapture] = useState<{ fps: number; highSpeed: boolean } | null>(null);
 
   /** False while a take runs on a device that cannot keep the picture live through it —
    * the screen says so instead of showing a still frame that reads as a crash. */
@@ -443,27 +439,9 @@ export function SessionScreen() {
             onZoomRange={(range) => dispatch({ type: "set-zoom-range", range })}
             cameraRef={cameraRef}
             onRecordingEnded={onRecordingEnded}
-            onCaptureConfig={(e) =>
-              setCapture({ fps: e.nativeEvent.fps, highSpeed: e.nativeEvent.highSpeed })
-            }
           >
             {state.mode === "recording" ? <RecordingFrame paused={!previewLive} /> : null}
 
-            {/* The capture rate, while FILMING only (Taylor, 2026-08-21). Framing a shot is
-                not the moment to think about frame rates; the moment it matters is the one
-                where the number describes what is actually being written to disk. */}
-            {state.mode === "recording" ? (
-              <View
-                pointerEvents="none"
-                style={[styles.fpsSlot, { top: insets.top + APP_HEADER_BAR + 10 }]}
-              >
-                <FpsPill
-                  fps={capture?.fps ?? null}
-                  highSpeed={capture?.highSpeed ?? true}
-                  recording
-                />
-              </View>
-            ) : null}
 
             {/* Top scrim + header chrome — all of it gone while armed. */}
             <Animated.View
@@ -575,13 +553,6 @@ export function SessionScreen() {
                 } else dispatch({ type: "stop" });
               }}
               autoStopIn={autoStopIn}
-              onDisarm={() => dispatch({ type: "disarm" })}
-              // Backing out of a held countdown lands where the golfer came FROM: the swing
-              // they were reviewing mid-session, or the plain capture screen on a fresh one.
-              onAbort={() => {
-                const last = state.swings[0];
-                if (last) dispatch({ type: "review", swingId: last.id });
-              }}
               onDelayChange={(delaySeconds) => {
                 touched.current = true;
                 dispatch({ type: "set-settings", settings: { delaySeconds } });
@@ -676,7 +647,6 @@ const styles = StyleSheet.create({
     paddingBottom: 34,
     gap: 12,
   },
-  fpsSlot: { position: "absolute", right: 16, alignItems: "flex-end" },
   stopping: {
     position: "absolute",
     top: 0,

@@ -26,9 +26,9 @@
 
 import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { networkInterfaces } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /**
@@ -42,6 +42,8 @@ const METRO_PORT = 8082;
 
 const MOBILE_DIR = join(fileURLToPath(new URL(".", import.meta.url)), "..");
 const APK = join(MOBILE_DIR, "android/app/build/outputs/apk/debug/app-debug.apk");
+/** Metro's console, captured rather than discarded — see spawnDetachedMetro. */
+const METRO_LOG = join(MOBILE_DIR, ".expo/metro-console.log");
 
 const args = process.argv.slice(2);
 const wantsNative = args.includes("--native");
@@ -145,12 +147,7 @@ async function ensureMetro(lan, { force = false } = {}) {
     }
   }
 
-  const child = spawn(
-    "npx",
-    ["expo", "start", "--dev-client", "--host", "lan", "--port", String(METRO_PORT)],
-    { cwd: MOBILE_DIR, detached: true, stdio: "ignore", shell: true },
-  );
-  child.unref();
+  spawnDetachedMetro();
 
   // 120s, not 50: a cold start right after a prebuild's watcher storm can take longer than
   // Metro's own ~75s first build, and giving up early reads as "Metro is broken" when it is
@@ -162,7 +159,31 @@ async function ensureMetro(lan, { force = false } = {}) {
       return;
     }
   }
-  die(`Metro did not come up on :${METRO_PORT}. Check apps/mobile/.expo/dev/logs/start.log`);
+  die(`Metro did not come up on :${METRO_PORT}. Check ${METRO_LOG}`);
+}
+
+/**
+ * Metro, started so that it OUTLIVES whoever started it.
+ *
+ * `spawn(detached)` alone is not enough on Windows: a child stays inside the caller's job
+ * object, so when the calling shell is cleaned up — which an automation harness does after
+ * every command — the job is killed and Metro dies with it. That is why Metro kept vanishing
+ * between commands (2026-08-21). `cmd /c start` hands the process to the shell to launch,
+ * which puts it outside the job, and output goes to a log file rather than being discarded so
+ * a startup failure is diagnosable instead of silent.
+ */
+function spawnDetachedMetro() {
+  mkdirSync(dirname(METRO_LOG), { recursive: true });
+  const cmd =
+    `npx expo start --dev-client --host lan --port ${METRO_PORT} ` +
+    `> "${METRO_LOG}" 2>&1`;
+  const child = spawn("cmd", ["/c", "start", "/min", "", "cmd", "/c", cmd], {
+    cwd: MOBILE_DIR,
+    detached: true,
+    stdio: "ignore",
+    windowsHide: true,
+  });
+  child.unref();
 }
 
 /** The adb serial to talk to. Both transports of the same phone can be attached at once, so

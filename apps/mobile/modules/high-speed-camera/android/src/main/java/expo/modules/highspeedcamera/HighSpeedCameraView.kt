@@ -499,7 +499,12 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
     h: Handler,
     promise: (Result<Map<String, Any>>) -> Unit,
   ) {
-    if (recording) return promise(Result.failure(IllegalStateException("already recording")))
+    // A take still running when JS asks to start one is an ORPHAN: the screen no longer knows
+    // about it, so nothing will ever stop it and every future Record fails with "already
+    // recording" until the app is killed. It happened for real when a Fast Refresh remounted
+    // the screen mid-take (2026-08-21). Refusing here protects a recording nobody can reach;
+    // abandoning it is what lets the golfer keep filming, so native never says no to Record.
+    abandonOrphanedTake()
     val cam = device ?: return promise(Result.failure(IllegalStateException("camera is not open")))
     val attempt = ladder.getOrNull(rung) ?: return promise(Result.failure(IllegalStateException(
       "the camera would not start a high-speed session in any supported configuration"
@@ -715,6 +720,24 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
         "bytes" to file.length(),
       ))
     }
+  }
+
+  /**
+   * Tear down a take nothing is going to claim, keeping the camera usable.
+   *
+   * The file goes with it: JS never learned this take existed, so it can never be reviewed,
+   * and leaving it in the cache is a swing-sized file nobody will ever delete. No
+   * `restorePreview()` — the caller is about to build its own session.
+   */
+  private fun abandonOrphanedTake() {
+    if (!recording) return
+    Log.w(TAG, "start requested while a take was running — abandoning the orphan")
+    recording = false
+    runCatching { (session as? CameraConstrainedHighSpeedCaptureSession)?.stopRepeating() }
+    runCatching { recorder?.stop() }
+    teardownRecorder()
+    runCatching { recordFile?.delete() }
+    recordFile = null
   }
 
   /** Camera died mid-take: end it as a reported failure rather than a screen that never moves. */

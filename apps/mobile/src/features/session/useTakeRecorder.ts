@@ -69,9 +69,15 @@ export function useTakeRecorder(
     return () => clearTimeout(timer);
   }, [mode]);
 
-  /** The golfer's stop — dock button or shutter remote. Safe to call in any state. */
+  /**
+   * The golfer's stop — dock button or shutter remote. Safe to call in any state.
+   *
+   * Deliberately NOT guarded on `active`: that ref is JS's belief about the take, and a
+   * remount resets it while the recorder keeps running. Native owns the truth, so Stop always
+   * asks it — the worst case is a harmless "not recording" rejection, and the case being
+   * prevented is a Stop button that silently does nothing.
+   */
   const stop = useCallback(async () => {
-    if (!active.current) return;
     try {
       const result = await camera.current?.stopRecording();
       active.current = false;

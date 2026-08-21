@@ -8,6 +8,7 @@ import {
   View,
 } from "react-native";
 import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import { Check, Trash2, Undo2 } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -190,6 +191,14 @@ export function SwingReview({ take, onSave, onDelete, saving = false }: SwingRev
           onReady={onReady}
           style={StyleSheet.absoluteFill}
         />
+        {/* The picture does not END, it fades out (Taylor, 2026-08-21): a hard black edge
+            against the controls reads as two stacked panels, and this screen is one thing —
+            a swing you are marking. Runs to the ground colour so the seam disappears. */}
+        <LinearGradient
+          colors={["rgba(6,10,20,0)", COLORS.bg]}
+          style={styles.stageFade}
+          pointerEvents="none"
+        />
         {impactSec === null ? (
           <View style={styles.seeding} pointerEvents="none">
             <ActivityIndicator color={COLORS.text} />
@@ -303,6 +312,8 @@ export function SwingReview({ take, onSave, onDelete, saving = false }: SwingRev
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.bg },
   stage: { flex: 1, backgroundColor: "#000" },
+  /** Tall enough to be a fade rather than a line, short enough to leave the swing alone. */
+  stageFade: { position: "absolute", left: 0, right: 0, bottom: 0, height: 96 },
   seeding: {
     position: "absolute",
     top: 0, left: 0, right: 0, bottom: 0,

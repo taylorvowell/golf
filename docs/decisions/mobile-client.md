@@ -261,14 +261,14 @@ type, alignment ghost, countdown, red recording treatment — and while armed th
 to the stop button alone) and the post-recording screen (the one-shape report player in
 session chrome with a floating staged analyzing bar and the session bar). Both session bars
 are the tab bar's wave construction with a **bigger red record button always at the exact
-screen centre**; no settings pills. **The FPS pill is back and permanent** (Taylor,
-2026-08-20, reversing his step-03 withdrawal): the capture rate shows while framing AND
-through the whole take, top-right, outside the chrome fade. It renders only what the camera
-probe reported (`onCaptureConfig`) — never a request — and a lens with no high-speed
-configuration reads "preview only" rather than a meaningless number. This is the one
-instrument the no-instruments rule admits on a golfer's screen, because §2.3's
-never-degrade-silently promise is only keepable if the golfer can see the rate before they
-hit a ball.
+screen centre**; no settings pills and **no FPS readout anywhere on the capture surface**
+(Taylor: withdrawn at step 03, tried again 2026-08-20, removed for good 2026-08-21). The rate
+is an instrument, and the instrument rule holds even for the one number this app is proudest
+of. §2.3's never-degrade-silently promise is kept by the **failure path** instead: a camera
+that cannot give the requested rate says so in a readable message, and the capture ladder logs
+the configuration it actually ran. The native `onCaptureConfig` event stays — the probed
+rate/size belong on the swing record as capture metadata (spec §06.8), which is data, not
+chrome.
 Build order is UI-stubbed-first; **wiring starts only after Taylor signs off the UX** — his
 explicit gate, an exception to the no-approval-gates rule. A session row is minted **only when
 the first swing is recorded**; sessions carry a name and a type (Swing Analysis / Practice
