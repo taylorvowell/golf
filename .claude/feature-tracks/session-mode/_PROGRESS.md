@@ -4,6 +4,52 @@ Append-only log. Spec: `DESIGN-session-mode.md`. Decision: ARCHIVE D61.
 **2026-08-20:** `.claude/golf_swing_capture_spec/` (00–12) adopted as the governing contract
 for the capture subsystem — where it and older notes disagree, the spec wins.
 
+## 06 - Upload and analysis wiring — a recorded swing reaches a real score
+**Date:** 2026-08-22
+**Phase:** Session Mode — Wiring
+**Summary:** A swing recorded in session mode now uploads, analyses and comes back as a report.
+Proven, not assumed: `pnpm --filter web capture:e2e` runs the whole loop through the same
+functions the phone calls and passed on a real clip — **view ready at r2, 322 frames @ 60fps,
+score 61.6**.
+
+**The server already had two-phase ingest; what it did not have was a way to run the FIRST
+analysis locally.** `startReanalysis`'s spawn path re-runs from an existing `analysis.json`, and
+a swing recorded ten seconds ago does not have one — so every local capture would have sat in the
+queue forever. `startCaptureAnalysis` now routes on `JOBS_DRIVER` (QStash for the hosted worker,
+a child process here) and a shared `spawnAnalysis` serves both first-analysis and re-analysis, so
+the ordering that makes publishing safe exists once rather than twice. `MediaStore.localPath`
+answers where a stored clip is on this machine and the cloud driver returns **null** — which is
+what stops a production deployment quietly assuming its objects are local.
+
+**Progress is the job's, never a clock.** `AnalyzingBar` lost its 12-second timer: the segment lit
+is the segment the job row reports, mapped from the analyzer's own stage strings, and it never
+moves backwards when a stage name is unrecognised. A queue nobody drains reads "Queued" for as
+long as that is true.
+
+**The pipeline lives outside React.** `processing.ts` is module-level because the golfer records,
+walks back to the ball and hits again — the screen that started the upload is gone long before the
+analyzer finishes, and a hook would have aborted it. `useSessionPipeline` is the thin part that
+must be in React: it starts a run per saved swing and folds only TERMINAL answers into the
+reducer, so per-stage ticks never re-render a live camera preview.
+
+**Failure never costs the video.** A failed run swaps the progress track for a notice carrying the
+analyzer's own sentence plus Try again; the clip keeps playing behind it. The reason is shown
+rather than mapped to a friendly generic, because "we couldn't find a swing" and "the upload was
+refused" need different actions.
+
+**Notes / named shortfalls.** Transport is one `PUT` of the trimmed clip — **no resumability, no
+background survival, no wifi policy, no offline queue**; all four are `media-pipeline`'s behind the
+`uploadSwingVideo()` seam. Video-only sessions upload and enqueue nothing (`analyze: false` →
+`{status: "idle"}`), because skipping ingest would leave the only copy of the swing in a cache the
+app sweeps; `analyze` defaults to true so an older client cannot trigger it. Both spawn paths now
+pass `--club-detector` when `WORKER_CLUB_DETECTOR` names one — re-analysis never did, which was
+the CLI trap applied silently to the server. `expo-file-system` was declared as a direct dependency
+(it was already autolinked as a dependency of `expo`, so **no native rebuild is needed**).
+Decisions recorded in `docs/decisions/media-storage.md`; `capture:e2e` documented in RUNBOOK §5.
+**Device pass on the S25+ is the outstanding shortfall** — the emulator cannot record.
+
+---
+
 ## 05 - Sessions become real
 **Date:** 2026-08-22
 **Phase:** Session Mode — Wiring

@@ -83,6 +83,19 @@ export interface MediaStore {
     key: string,
     contentType: string,
   ): Promise<UploadTarget | null>;
+  /**
+   * Where this object sits on THIS machine's disk, or null on a driver whose objects are not
+   * files here.
+   *
+   * Exists for exactly one caller: the local analysis path, which spawns `burnin.py` as a child
+   * process and therefore needs a path a Python process can open. The cloud driver correctly
+   * answers null — its objects are not on this machine — and that null is what makes it
+   * impossible to accidentally build a production path on the assumption that they are.
+   *
+   * Never returns a path for an object that is not there: a caller about to hand this to a
+   * subprocess should not have to distinguish "no such object" from "wrong driver".
+   */
+  localPath(bucket: string, key: string): Promise<string | null>;
   /** Everything under a prefix. Returns how many objects went — the deletion cascade (D24). */
   removePrefix(bucket: string, prefix: string): Promise<number>;
   /**

@@ -39,9 +39,41 @@ content-type set), never the client's filename, so nothing in a request body can
 object lands — and completion re-derives it, so there is no pending-upload state to persist.
 Completion **verifies** rather than believes: the client uploaded to a different host, so an
 unchecked claim becomes a worker failure minutes later that no golfer can act on.
+**What the phone sends is the TRIMMED clip**, never the take it was cut from. The take is a
+30-second recording; the swing is the five seconds around the strike the golfer marked, and
+uploading the source would cost minutes of a range's data to analyse footage of somebody walking
+back to the ball. `uploadSwingVideo()` in `apps/mobile/src/features/session/processing.ts` is the
+seam, and the whole run lives at module scope rather than in a screen — the golfer walks back to
+the ball while it uploads, and a hook would abort it the moment they left the post-swing screen.
+**A video-only session still uploads.** `POST .../source/complete` takes `analyze: false`, which
+stores the clip and leaves the view at `uploaded` with no job (answering `{status: "idle"}`, the
+contract's own word for "no run was ever started"). Skipping ingest entirely would leave the only
+copy of the swing in a cache directory the app sweeps. `analyze` defaults to **true**, so a client
+that has never heard of video-only cannot accidentally store a swing nobody will measure.
 **What this leaves to `media-pipeline`:** transport only — resumable/chunked upload, background
 survival, wifi policy, the offline queue. All of it swaps *how* the bytes travel behind
-`uploadSwingVideo()`; neither phase has an opinion about the transport.
+`uploadSwingVideo()`; neither phase has an opinion about the transport. Today's transport is one
+`PUT` of the whole file with no resumability and no background survival — named here so it is a
+known shortfall rather than a discovered one.
+
+### Analysis runs on the queue in production and as a child process locally
+
+**Decision:** `startCaptureAnalysis` picks from `JOBS_DRIVER`: `queue` publishes to QStash for the
+hosted worker, anything else spawns `burnin.py` as a child of the web server. Both write the same
+`jobs` row, so the client polls one shape (`GET /api/v1/swings/:id/reanalyze`) and renders progress
+identically. The client maps the job's own stage names onto the five it shows a golfer and **never
+interpolates between them** — a queue nobody is draining reads "Queued" for as long as that is
+true.
+**Gotchas:** The spawn path needs the uploaded clip as a file this machine can open, which is what
+`MediaStore.localPath` answers — the cloud driver returns null, and that null is what stops a
+production deployment quietly assuming its objects are local. Re-analysis and first analysis share
+one spawn implementation because everything after "which file, which angle, which hand" is
+identical, and the parts that make it safe (publishing to the NEXT revision before the row moves,
+marking the view failed rather than leaving it analysing) are exactly what a second copy drifts on.
+Both now pass `--club-detector` when `WORKER_CLUB_DETECTOR` names one; omitting it silently
+regenerates the trace on the weaker classical path.
+**How it is verified:** `pnpm --filter web capture:e2e` runs the whole loop on this machine through
+the same functions the phone calls.
 
 ### A storage key is derived from identity, never stored as an address
 

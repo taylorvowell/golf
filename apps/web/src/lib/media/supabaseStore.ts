@@ -52,6 +52,11 @@ export function supabaseStore(): MediaStore {
       return !error && !!data?.length;
     },
 
+    /** Objects live in a bucket, not on this machine — so there is no path, ever. */
+    async localPath() {
+      return null;
+    },
+
     async getBytes(bucket, key) {
       const { data, error } = await storageClient().storage.from(bucket).download(key);
       if (error || !data) return null;

@@ -176,6 +176,32 @@ export class ApiClient {
   }
 
   /**
+   * An upload target the SERVER named, resolved and authorized — for callers that send the bytes
+   * themselves (`expo-file-system`'s uploader), the way `mediaSource` serves the ones that fetch
+   * them.
+   *
+   * Ingest hands back either a signed storage URL or a route on this server, and **the client
+   * must not branch on which** — it sends the file exactly as described. The one thing that has
+   * to be decided is authorization, and that follows from the URL rather than from the storage
+   * driver: an absolute URL carries its own signature and must NOT receive our bearer token
+   * (handing a Supabase-signed URL an Authorization header is how a working upload starts
+   * 400ing), while a path on this server has no signature and needs one.
+   */
+  async uploadTarget(
+    url: string,
+    extra?: Record<string, string>,
+  ): Promise<{ url: string; headers: Record<string, string> }> {
+    const headers: Record<string, string> = {
+      ...extra,
+      [CLIENT_VERSION_HEADER]: this.clientVersion,
+    };
+    if (/^https?:\/\//i.test(url)) return { url, headers };
+    const token = await this.accessToken();
+    if (token) headers.Authorization = `Bearer ${token}`;
+    return { url: `${this.baseUrl}/${url.replace(/^\/+/, "")}`, headers };
+  }
+
+  /**
    * The launch call. Unauthenticated, so a build too old to sign in still learns why.
    *
    * It goes through `request`, which means a server that has already raised the floor past this

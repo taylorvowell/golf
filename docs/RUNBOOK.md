@@ -290,8 +290,18 @@ ffmpeg -itsscale 0.124875 -i <trimmed>.mp4 -an -c:v copy <realtime>.mp4   # 29.9
 python scripts/burnin.py <realtime>.mp4 --view dtl --handedness right        --club-detector runs/clubhead/weights/best.pt
 ```
 
-Then `pnpm --filter web db:backfill` mints the swing + view rows and publishes the artifacts, and
-the log groups by `created_at` gap — so the session's date is a single UPDATE:
+Then `pnpm --filter web db:backfill` mints the swing + view rows and publishes the artifacts.
+
+**Backfill owns the new swings as `admin@localhost`, and RLS then hides them from you.** The log
+comes back with the old sessions and none of the new ones, which reads as "the import failed"
+rather than "the rows belong to someone else". Reassign them, which also re-homes the published
+media onto your prefix:
+
+```bash
+pnpm --filter web db:claim-fixtures taylorvowell@gmail.com
+```
+
+The log groups by `created_at` gap, so the session's date is a single UPDATE:
 
 ```sql
 update swings s set created_at = (current_date + time '10:47:19') at time zone 'America/Chicago'
@@ -316,6 +326,9 @@ pnpm --filter mobile exec tsc --noEmit
 
 # the account lifecycle, against the RUNNING system — needs `pnpm dev` up (§4.2 + §4.3)
 pnpm --filter web verify:account                  # 7 checks; creates and deletes its own identity
+
+# the CAPTURE LOOP, end to end on this machine — needs Postgres up and the analyzer venv
+pnpm --filter web capture:e2e                     # smallest fixture; or pass a clip path
 
 # every swing's media, fetched over HTTP exactly as the phone fetches it
 pnpm --filter web verify:media you@example.com    # thumb + video + analysis per swing, real session
@@ -437,6 +450,14 @@ than a 404 body.
 
 It does **not** check that the overlay is drawn on the correct frame — that is Gate 3, needs pixel
 comparison against the analyzer's burn-in, and belongs to `analysis-ground-truth`.
+
+`capture:e2e` runs exactly what the phone runs and in the same order — `createCapture` mints the
+swing and hands back an upload target, the bytes go to that target, `completeCapture` verifies
+them and starts the analysis, and the job is polled until the view is `ready` with its
+`analysis.json` actually fetchable from the store. It is the fastest way to tell which half of a
+"my swing analyses forever" report to look at: if this passes, the server loop is fine and the
+problem is on the phone. A pass prints the score and the swing id, and the swing is a real row —
+it appears in the app's swing log afterwards, so delete it there when you are done.
 
 If `tsc` reports errors inside `.next/dev/types/` or `.next/types/`, those are stale generated
 files, not real errors — `rm -rf apps/web/.next/dev/types apps/web/.next/types` and re-run.

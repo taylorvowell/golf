@@ -108,7 +108,15 @@ export interface SessionSwing {
   recordedAt: number;
   /** The angle it was filmed from — captured at stop, per swing. */
   view: CaptureView;
-  status: "analyzing" | "ready";
+  /**
+   * The server's swing id, once ingest created the row. Null until then — and null forever if
+   * the upload never succeeded, which is why the local clip is what this screen plays until an
+   * analysed artifact exists to replace it.
+   */
+  serverId?: string | null;
+  /** Why the analysis stopped, in the analyzer's words. Set only with `status: "failed"`. */
+  failure?: string | null;
+  status: "analyzing" | "ready" | "failed";
   /** The trimmed local recording. Absent only on legacy stub swings; every swing minted
    * through `save-take` carries one, and it is what the post-swing screen plays until an
    * analyzed artifact replaces it (step 06). */
@@ -209,8 +217,15 @@ export type SessionAction =
    * the session starts the next swing (idle/reviewing → arm, countdown → cancel, recording →
    * stop), except within SHUTTER_DEBOUNCE_MS of the last stop — the double click on Stop. */
   | { type: "shutter-press"; at?: number }
-  /** A swing's analysis stub/job finished. */
+  /** Ingest created the server row for this swing — from the confirmed response, never before. */
+  | { type: "swing-linked"; swingId: string; serverId: string }
+  /** A swing's analysis job finished. */
   | { type: "swing-ready"; swingId: string }
+  /** The pipeline gave up on this swing. The VIDEO is untouched: a failed analysis must never
+   *  cost the golfer the recording, and retry re-runs from wherever it got to. */
+  | { type: "swing-failed"; swingId: string; reason: string }
+  /** The golfer asked to run a failed swing again — back to analysing, reason cleared. */
+  | { type: "swing-retrying"; swingId: string }
   /** Open a session swing on the post-recording screen. */
   | { type: "review"; swingId: string }
   /** Post-recording → capture ("Record New Swing", or the hardware back). */
@@ -418,11 +433,36 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
           return state;
       }
     }
+    case "swing-linked":
+      return {
+        ...state,
+        swings: state.swings.map((s) =>
+          s.id === action.swingId ? { ...s, serverId: action.serverId } : s,
+        ),
+      };
     case "swing-ready":
       return {
         ...state,
         swings: state.swings.map((s) =>
-          s.id === action.swingId ? { ...s, status: "ready" as const } : s,
+          s.id === action.swingId ? { ...s, status: "ready" as const, failure: null } : s,
+        ),
+      };
+    case "swing-retrying":
+      return {
+        ...state,
+        swings: state.swings.map((s) =>
+          s.id === action.swingId && s.status === "failed"
+            ? { ...s, status: "analyzing" as const, failure: null }
+            : s,
+        ),
+      };
+    case "swing-failed":
+      return {
+        ...state,
+        swings: state.swings.map((s) =>
+          s.id === action.swingId
+            ? { ...s, status: "failed" as const, failure: action.reason }
+            : s,
         ),
       };
     case "review":

@@ -75,6 +75,25 @@ export async function deleteSwing(id: string): Promise<void> {
   }
 }
 
+/**
+ * Re-fetch the list from outside a mounted screen — what the capture pipeline calls the moment an
+ * analysis finishes.
+ *
+ * The confirmed response updates the shared cache and every mounted log re-reads it, so the swing
+ * that was analysing on the post-swing screen becomes the real, artifact-backed swing without
+ * anything optimistic being written. A failure is silent on purpose: the caller is a background
+ * pipeline, and a toast about a refresh is not something a golfer can act on.
+ */
+export async function refreshSwings(): Promise<void> {
+  try {
+    const body = await api.request<SwingListResponse>("swings");
+    lastGood = body.swings;
+    notifyCacheChanged();
+  } catch {
+    // Keep whatever was confirmed before.
+  }
+}
+
 // Registered once at module scope — the same pattern supabase.ts uses for its AppState hook.
 // SIGNED_OUT fires on explicit sign-out and between two different users' sessions, which is
 // exactly when a seeded list would otherwise draw one golfer's swings for another.

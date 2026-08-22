@@ -11,6 +11,7 @@ import { useStarred } from "../swings/useStarred";
 import { useSwings } from "../swings/useSwings";
 import { COLORS } from "../../theme";
 import { AnalysisCompleteOverlay } from "./AnalysisCompleteOverlay";
+import { AnalysisFailedNotice } from "./AnalysisFailedNotice";
 import { AnalyzingBar } from "./AnalyzingBar";
 import { LocalClipPlayer } from "./LocalClipPlayer";
 import { SessionHeading } from "./SessionHeading";
@@ -18,6 +19,8 @@ import { SessionSwingDock } from "./SessionSwingDock";
 import type { SessionAction, SessionState, SessionSwing } from "./sessionState";
 import { SessionSwingListSheet } from "./sheets/SessionSwingListSheet";
 import { useDebugGroups } from "../debug/DebugOverlay";
+import { useHandedness } from "../profile/useProfile";
+import { retrySwing, useProcessingState } from "./useSessionPipeline";
 import { AnalysisErrorSheet } from "./sheets/AnalysisErrorSheet";
 import { SwingDeleteSheet } from "./sheets/SwingDeleteSheet";
 import { ANALYSIS_ERRORS, type AnalysisErrorKind } from "./analysisError";
@@ -120,6 +123,51 @@ export function PostSwingView({ state, dispatch, swing, onEndSession }: PostSwin
   );
 
   const analyzed = swing.status === "ready";
+  const failed = swing.status === "failed";
+
+  /**
+   * The analysed swing itself, once the pipeline finished and the list carries it.
+   *
+   * This is the swap the whole step exists for: until it resolves, the screen plays the trimmed
+   * local file — the honest picture of what was hit — and after it, the same screen plays the
+   * SERVED clip with the artifact over it, which is where phase markers, the trace and the
+   * scorecard come from. Requiring `status === "ready"` rather than merely finding the row is
+   * what keeps a half-published swing from being opened as a report.
+   */
+  const analysedSwing = useMemo(() => {
+    if (!swing.serverId || listState.kind !== "ok") return null;
+    const found = listState.swings.find((s) => s.id === swing.serverId);
+    return found && found.status === "ready" ? found : null;
+  }, [listState, swing.serverId]);
+
+  /** The live pipeline, for the one component that draws it. */
+  const run = useProcessingState(swing.id);
+  const handedness = useHandedness();
+  const retry = useCallback(() => {
+    if (!swing.clip) return;
+    retrySwing(
+      swing.id,
+      {
+        clip: swing.clip,
+        view: swing.view,
+        handedness: handedness === "left" ? "left" : "right",
+        sessionId: state.sessionId,
+        analyze: state.sessionType !== "video_only" && state.settings.aiAnalysis,
+      },
+      dispatch,
+    );
+  }, [dispatch, handedness, state.sessionId, state.sessionType, state.settings.aiAnalysis, swing]);
+
+  /**
+   * The progress track, the failure notice, or nothing — one slot, three states, so the two can
+   * never draw over each other.
+   */
+  const progress =
+    failed ? (
+      <AnalysisFailedNotice reason={swing.failure ?? "The analysis didn't finish."} onRetry={retry} />
+    ) : !analyzed ? (
+      <AnalyzingBar stage={run?.stage ?? "Uploading"} stageIndex={run?.stageIndex ?? 0} />
+    ) : null;
 
   /** This screen's contribution to the app-wide debug overlay, live only while it is mounted. */
   useDebugGroups(
@@ -206,10 +254,35 @@ export function PostSwingView({ state, dispatch, swing, onEndSession }: PostSwin
     />
   );
 
+  if (analysedSwing) {
+    // Analysis landed: the same screen, now showing the SERVED clip with its artifact over it —
+    // phase markers, the club trace and the scorecard, on the swing the golfer just hit. This is
+    // the swap the local player exists to cover, and it happens in place rather than by
+    // navigating, so the completion moment plays over one continuous surface.
+    return (
+      <SwingPage
+        swing={analysedSwing}
+        analyzed
+        celebrating={celebrating}
+        onBack={() => dispatch({ type: "back-to-capture" })}
+        testID="post-swing"
+        menu={dock}
+        extras={
+          <>
+            {celebrating ? <AnalysisCompleteOverlay /> : null}
+            {swingListSheet}
+            {deleteSheet}
+            {errorSheet}
+          </>
+        }
+      />
+    );
+  }
+
   if (swing.clip) {
-    // The recorded truth: the trimmed local clip loops full-bleed with the session chrome
-    // over it. Step 06 swaps this for the served, artifact-backed report when analysis
-    // lands; until then the local file is the honest picture of the swing that was hit.
+    // The recorded truth while the pipeline runs — and the permanent picture for a video-only
+    // session, which has no artifact to swap in. The trimmed local clip loops full-bleed with
+    // the session chrome over it.
     return (
       <View style={styles.localRoot} testID="post-swing-local">
         <LocalClipPlayer clip={swing.clip} />
@@ -224,12 +297,9 @@ export function PostSwingView({ state, dispatch, swing, onEndSession }: PostSwin
         <View style={[styles.heading, { top: insets.top + 10 }]} pointerEvents="none">
           <SessionHeading title={state.title} swingNumber={swing.number} />
         </View>
-        {!analyzed ? (
-          <View
-            style={[styles.analyzingSlot, { bottom: navBarBottomInset(insets.bottom) + 74 }]}
-            pointerEvents="none"
-          >
-            <AnalyzingBar recordedAt={swing.recordedAt} />
+        {progress ? (
+          <View style={[styles.analyzingSlot, { bottom: navBarBottomInset(insets.bottom) + 74 }]}>
+            {progress}
           </View>
         ) : null}
         {dock(false)}
@@ -250,9 +320,9 @@ export function PostSwingView({ state, dispatch, swing, onEndSession }: PostSwin
         <Text style={styles.fallbackDetail}>
           Playback lands with the capture wiring — recording flow continues.
         </Text>
-        {!analyzed ? (
+        {progress ? (
           <View style={[styles.analyzingSlot, { bottom: navBarBottomInset(insets.bottom) + 74 }]}>
-            <AnalyzingBar recordedAt={swing.recordedAt} />
+            {progress}
           </View>
         ) : null}
         {dock(false)}
@@ -275,12 +345,9 @@ export function PostSwingView({ state, dispatch, swing, onEndSession }: PostSwin
       extras={
         <>
           {/* Floats over the video, just above the session bar, while analysis runs. */}
-          {!analyzed ? (
-            <View
-              style={[styles.analyzingSlot, { bottom: navBarBottomInset(insets.bottom) + 74 }]}
-              pointerEvents="none"
-            >
-              <AnalyzingBar recordedAt={swing.recordedAt} />
+          {progress ? (
+            <View style={[styles.analyzingSlot, { bottom: navBarBottomInset(insets.bottom) + 74 }]}>
+              {progress}
             </View>
           ) : null}
           {celebrating ? <AnalysisCompleteOverlay /> : null}

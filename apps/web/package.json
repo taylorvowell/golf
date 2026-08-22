@@ -22,6 +22,7 @@
     "media:provision": "node --env-file-if-exists=.env --import tsx src/db/provisionStorage.ts",
     "models:publish": "node --env-file-if-exists=.env --import tsx src/db/publishModels.ts",
     "queue:e2e": "node --env-file-if-exists=.env --import tsx src/db/queueE2E.ts",
+    "capture:e2e": "node --env-file-if-exists=.env --import tsx src/db/captureE2E.ts",
     "verify:account": "node --env-file-if-exists=.env --import tsx src/db/verifyAccount.ts",
     "verify:media": "node --env-file-if-exists=.env --import tsx src/db/verifyMedia.ts"
   },

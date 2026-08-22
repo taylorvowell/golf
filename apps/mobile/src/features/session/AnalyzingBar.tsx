@@ -1,58 +1,39 @@
-import { useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 import { FONT_BODY } from "../../design/system/typography";
 import { COLORS } from "../../theme";
+import { ANALYSIS_STAGES } from "./processing";
 
 /**
- * The analyzing bar (§9.6): a spinner and a staged progress track shown while a swing's
- * analysis runs. Stages, never a fake percentage — in the stub the stage advances on a
- * timer; the wiring drives it from real job states and the component does not change.
+ * The analyzing bar (§9.6): a staged progress track shown while a swing's analysis runs.
  *
- * Owns its own ticking: nothing above it re-renders per tick.
+ * **Stages, never a percentage.** The segment lit is the segment the JOB says it is on — an
+ * upload, then the queue, then the analyzer's own stages. A queue nobody is draining reads
+ * "Queued" for as long as that is true rather than creeping toward 90%, because a progress bar
+ * that lies is one a golfer believes exactly once.
  *
  * Deliberately SMALL and off to one side (Taylor, step-03 iteration): it used to be a
  * full-width bar and it covered the player's transport, so the golfer could not scrub the swing
  * they had just hit while it analysed. Progress is secondary to the picture — it sits left of
- * the record button, above the session bar, and stays out of the way. No spinner: the segmented
- * track already moves, and two moving things in a pill this size is noise.
+ * the record button, above the session bar, and stays out of the way.
  */
 
-export const ANALYSIS_STAGES = [
-  "Uploading",
-  "Queued",
-  "Analyzing pose",
-  "Tracking club",
-  "Scoring",
-] as const;
-
-/** Stub pacing — the whole progression runs ~12s (also the driver's ready timer). */
-export const STUB_ANALYSIS_MS = 12_000;
+export { ANALYSIS_STAGES };
 
 export interface AnalyzingBarProps {
-  /** When the swing was recorded — the stub derives its stage from elapsed time. */
-  recordedAt: number;
+  /** The stage label, in a golfer's words — from the job row, never derived from a clock. */
+  stage: string;
+  /** Which segment is lit. Clamped here so an unexpected value cannot draw an empty track. */
+  stageIndex: number;
 }
 
-export function AnalyzingBar({ recordedAt }: AnalyzingBarProps) {
-  const [stage, setStage] = useState(0);
-
-  useEffect(() => {
-    const tick = setInterval(() => {
-      const elapsed = Date.now() - recordedAt;
-      const next = Math.min(
-        ANALYSIS_STAGES.length - 1,
-        Math.floor((elapsed / STUB_ANALYSIS_MS) * ANALYSIS_STAGES.length),
-      );
-      setStage(next);
-    }, 400);
-    return () => clearInterval(tick);
-  }, [recordedAt]);
+export function AnalyzingBar({ stage, stageIndex }: AnalyzingBarProps) {
+  const lit = Math.max(0, Math.min(ANALYSIS_STAGES.length - 1, stageIndex));
 
   return (
     <View style={styles.root} testID="analyzing-bar">
       <Text style={styles.label} numberOfLines={1}>
-        {ANALYSIS_STAGES[stage]}
+        {stage}
       </Text>
       <View style={styles.row}>
         {/* The spinner says "still working" between stage changes, which are up to a few seconds
@@ -60,7 +41,7 @@ export function AnalyzingBar({ recordedAt }: AnalyzingBarProps) {
         <ActivityIndicator size="small" color={COLORS.aqua} style={styles.spinner} />
         <View style={styles.track}>
           {ANALYSIS_STAGES.map((name, i) => (
-            <View key={name} style={[styles.segment, i <= stage && styles.segmentDone]} />
+            <View key={name} style={[styles.segment, i <= lit && styles.segmentDone]} />
           ))}
         </View>
       </View>

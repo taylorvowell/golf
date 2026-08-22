@@ -4,8 +4,7 @@ import { swings, swingViews, type ViewType } from "@/db/schema";
 import type { ResolvedView } from "@/db/views";
 import { SOURCE_BUCKET, sourceKey } from "@/lib/media/keys";
 import { getMediaStore, type UploadTarget } from "@/lib/media/store";
-import { enqueueCapture } from "@/lib/jobs/dispatch";
-import type { Job } from "@/lib/jobs";
+import { startCaptureAnalysis, type Job } from "@/lib/jobs";
 
 /**
  * Ingest — a captured or imported clip becoming a swing.
@@ -161,7 +160,16 @@ export async function completeCapture(
   userId: string,
   view: ResolvedView,
   contentType: string,
-): Promise<Job> {
+  /**
+   * Whether to enqueue the analysis. False is a **video-only** session (D61): the golfer asked
+   * for a recording, not a measurement, so the clip is stored and the view rests at `uploaded`
+   * with no job — and returns null rather than a job nobody asked for.
+   *
+   * The clip is still uploaded, and that is the point: skipping ingest entirely would leave the
+   * only copy of the swing in a cache directory the app sweeps.
+   */
+  analyze: boolean = true,
+): Promise<Job | null> {
   const key = rawKeyFor(view, contentType);
   const store = await getMediaStore();
   if (!(await store.exists(SOURCE_BUCKET, key))) {
@@ -173,9 +181,14 @@ export async function completeCapture(
     .set({ rawMediaKey: key, rawExpiresAt: expires, status: "uploaded" })
     .where(eq(swingViews.id, view.viewId));
 
+  if (!analyze) return null;
+
   const [row] = await tx.select({ handedness: swings.handedness })
     .from(swings).where(eq(swings.id, view.swingId)).limit(1);
   if (!row) throw new Error("the swing this view belongs to has gone");
 
-  return enqueueCapture(tx, userId, view, row.handedness);
+  // Routed rather than dispatched directly: `startCaptureAnalysis` picks the hosted worker or a
+  // local child process from `JOBS_DRIVER`, so this half of ingest has no opinion about where the
+  // analysis runs — the same property that lets the whole loop run on one machine.
+  return startCaptureAnalysis(tx, userId, view, row.handedness);
 }

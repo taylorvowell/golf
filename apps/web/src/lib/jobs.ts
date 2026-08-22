@@ -276,6 +276,89 @@ export async function startReanalysis(
     throw new Error(`source clip is gone: ${src}`);
   }
 
+  return spawnAnalysis(tx, actorId, view, {
+    type: "reanalyze",
+    sourcePath: src,
+    viewType: analysis.video.view,
+    handedness: analysis.video.handedness,
+  });
+}
+
+/**
+ * The FIRST analysis of a freshly uploaded capture, run as a child process of this server.
+ *
+ * The queue path (`enqueueCapture`) hands a hosted worker a set of URLs and is what production
+ * uses. This is its local twin, and it exists because without it the capture loop cannot be run
+ * end to end on one machine at all: `startReanalysis`'s spawn path re-runs from an EXISTING
+ * `analysis.json`, and a swing that has just been recorded does not have one yet.
+ *
+ * It needs the source as a file a Python process can open, which is why it asks the store for a
+ * `localPath` and refuses rather than guessing when there is none — a cloud-backed deployment
+ * has no such path, and that is exactly the deployment that should be on the queue driver.
+ */
+export async function startCaptureAnalysis(
+  tx: DbTx,
+  actorId: string,
+  view: ResolvedView,
+  handedness: "right" | "left",
+): Promise<Job> {
+  if (jobsDriverName() === "queue") {
+    const { enqueueCapture } = await import("@/lib/jobs/dispatch");
+    return enqueueCapture(tx, actorId, view, handedness);
+  }
+
+  const existing = await getJob(tx, actorId, view);
+  if (existing && (existing.status === "running" || existing.status === "queued")) {
+    return existing;
+  }
+
+  const rows = await tx.select({ rawMediaKey: viewsTable.rawMediaKey })
+    .from(viewsTable).where(eq(viewsTable.id, view.viewId)).limit(1);
+  const rawMediaKey = rows[0]?.rawMediaKey;
+  if (!rawMediaKey) {
+    throw new Error("this view has no uploaded source yet — complete the upload first");
+  }
+
+  const { SOURCE_BUCKET } = await import("@/lib/media/keys");
+  const { getMediaStore } = await import("@/lib/media/store");
+  const store = await getMediaStore();
+  const src = await store.localPath(SOURCE_BUCKET, rawMediaKey);
+  if (!src) {
+    throw new Error(
+      "the uploaded clip is not a file on this machine, so it cannot be analysed by a local " +
+        "process — set JOBS_DRIVER=queue for a hosted media store",
+    );
+  }
+
+  return spawnAnalysis(tx, actorId, view, {
+    type: "analyze",
+    sourcePath: src,
+    viewType: view.view,
+    handedness,
+  });
+}
+
+/**
+ * Run `burnin.py` over one clip as a child of this process, streaming its output into the job row.
+ *
+ * Shared by the first analysis of a capture and by a re-analysis, because everything after
+ * "which file, which angle, which hand" is identical — and the parts that make it safe (the
+ * throttled persistence, publishing to the NEXT revision before the row moves, marking the view
+ * failed rather than leaving it analysing) are exactly the parts a second copy would drift on.
+ */
+async function spawnAnalysis(
+  tx: DbTx,
+  actorId: string,
+  view: ResolvedView,
+  input: {
+    type: "analyze" | "reanalyze";
+    sourcePath: string;
+    viewType: string;
+    handedness: string;
+  },
+): Promise<Job> {
+  const src = input.sourcePath;
+
   const job: Job = {
     id: randomUUID(),
     viewId: view.viewId,
@@ -292,7 +375,7 @@ export async function startReanalysis(
   live.set(view.viewId, job);
 
   await tx.insert(jobsTable).values({
-    id: job.id, viewId: view.viewId, type: "reanalyze",
+    id: job.id, viewId: view.viewId, type: input.type,
     status: job.status, stage: job.stage, progressPct: job.progressPct, message: job.message,
     log: job.log,
   });
@@ -306,9 +389,14 @@ export async function startReanalysis(
   const args = [
     path.join("scripts", "burnin.py"), src,
     "--out", workingDirFor(view.mediaKey),
-    "--view", analysis.video.view,
-    "--handedness", analysis.video.handedness,
+    "--view", input.viewType,
+    "--handedness", input.handedness,
   ];
+  // The trained detector, when this machine has one configured. Omitting it silently falls back
+  // to the weaker classical trace — the standing trap in root `CLAUDE.md`, which had until now
+  // applied to the CLI only because the spawn path never passed it either.
+  const detector = process.env.WORKER_CLUB_DETECTOR;
+  if (detector && detector !== "none") args.push("--club-detector", detector);
 
   const child: ChildProcess = spawn(PYTHON, args, { cwd: ANALYZER, windowsHide: true });
 
@@ -395,7 +483,10 @@ export async function startReanalysis(
 
   child.on("close", (code) => {
     if (job.status === "failed") return; // child.on("error") already finished it
-    if (code === 0) finish("done", "complete", 100, "analysis rewritten");
+    if (code === 0) {
+      finish("done", "complete", 100,
+        input.type === "analyze" ? "analysis complete" : "analysis rewritten");
+    }
     else finish("failed", job.stage, job.progressPct, `analyzer exited ${code} — see log`);
   });
 

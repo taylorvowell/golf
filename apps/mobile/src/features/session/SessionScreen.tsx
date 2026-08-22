@@ -23,7 +23,7 @@ import { useAppNavigation } from "../../navigation";
 import { COLORS, SEMANTIC } from "../../theme";
 import { useHandedness } from "../profile/useProfile";
 import { primeSession, useSessions } from "../swings/useSessions";
-import { STUB_ANALYSIS_MS } from "./AnalyzingBar";
+import { useSessionPipeline } from "./useSessionPipeline";
 import { CameraControls } from "./CameraControls";
 import { CameraStage } from "./CameraStage";
 import { DualSyncButton } from "./DualSyncButton";
@@ -400,20 +400,10 @@ export function SessionScreen() {
       });
   }, [state.renamed, state.sessionId, state.sessionType, state.swings.length, state.title]);
 
-  // Stub analysis driver: each analyzing swing turns ready STUB_ANALYSIS_MS after it was
-  // recorded. The wiring replaces this effect with real job polling; the reducer's
-  // `swing-ready` action is the seam and does not change.
-  useEffect(() => {
-    const timers = state.swings
-      .filter((s) => s.status === "analyzing")
-      .map((s) =>
-        setTimeout(
-          () => dispatch({ type: "swing-ready", swingId: s.id }),
-          Math.max(0, s.recordedAt + STUB_ANALYSIS_MS - Date.now()),
-        ),
-      );
-    return () => timers.forEach(clearTimeout);
-  }, [state.swings]);
+  // The real pipeline: every saved swing uploads, enqueues (unless the session is video-only),
+  // and polls its job. The reducer's `swing-ready` / `swing-failed` actions are the seam, and the
+  // run itself lives outside React so walking back to the ball does not cancel it.
+  useSessionPipeline(state, dispatch, leftHanded ? "left" : "right");
 
   // Hardware back: on post-swing it returns to capture; on capture it leaves with the
   // slide-down — never an instant pop out of a self-animated surface.

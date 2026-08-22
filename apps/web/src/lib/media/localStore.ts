@@ -62,6 +62,16 @@ export function localStore(): MediaStore {
       }
     },
 
+    async localPath(bucket, key) {
+      try {
+        const file = resolveKey(bucket, key);
+        await access(file, constants.R_OK);
+        return file;
+      } catch {
+        return null;
+      }
+    },
+
     async getBytes(bucket, key) {
       try {
         return new Uint8Array(await readFile(resolveKey(bucket, key)));
