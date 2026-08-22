@@ -1,6 +1,6 @@
 import type { SwingSummary } from "@swingsage/schema/contract";
 
-import { SESSION_GAP_MS, type SwingSession } from "../swings/sessions";
+import { SESSION_GAP_MS, isQuarantined, type SwingSession } from "../swings/sessions";
 import type { SessionReport } from "./useSessionReports";
 
 /**
@@ -32,8 +32,16 @@ export interface SessionStats {
   analysing: number;
 }
 
-function scoredOf(swings: SwingSummary[]): SwingSummary[] {
-  return swings.filter((s) => s.status === "ready" && typeof s.overallScore === "number");
+/**
+ * The session's scored swings — empty for a drills or video-only session.
+ *
+ * Quarantine is applied at the session, not per swing: a drill rep that happened to get analysed
+ * still is not a swing attempt, and letting one through would put a number on the home screen
+ * that the golfer's history does not stand behind.
+ */
+function scoredOf(session: SwingSession): SwingSummary[] {
+  if (isQuarantined(session)) return [];
+  return session.swings.filter((s) => s.status === "ready" && typeof s.overallScore === "number");
 }
 
 function averageOf(scores: number[]): number | null {
@@ -45,11 +53,11 @@ export function latestSessionStats(sessions: SwingSession[], now: number): Sessi
   const latest = sessions[0];
   if (!latest) return null;
 
-  const scored = scoredOf(latest.swings);
+  const scored = scoredOf(latest);
   const scores = scored.map((s) => s.overallScore as number);
   const average = averageOf(scores);
   const previousAverage = sessions[1]
-    ? averageOf(scoredOf(sessions[1].swings).map((s) => s.overallScore as number))
+    ? averageOf(scoredOf(sessions[1]).map((s) => s.overallScore as number))
     : null;
 
   let bestSwingId: string | null = null;

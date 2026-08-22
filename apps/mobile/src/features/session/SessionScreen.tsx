@@ -22,8 +22,7 @@ import { FONT_DISPLAY } from "../../design/system/typography";
 import { useAppNavigation } from "../../navigation";
 import { COLORS, SEMANTIC } from "../../theme";
 import { useHandedness } from "../profile/useProfile";
-import { sessionize } from "../swings/sessions";
-import { useSwings } from "../swings/useSwings";
+import { primeSession, useSessions } from "../swings/useSessions";
 import { STUB_ANALYSIS_MS } from "./AnalyzingBar";
 import { CameraControls } from "./CameraControls";
 import { CameraStage } from "./CameraStage";
@@ -46,6 +45,7 @@ import { SessionHeading } from "./SessionHeading";
 import { SESSION_NAV_CLEARANCE } from "./SessionNav";
 import { SessionTitle } from "./SessionTitle";
 import { SwingExitSheet } from "./sheets/SwingExitSheet";
+import { calendarDate, createSession, renameSession } from "./sessionApi";
 import { stageSessionArrival } from "./sessionArrival";
 import { loadSessionDefaults } from "./sessionDefaults";
 import {
@@ -110,8 +110,6 @@ export function SessionScreen() {
   const [connecting, setConnecting] = useState(false);
   /** Hardware back on the post-swing screen asks instead of guessing — see `SwingExitSheet`. */
   const [exitOpen, setExitOpen] = useState(false);
-
-  const swingData = useSwings();
 
   const [state, dispatch] = useReducer(
     sessionReducer,
@@ -334,24 +332,73 @@ export function SessionScreen() {
     };
   }, []);
 
-  // Default name: "Session N" numbered from the sessions that already exist. The list is
-  // usually cached (stale-while-revalidate), so this lands before the golfer sees "1" —
-  // and never after a rename or a recorded swing.
-  const sessionNumber = useMemo(
-    () =>
-      swingData.state.kind === "ok" ? sessionize(swingData.state.swings).length + 1 : null,
-    [swingData.state],
-  );
-  const renamed = useRef(false);
+  // Default name: "Session N" numbered from the sessions the SERVER holds, not from swings
+  // grouped by time — a golfer who hit two balls and left still had a session, and inferring the
+  // number from the swing log skipped it. The list is shared and usually already cached, so this
+  // lands before the golfer sees "1"; the reducer refuses it over a rename or a minted session,
+  // so a slow answer can never overwrite either.
+  const { sessions: sessionRows, loading: sessionsLoading } = useSessions();
+  const sessionNumber = sessionsLoading ? null : sessionRows.length + 1;
   useEffect(() => {
-    if (sessionNumber == null || renamed.current || state.swings.length > 0) return;
-    if (/^Session \d+$/.test(state.title)) {
-      dispatch({ type: "rename", title: `Session ${sessionNumber}` });
+    if (sessionNumber == null) return;
+    dispatch({ type: "set-default-title", title: `Session ${sessionNumber}` });
+  }, [sessionNumber]);
+
+  /**
+   * The golfer renamed the session. Before the first swing that is purely local — there is no row
+   * to name yet — and after it, the name is PATCHed and the confirmed answer primes the log's
+   * cache so a log already on screen shows it.
+   *
+   * Fire-and-forget on purpose: a rename that loses the network must not block the field or
+   * revert under the golfer's cursor. The reducer holds the name either way, and the next
+   * rename re-sends it.
+   */
+  const sessionIdRef = useRef(state.sessionId);
+  useEffect(() => {
+    sessionIdRef.current = state.sessionId;
+  }, [state.sessionId]);
+  const onRename = useCallback((title: string) => {
+    touched.current = true;
+    dispatch({ type: "rename", title });
+    const id = sessionIdRef.current;
+    if (id) {
+      void renameSession(id, title)
+        .then(primeSession)
+        .catch(() => {});
     }
-    // `state.title` is read, not depended on — reacting to it would re-fire on the golfer's
-    // own rename, which `renamed` exists to prevent.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionNumber, state.swings.length]);
+  }, []);
+
+  /**
+   * The session becomes REAL on the first saved swing, never on opening the camera (D61).
+   *
+   * Watching `swings.length` rather than hooking the Save button covers every route a swing can
+   * arrive by — the trim path, the untrimmed fallback, and the dev-clip path — with one rule.
+   *
+   * It does not block the save. The golfer sees their swing the moment the trim finishes; the row
+   * lands a network round-trip later, and `session-minted` is dispatched only from the confirmed
+   * response, never optimistically. A failure releases the guard so the next saved swing retries
+   * — a session that never minted is a session's worth of swings that group by time, which is
+   * exactly what the log did before session mode.
+   */
+  const minting = useRef(false);
+  useEffect(() => {
+    if (state.swings.length === 0 || state.sessionId !== null || minting.current) return;
+    minting.current = true;
+    void createSession({
+      // The app's own "Session 4" is never sent as a name — null is what keeps the log's date
+      // title, and only a name the golfer typed replaces it.
+      name: state.renamed ? state.title : null,
+      sessionType: state.sessionType,
+      date: calendarDate(new Date()),
+    })
+      .then((session) => {
+        primeSession(session);
+        dispatch({ type: "session-minted", sessionId: session.id });
+      })
+      .catch(() => {
+        minting.current = false;
+      });
+  }, [state.renamed, state.sessionId, state.sessionType, state.swings.length, state.title]);
 
   // Stub analysis driver: each analyzing swing turns ready STUB_ANALYSIS_MS after it was
   // recorded. The wiring replaces this effect with real job polling; the reducer's
@@ -536,10 +583,7 @@ export function SessionScreen() {
                   <SessionHeading
                     title={state.title}
                     swingNumber={state.swings.length + 1}
-                    onRename={(title) => {
-                      renamed.current = true;
-                      dispatch({ type: "rename", title });
-                    }}
+                    onRename={onRename}
                   />
                 ) : (
                   <View style={styles.titleRow}>
@@ -549,10 +593,7 @@ export function SessionScreen() {
                     <View style={styles.titleSlot}>
                       <SessionTitle
                         title={state.title}
-                        onRename={(title) => {
-                          renamed.current = true;
-                          dispatch({ type: "rename", title });
-                        }}
+                        onRename={onRename}
                       />
                     </View>
                   </View>

@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "featureName": "session-mode",
-  "currentStep": "05",
+  "currentStep": "06",
   "phase": "Session Mode \u2014 Wiring",
-  "lastUpdated": "2026-08-21T04:00:00Z",
+  "lastUpdated": "2026-08-22T00:00:00Z",
   "steps": {
     "01": {
       "status": "complete",
@@ -30,7 +30,9 @@
       "note": "RECONCILE 2026-08-21 (corrected after audit): capture WORKS on the S25+ \u2014 1080p240 with a live preview (`take RUNNING on rung 0 (240-240 +preview)`). Native half from 66a3479; the joining wiring + the fixed-vs-variable fps-range fix + a configuration LADDER shipped 2026-08-20/21 under the capture spec (.claude/golf_swing_capture_spec/). Final shape: 30s hard cap with a 5s on-screen countdown, review = MARK THE STRIKE on a filmstrip (paused frame, no loop), Save cuts 5s around the mark (+100ms hidden pad each side), no FPS pill anywhere, back lens only. Audited 2026-08-21 (.claude/audits/session-capture-2026-08-21/) and the findings fixed in the same pass: camera-state thread safety, double-open device leak, recorder leak on a failed rung, orphaned-file paths, a cache sweep (a real phone had reached 1.8GB), AppState pause, screen-reader access to the scrub. Oracles: mobile tsc clean, 416 jest tests, compileDebugKotlin BUILD SUCCESSFUL."
     },
     "05": {
-      "status": "not-started"
+      "status": "complete",
+      "completedAt": "2026-08-22T00:00:00Z",
+      "note": "Sessions become real: migration 0016 (sessions.name nullable + session_type CHECK-constrained, default swing_analysis), GET/POST /api/v1/sessions + PATCH /api/v1/sessions/:id, SwingSummary.sessionId (additive, shape-lock re-locked with no removals), mint-on-first-swing in SessionScreen, rename PATCH, default numbering from the server session count, sessionize() grouping by real id with time-inference fallback, and drills/video-only quarantined from every durable average. Oracles: web tsc + eslint clean, 245 web vitest (8 new session RLS/type-lock), mobile tsc clean, 471 jest."
     },
     "06": {
       "status": "not-started"

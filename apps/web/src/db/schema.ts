@@ -176,6 +176,23 @@ export const sessions = pgTable("sessions", {
   date: date("date").notNull(),
   location: text("location"),
   notes: text("notes"),
+  /**
+   * The golfer's chosen name, or NULL when they never renamed it (D61).
+   *
+   * Null is not "unnamed" — it is the fact that the log's own date-title rule still applies.
+   * Storing the client's default "Session 3" here instead would make every session look
+   * renamed, and the log could never tell a name the golfer meant from a number the app
+   * counted.
+   */
+  name: text("name"),
+  /**
+   * What the golfer came to do. Locks once the session has swings: mixing types retroactively
+   * re-labels swings captured under a different promise, and `practice_drills`/`video_only`
+   * are quarantined from durable averages, so a late flip would rewrite history.
+   */
+  sessionType: text("session_type", {
+    enum: ["swing_analysis", "practice_drills", "video_only"],
+  }).notNull().default("swing_analysis"),
   /** §8 — what the golfer came to work on. */
   goal: text("goal"),
   /**

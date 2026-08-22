@@ -123,7 +123,20 @@ export const SHUTTER_DEBOUNCE_MS = 3_000;
 export interface SessionState {
   /** The editable half of the name — "Session N". The date half is fixed (`dateLabel`). */
   title: string;
+  /**
+   * Whether `title` is a name the GOLFER chose, as opposed to the app's own "Session N".
+   *
+   * The server stores a name only when this is true, because null there is what tells the swing
+   * log to keep its date title. Without the distinction every session would arrive looking
+   * renamed and the log could never print a date again.
+   */
+  renamed: boolean;
   dateLabel: string;
+  /**
+   * The server's session row, once the first swing minted it (D61), or null while the session
+   * is still client-side. Every swing recorded after this attaches to it.
+   */
+  sessionId: string | null;
   sessionType: SessionType;
   settings: SessionSettings;
   mode: CaptureMode;
@@ -151,6 +164,11 @@ export interface SessionState {
 
 export type SessionAction =
   | { type: "rename"; title: string }
+  /** The app's own numbering ("Session 4"), from the count of sessions the server holds. Not a
+   *  rename: it must never make the session look named to the log. */
+  | { type: "set-default-title"; title: string }
+  /** The server confirmed the session row. Only ever set once — the first swing mints it. */
+  | { type: "session-minted"; sessionId: string }
   | { type: "set-type"; sessionType: SessionType }
   | { type: "set-settings"; settings: Partial<SessionSettings> }
   | { type: "set-view"; view: CaptureView }
@@ -216,7 +234,9 @@ export function initialSessionState(
 ): SessionState {
   return {
     title: `Session ${sessionNumber}`,
+    renamed: false,
     dateLabel: sessionDateLabel(when),
+    sessionId: null,
     sessionType: "swing_analysis",
     settings,
     mode: "idle",
@@ -234,8 +254,19 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
   switch (action.type) {
     case "rename": {
       const title = action.title.trim();
+      return title.length === 0 ? state : { ...state, title, renamed: true };
+    }
+    case "set-default-title": {
+      // Never over a name the golfer typed, and never once the session is real — the numbering
+      // arrives asynchronously and must not win a race against either.
+      if (state.renamed || state.sessionId !== null) return state;
+      const title = action.title.trim();
       return title.length === 0 ? state : { ...state, title };
     }
+    case "session-minted":
+      // Idempotent: the mint is fire-and-forget from the save path, and a retry that lands after
+      // the first answer must not repoint a session the swings are already attached to.
+      return state.sessionId === null ? { ...state, sessionId: action.sessionId } : state;
     case "set-type": {
       // A session is ONE type: mixing types retroactively re-labels swings captured under
       // different promises, so the toggle locks the moment the first swing exists.

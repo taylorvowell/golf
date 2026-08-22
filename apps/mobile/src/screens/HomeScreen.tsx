@@ -42,6 +42,7 @@ import { dismissDeepIntro, useDeepIntro } from "../features/coach/useDeepIntro";
 import { dismissStanceIntro, useStanceIntro } from "../features/coach/useStanceIntro";
 import { NotificationBell } from "../features/notifications/NotificationBell";
 import { createdAtMs, sessionize } from "../features/swings/sessions";
+import { useSessions } from "../features/swings/useSessions";
 import { useSwings } from "../features/swings/useSwings";
 import { useAuthenticatedImage } from "../platform/useAuthenticatedImage";
 import { useAppNavigation, type Navigation } from "../navigation";
@@ -72,9 +73,10 @@ export function HomeScreen() {
   const styles = useStyles();
   const { onScroll: onChromeScroll, chromePx } = useChromeScroll();
 
+  const { sessions: sessionRows } = useSessions();
   const sessions = useMemo(
-    () => (state.kind === "ok" ? sessionize(state.swings) : []),
-    [state],
+    () => (state.kind === "ok" ? sessionize(state.swings, sessionRows) : []),
+    [state, sessionRows],
   );
   const stats = useMemo(() => latestSessionStats(sessions, Date.now()), [sessions]);
 

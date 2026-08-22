@@ -3,7 +3,6 @@ import { Animated, Easing, Pressable, Text, View } from "react-native";
 import { ChevronDown } from "lucide-react-native";
 
 import {
-  DateTitle,
   SCROLL_PRESS_DELAY_MS,
   ScoreOrb,
   SwingTimelineList,
@@ -14,6 +13,7 @@ import { themedStyles, useTheme } from "../../theme";
 import { SessionTags } from "./SessionTags";
 import { SessionThumb } from "./SessionThumb";
 import { sessionStats, type SwingSession } from "./sessions";
+import { SessionTitle } from "./SessionTitle";
 import { sessionSwingItems } from "./sessionTimeline";
 
 /**
@@ -59,7 +59,7 @@ export function SessionRow({
         testID={`session-${session.id}`}
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
-        accessibilityLabel={`${formatDayTitle(session.start)}${
+        accessibilityLabel={`${session.name ?? formatDayTitle(session.start)}${
           stats.avg !== null ? `, average ${stats.avg}` : ""
         }, ${session.swings.length} swings`}
         accessibilityHint={open ? "Hides the swings" : "Shows the swings in this session"}
@@ -69,7 +69,7 @@ export function SessionRow({
       >
         <SessionThumb session={session} />
         <View style={{ flex: 1, minWidth: 0 }}>
-          <DateTitle ms={session.start} size={13} />
+          <SessionTitle session={session} size={13} />
           {/* What kind of session, how it was filmed, then when — one line under the date. */}
           <View style={styles.metaRow}>
             <SessionTags session={session} />

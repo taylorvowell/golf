@@ -125,6 +125,10 @@ export async function listSwings(tx: DbTx, userId: string): Promise<SwingSummary
 
     out.push({
       id: swing.id,
+      // Null until a capture flow minted a session for it (D41 additive). The client groups by
+      // this when it is set and falls back to inferring a session from time when it is not, so
+      // a log holding both kinds still reads as one history.
+      sessionId: swing.sessionId,
       label: swing.referenceLabel ?? primary?.mediaKey ?? swing.id,
       referenceLabel: swing.referenceLabel,
       views,

@@ -37,11 +37,29 @@ carries a **session focus** — proposed by the coach at the explicit start from
 and the previous session (`PROJECT_MAIN.md` §8.2) — which concentrates per-swing analysis
 emphasis and quick feedback for that session, and persists across sessions until improvement is
 sustained.
+A session row carries `name` and `session_type` (`swing_analysis` | `practice_drills` |
+`video_only`, CHECK-constrained text, defaulting to `swing_analysis`). The row is minted on the
+**first recorded swing**, never on entering session mode — opening the camera and walking away
+leaves nothing behind. `name` is **null until the golfer renames it**: the app's own "Session 4"
+is a number it counted, and storing it would make every session look renamed to the swing log,
+which keeps its date title precisely when the name is null. `session_type` **locks once the
+session has swings** (server-enforced, 409 `type_locked`) — every swing in it was captured under
+one promise, and a late flip rewrites what the golfer's history claims about swings already hit.
+
+**Quarantine** — `practice_drills` and `video_only` swings never feed a durable number. It is
+enforced in the client's aggregation (`sessionize`/`sessionStats`/`logStats`, the home screen's
+`latestSessionStats`, and the progress window), not by a database constraint: the rows are still
+the golfer's own data and must stay readable, countable and visible. Excluded means **absent**,
+never zero — a quarantined session still counts as a session and still shows its swings, and
+simply contributes no average, no best and no trend point.
+
 **Gotchas:** Deleting a session must never delete the swings in it. That is the single most likely
 destructive mistake in the whole swing log. Automatic grouping by time window guesses wrong in
 both directions and a golfer cannot correct it without knowing the rule — a suggestion is
-correctable, an inference is not.
-**See:** ARCHIVE D29.
+correctable, an inference is not. Time inference does not go away when session rows arrive: every
+swing recorded before session mode has no `session_id`, so the log groups by id where there is
+one and by the two-hour gap where there is not.
+**See:** ARCHIVE D29, D61.
 
 ### Frame stills are extracted on demand and cached as revision-addressed artifacts
 
@@ -301,8 +319,8 @@ the roster below is the whole roster — **any vendor not on this list is not in
 | App builds + push | **Expo EAS** (free) | Used from the FIRST build so the signing SHA-1 never changes. |
 | LLM | **Anthropic** via **Vercel AI Gateway** (BYOK) | See [analysis-and-ai.md](analysis-and-ai.md) for the per-job tiers. |
 | Media models (TTS, image, video) | **Replicate** | Never in the coaching-text path. |
-| Crash + error tracking | **Sentry** | `@sentry/react-native` (Expo config plugin, EAS source maps) + `@sentry/nextjs`. The instrument behind the crash-free-sessions SLO. |
-| Product analytics | **PostHog** | §37's product-event funnel, pseudonymised. Its error tracking is NOT used — Sentry's RN support is materially better. |
+| Crash + error tracking | **Sentry** — **DEFERRED** (Taylor, 2026-08-22) | `@sentry/react-native` (Expo config plugin, EAS source maps) + `@sentry/nextjs` when it lands. Still **launch-blocking**: crash-free sessions is an SLO with no other instrument. Deferring is safe because adoption is one SDK + one DSN with no rework — unlike the EAS signing identity, nothing about waiting is irreversible. Re-opens in `observability-and-slos`. |
+| Product analytics | **PostHog** — **DEFERRED** (Taylor, 2026-08-22) | §37's product-event funnel, pseudonymised, when it lands. Its error tracking is NOT used — Sentry's RN support is materially better. Re-opens in `observability-and-slos`. |
 
 **$0/mo fixed today** — every vendor sits on a free tier. **~$45/mo at launch**, when Supabase and Vercel go paid together. Plus ~$12/yr for the domain, ~$0.02 per swing analysed, and Anthropic per use.
 
@@ -316,7 +334,7 @@ Three environments (dev / preview / production) stand.
 **Vercel functions and the Supabase project are pinned to the same region.** Set it at project
 creation — it is a `vercel.json` line now and a migration later.
 
-**Transactional email is deferred.** Sign-in is Google + Apple, phone OTP is held (D46), and
+**Transactional email is deferred.** Sign-in is Google, Apple and phone OTP over Twilio Verify, and
 Supabase's built-in mailer covers the residual at launch volume. Resend when that stops being
 true, not before.
 

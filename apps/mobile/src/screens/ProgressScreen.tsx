@@ -31,6 +31,7 @@ import {
   progressViewModel,
 } from "../features/progress/viewModel";
 import { NotificationBell } from "../features/notifications/NotificationBell";
+import { useSessions } from "../features/swings/useSessions";
 import { useSwings } from "../features/swings/useSwings";
 import { useAppNavigation } from "../navigation";
 import { themedStyles, useTheme } from "../theme";
@@ -60,9 +61,10 @@ export function ProgressScreen() {
   const backdropHeight =
     heroHeight === null ? 424 + insets.top : heroHeight + 92 + HERO_SHEET_GAP;
 
+  const { sessions: sessionRows } = useSessions();
   const vm = useMemo(
-    () => (state.kind === "ok" ? progressViewModel(state.swings, Date.now()) : null),
-    [state],
+    () => (state.kind === "ok" ? progressViewModel(state.swings, Date.now(), sessionRows) : null),
+    [state, sessionRows],
   );
 
   const hero = (

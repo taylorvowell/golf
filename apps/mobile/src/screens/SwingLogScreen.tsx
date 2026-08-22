@@ -24,6 +24,7 @@ import { NotificationBell } from "../features/notifications/NotificationBell";
 import { LatestSessionCard } from "../features/swings/LatestSessionCard";
 import { SessionRow } from "../features/swings/SessionRow";
 import { logStats, sessionStats, sessionize } from "../features/swings/sessions";
+import { useSessions } from "../features/swings/useSessions";
 import { useSwings } from "../features/swings/useSwings";
 import { useAppNavigation } from "../navigation";
 import { themedStyles, useTheme } from "../theme";
@@ -51,9 +52,10 @@ export function SwingLogScreen() {
   const backdropHeight =
     heroHeight === null ? 330 + insets.top : heroHeight + 74 + HERO_SHEET_GAP;
 
+  const { sessions: sessionRows } = useSessions();
   const sessions = useMemo(
-    () => (state.kind === "ok" ? sessionize(state.swings) : []),
-    [state],
+    () => (state.kind === "ok" ? sessionize(state.swings, sessionRows) : []),
+    [state, sessionRows],
   );
   const older = sessions.slice(1);
   /**

@@ -1706,6 +1706,85 @@
   "api#/definitions/rolesResponse/properties/roles/items": {
     "type": "string"
   },
+  "api#/definitions/sessionCreateRequest": {
+    "type": "object"
+  },
+  "api#/definitions/sessionCreateRequest/properties/date": {
+    "type": "string"
+  },
+  "api#/definitions/sessionCreateRequest/properties/name": {
+    "type": "null|string"
+  },
+  "api#/definitions/sessionCreateRequest/properties/sessionType": {
+    "ref": "#/definitions/sessionType"
+  },
+  "api#/definitions/sessionListResponse": {
+    "type": "object",
+    "required": [
+      "sessions"
+    ]
+  },
+  "api#/definitions/sessionListResponse/properties/sessions": {
+    "type": "array"
+  },
+  "api#/definitions/sessionListResponse/properties/sessions/items": {
+    "ref": "#/definitions/sessionSummary"
+  },
+  "api#/definitions/sessionPatchRequest": {
+    "type": "object"
+  },
+  "api#/definitions/sessionPatchRequest/properties/name": {
+    "type": "null|string"
+  },
+  "api#/definitions/sessionPatchRequest/properties/sessionType": {
+    "ref": "#/definitions/sessionType"
+  },
+  "api#/definitions/sessionResponse": {
+    "type": "object",
+    "required": [
+      "session"
+    ]
+  },
+  "api#/definitions/sessionResponse/properties/session": {
+    "ref": "#/definitions/sessionSummary"
+  },
+  "api#/definitions/sessionSummary": {
+    "type": "object",
+    "required": [
+      "createdAt",
+      "date",
+      "id",
+      "name",
+      "sessionType",
+      "swingCount"
+    ]
+  },
+  "api#/definitions/sessionSummary/properties/createdAt": {
+    "type": "integer"
+  },
+  "api#/definitions/sessionSummary/properties/date": {
+    "type": "string"
+  },
+  "api#/definitions/sessionSummary/properties/id": {
+    "type": "string"
+  },
+  "api#/definitions/sessionSummary/properties/name": {
+    "type": "null|string"
+  },
+  "api#/definitions/sessionSummary/properties/sessionType": {
+    "ref": "#/definitions/sessionType"
+  },
+  "api#/definitions/sessionSummary/properties/swingCount": {
+    "type": "integer"
+  },
+  "api#/definitions/sessionType": {
+    "type": "string",
+    "enum": [
+      "\"practice_drills\"",
+      "\"swing_analysis\"",
+      "\"video_only\""
+    ]
+  },
   "api#/definitions/stageListResponse": {
     "type": "object",
     "required": [
@@ -1831,6 +1910,9 @@
     "type": "null|string"
   },
   "api#/definitions/swingSummary/properties/scoringModelVersion": {
+    "type": "null|string"
+  },
+  "api#/definitions/swingSummary/properties/sessionId": {
     "type": "null|string"
   },
   "api#/definitions/swingSummary/properties/status": {

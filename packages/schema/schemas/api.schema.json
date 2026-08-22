@@ -313,6 +313,13 @@
         },
         "poseCoverage": {
           "type": "number"
+        },
+        "sessionId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The practice session this swing belongs to, once a capture flow minted one (D41 additive). Null on every swing recorded before session mode, and on any swing whose session was deleted — the log falls back to inferring a session from time, so the golfer never sees a gap."
         }
       }
     },
@@ -328,6 +335,119 @@
           "items": {
             "$ref": "#/definitions/swingSummary"
           }
+        }
+      }
+    },
+    "sessionType": {
+      "title": "SessionType",
+      "type": "string",
+      "enum": [
+        "swing_analysis",
+        "practice_drills",
+        "video_only"
+      ],
+      "description": "What the golfer came to do. `practice_drills` and `video_only` are quarantined from durable averages — a drill rep is not a scored swing attempt, and a video-only clip was never analysed."
+    },
+    "sessionSummary": {
+      "title": "SessionSummary",
+      "type": "object",
+      "description": "One practice session. Minted by the capture flow on the FIRST recorded swing, never on entering session mode — a golfer who opens the camera and walks away leaves nothing behind.",
+      "required": [
+        "id",
+        "date",
+        "name",
+        "sessionType",
+        "swingCount",
+        "createdAt"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "date": {
+          "type": "string",
+          "description": "The calendar day it was recorded on, `YYYY-MM-DD` in the golfer's own timezone as the client stated it."
+        },
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The golfer's chosen name, or null when they never renamed it. Null is not 'unnamed': it is what tells the log to keep its date title rather than print a number the app counted."
+        },
+        "sessionType": {
+          "$ref": "#/definitions/sessionType"
+        },
+        "swingCount": {
+          "type": "integer",
+          "description": "How many swings currently point at this session. What locks the type, and what numbers the next default name."
+        },
+        "createdAt": {
+          "type": "integer"
+        }
+      }
+    },
+    "sessionListResponse": {
+      "title": "SessionListResponse",
+      "type": "object",
+      "required": [
+        "sessions"
+      ],
+      "properties": {
+        "sessions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/sessionSummary"
+          }
+        }
+      }
+    },
+    "sessionCreateRequest": {
+      "title": "SessionCreateRequest",
+      "type": "object",
+      "description": "POST /api/v1/sessions. Every field optional: a session created with an empty body is today's unnamed analysis session, which is exactly what the capture screen mints when the golfer touched nothing.",
+      "properties": {
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Send null (or omit) while the title is still the app's own default — see `sessionSummary.name`."
+        },
+        "sessionType": {
+          "$ref": "#/definitions/sessionType"
+        },
+        "date": {
+          "type": "string",
+          "description": "`YYYY-MM-DD`, stated by the client because only the phone knows the golfer's timezone. Defaults to the server's date when omitted."
+        }
+      }
+    },
+    "sessionPatchRequest": {
+      "title": "SessionPatchRequest",
+      "type": "object",
+      "description": "PATCH /api/v1/sessions/:id. Partial, like the profile patch — a screen sends only what it edits. `sessionType` is rejected once the session has swings.",
+      "properties": {
+        "name": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sessionType": {
+          "$ref": "#/definitions/sessionType"
+        }
+      }
+    },
+    "sessionResponse": {
+      "title": "SessionResponse",
+      "type": "object",
+      "required": [
+        "session"
+      ],
+      "properties": {
+        "session": {
+          "$ref": "#/definitions/sessionSummary"
         }
       }
     },

@@ -1,13 +1,14 @@
 import { Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 
-import { DateTitle, ScoreOrb, SwingTimelineList } from "../../design/system";
+import { ScoreOrb, SwingTimelineList } from "../../design/system";
 import { FONT_BODY } from "../../design/system/typography";
 import { useTheme } from "../../theme";
 import { SessionTags } from "./SessionTags";
 import { SessionThumb } from "./SessionThumb";
 import { sessionSwingItems } from "./sessionTimeline";
 import { sessionStats, type SwingSession } from "./sessions";
+import { SessionTitle } from "./SessionTitle";
 
 /**
  * The newest session as the log's featured card. Taylor 2026-08-17: the mockup's tinted
@@ -54,7 +55,7 @@ export function LatestSessionCard({
       >
         <SessionThumb session={session} />
         <View style={{ flex: 1, minWidth: 0 }}>
-          <DateTitle ms={session.start} size={15} />
+          <SessionTitle session={session} size={15} />
           {/* How it was filmed, then when — one line under the date. */}
           <View
             style={{ flexDirection: "row", alignItems: "center", gap: 7, marginTop: 5 }}

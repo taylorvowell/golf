@@ -4,8 +4,10 @@ import type { BrandIconName, StickFigure } from "../../design/system";
 import { FORM_FIGURES } from "../../design/system";
 import {
   createdAtMs,
+  isQuarantined,
   sessionStats,
   sessionize,
+  type SessionMeta,
   type SwingSession,
 } from "../swings/sessions";
 
@@ -93,6 +95,9 @@ export function compareEnds(
   const scored: CompareEnd[] = [];
   for (const session of sessions) {
     if (session.end < cutoff) continue;
+    // Drills and video-only never become an end of the then-vs-now compare — the comparison is
+    // a claim about swing quality over time, which those sessions were never measuring.
+    if (isQuarantined(session)) continue;
     for (const s of session.swings) {
       if (s.status === "ready" && typeof s.overallScore === "number") {
         scored.push({
@@ -127,8 +132,12 @@ export interface ProgressViewModel {
   compare: { then: CompareEnd; now: CompareEnd } | null;
 }
 
-export function progressViewModel(swings: SwingSummary[], now: number): ProgressViewModel {
-  const sessions = sessionize(swings);
+export function progressViewModel(
+  swings: SwingSummary[],
+  now: number,
+  meta?: readonly SessionMeta[],
+): ProgressViewModel {
+  const sessions = sessionize(swings, meta);
   const window = progressWindow(sessions, now);
   const kind =
     window.swings === 0 ? "empty" : window.scoredSessions >= 2 ? "ready" : "low-data";

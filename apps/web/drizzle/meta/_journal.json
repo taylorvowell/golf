@@ -113,6 +113,13 @@
       "when": 1786700400000,
       "tag": "0015_six_answer_profile",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1786700500000,
+      "tag": "0016_session_name_and_type",
+      "breakpoints": true
     }
   ]
 }

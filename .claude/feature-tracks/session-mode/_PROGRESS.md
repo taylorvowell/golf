@@ -4,6 +4,43 @@ Append-only log. Spec: `DESIGN-session-mode.md`. Decision: ARCHIVE D61.
 **2026-08-20:** `.claude/golf_swing_capture_spec/` (00–12) adopted as the governing contract
 for the capture subsystem — where it and older notes disagree, the spec wins.
 
+## 05 - Sessions become real
+**Date:** 2026-08-22
+**Phase:** Session Mode — Wiring
+**Summary:** A practice session is now a row the server mints on the FIRST recorded swing, and the
+swing log groups by it. Migration 0016 adds `sessions.name` (nullable) and `sessions.session_type`
+(CHECK-constrained text, default `swing_analysis`); `GET`/`POST /api/v1/sessions` and
+`PATCH /api/v1/sessions/:id` join the versioned API; `SwingSummary` grows `sessionId`.
+
+**The two rules that carry the design, both pinned by tests.** `name` is **null until the golfer
+renames it** — the app's own "Session 4" is a number it counted, and storing it would make every
+session look renamed to a log whose title rule is "the date, unless they named it". And
+`session_type` **locks once the session has swings** (409 `type_locked`), because every swing in a
+session was captured under one promise and drills/video-only are quarantined from durable
+averages; a late flip would rewrite what the golfer's history claims about swings already hit.
+
+**Grouping now has two kinds and always will.** `sessionize()` groups by real `sessionId` where
+there is one and falls back to the two-hour time gap where there is not — every swing recorded
+before session mode has no id, so replacing the inference would have orphaned the existing log.
+A session that knows its name and mode says so; one that does not abstains rather than inventing
+them. Quarantine (`isQuarantined`) removes drills and video-only from `sessionStats`, `logStats`
+averages, the home screen's `latestSessionStats`, and the progress window's compare — **absent,
+never zero**: the session still counts, still shows its swings, and simply contributes no number.
+
+**Notes:** The mint is fire-and-forget and does not block the save — the golfer sees their swing
+the moment the trim finishes, and `session-minted` is dispatched only from the confirmed response
+(no optimistic writes, matching `deleteSwing`'s discipline). A failed mint releases the guard so
+the next saved swing retries; until one succeeds those swings group by time, which is exactly what
+the log did before. Default numbering now comes from the server's session count rather than
+`sessionize(swings).length` — a golfer who hit two balls and left still had a session, and the
+old inference skipped it. Swing creation with the `sessionId` is step 06's; the seam is in state.
+`route-auth.test.ts`'s `[id]` rule was widened from "must use requireViewAccess" to "requireViewAccess
+OR listed in `ROW_SCOPED` **and** demonstrably running inside `withUser`" — a session id is not a
+swing id, and the mechanical check had to stay total rather than be scoped to swings.
+Decision recorded in `docs/decisions/platform-data.md` (edited in place).
+
+---
+
 ## 04 - Recording WORKS on the S25+ — 1080p240 with a live preview
 **Date:** 2026-08-21
 **Phase:** Session Mode — Wiring

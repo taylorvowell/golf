@@ -1,15 +1,41 @@
-import { SESSION_GAP_MS, logStats, sessionStats, sessionize } from "./sessions";
+import {
+  SESSION_GAP_MS,
+  isQuarantined,
+  logStats,
+  sessionStats,
+  sessionize,
+  type SessionMeta,
+} from "./sessions";
 import type { SwingSummary } from "@swingsage/schema/contract";
 
 /**
- * The grouping is inferred from time until the contract carries a session id, so what is pinned
- * is the inference: the gap splits, the ordering reads like a range visit (newest session first,
- * swings within it in the order they were hit), and `best` ignores unscored swings instead of
- * treating them as zero.
+ * Two groupings live here and both are pinned.
+ *
+ * The TIME inference — the gap splits, the ordering reads like a range visit (newest session
+ * first, swings within it in the order they were hit), `best` ignores unscored swings instead of
+ * treating them as zero — is what every swing recorded before session mode still gets.
+ *
+ * The REAL grouping is by the `sessionId` the capture flow mints, and it has to coexist with the
+ * inference in one log rather than replacing it: a golfer's history does not start over when the
+ * feature ships. The mixed case is therefore a first-class test, not an edge case.
  */
 
 function swing(id: string, createdAt: number, overallScore: number | null = null): SwingSummary {
   return { id, createdAt, overallScore } as SwingSummary;
+}
+
+/** A swing the capture flow minted a session for. */
+function inSession(
+  id: string,
+  createdAt: number,
+  sessionId: string,
+  overallScore: number | null = null,
+): SwingSummary {
+  return { id, createdAt, overallScore, sessionId } as SwingSummary;
+}
+
+function meta(id: string, sessionType: SessionMeta["sessionType"], name: string | null = null): SessionMeta {
+  return { id, name, sessionType };
 }
 
 const T0 = 1_760_000_000_000; // an arbitrary epoch-ms anchor
@@ -88,5 +114,90 @@ describe("logStats (the hero's whole-log overview)", () => {
   it("abstains from avg/best when nothing scored — never fabricates a zero", () => {
     const sessions = sessionize([swing("a", T0, null)]);
     expect(logStats(sessions)).toEqual({ sessions: 1, swings: 1, avg: null, best: null });
+  });
+});
+
+describe("real session rows", () => {
+  it("groups by the minted id, not by time — two sessions minutes apart stay apart", () => {
+    // The exact case time inference cannot see: the golfer ended a session and started another
+    // without leaving the range, so both sit inside one SESSION_GAP_MS window.
+    const sessions = sessionize(
+      [
+        inSession("a", T0, "s1", 70),
+        inSession("b", T0 + 60_000, "s1", 74),
+        inSession("c", T0 + 5 * 60_000, "s2", 66),
+      ],
+      [meta("s1", "swing_analysis"), meta("s2", "swing_analysis")],
+    );
+    expect(sessions.map((s) => s.id)).toEqual(["s2", "s1"]);
+    expect(sessions[1].swings.map((w) => w.id)).toEqual(["a", "b"]);
+  });
+
+  it("carries the golfer's name and mode, and abstains when the rows have not loaded", () => {
+    const swings = [inSession("a", T0, "s1", 70)];
+    const named = sessionize(swings, [meta("s1", "practice_drills", "Wedge day")]);
+    expect(named[0].name).toBe("Wedge day");
+    expect(named[0].sessionType).toBe("practice_drills");
+
+    // No metadata (offline, or a session row that has not arrived): grouping still holds, but the
+    // log says nothing it cannot back up.
+    const bare = sessionize(swings);
+    expect(bare[0].id).toBe("s1");
+    expect(bare[0].name).toBeNull();
+    expect(bare[0].sessionType).toBeNull();
+  });
+
+  it("sessionizes a log holding both kinds at once", () => {
+    const sessions = sessionize(
+      [
+        swing("old-a", T0 - 3 * SESSION_GAP_MS, 60),
+        swing("old-b", T0 - 3 * SESSION_GAP_MS + 60_000, 64),
+        inSession("new-a", T0, "s1", 80),
+      ],
+      [meta("s1", "swing_analysis")],
+    );
+    expect(sessions.map((s) => s.id)).toEqual(["s1", "old-a"]);
+    expect(sessions[1].swings.map((w) => w.id)).toEqual(["old-a", "old-b"]);
+  });
+});
+
+describe("drills and video-only are quarantined from durable numbers", () => {
+  const drills = () =>
+    sessionize(
+      [inSession("a", T0, "s1", 70), inSession("b", T0 + 60_000, "s1", 90)],
+      [meta("s1", "practice_drills")],
+    )[0];
+
+  it("names which modes are quarantined", () => {
+    expect(isQuarantined({ sessionType: "practice_drills" })).toBe(true);
+    expect(isQuarantined({ sessionType: "video_only" })).toBe(true);
+    expect(isQuarantined({ sessionType: "swing_analysis" })).toBe(false);
+    // A time-inferred session was never declared a drill, so it is not quarantined.
+    expect(isQuarantined({ sessionType: null })).toBe(false);
+  });
+
+  it("reports no best and no stats — absent, never zero", () => {
+    const session = drills();
+    expect(session.best).toBeNull();
+    expect(sessionStats(session)).toEqual({
+      avg: null,
+      best: null,
+      start: null,
+      improvement: null,
+    });
+  });
+
+  it("still counts in the log's session and swing totals", () => {
+    // The golfer showed up and hit balls. Hiding that would make the log claim less practice
+    // than they did — quarantine is about AVERAGES, not about existence.
+    const sessions = sessionize(
+      [
+        inSession("a", T0, "s1", 70),
+        inSession("b", T0 + 60_000, "s1", 90),
+        inSession("c", T0 + 2 * SESSION_GAP_MS, "s2", 80),
+      ],
+      [meta("s1", "practice_drills"), meta("s2", "swing_analysis")],
+    );
+    expect(logStats(sessions)).toEqual({ sessions: 2, swings: 3, avg: 80, best: 80 });
   });
 });

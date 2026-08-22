@@ -48,6 +48,21 @@ const PUBLIC_ROUTES: Record<string, string> = {
     "too old; behind sign-in, the only symptom of needing an upgrade would be a failed sign-in.",
 };
 
+/**
+ * `[id]` routes whose id is NOT a swing id, and which prove ownership through row-level security
+ * rather than `requireViewAccess`.
+ *
+ * An allowlist with a reason attached, for the same reason `PUBLIC_ROUTES` is one: "this id is
+ * fine because RLS covers it" is exactly what someone would say about a route where it does not.
+ * The test additionally requires the file to actually run its query through `withUser`, so an
+ * entry here cannot excuse a route that reaches the database any other way.
+ */
+const ROW_SCOPED: Record<string, string> = {
+  "v1/sessions/[id]":
+    "A session id. `sessions_write` is owner-only, and the update is scoped to the caller's own " +
+    "user id inside `withUser` — another golfer's session matches no row and answers 404.",
+};
+
 const routeId = (file: string) =>
   file
     .slice(join(API_DIR).length + 1)
@@ -126,21 +141,29 @@ describe("API route authentication", () => {
     ).toEqual([]);
   });
 
-  it("checks ownership, not merely sign-in, on swing-scoped routes", () => {
-    // `[id]` routes take a swing id from the URL. Knowing that a caller is signed in says nothing
-    // about whether the swing is theirs, so these need the ownership check specifically —
-    // `requireViewAccess`, which checks ownership AND resolves which view is being asked for.
+  it("checks ownership, not merely sign-in, on id-scoped routes", () => {
+    // `[id]` routes take an id from the URL. Knowing that a caller is signed in says nothing about
+    // whether the row is theirs, so each one needs an ownership check — and the check differs by
+    // what the id names, which is why `ROW_SCOPED` exists rather than a single blanket rule.
     const weak = files
       .filter((f) => f.includes(`[id]`))
       // Internal `[id]` is a JOB id whose scope the token itself carries, checked above.
       .filter((f) => !routeId(f).startsWith(INTERNAL_PREFIX))
-      .filter((f) => !readFileSync(f, "utf8").includes("requireViewAccess"))
+      .filter((f) => {
+        const text = readFileSync(f, "utf8");
+        if (text.includes("requireViewAccess")) return false;
+        // A row-scoped route proves ownership through row-level security instead: the query runs
+        // inside `withUser`, so a row belonging to someone else matches nothing. Being LISTED is
+        // not enough — the file has to actually run on that connection.
+        return !(routeId(f) in ROW_SCOPED && text.includes("withUser"));
+      })
       .map((f) => f.replace(process.cwd(), "."));
 
     expect(
       weak,
-      "These routes take a swing id but only check that SOMEONE is signed in. Any account could " +
-        "read any swing by id. Use requireViewAccess.",
+      "These routes take an id but only check that SOMEONE is signed in. Any account could read " +
+        "or edit any row by id. Use requireViewAccess for a swing id, or run the query inside " +
+        "`withUser` and add the route to ROW_SCOPED with the reason.",
     ).toEqual([]);
   });
 });

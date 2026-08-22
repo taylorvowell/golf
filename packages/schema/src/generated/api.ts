@@ -9,6 +9,13 @@
  */
 export type ApiVersion = "v1";
 /**
+ * What the golfer came to do. `practice_drills` and `video_only` are quarantined from durable averages — a drill rep is not a scored swing attempt, and a video-only clip was never analysed.
+ *
+ * This interface was referenced by `Api`'s JSON-Schema
+ * via the `definition` "sessionType".
+ */
+export type SessionType = "swing_analysis" | "practice_drills" | "video_only";
+/**
  * Either the job row, or `{ status: 'idle' }` when no run has ever been started for this view.
  *
  * This interface was referenced by `Api`'s JSON-Schema
@@ -171,6 +178,10 @@ export interface SwingSummary {
   tempoRatio: number | null;
   traceEnabled: boolean;
   poseCoverage: number;
+  /**
+   * The practice session this swing belongs to, once a capture flow minted one (D41 additive). Null on every swing recorded before session mode, and on any swing whose session was deleted — the log falls back to inferring a session from time, so the golfer never sees a gap.
+   */
+  sessionId?: string | null;
 }
 /**
  * This interface was referenced by `Api`'s JSON-Schema
@@ -178,6 +189,70 @@ export interface SwingSummary {
  */
 export interface SwingListResponse {
   swings: SwingSummary[];
+}
+/**
+ * One practice session. Minted by the capture flow on the FIRST recorded swing, never on entering session mode — a golfer who opens the camera and walks away leaves nothing behind.
+ *
+ * This interface was referenced by `Api`'s JSON-Schema
+ * via the `definition` "sessionSummary".
+ */
+export interface SessionSummary {
+  id: string;
+  /**
+   * The calendar day it was recorded on, `YYYY-MM-DD` in the golfer's own timezone as the client stated it.
+   */
+  date: string;
+  /**
+   * The golfer's chosen name, or null when they never renamed it. Null is not 'unnamed': it is what tells the log to keep its date title rather than print a number the app counted.
+   */
+  name: string | null;
+  sessionType: SessionType;
+  /**
+   * How many swings currently point at this session. What locks the type, and what numbers the next default name.
+   */
+  swingCount: number;
+  createdAt: number;
+}
+/**
+ * This interface was referenced by `Api`'s JSON-Schema
+ * via the `definition` "sessionListResponse".
+ */
+export interface SessionListResponse {
+  sessions: SessionSummary[];
+}
+/**
+ * POST /api/v1/sessions. Every field optional: a session created with an empty body is today's unnamed analysis session, which is exactly what the capture screen mints when the golfer touched nothing.
+ *
+ * This interface was referenced by `Api`'s JSON-Schema
+ * via the `definition` "sessionCreateRequest".
+ */
+export interface SessionCreateRequest {
+  /**
+   * Send null (or omit) while the title is still the app's own default — see `sessionSummary.name`.
+   */
+  name?: string | null;
+  sessionType?: SessionType;
+  /**
+   * `YYYY-MM-DD`, stated by the client because only the phone knows the golfer's timezone. Defaults to the server's date when omitted.
+   */
+  date?: string;
+}
+/**
+ * PATCH /api/v1/sessions/:id. Partial, like the profile patch — a screen sends only what it edits. `sessionType` is rejected once the session has swings.
+ *
+ * This interface was referenced by `Api`'s JSON-Schema
+ * via the `definition` "sessionPatchRequest".
+ */
+export interface SessionPatchRequest {
+  name?: string | null;
+  sessionType?: SessionType;
+}
+/**
+ * This interface was referenced by `Api`'s JSON-Schema
+ * via the `definition` "sessionResponse".
+ */
+export interface SessionResponse {
+  session: SessionSummary;
 }
 /**
  * A hand-placed club head, normalized 0–1 against the video frame — the same convention as `analysis.json`. Corrections live in the database and merge by frame at render time, never in the artifact, which is rewritten wholesale by every re-analysis.
