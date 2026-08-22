@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
+import { DEFAULT_COACH_ID, isCoachId, type CoachId } from "../coach/coaches";
+
 /**
  * App-level preferences — the Settings screen's toggles, as opposed to per-session settings
  * (`sessionDefaults.ts`) which the session sheet owns. Device-local until an account-level
@@ -19,11 +21,14 @@ export interface AppPrefs {
   recordSounds: boolean;
   /** The countdown's 3-2-1 ticks. Only meaningful while `recordSounds` is on — the gate. */
   countdownTicks: boolean;
+  /** Which AI coach persona speaks — voice and manner only, never the facts. */
+  coachId: CoachId;
 }
 
 export const DEFAULT_APP_PREFS: AppPrefs = {
   recordSounds: true,
   countdownTicks: true,
+  coachId: DEFAULT_COACH_ID,
 };
 
 let cache: AppPrefs = DEFAULT_APP_PREFS;
@@ -46,6 +51,7 @@ async function loadOnce(): Promise<void> {
     cache = {
       recordSounds: bool(p.recordSounds, DEFAULT_APP_PREFS.recordSounds),
       countdownTicks: bool(p.countdownTicks, DEFAULT_APP_PREFS.countdownTicks),
+      coachId: isCoachId(p.coachId) ? p.coachId : DEFAULT_APP_PREFS.coachId,
     };
     listeners.forEach((l) => l());
   } catch {

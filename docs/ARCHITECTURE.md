@@ -31,12 +31,14 @@ where that is going, and marks what is real as it lands.
       │  Supabase   │  │  Upstash QStash│
       │  Postgres   │  │  dispatch      │
       │  + Auth     │  └──┬─────────────┘
-      │  + Storage  │     │
-      └──────▲──────┘  ┌──▼──────────────────────────┐
-             │         │  Analyzer worker (Railway)  │
-             └─────────┤  Python CV pipeline         │
-              service  │  UNCHANGED internals        │
-              role     └─────────────────────────────┘
+      │             │     │
+      │  Cloudflare │  ┌──▼──────────────────────────┐
+      │  R2 (media) │  │  Analyzer worker (Modal)    │
+      └──────▲──────┘  │  Python CV pipeline         │
+             │         │  serverless GPU, scale-to-0 │
+             └─────────┤  UNCHANGED internals        │
+              signed   └─────────────────────────────┘
+              URLs
 ```
 
 | Component | Status | Notes |
@@ -60,10 +62,10 @@ where that is going, and marks what is real as it lands.
 | Web app role | Coach + admin surface | Coach and admin work is desk-shaped; the player already exists | D6 |
 | Database | Supabase Postgres, Drizzle retained | Supabase *is* Postgres; migrations and FKs already exist | D7 |
 | Authorization | Row-level security | Coach access is a data rule, not a UI check | D7 |
-| Media | Supabase Storage, stable keys | One authorization path for user video | D8 |
+| Media | Cloudflare R2, stable keys | Zero egress; same Cloudflare account as DNS | D8, D64 |
 | Queue | Upstash QStash dispatch; state in Postgres | Existing job protocol survives the network boundary | D9 |
-| Worker | Railway container | GPU availability to be confirmed early | D9 |
-| Secrets | Infisical, 3 environments | | D10 |
+| Worker | Modal, serverless GPU | Bursty, GPU-bound, idle most of the hour | D9, D64 |
+| Secrets | Platform-native (Vercel / EAS / Modal), 3 environments | No vault vendor at solo scale | D10, D64 |
 | Offline | Capture and library offline; analysis online | Golfers record where signal is worst | D11 |
 | Releases | EAS Build/Submit; OTA for JS only | No Mac; native changes still need review | D12 |
 | SLOs | p95 analysis < 180 s, 0-frame overlay drift | Makes "production ready" falsifiable | D13 |
@@ -81,12 +83,12 @@ where that is going, and marks what is real as it lands.
    **local store first** — this step completes with no network (D11).
 2. **Trim.** The golfer selects the swing within the recording. Manual for now: automatic
    isolation is deferred (D2), so this fallback is required, not optional.
-3. **Upload.** Compressed on-device, then transferred resumably in chunks to Supabase Storage,
+3. **Upload.** Compressed on-device, then transferred resumably in chunks to Cloudflare R2,
    surviving app suspension and connection loss. Queued and retried if offline (D11,
    `media-pipeline`).
 4. **Enqueue.** The API creates a job row in Postgres and dispatches via QStash, applying the
    per-user concurrency cap that stops one golfer's batch starving everyone else (D9, §38).
-5. **Analyse.** The Railway worker pulls source from storage and runs the **unchanged** pipeline:
+5. **Analyse.** The Modal worker pulls source from storage and runs the **unchanged** pipeline:
    normalize → pose → post-process → events → club → checkpoints → metrics → scoring. It writes
    artifacts back to storage and progress to the job row, using a scoped service role (D7).
 6. **Notify.** Analysis completion pushes a notification, because a ~3-minute job means the
@@ -161,9 +163,15 @@ Recorded here so the gap between plan and spec never narrows silently.
   not simultaneously satisfiable. D1.
 - **Automatic swing detection deferred** (§11) to a future phase, with a manual trim fallback
   carrying the workflow meanwhile. D2.
-- **Azure not used for media** despite §39's preference, because splitting storage from the auth
-  system would create a second authorization path for user video. §39 subordinates preferences to
-  capabilities; revisit trigger recorded. D8.
+- **Azure not used for media** despite §39's preference. Media lives in Cloudflare R2, chosen on
+  egress economics for a video product ($0/GB against $0.09/GB) and because it needs no vendor
+  beyond the Cloudflare account already opened for DNS. §39 subordinates preferences to
+  capabilities. D8, D64.
+- **Railway, Infisical and RunPod removed from §39's list.** The analyzer worker is Modal
+  (serverless GPU beats an idle-billed container for a job that runs ~76s a few times an hour),
+  the API is Vercel (native Next.js host; the 4.5 MB body cap never binds because uploads go
+  direct to storage), and secrets live in the platforms that run the code rather than a vault
+  vendor. D64.
 
 ---
 

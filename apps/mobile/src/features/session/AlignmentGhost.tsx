@@ -24,6 +24,25 @@ import { COLORS } from "../../theme";
 /** Present but not competing with the picture — the outline reads at just over half. */
 const GHOST_OPACITY = 0.55;
 
+/**
+ * How far down the stage the figure is nudged, as a share of its own height (Taylor,
+ * 2026-08-22).
+ *
+ * The artboard centres the golfer, but a phone stood on the ground sees them lower in the frame
+ * than the composition assumes — so the guide sat above where a real body lands and asked the
+ * golfer to frame themselves too high.
+ */
+const GHOST_DROP = 0.24;
+
+/**
+ * A nudge toward the leading edge, as a share of the figure's own width (Taylor, 2026-08-22).
+ *
+ * Signed against the ART, which is right-handed: a left-handed golfer gets the mirror image in
+ * the mirrored spot, so the nudge has to mirror with them or the guide drifts the wrong way for
+ * half the users.
+ */
+const GHOST_SHIFT = 0.06;
+
 export interface AlignmentGhostProps {
   width: number;
   height: number;
@@ -55,8 +74,8 @@ export function AlignmentGhost({ width, height, visible, view }: AlignmentGhostP
       <Animated.View
         style={{
           position: "absolute",
-          left: place.left,
-          top: place.top,
+          left: place.left + place.width * (mirrored ? GHOST_SHIFT : -GHOST_SHIFT),
+          top: place.top + place.height * GHOST_DROP,
         }}
       >
         <PoseOutline

@@ -14,9 +14,9 @@ cloud pricing moves, and every figure here is a list price rather than a negotia
 | Layer | Platform | Why this one | ~$/month |
 |---|---|---|---|
 | **Media storage + delivery** | **Cloudflare R2** | **$0 egress.** The single largest cost decision in the plan | **~$450** |
-| **Analysis compute** | **Serverless GPU** — RunPod or Modal, L4/A10G class | Bursty, GPU-bound, must scale to zero overnight | **$650 – $1,300** |
+| **Analysis compute** | **Modal** — serverless GPU, L4/A10G class | Bursty, GPU-bound, must scale to zero overnight | **$650 – $1,300** |
 | **Database + Auth** | **Supabase Pro** | Already chosen (D7). 10k MAU sits inside the 100k MAU allowance | **~$100** |
-| **API + coach/admin web** | **Next.js**, Vercel or Railway | API load is ~2% of one instance at this scale — see below | **~$50** |
+| **API + coach/admin web** | **Next.js on Vercel Pro** | API load is ~2% of one instance at this scale — see below | **~$50** |
 | **Job dispatch** | **Upstash QStash** | Already chosen (D9). $1 per 100k messages | **~$5** |
 | **Error + performance** | Sentry | | **~$50** |
 | | | | **≈ $1,300 – $2,000** |
@@ -103,7 +103,7 @@ which host is viable, and whether D13's latency SLO is reachable at all. It need
 credentials and no accounts. Tracked as **D18**.
 
 **Sizing:** RTMW pose and YOLO11s are small models — this is not LLM inference. An **L4**
-(~$0.39/h on-demand, RunPod) or **A10G** (~$1.10/h, Modal serverless) is ample. A100/H100 would
+or an **A10G** (~$1.10/h on Modal serverless) is ample. A100/H100 would
 be wasted money.
 
 **Serverless over reserved pods**, because load is bursty and analysis is already asynchronous
@@ -127,11 +127,13 @@ storage**.
 **R2 saves roughly $840/month at 10k MAU** — over half the entire infrastructure bill — and the
 gap widens with every additional view.
 
-This directly quantifies **D8's revisit trigger**. Supabase Storage was chosen so signed-URL
-issuance sits inside the same system that decides who may view a swing, which is a genuine
-correctness argument at small scale. At 10k MAU the economics invert decisively. Note Supabase
-egress is **the same $0.09/GB as S3** once past the 250 GB included — it is not a cheaper option,
-just a more convenient one.
+This is the number that settled D8 on **R2** (D64). Supabase Storage briefly looked right on the
+argument that signed-URL issuance would sit inside the same system that decides who may view a
+swing — but it does not: the media driver holds a service credential that bypasses
+`storage.objects` policies, so authorization rests on the route either way. With no correctness
+difference, the economics decide, and they decide decisively. Note Supabase egress is **the same
+$0.09/GB as S3** once past the 250 GB included — it was never the cheaper option, just the more
+convenient one.
 
 ### Storage is a ratchet, not a dial
 
@@ -179,7 +181,7 @@ Concrete signals, so these stay observations rather than opinions.
 
 | Move | Trigger |
 |---|---|
-| Supabase Storage → R2 | Monthly egress above ~$200, or video start latency degrades |
+| R2 → R2 + a paid CDN tier | Video start latency degrades at the p95 |
 | Serverless GPU → reserved pods | Sustained GPU utilisation above ~60% |
 | Next.js API → dedicated service | Cold starts visible in API p95, or deploy coupling blocking releases |
 | Add CDN in front of media | p95 video start time misses target in any region |
@@ -191,8 +193,8 @@ Concrete signals, so these stay observations rather than opinions.
 
 Nothing above requires building for 10k MAU today. Three properties keep the path open:
 
-1. **Media addressed by stable keys, not storage paths** (spine step 09). Makes
-   Supabase Storage → R2 a routing change rather than a data migration.
+1. **Media addressed by stable keys, not storage paths** (spine step 09). This is what makes the
+   still-unbuilt `r2Store.ts` a driver swap behind `MediaStore` rather than a data migration.
 2. **The analyzer stays a pure JSON producer.** Horizontal scaling depends on it, and it is the
    property that survived the mobile pivot intact.
 3. **Retention ships with the schema, not after it** (D15). Retrofitting expiry across 60 TB is

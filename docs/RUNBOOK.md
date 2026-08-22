@@ -65,9 +65,11 @@ overlays are missing, that is almost always an unpublished fixture — re-run ba
 
 The default driver is **local** and needs no credentials: it writes `.media/` at the repo root,
 hard-linked from `services/analyzer/out`, so it costs essentially no disk. Delete `.media/` and
-re-run backfill to rebuild it. To use Supabase Storage instead, run
-`pnpm --filter web media:provision` once and set `MEDIA_DRIVER=supabase`. Cloud is never inferred
-from the Supabase auth vars — see [`infra/storage/README.md`](../infra/storage/README.md).
+re-run backfill to rebuild it. A second driver exists for Supabase Storage —
+`pnpm --filter web media:provision` once, then `MEDIA_DRIVER=supabase` — but **production media is
+Cloudflare R2** (D64) and the R2 driver is not written yet, so the Supabase driver is a local
+convenience only, not the path anything ships on. Cloud is never inferred from the Supabase auth
+vars — see [`infra/storage/README.md`](../infra/storage/README.md).
 
 ---
 
@@ -255,6 +257,48 @@ Queue policy (step 05) is env-tunable, defaults in `apps/web/src/lib/jobs/policy
 locally: enqueue with the worker process DOWN — after QStash's 3 retries the failure callback
 (`/api/internal/jobs/<id>/failure`) settles the job `failed` with the `dlqId` in its log; if
 it never fires, the pending-timeout sweep settles it on the next poll instead.
+
+### Turning on-device dev clips into a session in the swing log
+
+The clip library on the S25+ (`/sdcard/Android/media/com.swingsage.spike/dev-clips`) holds long
+takes filmed the way a golfer films alone. Getting a few of them into the log as a dated session
+is four steps; nothing here touches the phone beyond a read.
+
+```bash
+# 1. which clips exist, and which angle each was triaged as
+adb -s <phone> shell 'ls -la /sdcard/Android/media/com.swingsage.spike/dev-clips/'
+adb -s <phone> exec-out 'run-as com.swingsage.spike cat databases/RKStorage' > RKStorage.db
+#    then read key swingsage.devClipMarks.v1 out of catalystLocalStorage
+
+# 2. pull the ones you want (adb needs a WINDOWS destination path — C:/..., not /c/...)
+adb -s <phone> pull /sdcard/Android/media/com.swingsage.spike/dev-clips/<name>.mp4 C:/tmp/<name>.mp4
+
+# 3. cut the swing out, the way the save screen would
+services/analyzer/.venv/Scripts/python.exe services/analyzer/scripts/trimswing.py <src> <dst>
+```
+
+`trimswing.py` mirrors `SwingClip.kt`'s `hf` detector and `SwingReview`'s window, and prints the
+anchor it chose plus the runners-up so a bad seed is visible rather than silent.
+
+**Retime before analysing.** These clips are 240 fps capture written at 30 fps playback
+(`com.android.capture.fps=240`), so handing one to `burnin.py` as-is analyses an 8×-slow swing:
+every time-based metric comes out eight times too long and the CFR-60 resample doubles an
+already-inflated frame count.
+
+```bash
+ffmpeg -itsscale 0.124875 -i <trimmed>.mp4 -an -c:v copy <realtime>.mp4   # 29.97/240
+python scripts/burnin.py <realtime>.mp4 --view dtl --handedness right        --club-detector runs/clubhead/weights/best.pt
+```
+
+Then `pnpm --filter web db:backfill` mints the swing + view rows and publishes the artifacts, and
+the log groups by `created_at` gap — so the session's date is a single UPDATE:
+
+```sql
+update swings s set created_at = (current_date + time '10:47:19') at time zone 'America/Chicago'
+from swing_views v where v.swing_id = s.id and v.media_key = '<folder name>';
+```
+
+Swings within `SESSION_GAP_MS` (2h) of each other become one session.
 
 ---
 
@@ -745,6 +789,56 @@ starts Apple's annual $99 clock early. Begin enrolment around step 07 for buffer
 13 Nov 2023 must run a closed test with 12 testers opted in for 14 continuous days before it can
 publish, while an **organization** account is exempt but needs D-U-N-S verification. See spine
 step 10 for the full comparison.
+
+### Recording without standing on a range — the dev clip drawer
+
+Pre-recorded swings can stand in for a live take, landing straight on the mark-the-strike review
+screen. The folder is created on first launch and needs no permission:
+
+```
+Internal storage\Android\media\com.swingsage.spike\dev-clips
+```
+
+**Plug the phone in and drag files there in Explorer** — that path is `Android/media`, not
+`Android/data`, which is the difference between visible and hidden under Android 11+ scoped
+storage. `/sdcard` and `Internal storage` are the same volume under two names; over adb it is:
+
+```
+adb push "C:\path\to\clips\." /sdcard/Android/media/com.swingsage.spike/dev-clips/
+# or, for clips already on the phone:
+adb shell cp /sdcard/DCIM/Camera/*.mp4 /sdcard/Android/media/com.swingsage.spike/dev-clips/
+```
+
+Then open session mode, tap the amber DEBUG pill → **Clip library**. Each row carries a thumbnail,
+the file name, `seconds · fps · MB`, a status (**NEW / TRIED / SAVED** — persisted, so triage
+survives a reload) and an angle tag. Tapping a row loads it as a finished take and lands on review.
+
+**Check the angle tag before loading a front-view clip.** It is guessed from the file name
+(`front`, `face-on`, `fo` → FRONT, everything else → DTL) and the guess is stamped onto the swing;
+a face-on clip marked DTL inverts every lead/trail metric the analyzer computes, which then reads
+as bad analysis rather than bad metadata. Tap the tag to flip it — the correction sticks with the
+clip. The fps is derived from the file (frames ÷ duration), so a phone slow-motion clip that plays
+at 30 reports 30 and the frame clock stays honest. **Rescan** picks up files added while the app
+was running.
+
+On a dev clip the bin becomes a **Back arrow** — the file is never deleted, and backing out reopens
+the library so rejecting a clip and trying the next is two taps.
+
+**Comparing impact detectors.** DEBUG → **Impact detection** offers eight: `attack` (default),
+`peak`, `hf`, `flux`, `sharp`, `crest`, `decay` and `ensemble`. The choice persists, and the review
+screen prints `SEEDED BY <method>` on a dev clip; switching re-seeds the mark on the clip already
+open, so one clip gives eight answers with no reload. The same group carries **Ignore first/last
+5s** — the edge prior, on by default, switchable so it can be A/B'd on one clip. Nothing here
+produces an accuracy figure: there are no labelled strike frames, so record a preference as a
+preference, never as a measurement.
+
+**Swing preview.** The review screen's bottom-right corner loops the exact five seconds Save would
+cut, at 1x. It updates when you let go of the slider (not during the drag), so it answers "is the
+whole swing in the window" before you commit rather than after.
+
+`Android/data/com.swingsage.spike/files/dev-clips` is still scanned as a fallback, so clips already
+pushed there keep working. The app never deletes either folder's contents: the capture-cache sweep
+cannot reach them, and both Save and Delete on the review screen refuse to unlink a dev take.
 
 ---
 

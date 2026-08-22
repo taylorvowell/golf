@@ -178,7 +178,7 @@ coaching, billing, hosting) is unbuilt.
 | 36 | Search, filtering, organization | 🟡 | Sort only. |
 | 37 | Product analytics | ⬜ | Owned by `observability-and-slos` in the foundation phase, live from the first deployed environment rather than after five phases of features. |
 | 38 | Production readiness and scale | ⬜ | Local Docker Postgres, local disk media, hand-invoked CLI analyzer. Nothing is deployed. Split across `analyzer-service` (capacity model, fair queuing), `observability-and-slos` (targets and telemetry) and `production-readiness` (retention, load testing). |
-| 39 | Supabase, Upstash, Railway, Infisical, Azure | ⬜ | None wired. Current stack is local Postgres via Drizzle + local disk. Stripe struck from the list by D1. |
+| 39 | Supabase, Cloudflare R2, Vercel, Modal, Upstash, Anthropic, Replicate, Sentry, PostHog, EAS | ⬜ | None wired. Current stack is local Postgres via Drizzle + local disk. §39's original list is superseded by D64: Stripe struck by D1, Azure by R2's egress economics, Railway by Modal + Vercel, Infisical by platform-native secrets. |
 
 ---
 

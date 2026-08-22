@@ -94,6 +94,35 @@ jest.mock("./modules/high-speed-camera/src/HighSpeedCameraView", () => {
   return { __esModule: true, default: HighSpeedCameraView };
 });
 
+/**
+ * `expo-video` is a native module: `useVideoPlayer` reaches for a real player at import time and
+ * throws under jest. The stand-in is a plain object whose properties can be written and read, so a
+ * test can assert what the preview asked the player to do (seek, rate, muted) without a device.
+ */
+jest.mock("expo-video", () => {
+  const React = require("react");
+  const { View } = require("react-native");
+  return {
+    useVideoPlayer: (_source, setup) => {
+      const player = React.useMemo(
+        () => ({
+          muted: false,
+          currentTime: 0,
+          playbackRate: 1,
+          timeUpdateEventInterval: 0,
+          play: jest.fn(),
+          pause: jest.fn(),
+          addListener: jest.fn(() => ({ remove: jest.fn() })),
+        }),
+        [],
+      );
+      React.useMemo(() => setup?.(player), [player]);
+      return player;
+    },
+    VideoView: (props) => React.createElement(View, props),
+  };
+});
+
 jest.mock("./modules/frame-clock/src/FrameClockView", () => {
   const React = require("react");
   const { View } = require("react-native");

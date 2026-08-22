@@ -47,8 +47,10 @@ import {
   TitleText,
   WaveNav,
   WeekStrip,
+  PortraitPicker,
 } from "../design/system";
 import { useState } from "react";
+import { COACHES } from "../features/coach/coaches";
 import { themedStyles, useTheme } from "../theme";
 
 /**
@@ -178,6 +180,10 @@ export function SystemGalleryScreen() {
             { label: "SU", dayOfMonth: 17 },
           ]}
         />
+      </Section>
+
+      <Section title="Portrait picker — choosing a person">
+        <PortraitPickerDemo />
       </Section>
 
       <Section title="Lists — §08">
@@ -383,6 +389,24 @@ export function SystemGalleryScreen() {
         />
       </Section>
     </ScrollView>
+  );
+}
+
+/** The picker with its own local choice — the spec's job is showing both states at once. */
+function PortraitPickerDemo() {
+  const [id, setId] = useState(COACHES[0].id as string);
+  return (
+    <PortraitPicker
+      options={COACHES.map((c) => ({
+        id: c.id,
+        name: c.name,
+        tag: c.voiceLabel,
+        blurb: c.style,
+        image: c.portrait,
+      }))}
+      selectedId={id}
+      onSelect={setId}
+    />
   );
 }
 

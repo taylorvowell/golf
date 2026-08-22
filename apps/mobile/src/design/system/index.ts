@@ -14,6 +14,7 @@ export { Chip } from "./Chip";
 export { Input } from "./Input";
 export { Segmented } from "./Segmented";
 export { Panel, PanelHead } from "./Panel";
+export { PortraitPicker, type PortraitOption } from "./PortraitPicker";
 export { ListGroup, ListRow, ListSectionLabel } from "./ListRow";
 export { AppHeader, APP_HEADER_BAR } from "./AppHeader";
 export { DateTitle, dayTitleParts, formatDayTitle } from "./DateTitle";

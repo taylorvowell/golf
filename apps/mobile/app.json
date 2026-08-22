@@ -48,7 +48,8 @@
           }
         }
       ],
-      "./plugins/withTransparentNavBar"
+      "./plugins/withTransparentNavBar",
+      "expo-video"
     ],
     "experiments": {
       "reactCompiler": true

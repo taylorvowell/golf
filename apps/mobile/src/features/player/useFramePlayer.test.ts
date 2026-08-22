@@ -202,7 +202,13 @@ describe("readiness and failure", () => {
 
     await act(async () =>
       view.result.current.handlers.onReady({
-        nativeEvent: { durationMs: 4000, width: 1080, height: 1920, containerFps: 60 },
+        nativeEvent: {
+          durationMs: 4000,
+          width: 1080,
+          height: 1920,
+          rotationDegrees: 0,
+          containerFps: 60,
+        },
       }),
     );
 
@@ -210,6 +216,9 @@ describe("readiness and failure", () => {
       durationMs: 4000,
       width: 1080,
       height: 1920,
+      // CODED orientation travels with the dimensions — a caller sizing a box from width/height
+      // alone squashes every rotated phone clip, so the pair is never carried without it.
+      rotationDegrees: 0,
       containerFps: 60,
     });
   });

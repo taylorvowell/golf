@@ -230,6 +230,11 @@ class FrameClockView(context: Context, appContext: AppContext) : ExpoView(contex
               "durationMs" to (if (exo.duration == C.TIME_UNSET) 0L else exo.duration),
               "width" to (format?.width ?: 0),
               "height" to (format?.height ?: 0),
+              // CODED orientation, which is not display orientation. A portrait phone clip is
+              // stored 1920x1080 with a 90° rotation in the container; media3 rotates it for
+              // display but `format.width/height` still describe the stored frame, so a caller
+              // sizing a box from them alone squashes every portrait video it draws.
+              "rotationDegrees" to (format?.rotationDegrees ?: 0),
               // The container's own frame rate, reported alongside the fps prop precisely so a
               // mismatch is visible rather than silently absorbed into wrong frame indices.
               "containerFps" to (format?.frameRate?.toDouble() ?: 0.0)
@@ -242,6 +247,18 @@ class FrameClockView(context: Context, appContext: AppContext) : ExpoView(contex
         onPlayerError(mapOf("message" to (error.message ?: error.errorCodeName)))
       }
     })
+
+    /**
+     * **Silent, always, everywhere in the app** (Taylor, 2026-08-22).
+     *
+     * Audio in this product exists for ONE purpose: locating the strike, which `SwingClip` does
+     * by decoding the track directly — never by playing it. No surface that shows video has any
+     * use for sound, and a clip that suddenly speaks in a quiet room, or at 8x, is noise.
+     *
+     * Set here rather than per screen, and there is deliberately no `setMuted` to undo it: a rule
+     * every call site has to remember is a rule that gets forgotten by the next surface.
+     */
+    exo.volume = 0f
 
     player = exo
   }
@@ -456,11 +473,6 @@ class FrameClockView(context: Context, appContext: AppContext) : ExpoView(contex
     player?.setPlaybackSpeed(speed)
   }
 
-  /** Audio only — the scrub chase plays the video at whatever rate follows the finger, and the
-   *  soundtrack at 4x is noise, not information. Video timing is unaffected by volume. */
-  fun setMuted(muted: Boolean) {
-    player?.volume = if (muted) 0f else 1f
-  }
 
   fun resetStats() {
     synchronized(pendingLock) { pendingCommits.clear() }

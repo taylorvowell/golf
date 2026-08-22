@@ -53,8 +53,18 @@ export interface FrameRenderedEvent {
 
 export interface ReadyEvent {
   durationMs: number;
+  /** CODED width — not display width. See `rotationDegrees`. */
   width: number;
   height: number;
+  /**
+   * How far the container says the frame must be rotated to be upright: 0, 90, 180 or 270.
+   *
+   * **`width`/`height` describe the STORED frame, not the displayed one.** A portrait phone clip
+   * is stored 1920x1080 with 90° of rotation; the player draws it upright, but a layout sized
+   * from the raw pair squashes it. At 90 or 270 the two are swapped for display — that is what
+   * `displayAspectRatio` below is for.
+   */
+  rotationDegrees: number;
   /** The container's own frame rate. Compare against the `fps` prop — a mismatch means every
    *  frame index is wrong while each component looks individually correct. */
   containerFps: number;
@@ -66,6 +76,19 @@ export interface ReadyEvent {
  * views. Which one an overlay-on-video layout needs is a measurement. No-op on iOS.
  */
 export type SurfaceType = "surfaceView" | "textureView";
+
+/**
+ * Width ÷ height as the video is actually DISPLAYED, from a `ReadyEvent`.
+ *
+ * The one place the rotation rule lives, so no screen has to remember it. Returns null when the
+ * player has not reported usable dimensions, which callers render as "no aspect known yet"
+ * rather than as a guess.
+ */
+export function displayAspectRatio(e: ReadyEvent): number | null {
+  if (!e.width || !e.height) return null;
+  const turned = e.rotationDegrees === 90 || e.rotationDegrees === 270;
+  return turned ? e.height / e.width : e.width / e.height;
+}
 
 
 export type FrameClockViewProps = {
@@ -109,8 +132,8 @@ export interface FrameClockHandle {
   setScrubbing: (active: boolean) => Promise<void>;
   /** 1 = real time, 0.25 = quarter speed. A 240fps clip at 0.25 plays at a true 60fps. */
   setPlaybackSpeed: (speed: number) => Promise<void>;
-  /** Audio only. The scrub chase mutes while it drives playback at finger-following rates. */
-  setMuted: (muted: boolean) => Promise<void>;
+  // No `setMuted`: every player this module creates is silent from birth. Audio exists in this
+  // product only so the analyzer can find the strike, and it reads the track without playing it.
   getStats: () => Promise<FrameClockStats>;
   resetStats: () => Promise<void>;
 }

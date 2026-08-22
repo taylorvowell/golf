@@ -15,14 +15,33 @@ the other would silently skip real work. Until it ships, `in-app-capture` must p
 trim/select fallback**; that fallback is required, not optional.
 **See:** ARCHIVE D2.
 
-### The AI provider seam is server-side; the model is deliberately not chosen
+### The AI provider seam is server-side; the model is Anthropic, in three tiers
 
-**Decision:** Fix the **seam**, not the model. All model access goes through a server-side
-provider abstraction, so the model is swappable without touching callers.
+**Decision:** All model access goes through a server-side provider abstraction, so the model is
+swappable without touching callers. Behind that seam the provider is **Anthropic**, reached
+through **Vercel AI Gateway with BYOK** (list pricing, zero markup), with the tier chosen per job:
+
+| Job | Model |
+|---|---|
+| L1 coach narrative — L0 facts rewritten as coach prose | `claude-sonnet-5` |
+| L2 coach chat (§17) over the same read model | `claude-sonnet-5` |
+| Launch-monitor screenshot → structured stats | `claude-opus-5` |
+| Cheap classification — goal tagging, drill self-reports, onboarding fields | `claude-haiku-4-5` |
+
+Model IDs and the tier assignment are **versioned configuration**, and every AI-authored artifact
+records the version that produced it, exactly as `scoring_model_version` does for scoring.
 **Scope:** AI is for coaching narrative, conversation and parsing images — **never** for producing
 geometry. Pose, club, phase and angle maths are deterministic machine vision. AI is an
-enhancement, never a hard dependency for a swing reaching a ready state.
-**See:** ARCHIVE D16.
+enhancement, never a hard dependency for a swing reaching a ready state; every call validates
+against its schema, retries once, then falls back to template copy, and `AI_PROVIDER=mock` still
+reaches `ready`.
+**Gotchas:** The gateway is Vercel's because `apps/web` already runs on Vercel — routing model
+calls through it adds **zero new data processors**, where a third-party router (OpenRouter) adds
+one and inherits the no-training / short-retention obligation below, satisfiable only in a ZDR
+mode that shrinks the model pool. **Replicate is a separate vendor with a clean boundary:**
+Anthropic writes words, Replicate renders media (TTS, image, video). Replicate is never in the
+coaching-text path.
+**See:** ARCHIVE D16; `.claude/architecture/production-vendor-stack-2026-08-22.md`.
 
 ### What golfer data may reach a model provider
 
@@ -227,8 +246,10 @@ real swing?" classifier; stated intent is the only admissible signal.
 (verdict phrasings × moments × per-area feel cues) batch-rendered once with **Gemini 3.1
 Flash TTS, called via Replicate** (`replicate.com/google/gemini-3.1-flash-tts`, official
 listing — Taylor's existing account; `REPLICATE_API_TOKEN` in the generation script's env),
-selected with no-repeat rotation. A versioned `voice_config` pins the Replicate model ref +
-voice; a manifest (line → text hash → asset) drives regeneration, and any model change
+selected with no-repeat rotation. The bank is rendered **once per persona** — one Gemini voice
+each for Mark (`Orus`), Sean (`Charon`) and Julie (`Zephyr`) — so the golfer's coach pick
+selects a bank, never a runtime call. A versioned `voice_config` pins the Replicate model ref +
+the per-persona voice; a manifest (line → text hash → asset) drives regeneration, and any model change
 regenerates the whole bank. The app never calls a TTS vendor at runtime; device TTS is the
 offline fallback; settings disclose the AI voice. ElevenLabs is the named fallback vendor
 behind a script flag; the bake-off alternates (MiniMax, Chatterbox) also run on Replicate.
@@ -241,15 +262,26 @@ produced. Gemini output carries a SynthID watermark (inaudible; fine).
 
 ### The Coach is a persona over deterministic systems, never a system that owns state
 
-**Decision:** All guidance reaches the golfer through one Coach persona — the Coach surface
-(active focuses, proposals, the Focus page, chat, summaries) plus contextual appearances
-(after-swing verdicts, the spoken D57 voice). Underneath: L0 deterministic engines own every
-fact and all state; L1 narrative AI rewrites L0 facts into coach prose (template fallback);
+**Decision:** All guidance reaches the golfer through a Coach persona the golfer picks — the
+Coach surface (active focuses, proposals, the Focus page, chat, summaries) plus contextual
+appearances (after-swing verdicts, the spoken D57 voice). The roster is three personas —
+**Mark** (Gemini voice `Orus`), **Sean** (`Charon`) and **Julie** (`Zephyr`) — differing in
+voice, manner and portrait ONLY; the pick never changes a fact, a score, an abstention or a
+priority. The roster lives in `apps/mobile/src/features/coach/coaches.ts`, portraits in
+`apps/mobile/assets/coaches/<id>.jpg`, and the choice is a device-local app preference
+(`appPrefs.coachId`) until an account-level settings surface exists. It is picked on the **AI
+coach preferences** page — reached from My profile, and from a faint semi-transparent gear at
+the top of the Coach page — never from general Settings, which holds app behaviour rather than
+who the product is. The picker is the design system's `PortraitPicker`: portrait cards where
+the face carries the choice, one blurb for whoever is chosen, selection shown by veil + wash +
+tick rather than an edge. Underneath: L0
+deterministic engines own every fact and all state; L1 narrative AI rewrites L0 facts into coach prose (template fallback);
 L2 is §17 chat over the same read-model. Information flows L0 → L1/L2 only. AI writes the
 coach's words, never its facts; the only AI-output→state path is a golfer's tap. A versioned
 coach persona spec is shared by template copy and AI prompts.
 **Gotchas:** An L1/L2 line naming a streak, score, or achievement the evidence model has not
-produced is a correctness bug, same class as a fabricated face angle. The persona renders
-each guidance object's source (`ai | coach | self`) so human-coach guidance stays visibly
+produced is a correctness bug, same class as a fabricated face angle. Two golfers on the same
+swing get the same numbers in different words — a persona that changes an assessment is that
+same class of bug. The persona renders each guidance object's source (`ai | coach | self`) so human-coach guidance stays visibly
 distinct when it arrives (§26.3); the AI coach never presents as human.
 **See:** ARCHIVE D58; `PROJECT_MAIN.md` §17; `.claude/architecture/coach-and-focus-2026-08-14.md`.

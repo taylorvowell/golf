@@ -122,11 +122,16 @@ class HighSpeedCameraModule : Module() {
      * falls back to a default window and the golfer slides it. Nothing here is a measurement — the
      * real Impact frame comes from the analyzer, which snaps it to the club-head low point.
      */
-    AsyncFunction("detectImpacts") { path: String, limit: Int, promise: Promise ->
+    AsyncFunction("detectImpacts") {
+      path: String, limit: Int, method: String?, edgeWeighting: Boolean?, promise: Promise ->
       try {
-        promise.resolve(SwingClip.detectImpacts(path, limit).map {
-          mapOf("timeSec" to it.timeSec, "score" to it.score)
-        })
+        val found = SwingClip.detectImpacts(
+          path,
+          limit,
+          SwingClip.Method.parse(method),
+          edgeWeighting ?: true,
+        )
+        promise.resolve(found.map { mapOf("timeSec" to it.timeSec, "score" to it.score) })
       } catch (e: Throwable) {
         promise.reject("DETECT_IMPACTS", e.message ?: "impact detection failed", e)
       }
@@ -146,6 +151,15 @@ class HighSpeedCameraModule : Module() {
       }
     }
 
+    /** The same strip, at times the caller chooses — for a non-linear scrub axis. */
+    AsyncFunction("clipThumbnailsAt") { path: String, timesSec: List<Double>, width: Int, promise: Promise ->
+      try {
+        promise.resolve(SwingClip.thumbnailsAt(path, timesSec, width, context.cacheDir))
+      } catch (e: Throwable) {
+        promise.reject("CLIP_THUMBNAILS_AT", e.message ?: "thumbnail extraction failed", e)
+      }
+    }
+
     /**
      * Delete capture leftovers: takes and filmstrips older than `keepNewerThanMs`.
      *
@@ -161,10 +175,31 @@ class HighSpeedCameraModule : Module() {
       }
     }
 
+    /**
+     * Pre-recorded clips to stand in for a live take (`__DEV__` only — see `devClipsFolder`).
+     *
+     * Answers with the folder either way, so an empty drawer can tell the developer where to
+     * push files instead of just saying "none".
+     */
+    AsyncFunction("devClips") { promise: Promise ->
+      try {
+        val dirs = devClipFolders()
+        // Every folder is scanned so clips already pushed to the old location still show up,
+        // but only the FIRST is named — a drawer that offers two paths to choose between is a
+        // drawer that gets files put in the wrong one.
+        promise.resolve(mapOf(
+          "folder" to (dirs.firstOrNull()?.absolutePath ?: ""),
+          "clips" to dirs.flatMap { SwingClip.listDevClips(it) },
+        ))
+      } catch (e: Throwable) {
+        promise.reject("DEV_CLIPS", e.message ?: "could not list dev clips", e)
+      }
+    }
+
     /** Remux a window out of a take — no re-encode, so it costs milliseconds and loses nothing. */
     AsyncFunction("trimClip") { path: String, startSec: Double, endSec: Double, promise: Promise ->
       try {
-        promise.resolve(mapOf("path" to SwingClip.trim(path, startSec, endSec)))
+        promise.resolve(mapOf("path" to SwingClip.trim(path, startSec, endSec, context.cacheDir)))
       } catch (e: Throwable) {
         promise.reject("TRIM_CLIP", e.message ?: "trim failed", e)
       }
@@ -191,6 +226,28 @@ class HighSpeedCameraModule : Module() {
       }
     }
   }
+
+  /**
+   * Where a developer drops pre-recorded swings, in preference order.
+   *
+   * **`Android/media/<pkg>/dev-clips` is the one to use.** It is the only location that is both
+   * writable by this app with NO permission declared and still visible to Windows Explorer over
+   * USB and to the phone's own file manager — Android 11's scoped-storage lockdown covers
+   * `Android/data` and `Android/obb` but deliberately not `Android/media`. A public folder
+   * (`Movies`, `DCIM`) would need `READ_MEDIA_VIDEO`, and a permission declared for a debug-only
+   * convenience ships in the release manifest and onto the store's data-safety form.
+   *
+   * `Android/data/<pkg>/files/dev-clips` stays in the list as a fallback: it was the first
+   * choice, clips may already sit there, and `getExternalMediaDirs` is deprecated (still
+   * functional) so a device that answers null must still have somewhere to look.
+   *
+   * All created on demand so the drawer can name a path that exists.
+   */
+  @Suppress("DEPRECATION")
+  private fun devClipFolders(): List<File> = listOfNotNull(
+    context.externalMediaDirs.firstOrNull()?.let { File(it, "dev-clips") },
+    File(context.getExternalFilesDir(null), "dev-clips"),
+  ).onEach { runCatching { it.mkdirs() } }
 
   private companion object {
     /** Out of 100 — quiet on purpose; the tick must never read as the record cue. */

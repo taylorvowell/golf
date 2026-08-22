@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
-import { Pressable, Text, useWindowDimensions, View } from "react-native";
-import { ChevronRight, Film, ScanLine } from "lucide-react-native";
+import { useEffect, useMemo, useState } from "react";
+import { Animated, Pressable, Text, useWindowDimensions, View } from "react-native";
+import { ChevronRight, Film, ScanLine, Settings } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
@@ -22,6 +22,8 @@ import {
   WAVE_NAV_CLEARANCE,
 } from "../design/system";
 import { displayLine, FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
+import { CoachAvatar } from "../features/coach/CoachAvatar";
+import { useCoach } from "../features/coach/useCoach";
 import {
   COACH_DRILLS,
   COACH_FOCUS_AREAS,
@@ -33,6 +35,9 @@ import { createdAtMs } from "../features/swings/sessions";
 import { useSwings } from "../features/swings/useSwings";
 import { useAppNavigation } from "../navigation";
 import { themedStyles, useTheme } from "../theme";
+
+/** How far the page scrolls before the preferences gear has fully left with the hero. */
+const GEAR_FADE_PX = 64;
 
 /**
  * Coach — the AI coach's page ("Coach" means the AI; the human is the Instructor —
@@ -46,10 +51,18 @@ export function CoachScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const { state } = useSwings();
+  const [coach] = useCoach();
   const t = useTheme();
   const styles = useStyles();
   const { onScroll: onChromeScroll, chromePx } = useChromeScroll();
   const [heroHeight, setHeroHeight] = useState<number | null>(null);
+  // The gear stops being a target as soon as it has faded — a listener rather than a scroll
+  // handler so it costs nothing per frame (React bails on an unchanged boolean).
+  const [gearLive, setGearLive] = useState(true);
+  useEffect(() => {
+    const id = chromePx.addListener(({ value }) => setGearLive(value < GEAR_FADE_PX * 0.8));
+    return () => chromePx.removeListener(id);
+  }, [chromePx]);
   const backdropHeight =
     heroHeight === null ? 300 + insets.top : heroHeight + 92 + HERO_SHEET_GAP;
 
@@ -78,7 +91,15 @@ export function CoachScreen() {
           </View>
           <Text style={styles.heroTitle}>Coach</Text>
         </View>
-        <Text style={styles.heroEyebrow}>Your AI coach</Text>
+        {/* Who is talking. Display only — the door to changing it is the gear, which has to
+            live OUTSIDE this tree to be tappable at all (see the overlay below). */}
+        <View style={styles.personaRow}>
+          <CoachAvatar coach={coach} size={40} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.heroEyebrow}>Your AI coach</Text>
+            <Text style={styles.personaName}>{coach.name}</Text>
+          </View>
+        </View>
         {/* The coach's one-line read — the persona voice, updated with the priorities. */}
         <Text style={styles.heroHeadline}>Setup first — it unlocks everything after it.</Text>
         <Text style={styles.heroCopy}>
@@ -218,6 +239,47 @@ export function CoachScreen() {
         </View>
       </SheetOverBackdrop>
 
+      {/* The coach-preferences door — a sibling of the header, not hero content.
+          Anything inside `SheetOverBackdrop`'s backdrop is painted UNDER its scroll view and
+          never receives a touch, which is exactly how this button silently did nothing on the
+          first pass. It rides the same `chromePx` as the header so it leaves with the hero it
+          belongs to, and stops hit-testing once faded — an invisible 32pt target over the
+          sheet would swallow presses meant for the cards. */}
+      <Animated.View
+        pointerEvents={gearLive ? "box-none" : "none"}
+        style={[
+          styles.prefsSlot,
+          {
+            top: insets.top + APP_HEADER_BAR + 22,
+            opacity: chromePx.interpolate({
+              inputRange: [0, GEAR_FADE_PX],
+              outputRange: [1, 0],
+              extrapolate: "clamp",
+            }),
+            transform: [
+              {
+                translateY: chromePx.interpolate({
+                  inputRange: [0, GEAR_FADE_PX],
+                  outputRange: [0, -GEAR_FADE_PX],
+                  extrapolate: "clamp",
+                }),
+              },
+            ],
+          },
+        ]}
+      >
+        <Pressable
+          testID="coach-prefs"
+          accessibilityRole="button"
+          accessibilityLabel="AI coach preferences"
+          hitSlop={14}
+          onPress={() => navigation.navigate("AiCoachPreferences")}
+          style={({ pressed }) => [styles.prefsButton, pressed && styles.prefsPressed]}
+        >
+          <Settings size={17} color="rgba(255,255,255,0.5)" strokeWidth={2.2} />
+        </Pressable>
+      </Animated.View>
+
       <AppHeader
         hero
         chromePx={chromePx}
@@ -294,8 +356,26 @@ const useStyles = themedStyles((t) => ({
     lineHeight: displayLine(31),
     letterSpacing: -0.62,
   },
+  personaRow: { marginTop: 18, flexDirection: "row", alignItems: "center", gap: 10 },
+  prefsSlot: { position: "absolute", right: 18 },
+  /* Semi-transparent on the hero gradient — present, never loud. */
+  prefsButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.09)",
+  },
+  prefsPressed: { backgroundColor: "rgba(255,255,255,0.22)" },
+  personaName: {
+    marginTop: 3,
+    color: t.onDark,
+    fontFamily: FONT_DISPLAY.extraBold,
+    fontSize: 15,
+    lineHeight: displayLine(15),
+  },
   heroEyebrow: {
-    marginTop: 18,
     color: "rgba(255,255,255,0.74)",
     fontFamily: FONT_DISPLAY.black,
     fontSize: 9,
@@ -303,7 +383,7 @@ const useStyles = themedStyles((t) => ({
     textTransform: "uppercase",
   },
   heroHeadline: {
-    marginTop: 8,
+    marginTop: 14,
     color: t.onDark,
     fontFamily: FONT_DISPLAY.black,
     fontSize: 24,

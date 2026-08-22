@@ -107,7 +107,7 @@
       "spine": true,
       "lifecycle": "active",
       "phase": "foundation",
-      "goal": "Promote the analyzer from a hand-invoked CLI to a hosted, queue-driven worker reading and writing object storage. FIRST STEP is a measurement, not a deploy: pose inference currently runs on CPU and only the club detector uses GPU, so measure CPU-vs-CUDA pose on this pipeline and let that choose the host (D18 reopened Railway, which has no GPU). Then the capacity and cost model, per-user fair queuing so one workload cannot degrade everyone else's (\u00a738), backpressure, retry/dead-letter handling, and a validated analysis-latency SLO. The job model carries a kind discriminator (swing | drill | demo | lesson_finalize, D59/D60) and priority classes from day one \u2014 drill, demo-transcode and lesson-finalize jobs are short and CPU-only and must not queue behind swing club-tracking (.claude/architecture/guided-drills-architecture-2026-08-17.md, .claude/architecture/coach-video-lessons-2026-08-18.md).",
+      "goal": "Promote the analyzer from a hand-invoked CLI to a hosted, queue-driven worker reading and writing object storage. FIRST STEP is a measurement, not a deploy: pose inference currently runs on CPU and only the club detector uses GPU, so measure CPU-vs-CUDA pose on this pipeline and which priced the host choice (settled: Modal, D64). Then the capacity and cost model, per-user fair queuing so one workload cannot degrade everyone else's (\u00a738), backpressure, retry/dead-letter handling, and a validated analysis-latency SLO. The job model carries a kind discriminator (swing | drill | demo | lesson_finalize, D59/D60) and priority classes from day one \u2014 drill, demo-transcode and lesson-finalize jobs are short and CPU-only and must not queue behind swing club-tracking (.claude/architecture/guided-drills-architecture-2026-08-17.md, .claude/architecture/coach-video-lessons-2026-08-18.md).",
       "statusFile": ".claude/feature-tracks/analyzer-service/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#32-analysis-processing-experience",
@@ -123,7 +123,7 @@
           "track": "platform-foundation"
         }
       ],
-      "blockedBy": "docs/decisions/ARCHIVE-numbered.md D18 \u2014 worker host undecided",
+      "blockedBy": "docs/HANDOFF.md — the production-stack row (vendor signups + spend). The HOST question itself is ANSWERED: Modal, per docs/decisions/platform-data.md — 'Production infrastructure is stood up once, now'. What remains is Taylor creating the accounts.",
       "sequencingNote": "Spine returned here 2026-08-18 when design-system completed. Steps 01-04 are done (measurement, pipeline entry point, reproducible env + worker skeleton, queue loop proven locally); the remaining work \u2014 fair queuing, retry/DLQ, orphan detection, backpressure, capacity model \u2014 is host-agnostic and provable locally. Only the DEPLOY half waits on the worker-host HANDOFF row. SPEED: per-stage wall clock is measured \u2014 .claude/architecture/swing-analysis-speed-2026-08-18.md. The `variants` stage is 72% of a run and pose only 11%, so the optimisation order is variants-off-in-production first, worker host second; read it before quoting an analysis time or optimising anything."
     },
     {

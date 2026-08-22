@@ -53,11 +53,14 @@ import {
   initialSessionState,
   sessionReducer,
 } from "./sessionState";
+import { DevClipsSheet } from "./sheets/DevClipsSheet";
 import { DualSyncSheet } from "./sheets/DualSyncSheet";
 import { SessionSettingsSheet } from "./sheets/SessionSettingsSheet";
 import { SessionTypeInfoSheet } from "./sheets/SessionTypeInfoSheet";
 import { SwingReview } from "./SwingReview";
 import { useRecordSounds } from "./useRecordSounds";
+import { useDevClips } from "./useDevClips";
+import { useImpactMethod } from "./useImpactMethod";
 import { useShutterRemote } from "./useShutterRemote";
 import { useTakeRecorder } from "./useTakeRecorder";
 import { useToast } from "../toast/ToastProvider";
@@ -209,6 +212,12 @@ export function SessionScreen() {
       .catch(() => {});
   }, []);
 
+  /** Pre-recorded swings in the debug menu, standing in for a live take (`__DEV__` only). */
+  const devClips = useDevClips(dispatch);
+  /** Which audio detector seeds the review mark — switchable from the debug menu so the four
+   * can be compared against real clips rather than argued about. */
+  const impactMethod = useImpactMethod();
+
   const { stop: stopTake, onRecordingEnded } = useTakeRecorder(
     state.mode,
     cameraRef,
@@ -233,8 +242,10 @@ export function SessionScreen() {
         const { path } = await HighSpeedCamera.trimClip(take.path, startSec, endSec);
         // The trimmed clip is now the retained copy; the untrimmed source has served its
         // purpose. (The upload-acceptance half of the deletion contract arrives with step
-        // 06 — locally, a successful trim IS acceptance.)
-        void HighSpeedCamera.deleteClip?.(take.path);
+        // 06 — locally, a successful trim IS acceptance.) A DEV clip is not ours to destroy:
+        // it is a file the developer put there deliberately and expects to reuse.
+        if (take.dev) devClips.markSaved(take.path);
+        else void HighSpeedCamera.deleteClip?.(take.path);
         dispatch({
           type: "save-take",
           at: Date.now(),
@@ -252,16 +263,28 @@ export function SessionScreen() {
         setSavingTake(false);
       }
     },
-    [savingTake, state.pendingTake],
+    [devClips, savingTake, state.pendingTake],
   );
 
-  /** Delete on the review screen: the golfer said bin it, so the file goes too. */
+  /**
+   * Delete on the review screen: the golfer said bin it, so the file goes too.
+   *
+   * A dev clip is the exception on both counts — the file is a library file that outlives every
+   * session, and the button is a plain Back rather than a bin (Taylor, 2026-08-21). Backing out
+   * reopens the library, which makes "try one, reject it, try the next" a two-tap loop instead
+   * of a round trip through the debug menu.
+   */
   const discardTake = useCallback(() => {
     const take = state.pendingTake;
     if (!take) return;
+    if (take.dev) {
+      dispatch({ type: "discard-take" });
+      devClips.setOpen(true);
+      return;
+    }
     void HighSpeedCamera.deleteClip?.(take.path);
     dispatch({ type: "discard-take" });
-  }, [state.pendingTake]);
+  }, [devClips, state.pendingTake]);
 
   // ---- Entrance / exit ------------------------------------------------------------------
   // 0 = on screen, 1 = parked below. Entrance runs on mount; every way out goes through
@@ -473,6 +496,9 @@ export function SessionScreen() {
             saving={savingTake}
             onSave={(w) => void saveTake(w)}
             onDelete={discardTake}
+            dev={state.pendingTake.dev}
+            method={impactMethod.method}
+            edgeWeighting={impactMethod.edgeWeighting}
           />
         ) : reviewingSwing ? (
           <PostSwingView
@@ -674,6 +700,8 @@ export function SessionScreen() {
           endSession();
         }}
       />
+      {/* The clip library, opened from the debug menu. Never mounted in a release build. */}
+      {__DEV__ ? <DevClipsSheet drawer={devClips} /> : null}
       <DualSyncSheet
         visible={sheet === "sync"}
         onClose={() => setSheet(null)}

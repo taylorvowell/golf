@@ -10,6 +10,46 @@ export interface Camera2Capabilities {
   reason?: string;
 }
 
+/**
+ * How a strike is picked out of the audio. Eight different discriminators, not eight tunings of
+ * one — see the native `SwingClip.Method` for what each measures and why.
+ *
+ * None of them has ground truth yet, so whichever is chosen is chosen on judgement watching real
+ * clips, and that is a preference and must never be recorded as an accuracy figure.
+ */
+export type ImpactMethod =
+  | "attack"
+  | "peak"
+  | "hf"
+  | "flux"
+  | "sharp"
+  | "crest"
+  | "decay"
+  | "ensemble";
+
+export const IMPACT_METHODS: ImpactMethod[] = [
+  "attack",
+  "peak",
+  "hf",
+  "flux",
+  "sharp",
+  "crest",
+  "decay",
+  "ensemble",
+];
+
+/** What each one keys on, for the picker that offers them. */
+export const IMPACT_METHOD_LABELS: Record<ImpactMethod, string> = {
+  attack: "Attack — rise vs. background",
+  peak: "Peak — plain loudest",
+  hf: "HF — high-frequency click",
+  flux: "Flux — onset strength",
+  sharp: "Sharp — HF attack, weighted by level",
+  crest: "Crest — peak over RMS, scale-free",
+  decay: "Decay — fast rise AND fast fall",
+  ensemble: "Ensemble — what the others agree on",
+};
+
 /** A candidate ball strike found in a recorded take. */
 export interface ImpactCandidate {
   /** Seconds from the start of the clip. */
@@ -18,8 +58,42 @@ export interface ImpactCandidate {
   score: number;
 }
 
+/** A pre-recorded clip standing in for a live take. `__DEV__` only. */
+export interface DevClip {
+  /** Absolute path, no `file://` scheme — the same shape a real take carries. */
+  path: string;
+  name: string;
+  durationMs: number;
+  /** Frames ÷ duration, read off the file — never assumed, and never the capture rate. */
+  fps: number;
+  /**
+   * The rate the SENSOR ran at (`com.android.capture.fps`), or 0 when the file does not say.
+   *
+   * For a phone slow-motion clip this is 240 while `fps` is 30 — the container's timeline runs
+   * eight times slower than the world, so a window measured in file-seconds is a fraction of the
+   * action it looks like. Every duration derived from such a clip has to be scaled by
+   * `captureFps / fps` or it silently means something else.
+   */
+  captureFps: number;
+  sizeBytes: number;
+}
+
+export interface DevClipListing {
+  /** Always present, even when empty — an empty drawer has to say where to put files. */
+  folder: string;
+  clips: DevClip[];
+}
+
 interface HighSpeedCameraModule {
   camera2Capabilities(): Promise<Camera2Capabilities>;
+  /**
+   * Pre-recorded clips a developer pushed to `Android/data/<pkg>/files/dev-clips`.
+   *
+   * The point is to reach the review screen without standing on a range: a long clip filmed
+   * the real way (start, walk out, hit, walk back, stop) is exactly what the mark-the-strike
+   * screen exists to cut down, so this exercises the real path rather than a shortcut past it.
+   */
+  devClips(): Promise<DevClipListing>;
   /**
    * Candidate strike times, strongest first.
    *
@@ -28,7 +102,18 @@ interface HighSpeedCameraModule {
    * slide; it is never a measurement. The real Impact frame comes from the analyzer, which snaps
    * it to the club-head low point and beats any scrubber drag.
    */
-  detectImpacts(path: string, limit: number): Promise<ImpactCandidate[]>;
+  detectImpacts(
+    path: string,
+    limit: number,
+    method?: ImpactMethod,
+    /**
+     * Down-weight the first and last five seconds — a golfer filming alone walks out and walks
+     * back, so both ends are footsteps and phone handling. A prior, not a filter: an edge strike
+     * still wins if nothing in the interior comes close. Default on; switchable so it can be
+     * checked against the same clip.
+     */
+    edgeWeighting?: boolean,
+  ): Promise<ImpactCandidate[]>;
   /**
    * Evenly spaced frames across a take, as JPEG file paths — the review scrubber's filmstrip.
    * An empty array is a normal answer for an unreadable clip; the strip just stays plain.
@@ -36,6 +121,17 @@ interface HighSpeedCameraModule {
   clipThumbnails(
     path: string,
     count: number,
+    width: number,
+  ): Promise<Array<{ path: string; timeSec: number; width: number; height: number }>>;
+  /**
+   * The same strip, at times the caller chooses.
+   *
+   * The scrub axis is not linear — it spends most of its width on the seconds around impact — so
+   * an evenly spaced strip would show a picture that is not the moment its cell selects.
+   */
+  clipThumbnailsAt(
+    path: string,
+    timesSec: number[],
     width: number,
   ): Promise<Array<{ path: string; timeSec: number; width: number; height: number }>>;
   /** Remux a window out of a take. No re-encode — milliseconds, and no quality lost. */

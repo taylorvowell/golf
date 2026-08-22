@@ -25,6 +25,7 @@ import { VersionGate } from "./src/platform/VersionGate";
 import { TabBar } from "./src/design/TabBar";
 import { BillingDebug } from "./src/features/billing/BillingDebug";
 import { EntitlementProvider } from "./src/features/billing/entitlement";
+import { AiCoachPreferencesScreen } from "./src/screens/AiCoachPreferencesScreen";
 import { CoachScreen } from "./src/screens/CoachScreen";
 import { DeleteAccountRoute } from "./src/screens/DeleteAccountRoute";
 import { HomeScreen } from "./src/screens/HomeScreen";
@@ -249,6 +250,11 @@ function Root() {
                     name="Settings"
                     component={SettingsScreen}
                     options={{ title: "Settings" }}
+                  />
+                  <Stack.Screen
+                    name="AiCoachPreferences"
+                    component={AiCoachPreferencesScreen}
+                    options={{ title: "AI coach preferences" }}
                   />
                   <Stack.Screen
                     name="MyProfile"

@@ -391,6 +391,22 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
       ?.maxByOrNull { it.width * it.height }
       ?: Size(1920, 1080)
 
+  /**
+   * The rotation the MP4 header must carry so the clip plays the way it was filmed.
+   *
+   * The sensor is mounted landscape and hands the encoder landscape frames no matter how the
+   * phone is held, so a portrait recording is only portrait because of this number. Nothing
+   * was setting it: every take was written 1920x1080 with no rotation at all, and every
+   * player — the review screen, the post-swing player, and eventually the analyzer, which
+   * would have measured a golfer lying on their side — drew it on its edge (2026-08-21).
+   *
+   * Back lens only and the app is locked to portrait (`app.json`), so the device is always at
+   * its natural rotation and the hint reduces to the sensor's own mounting angle. Read from
+   * the device rather than written as 90: it is a per-sensor fact, not a constant.
+   */
+  private fun orientationHint(cameraId: String): Int =
+    manager.getCameraCharacteristics(cameraId).get(CameraCharacteristics.SENSOR_ORIENTATION) ?: 90
+
   private fun bitrateFor(size: Size, fps: Int): Int {
     val base = size.width.toDouble() * size.height.toDouble() * 30.0 * BPP_AT_30
     return (base * sqrt(fps.toDouble() / 30.0)).toInt().coerceAtMost(MAX_BITRATE)
@@ -688,6 +704,8 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
         setVideoFrameRate(fps)
         setCaptureRate(fps.toDouble())
         setVideoEncodingBitRate(bitrateFor(size, fps))
+        // The one line that makes a portrait swing play portrait — see `orientationHint`.
+        setOrientationHint(orientationHint(cam.id))
         setMaxDuration(maxSeconds * 1000)
         setOnInfoListener { _, what, _ ->
           if (what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_DURATION_REACHED) {

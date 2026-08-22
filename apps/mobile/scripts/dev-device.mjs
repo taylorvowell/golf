@@ -300,9 +300,35 @@ async function warmBundle() {
   }
 }
 
+/**
+ * Put Metro on the DEVICE's own localhost, through the adb transport.
+ *
+ * **This is what makes the dev loop survive the network.** A phone reaches this machine by LAN
+ * address only while it is actually on the LAN — and it silently stops being on the LAN when a
+ * VPN turns on, when it drops to mobile data, or when DHCP moves it. What happens then is the
+ * worst available failure: the dev client cannot fetch, falls back to **the last bundle it
+ * downloaded**, and says nothing. Every symptom reads as "my change had no effect", and the change
+ * is provably in the served bundle the whole time. That cost most of a day on 2026-08-22, with the
+ * phone sitting on 100.106.111.127 — a VPN address that cannot see 10.0.1.107 at all.
+ *
+ * `adb reverse` forwards the device's own `127.0.0.1:8082` back down the debug transport, so the
+ * route is the USB/adb link rather than the network. It works over wireless debugging too.
+ * Returns the host the device should use, LAN address as the fallback when reverse is refused.
+ */
+function tunnelHost(target, lan) {
+  const out = quiet("adb", ["-s", target, "reverse", `tcp:${METRO_PORT}`, `tcp:${METRO_PORT}`]);
+  if (out === null) {
+    ok(`adb reverse unavailable — falling back to ${lan} (a VPN on the phone will break this)`);
+    return lan;
+  }
+  ok("Metro tunnelled to the device's own localhost (survives VPN / Wi-Fi changes)");
+  return "127.0.0.1";
+}
+
 async function launch(target, lan) {
-  step(`Launching against ${lan}:${METRO_PORT}`);
-  const url = encodeURIComponent(`http://${lan}:${METRO_PORT}`);
+  const host = tunnelHost(target, lan);
+  step(`Launching against ${host}:${METRO_PORT}`);
+  const url = encodeURIComponent(`http://${host}:${METRO_PORT}`);
   sh("adb", [
     "-s",
     target,
@@ -317,16 +343,64 @@ async function launch(target, lan) {
 
   // Landing on DevLauncherActivity instead of MainActivity IS the white screen — report it
   // rather than claiming success.
-  for (let i = 0; i < 10; i += 1) {
+  let onMainActivity = false;
+  for (let i = 0; i < 10 && !onMainActivity; i += 1) {
     await sleep(1500);
     const acts = quiet("adb", ["-s", target, "shell", "dumpsys", "activity", "activities"]);
-    if (acts.includes("com.swingsage.spike/.MainActivity")) {
-      ok("app is on MainActivity — bundle loaded");
+    onMainActivity = acts.includes("com.swingsage.spike/.MainActivity");
+  }
+  if (!onMainActivity) {
+    die("Still on the dev launcher. Metro is serving, so the device could not reach it: check " +
+        "both are on the same Wi-Fi and that no VPN is on the phone.");
+  }
+
+  // **MainActivity is not proof the bundle ran.** A device can sit on MainActivity showing a
+  // white screen with no JS at all — measured 2026-08-21, right after a native install, while
+  // this script printed "bundle loaded". The authoritative check is Metro's own inspector
+  // registry: a JS runtime only appears there once the bundle has been evaluated on the device.
+  for (let i = 0; i < 10; i += 1) {
+    const runtimes = await metroRuntimes();
+    if (runtimes.some((r) => r.deviceName && acceptsDevice(r.deviceName, target))) {
+      ok("JS runtime connected to Metro — the bundle actually ran");
       return;
     }
+    await sleep(1500);
   }
-  die("Still on the dev launcher. Metro is serving, so the device could not reach it: check " +
-      "both are on the same Wi-Fi and that no VPN is on the phone.");
+  // The device booted the LAST BUNDLE IT HAD because it could not fetch a new one. An in-app
+  // reload re-runs that same cached JS, so it never helps — the fix is a fresh launch, and if
+  // it persists, a network the device cannot use (a VPN is the usual culprit).
+  die(
+    "On MainActivity, but NO JS runtime reached Metro — the device is on a STALE CACHED " +
+      "BUNDLE. Re-run with --restart; if it persists, check apps/mobile/start.log.",
+  );
+}
+
+/** The JS runtimes Metro currently has connected, or `[]` when it cannot be asked. */
+async function metroRuntimes() {
+  try {
+    const res = await fetch(`http://127.0.0.1:${METRO_PORT}/json/list`, {
+      signal: AbortSignal.timeout(4000),
+    });
+    if (!res.ok) return [];
+    const list = await res.json();
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Whether a Metro runtime entry belongs to the device being launched.
+ *
+ * Both a phone and the emulator are commonly attached at once, and the emulator's runtime lingers
+ * from an earlier session — so "some runtime exists" would pass while the phone showed white.
+ * Metro reports a model name (`SM-S936U1`) and adb reports the device by serial, so the match is
+ * made on the emulator/physical split, which is the distinction that actually matters here.
+ */
+function acceptsDevice(deviceName, target) {
+  const isEmulatorTarget = target.startsWith("emulator-");
+  const isEmulatorRuntime = /sdk_gphone|emulator/i.test(deviceName);
+  return isEmulatorTarget === isEmulatorRuntime;
 }
 
 // Windows-only by construction: netstat/taskkill/`cmd /c start`/gradlew.bat. Said plainly

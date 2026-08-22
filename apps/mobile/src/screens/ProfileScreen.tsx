@@ -8,6 +8,7 @@ import {
   HelpCircle,
   Lock,
   Settings as SettingsIcon,
+  Sparkles,
   UserRound,
   X,
 } from "lucide-react-native";
@@ -195,6 +196,13 @@ export function ProfileScreen() {
                 title="My profile"
                 subtitle="Personal info and golfer details"
                 onPress={() => close(() => navigation.navigate("MyProfile"))}
+              />
+              <MenuRow
+                testID="profile-ai-coach"
+                icon={Sparkles}
+                title="AI coach preferences"
+                subtitle="Which coach speaks, and how they sound"
+                onPress={() => close(() => navigation.navigate("AiCoachPreferences"))}
               />
               <MenuRow
                 testID="profile-lesson-history"

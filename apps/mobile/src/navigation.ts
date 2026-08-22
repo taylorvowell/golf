@@ -37,6 +37,8 @@ export type RootStackParamList = {
   /** The §29 inbox — a drawer from the right, opened by the header bell on any tab. */
   Notifications: undefined;
   Settings: undefined;
+  /** Which of the three AI coach personas speaks — voice, portrait and manner only. */
+  AiCoachPreferences: undefined;
   /** §5.2 — the golfer's six profile answers, one page, two columns. */
   MyProfile: undefined;
   /** §4.4/§5.4 — role, handedness, style, handicap. Auto-opens after signup while

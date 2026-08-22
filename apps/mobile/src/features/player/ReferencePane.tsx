@@ -85,8 +85,8 @@ export function ReferencePane({
 
   const onReady = useCallback(() => {
     setReady(true);
-    // Never audible: two soundtracks at once is noise, and this one is not the swing being studied.
-    void handle.current?.setMuted(true);
+    // Nothing to mute any more — every FrameClock player is silent from birth (the module sets
+    // volume to zero at creation, and offers no way to raise it).
   }, []);
 
   const name = reference.referenceLabel ?? reference.label;

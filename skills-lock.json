@@ -25,6 +25,12 @@
       "skillPath": "skills/dogfood/SKILL.md",
       "computedHash": "c83ed84a234bb8ea7a588635ace904e150429f83321024487c7dbcfd19c81575"
     },
+    "genmedia-voice-director": {
+      "source": "GoogleCloudPlatform/vertex-ai-creative-studio",
+      "sourceType": "github",
+      "skillPath": "experiments/mcp-genmedia/skills/genmedia-voice-director/SKILL.md",
+      "computedHash": "5fe27e42f7adb588212609cf463f87ce897e032a90eaffc6959ac05e4c119465"
+    },
     "github-actions": {
       "source": "callstackincubator/agent-skills",
       "sourceType": "github",

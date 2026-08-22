@@ -71,6 +71,14 @@ export interface SwingClipRef {
   /** The rate the session was CONFIGURED at — never the rate that was requested. */
   fps: number;
   durationMs: number;
+  /**
+   * How much slower this file's timeline runs than the world. 1 for anything this app records.
+   *
+   * A phone slow-motion clip is captured at 240 and written to play at 30, so one file-second is
+   * an eighth of a real second. Without this, "two and a half seconds before impact" cuts a third
+   * of a second of actual swing and the backswing falls outside the window (Taylor, 2026-08-22).
+   */
+  slowMoFactor?: number;
 }
 
 /**
@@ -81,6 +89,14 @@ export interface SwingClipRef {
 export interface PendingTake extends SwingClipRef {
   /** The angle it was filmed from — stamped when the recording stopped. */
   view: CaptureView;
+  /**
+   * This take is a pre-recorded DEV clip, not something the camera just wrote (`__DEV__`).
+   *
+   * Load-bearing, not cosmetic: both Save and Delete destroy the take's source file, which is
+   * right for a recording that has served its purpose and catastrophic for a developer's clip
+   * library. Anything that deletes a file checks this first.
+   */
+  dev?: boolean;
 }
 
 /** A swing the golfer confirmed — the wiring replaces `id` with the server's and drives
@@ -157,6 +173,16 @@ export type SessionAction =
   | { type: "take-ready"; take: SwingClipRef; at?: number }
   /** The camera failed to start or died mid-take. Back to idle; nothing was minted. */
   | { type: "record-failed" }
+  /**
+   * `__DEV__` only: a pre-recorded clip stands in for a take, landing straight on review.
+   *
+   * A separate action from `take-ready` on purpose — that one's `mode === "recording"` guard
+   * settles the tap-versus-hard-cap race and must not be loosened to let a debug control in.
+   *
+   * `view` comes from the clip, not the screen: the drawer knows which angle each file was
+   * filmed from, and a front-view clip stamped `dtl` inverts every angle the analyzer reads.
+   */
+  | { type: "dev-take"; take: SwingClipRef; view?: CaptureView; at?: number }
   /** Save on the review screen, after the trim finished: the take becomes a swing. */
   | { type: "save-take"; swingId?: string; clip: SwingClipRef; at?: number }
   /** Delete on the review screen: the take is discarded, nothing was ever minted. */
@@ -287,6 +313,22 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
     }
     case "record-failed":
       return state.mode === "recording" ? { ...state, mode: "idle" } : state;
+    case "dev-take": {
+      // Only from a settled screen: never over a live take, and never over an unreviewed one
+      // whose only copy would be dropped on the floor.
+      if (state.mode !== "idle" || state.pendingTake !== null) return state;
+      const view = action.view ?? state.view;
+      return {
+        ...state,
+        // The screen follows the clip, so the alignment ghost and the view toggle agree with
+        // what is actually on review — and the next real take inherits the same angle.
+        view,
+        pendingTake: { ...action.take, view, dev: true },
+        // Review owns the surface, so nothing may be open behind it.
+        reviewing: null,
+        stoppedAt: action.at ?? Date.now(),
+      };
+    }
     case "save-take": {
       const take = state.pendingTake;
       if (take === null) return state;

@@ -101,16 +101,18 @@ orphans unenumerable bytes. Confirmation lives in the client; a flag on the wire
 is the mobile app.
 **See:** ARCHIVE D6.
 
-### Job dispatch is Upstash QStash; job state lives in Postgres; the worker host is OPEN
+### Job dispatch is Upstash QStash; job state lives in Postgres; the worker runs on Modal
 
 **Decision:** Upstash QStash dispatches analysis jobs and job state stays in Postgres — the
 queue carries dispatch, never truth. The loop is **built and proven locally** against the QStash
 dev server (`pnpm --filter web queue:e2e`): dispatcher (`lib/jobs/dispatch.ts`) → QStash →
 worker HTTP server (`service/server.py`) → `pipeline.run()` → artifacts and events back through
 `/api/internal/jobs/*`. The queue path sits behind `JOBS_DRIVER=queue`, opt-in and never
-inferred, with the spawn path still the local default. **The worker HOST (and production QStash
-credentials) remain the open half** — step 01 measured pose 2.32x faster on CUDA, which prices
-Railway's missing GPU; the choice is spend and sits with Taylor in `../HANDOFF.md`.
+inferred, with the spawn path still the local default. **The worker host is Modal** — a
+signature-verified HTTP endpoint QStash pushes to, serverless GPU with scale-to-zero and
+per-second billing, which is the honest shape for a job that runs ~76s a few times an hour and
+is idle the rest of the time. **Scheduled work uses QStash schedules, never a second scheduler.**
+Only the production credentials remain, in `../HANDOFF.md`.
 **Gotchas:** The worker sees only URLs and a signed per-job token — no DB or storage
 credential; the web app stays the single owner of media addressing, and internal-route writes
 run under the enqueuing user's identity (no elevation on a request path, D26). A
@@ -195,8 +197,11 @@ commit: the manifest hash changes in the same commit as the re-publish, or the c
 
 **Decision:** local / preview / production, each with its own Supabase project, storage buckets
 and secrets.
-**Status:** **Not met.** One project exists. A preview project is free; the third needs Pro at
-$25/mo — a spend decision, so it is [`../HANDOFF.md`](../HANDOFF.md)'s, not Claude's.
+**Status:** **Partly met.** One project exists (`golf-swing`, the local/dev one); `swingsage-prod`
+is created in the production-stack pass. Supabase Free allows **2 active projects**, so dev +
+production fit. **The preview project is what forces Supabase Pro** — it is the third, and it is
+also the cheapest reason to upgrade. Until then, preview deployments point at the production
+project's schema on a separate branch, which is a real (and named) shortfall, not a design.
 **See:** ARCHIVE D10.
 
 ### SLO targets
@@ -279,3 +284,83 @@ club-tracking. Plain-drill completion is a self-report: coach roll-ups label it
 self-reported and never mingle it with camera-verified rep counts.
 **See:** ARCHIVE D60; `PROJECT_MAIN.md` §26.4, §27;
 `.claude/architecture/coach-video-lessons-2026-08-18.md`.
+
+### Production infrastructure is stood up once, now — there is no local-tunnel interim
+
+**Decision:** SwingSage runs on its production vendors from the moment it leaves the LAN, and
+the roster below is the whole roster — **any vendor not on this list is not in the system.**
+
+| Concern | Vendor | Why this one |
+|---|---|---|
+| Auth + Postgres | **Supabase** — Free now, **Pro ($25/mo) at launch** | Once media moved to R2, Pro buys exactly three things: no 7-day idle pause, daily backups, and more than 2 active projects. None binds before there is user data or a preview environment, and **the upgrade is in-place** — same project, same URL, same keys, no migration. **Upgrade trigger: the third environment, or the first real golfer's swings.** PITR is a further paid add-on and is NOT needed. |
+| Object storage | **Cloudflare R2** | Zero egress. Same Cloudflare account as DNS, so no new vendor. |
+| DNS + domain + CDN | **Cloudflare** (free + ~$12/yr) | |
+| API + coach/admin web | **Vercel** — Hobby now, **Pro ($20/mo/seat) at launch** | Native host for `apps/web`. Hobby's bar is *revenue* — ads, payments, client work, a monetized product — and a pre-launch project with no store listing and no payment flow is none of them. Its caps (100 GB transfer, 1M edge requests, 1M invocations, 4 CPU-hours/mo) are far above solo-dev volume, and custom domains, SSL, previews and Fluid compute are all included. **Upgrade triggers: the store listing goes live, or a route needs Pro's 800s function ceiling (only coach-chat SSE will).** |
+| Analyzer worker | **Modal** | Serverless GPU, scale-to-zero, per-second billing. ~$0.02/swing at L4. |
+| Job dispatch + schedules | **Upstash QStash** | pay-as-you-go, ~$0 at launch volume |
+| App builds + push | **Expo EAS** (free) | Used from the FIRST build so the signing SHA-1 never changes. |
+| LLM | **Anthropic** via **Vercel AI Gateway** (BYOK) | See [analysis-and-ai.md](analysis-and-ai.md) for the per-job tiers. |
+| Media models (TTS, image, video) | **Replicate** | Never in the coaching-text path. |
+| Crash + error tracking | **Sentry** | `@sentry/react-native` (Expo config plugin, EAS source maps) + `@sentry/nextjs`. The instrument behind the crash-free-sessions SLO. |
+| Product analytics | **PostHog** | §37's product-event funnel, pseudonymised. Its error tracking is NOT used — Sentry's RN support is materially better. |
+
+**$0/mo fixed today** — every vendor sits on a free tier. **~$45/mo at launch**, when Supabase and Vercel go paid together. Plus ~$12/yr for the domain, ~$0.02 per swing analysed, and Anthropic per use.
+
+**Upgrade before the store listing is live, never after.** Vercel enforces its commercial-use line by suspending the project, and both upgrades are in-place — no migration, no key changes — so there is no reason to be late.
+
+**Secrets live in the platforms that run the code** — Vercel environment variables, EAS secrets,
+Modal secrets, each scoped to its own runtime. There is **no secrets vendor**; a central vault is
+a team-scale pattern that here would add a vendor, a sync step and a new single point of failure.
+Three environments (dev / preview / production) stand.
+
+**Vercel functions and the Supabase project are pinned to the same region.** Set it at project
+creation — it is a `vercel.json` line now and a migration later.
+
+**Transactional email is deferred.** Sign-in is Google + Apple, phone OTP is held (D46), and
+Supabase's built-in mailer covers the residual at launch volume. Resend when that stops being
+true, not before.
+
+**Scope:** Answers the long-open worker-host question (ARCHIVE D18, D53): **Modal**. It is
+the right shape for what was actually built — the worker is a signature-verified HTTP
+endpoint QStash pushes to, single-flight, from an 8.4GB image, running ~76s a few times an
+hour and idle the rest of the time. Serverless GPU with scale-to-zero and per-second
+billing bills that pattern honestly, where a rented GPU VM bills 24/7 for ~2% utilisation.
+An L4 is sufficient; a 2016 GTX 1080 already gave 2.32× on pose (D53).
+
+**Gotchas:** **Railway is not the API host and is not in the system.** Vercel's 4.5 MB request-body
+cap is the usual reason a video product leaves Vercel, and it does not apply here — ingest is
+two-phase and the client sends bytes straight to storage, so the API never carries a video body.
+Every remaining route is short, and Fluid compute's 800s Pro ceiling covers the coach-chat SSE
+stream; the multi-minute work is on Modal by design. Railway would add a second compute vendor and
+idle billing for nothing the design needs. **OpenRouter is likewise rejected**: a router sits in
+the prompt path and becomes a data processor subject to the no-training / short-retention rule,
+satisfiable only in a ZDR mode that shrinks the model pool — while Vercel already sees every
+prompt, so AI Gateway adds none. It also charges 5.5% where the gateway charges zero.
+Another explicitly rejected alternative was hosting the API while tunnelling to the
+analyzer on the developer's desktop GPU — cheaper, and available the same day, but it is
+precisely the interim build the standing infrastructure constraint exists to forbid, and it
+makes a range session depend on a PC being awake. **EAS is used from the first build for the
+same reason:** an EAS build is signed by an EAS-managed keystore whose SHA-1 differs from a
+local build's, and the signing identity is permanent from the first store upload, so
+switching build routes later means re-registering every OAuth client. The
+`com.swingsage.spike` → `com.swingsage.app` rename happens in the same pass, for the same
+irreversibility reason. **Media lives in R2, not Supabase Storage**, and the argument
+that briefly said otherwise was wrong on the facts. It claimed Supabase Storage carried
+"the storage half of the authorization boundary" via `storage.foldername(name)[2] =
+auth.uid()`. It does not, and `supabaseStore.ts` says so in its own header: the driver holds
+`SUPABASE_SECRET_KEY`, a credential **not subject to the `storage.objects` policies**, so
+authorization rests entirely on `requireViewAccess` in the route. There are no storage
+policies — the key scheme is built so there *could* be, deliberately unwritten because
+shipping a policy while a bypassing credential does the reading is the inert-boundary
+mistake D26 already cost this project once. So the live model is private bucket +
+service credential + route-resolved ownership + short-lived signed URL, which is **exactly**
+what R2 does. Nothing is given up, and the economics are decisively better for a video
+product: R2 charges **zero egress**, against $0.09/GB past 250GB. R2 also needs no new
+vendor — it is the Cloudflare account already being opened for DNS. **The remaining gap is not
+infrastructure:** `media-pipeline` is unbuilt, so a swing is still a ~300MB upload; the
+production answer is the analysis-proxy-first lever, not a hosting change.
+
+**See:** ARCHIVE D9, D10, D18, D53; `docs/HANDOFF.md` (the production-stack row);
+`production-credentials.local.txt` (gitignored, the fill-in-once sheet);
+`.claude/architecture/swing-analysis-speed-2026-08-18.md`;
+`.claude/architecture/production-vendor-stack-2026-08-22.md`.

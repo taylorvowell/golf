@@ -90,6 +90,28 @@ it("take-ready is idempotent against the tap/hard-cap race", () => {
   expect(sessionReducer(s, { type: "take-ready", take: CLIP, at: 11 })).toBe(s);
 });
 
+it("a dev clip opens review flagged, and never lands over a live or unreviewed take", () => {
+  // Flagged is the whole point: SessionScreen reads `dev` to decide whether Save and Delete
+  // may unlink the file, and an unflagged dev take deletes a developer's own clip library.
+  const injected = sessionReducer(base(), { type: "dev-take", take: TAKE, at: 5 });
+  expect(injected.pendingTake).toMatchObject({ path: TAKE.path, dev: true });
+
+  // The clip's own angle wins over the screen's, and the screen follows it. Stamping a
+  // front-view clip `dtl` inverts every lead/trail metric downstream, where it reads as bad
+  // analysis rather than bad metadata — so it is pinned here.
+  const front = sessionReducer(base(), { type: "dev-take", take: TAKE, view: "face_on" });
+  expect(front.pendingTake?.view).toBe("face_on");
+  expect(front.view).toBe("face_on");
+
+  // Mid-take it is refused — the camera owns the surface and the real file is still being
+  // written; and over an unreviewed take it would drop that take's only copy on the floor.
+  let recording = sessionReducer(base(), { type: "arm" });
+  recording = sessionReducer(recording, { type: "countdown-done" });
+  expect(sessionReducer(recording, { type: "dev-take", take: CLIP })).toBe(recording);
+  const unreviewed = sessionReducer(recording, { type: "take-ready", take: TAKE, at: 10 });
+  expect(sessionReducer(unreviewed, { type: "dev-take", take: CLIP })).toBe(unreviewed);
+});
+
 it("nothing arms over an unreviewed take, and discard mints nothing", () => {
   let s = sessionReducer(base(), { type: "arm" });
   s = sessionReducer(s, { type: "countdown-done" });

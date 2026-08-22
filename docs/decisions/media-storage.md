@@ -2,14 +2,23 @@
 
 Present tense, current state. Rationale lives in [ARCHIVE-numbered.md](ARCHIVE-numbered.md).
 
-### Media lives in Supabase Storage, behind a driver seam
+### Media lives in Cloudflare R2, behind a driver seam
 
-**Decision:** Supabase Storage holds both source uploads and derived artifacts, reached through a
-`lib/media` seam with a credential-free local driver and a Supabase driver. Artifacts are
-published from the analyzer's working directory.
-**Gotchas:** Supabase Free caps uploads at **50 MB/file**, well below a 270–330 MB phone video —
-relevant to `media-pipeline`. Range requests are verified over the network path (206 responses).
-**See:** ARCHIVE D8, D33.
+**Decision:** Cloudflare R2 holds both source uploads and derived artifacts, reached through a
+`lib/media` seam with a credential-free local driver and an S3-API driver. Artifacts are
+published from the analyzer's working directory. The live authorization model is **private
+bucket + service credential + route-resolved ownership + short-lived signed URL** — the driver
+holds a credential that bypasses any bucket policy, so authorization rests entirely on
+`requireViewAccess` in the route, not on storage-level rules.
+**Gotchas:** R2 charges **zero egress**, which is the whole argument for a video product —
+Supabase Storage bills $0.09/GB past 250 GB and would dominate the bill by mid-year-one. R2 is
+the **same Cloudflare account** already opened for DNS, so it adds no vendor. Range requests are
+verified over the network path (206 responses).
+**Status:** The decision is R2; `apps/web/src/lib/media/` currently ships `localStore.ts` and
+`supabaseStore.ts` and **no R2 driver**. `r2Store.ts` behind the existing `MediaStore` interface
+is the outstanding build item — the seam is exactly what makes it a driver swap and not a
+migration.
+**See:** ARCHIVE D8, D33, D64; `.claude/architecture/production-vendor-stack-2026-08-22.md`.
 
 ### Ingest is two-phase and the client uploads directly to storage
 

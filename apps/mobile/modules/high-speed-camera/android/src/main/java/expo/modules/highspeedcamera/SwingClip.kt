@@ -14,6 +14,7 @@ import java.nio.ByteBuffer
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.sqrt
 
 /**
  * What happens to a take after the recorder closes the file: find the strike, cut around it.
@@ -55,7 +56,127 @@ object SwingClip {
    * only ever fires on a malformed file — see the deadline in `decodeEnvelope`. */
   private const val DECODE_BUDGET_MS = 10_000L
 
+  /**
+   * How much of each end of a clip is a priori unlikely to hold the strike (Taylor, 2026-08-21).
+   *
+   * A golfer filming alone starts the recording, walks out to the ball, hits, and walks back to
+   * stop it — so both ends are footsteps, phone handling and setup noise, which is exactly the
+   * material that fools a loudness detector. The first and last five seconds are therefore
+   * DOWN-WEIGHTED, never excluded: a swing taken right beside the phone is unlikely, not
+   * impossible, and a hard cut would make the seed provably wrong in a case that does happen.
+   */
+  private const val EDGE_SEC = 5.0
+
+  /**
+   * What an edge candidate's score is multiplied by at the very first/last sample.
+   *
+   * Non-zero on purpose — this is a prior, not a filter. A genuine strike in the first second
+   * still wins if nothing in the interior comes close to it, which is the behaviour "unlikely"
+   * describes and "impossible" does not.
+   */
+  private const val EDGE_FLOOR = 0.15
+
+  /**
+   * A short clip has no uninteresting ends to discount, so the edge window shrinks with it.
+   *
+   * Without this a six-second clip would be entirely edge and every candidate would be scaled
+   * by roughly the same weight — arithmetic with no effect, spent on every window.
+   */
+  private const val EDGE_MAX_FRACTION = 0.25
+
   data class Impact(val timeSec: Double, val score: Double)
+
+  /**
+   * The three short-time views of the audio, all built in one decode pass.
+   *
+   * Kept together because every method reads some combination of them, and decoding a
+   * 60-second clip once per method — eight times, to compare eight — is the difference between
+   * a drawer worth switching in and one nobody waits for.
+   */
+  private class Envelopes(val peak: DoubleArray, val hf: DoubleArray, val rms: DoubleArray) {
+    companion object {
+      val EMPTY = Envelopes(DoubleArray(0), DoubleArray(0), DoubleArray(0))
+    }
+  }
+
+  /**
+   * How a strike is picked out of the audio. Eight genuinely different discriminators, not eight
+   * tunings of one — the point of switching is to find out which PHYSICAL property
+   * of a golf strike separates it best from a range's other loud events.
+   *
+   * There is no ground truth for any of them yet. Whichever wins, wins on a developer watching
+   * the seed land against 29 real clips; that is a preference, not a measurement, and it must
+   * not be written down as accuracy (the project has made that mistake before).
+   */
+  enum class Method {
+    /** Ratio to background AND rise against the previous window. The shipped default. */
+    ATTACK,
+
+    /** Plain loudest window. The naive baseline — worth having precisely because it is what
+     * everyone assumes works, and seeing it fail on a shout is the argument for the others. */
+    PEAK,
+
+    /**
+     * Rise in HIGH-FREQUENCY content, from a first-difference (crude high-pass) envelope.
+     *
+     * Physically well motivated: a club striking a ball is a broadband click
+     * with strong energy well above anything a voice, a gust or a footstep produces, so this
+     * should reject the loud-but-dull events that fool loudness.
+     */
+    HF,
+
+    /**
+     * Onset strength — positive change in energy between windows, the classic onset detector.
+     *
+     * Scores the EDGE rather than the level, so a strike arriving on top of an already-noisy
+     * background still stands out, where a ratio-to-background test would be swamped.
+     */
+    FLUX,
+
+    /**
+     * ATTACK's background-and-rise test, run on the high-frequency envelope instead of the raw
+     * one — the two ideas that work best, composed.
+     *
+     * HF alone still fires on anything with a sharp edge; ATTACK alone still fires on anything
+     * loud and sudden. Requiring a sharp edge that is ALSO sharp *in the treble* is the closest
+     * cheap description of a golf strike this file has.
+     */
+    SHARP,
+
+    /**
+     * Crest factor — the window's peak divided by its own RMS.
+     *
+     * Measures IMPULSIVENESS independently of loudness: a click is a large spike sitting in an
+     * otherwise quiet window, so its peak dwarfs its average, while a shout or a gust fills the
+     * whole window and has a crest near one. The only method here that is scale-free, so it does
+     * not care how far away the phone was.
+     */
+    CREST,
+
+    /**
+     * Impulse shape — a fast rise IMMEDIATELY followed by a fast fall.
+     *
+     * The one test that uses what happens AFTER the candidate. A ball strike is over in
+     * milliseconds; a voice, a gust, a passing car and a bag hitting the ground all sustain. Two
+     * windows of decay is what separates them, and nothing that only looks backwards can see it.
+     */
+    DECAY,
+
+    /**
+     * Agreement across every other method — the candidate the most detectors independently like.
+     *
+     * Each method's candidates are normalised against its own best (their scores are on wildly
+     * different scales) and votes are summed over candidates that land within one separation
+     * window of each other. Costs nothing extra: all methods read the same single decode.
+     */
+    ENSEMBLE;
+
+    companion object {
+      /** Unknown names fall back rather than throwing — a stale JS build must not break Save. */
+      fun parse(raw: String?): Method =
+        entries.firstOrNull { it.name.equals(raw ?: "", ignoreCase = true) } ?: ATTACK
+    }
+  }
 
   // ------------------------------------------------------------------ detection
 
@@ -65,7 +186,12 @@ object SwingClip {
    * Empty is a normal answer — an indoor mat, a muted take, a windy range — and the caller is
    * expected to fall back to a default window rather than treat it as an error.
    */
-  fun detectImpacts(path: String, limit: Int = 3): List<Impact> {
+  fun detectImpacts(
+    path: String,
+    limit: Int = 3,
+    method: Method = Method.ATTACK,
+    edgeWeighting: Boolean = true,
+  ): List<Impact> {
     val extractor = MediaExtractor()
     return try {
       extractor.setDataSource(path)
@@ -77,8 +203,12 @@ object SwingClip {
       val format = extractor.getTrackFormat(track)
       val sampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
       val channels = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-      val envelope = decodeEnvelope(extractor, format, sampleRate, channels)
-      pickImpacts(envelope, WINDOW_MS / 1000.0, limit)
+      // One decode serves every method — all three envelopes are built in the same pass, so
+      // switching method costs nothing extra and the ensemble is one decode, not eight.
+      val env = decodeEnvelope(extractor, format, sampleRate, channels)
+      val windowSec = WINDOW_MS / 1000.0
+      val durationSec = env.peak.size * windowSec
+      separate(weightByTime(score(method, env, windowSec), durationSec, edgeWeighting), limit)
     } catch (e: Throwable) {
       // A clip whose audio cannot be read still records a swing. Seeding is a convenience.
       Log.w(TAG, "impact detection failed: ${e.message}")
@@ -99,8 +229,8 @@ object SwingClip {
     format: MediaFormat,
     sampleRate: Int,
     channels: Int,
-  ): DoubleArray {
-    val mime = format.getString(MediaFormat.KEY_MIME) ?: return DoubleArray(0)
+  ): Envelopes {
+    val mime = format.getString(MediaFormat.KEY_MIME) ?: return Envelopes.EMPTY
     // Created INSIDE the try whose finally releases it — a codec that fails to configure
     // (unsupported profile, corrupt format) otherwise leaks the native instance, silently,
     // on every take, because the caller catches and logs.
@@ -115,7 +245,16 @@ object SwingClip {
 
     val samplesPerWindow = max(1, (sampleRate * WINDOW_MS / 1000.0).toInt())
     val out = ArrayList<Double>(4096)
+    /** The same windows measured on |x[n] − x[n−1]| — a one-tap high-pass, so it responds to
+     *  how FAST the waveform moves rather than how far, which is what a click is. */
+    val hfOut = ArrayList<Double>(4096)
+    /** Root-mean-square per window. Only CREST reads it, and only as the denominator that
+     *  turns a peak into "how spiky", which is the one scale-free thing here. */
+    val rmsOut = ArrayList<Double>(4096)
     var windowPeak = 0.0
+    var windowHf = 0.0
+    var windowSquares = 0.0
+    var previousSample = 0.0
     var windowCount = 0
 
     val info = MediaCodec.BufferInfo()
@@ -163,10 +302,18 @@ object SwingClip {
                 val hi = buf.get().toInt()
                 frameMax = max(frameMax, abs((hi shl 8) or lo))
               }
-              windowPeak = max(windowPeak, frameMax / 32768.0)
+              val sample = frameMax / 32768.0
+              windowPeak = max(windowPeak, sample)
+              windowHf = max(windowHf, abs(sample - previousSample))
+              windowSquares += sample * sample
+              previousSample = sample
               if (++windowCount >= samplesPerWindow) {
                 out.add(windowPeak)
+                hfOut.add(windowHf)
+                rmsOut.add(sqrt(windowSquares / windowCount))
                 windowPeak = 0.0
+                windowHf = 0.0
+                windowSquares = 0.0
                 windowCount = 0
               }
             }
@@ -180,8 +327,12 @@ object SwingClip {
       runCatching { codec.release() }
     }
 
-    if (windowCount > 0) out.add(windowPeak)
-    return out.toDoubleArray()
+    if (windowCount > 0) {
+      out.add(windowPeak)
+      hfOut.add(windowHf)
+      rmsOut.add(sqrt(windowSquares / windowCount))
+    }
+    return Envelopes(out.toDoubleArray(), hfOut.toDoubleArray(), rmsOut.toDoubleArray())
   }
 
   /**
@@ -192,7 +343,7 @@ object SwingClip {
    * every other loud thing at a driving range: a shout, a gust and a dropped bag are all loud and
    * none of them arrive in 5 milliseconds.
    */
-  private fun pickImpacts(env: DoubleArray, windowSec: Double, limit: Int): List<Impact> {
+  private fun byAttack(env: DoubleArray, windowSec: Double): List<Impact> {
     if (env.size < 4) return emptyList()
 
     var background = env.take(min(env.size, 40)).average().coerceAtLeast(1e-6)
@@ -211,9 +362,170 @@ object SwingClip {
       if (ratio < PEAK_RATIO) background = background * (1 - BACKGROUND_ALPHA) + v * BACKGROUND_ALPHA
     }
 
-    // Collapse each strike and its echo into one candidate, keeping the strongest.
+    return found
+  }
+
+  /** Route a method to its raw scored candidates. Separation and the time prior come after. */
+  private fun score(method: Method, env: Envelopes, windowSec: Double): List<Impact> =
+    when (method) {
+      Method.ATTACK -> byAttack(env.peak, windowSec)
+      Method.HF -> byAttack(env.hf, windowSec)
+      Method.SHARP -> bySharp(env, windowSec)
+      Method.PEAK -> byLevel(env.peak, windowSec)
+      Method.FLUX -> byFlux(env.peak, windowSec)
+      Method.CREST -> byCrest(env, windowSec)
+      Method.DECAY -> byDecay(env.peak, windowSec)
+      Method.ENSEMBLE -> byEnsemble(env, windowSec)
+    }
+
+  /**
+   * The loudest windows, full stop.
+   *
+   * The naive baseline, kept because it is what everyone assumes a strike detector is, and
+   * because watching it seed on a shout or a passing car is the clearest possible argument for
+   * the others. No background model and no attack test.
+   */
+  private fun byLevel(env: DoubleArray, windowSec: Double): List<Impact> =
+    env.indices.map { Impact(it * windowSec, env[it]) }
+
+  /**
+   * Positive change in level between windows — the classic onset detector.
+   *
+   * Scores the EDGE, not the level. Where ATTACK asks "is this loud relative to the quiet
+   * background", flux asks only "did it just get louder", which keeps working when the
+   * background is not quiet — a range with a mower running, a windy day.
+   */
+  private fun byFlux(env: DoubleArray, windowSec: Double): List<Impact> =
+    (1 until env.size).map { Impact(it * windowSec, max(0.0, env[it] - env[it - 1])) }
+
+  /**
+   * Peak over RMS within the window — impulsiveness measured without loudness.
+   *
+   * Scale-free, which is the property nothing else here has: it does not care how far the phone
+   * was from the ball, only whether the window is one spike in near-silence or a wall of sound.
+   * Gated on audibility, because the ratio between two inaudible numbers can be enormous and
+   * means nothing.
+   */
+  private fun byCrest(env: Envelopes, windowSec: Double): List<Impact> {
+    val n = min(env.peak.size, env.rms.size)
+    val audible = (env.peak.maxOrNull() ?: 0.0) * 0.05
+    return (0 until n).mapNotNull { i ->
+      if (env.peak[i] < audible) null
+      else Impact(i * windowSec, env.peak[i] / max(env.rms[i], 1e-5))
+    }
+  }
+
+  /**
+   * A sharp rise followed immediately by a sharp fall.
+   *
+   * The only test here that looks FORWARD. A strike is over in milliseconds while a shout, a
+   * gust, a car and a dropped bag all sustain, so the fall is a discriminator none of the
+   * backwards-looking methods can see. Rise times fall, so both must hold.
+   */
+  private fun byDecay(env: DoubleArray, windowSec: Double): List<Impact> {
+    if (env.size < 4) return emptyList()
+    return (1 until env.size - 2).map { i ->
+      val rise = env[i] - env[i - 1]
+      // Two windows out, not one: a strike's own ring-down occupies the window right after it.
+      val fall = env[i] - env[i + 2]
+      Impact(i * windowSec, if (rise > 0 && fall > 0) rise * fall else 0.0)
+    }
+  }
+
+  /**
+   * ATTACK on the HF envelope, weighted by absolute level.
+   *
+   * The composition of the two ideas that each work half the time. The level term is why it is
+   * not just HF: sharpness alone picks a fabric rustle against the microphone, which is all
+   * treble and nothing like a ball being struck.
+   */
+  private fun bySharp(env: Envelopes, windowSec: Double): List<Impact> {
+    val n = min(env.hf.size, env.peak.size)
+    if (n < 4) return emptyList()
+    return byAttack(env.hf.copyOf(n), windowSec).map { cand ->
+      val i = (cand.timeSec / windowSec).toInt().coerceIn(0, n - 1)
+      Impact(cand.timeSec, cand.score * env.peak[i])
+    }
+  }
+
+  /**
+   * What the other methods agree on.
+   *
+   * Every method runs, each one's candidates are normalised against its OWN best — the scores
+   * are on incomparable scales, a crest factor and an amplitude product sharing no units — and
+   * candidates within one separation window pool their votes. A time four detectors
+   * independently like beats a time one likes enormously, which is the whole point: their
+   * failure modes differ, so agreement is evidence where magnitude is not.
+   */
+  private fun byEnsemble(env: Envelopes, windowSec: Double): List<Impact> {
+    val votes = ArrayList<Impact>()
+    for (method in Method.entries) {
+      if (method == Method.ENSEMBLE) continue
+      // Only each method's few best vote. The full candidate list is mostly noise, and letting
+      // all of it vote would simply re-derive the loudest window.
+      val top = separate(score(method, env, windowSec), 3)
+      val best = top.maxOfOrNull { it.score } ?: continue
+      if (best <= 0.0) continue
+      for (cand in top) votes.add(Impact(cand.timeSec, cand.score / best))
+    }
+    if (votes.isEmpty()) return emptyList()
+
+    // Pooled to their weighted centre, so agreement SHARPENS the estimate rather than just
+    // confirming whichever method happened to be listed first.
+    val pooled = ArrayList<Impact>()
+    for (vote in votes.sortedBy { it.timeSec }) {
+      val last = pooled.lastOrNull()
+      if (last != null && abs(last.timeSec - vote.timeSec) < MIN_SEPARATION_S) {
+        val total = last.score + vote.score
+        pooled[pooled.size - 1] =
+          Impact((last.timeSec * last.score + vote.timeSec * vote.score) / total, total)
+      } else {
+        pooled.add(vote)
+      }
+    }
+    return pooled
+  }
+
+  /**
+   * Down-weight candidates near either end of the clip — Taylor's prior, 2026-08-21.
+   *
+   * A clip filmed alone begins with a walk out and ends with a walk back, so both ends carry
+   * footsteps, phone handling and setup noise: the loud, sharp, non-golf material every method
+   * here is vulnerable to. The weight ramps from `EDGE_FLOOR` at the very edge to 1 at
+   * `EDGE_SEC` in, so an edge candidate must be several times stronger than an interior one to
+   * still win — unlikely, not impossible, which is the instruction.
+   *
+   * Switchable off, because a prior nobody can turn off is a prior nobody can check.
+   */
+  private fun weightByTime(
+    candidates: List<Impact>,
+    durationSec: Double,
+    enabled: Boolean,
+  ): List<Impact> {
+    if (!enabled || durationSec <= 0) return candidates
+    val edge = min(EDGE_SEC, durationSec * EDGE_MAX_FRACTION)
+    if (edge <= 0) return candidates
+    return candidates.map { cand ->
+      val nearest = min(cand.timeSec, durationSec - cand.timeSec)
+      if (nearest >= edge) {
+        cand
+      } else {
+        val ramp = (nearest / edge).coerceIn(0.0, 1.0)
+        Impact(cand.timeSec, cand.score * (EDGE_FLOOR + (1 - EDGE_FLOOR) * ramp))
+      }
+    }
+  }
+
+  /**
+   * Strongest first, dropping anything within `MIN_SEPARATION_S` of a stronger pick.
+   *
+   * Every method needs this and for the same reason: a strike and its echo off the bay wall are
+   * one event, and returning both spends a candidate slot on a duplicate.
+   */
+  private fun separate(scored: List<Impact>, limit: Int): List<Impact> {
     val merged = ArrayList<Impact>()
-    for (cand in found.sortedByDescending { it.score }) {
+    for (cand in scored.sortedByDescending { it.score }) {
+      if (cand.score <= 0.0) break
       if (merged.none { abs(it.timeSec - cand.timeSec) < MIN_SEPARATION_S }) merged.add(cand)
       if (merged.size >= limit) break
     }
@@ -234,6 +546,57 @@ object SwingClip {
    * — being a few frames off the requested time costs nothing at this size. Never decode every
    * frame of a 240 fps take for this.
    */
+  /**
+   * Frames at EXPLICIT times — the filmstrip for a scrubber whose time axis is not linear.
+   *
+   * Evenly spaced frames describe an evenly spaced axis. Once the track spends most of its width
+   * on the seconds around impact, an even strip stops matching what is under the finger, and the
+   * picture at a cell is no longer the moment that cell selects.
+   */
+  fun thumbnailsAt(path: String, timesSec: List<Double>, width: Int, outDir: File): List<Map<String, Any>> {
+    val source = File(path)
+    require(source.exists()) { "no such clip: $path" }
+    if (timesSec.isEmpty()) return emptyList()
+
+    val retriever = MediaMetadataRetriever()
+    val out = mutableListOf<Map<String, Any>>()
+    try {
+      retriever.setDataSource(source.absolutePath)
+      val stem = source.nameWithoutExtension
+      timesSec.forEachIndexed { i, atSec ->
+        val frame = runCatching {
+          retriever.getScaledFrameAtTime(
+            (atSec * 1_000_000L).toLong().coerceAtLeast(0L),
+            MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+            width,
+            width,
+          )
+        }.getOrNull() ?: return@forEachIndexed
+
+        val file = File(outDir, "$THUMB_PREFIX${stem}_$i.jpg")
+        val wrote = runCatching {
+          FileOutputStream(file).use { frame.compress(Bitmap.CompressFormat.JPEG, 70, it) }
+        }.isSuccess
+        val w = frame.width
+        val h = frame.height
+        frame.recycle()
+        if (!wrote) {
+          runCatching { file.delete() }
+          return@forEachIndexed
+        }
+        out.add(mapOf(
+          "path" to file.absolutePath,
+          "timeSec" to atSec,
+          "width" to w,
+          "height" to h,
+        ))
+      }
+    } finally {
+      runCatching { retriever.release() }
+    }
+    return out
+  }
+
   fun thumbnails(path: String, count: Int, width: Int, outDir: File): List<Map<String, Any>> {
     val source = File(path)
     require(source.exists()) { "no such clip: $path" }
@@ -342,14 +705,116 @@ object SwingClip {
    * asked — that is extra lead-in, which the window wanted anyway, and never a late start that
    * would clip the takeaway.
    */
-  fun trim(path: String, startSec: Double, endSec: Double): String {
+  /** What the dev clip drawer will offer. Anything else in the folder is ignored silently. */
+  private val VIDEO_EXTENSIONS = setOf("mp4", "mov", "m4v")
+
+  /**
+   * Pre-recorded clips a developer dropped in, newest first — the take a real recording would
+   * have produced, without standing on a range.
+   *
+   * A missing folder is a normal answer (`emptyList`), not an error: the drawer says how to
+   * fill it. An unreadable file is skipped rather than failing the whole listing, because one
+   * half-copied `adb push` should not hide the other twenty clips.
+   */
+  fun listDevClips(dir: File): List<Map<String, Any>> =
+    dir.takeIf { it.isDirectory }
+      ?.listFiles { f: File -> f.isFile && f.extension.lowercase() in VIDEO_EXTENSIONS }
+      ?.sortedByDescending { it.lastModified() }
+      ?.mapNotNull { describe(it) }
+      ?: emptyList()
+
+  /**
+   * A clip's real duration and frame rate, or null when it cannot be read.
+   *
+   * The rate is derived as **frames ÷ duration**, not taken from a metadata field, because the
+   * two disagree exactly where it matters. A phone's slow-motion mode writes a file that was
+   * CAPTURED at 240 and PLAYS at 30, and the frame clock needs the rate the container actually
+   * advances at — `CAPTURE_FRAMERATE` would put every scrub eight frames out. The track's own
+   * `frame-rate` is the fallback for pre-28 devices, which publish no frame count.
+   */
+  private fun describe(file: File): Map<String, Any>? {
+    val retriever = MediaMetadataRetriever()
+    return try {
+      retriever.setDataSource(file.absolutePath)
+      val durationMs = retriever
+        .extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: return null
+      if (durationMs <= 0L) return null
+      val frames = retriever
+        .extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_FRAME_COUNT)?.toIntOrNull()
+      val fps = when {
+        frames != null && frames > 0 -> frames * 1000.0 / durationMs
+        else -> trackFrameRate(file.absolutePath) ?: return null
+      }
+      // The rate the SENSOR ran at, which for a phone slow-motion clip is not the rate the file
+      // plays at: `com.android.capture.fps=240` on a container that advances at 30 means the
+      // timeline runs 8x slower than reality. Absent on an ordinary recording, and 0 there.
+      val captureFps = retriever
+        .extractMetadata(MediaMetadataRetriever.METADATA_KEY_CAPTURE_FRAMERATE)?.toDoubleOrNull()
+      mapOf(
+        "path" to file.absolutePath,
+        "name" to file.name,
+        "durationMs" to durationMs.toDouble(),
+        "fps" to fps,
+        "captureFps" to (captureFps ?: 0.0),
+        "sizeBytes" to file.length().toDouble(),
+      )
+    } catch (_: Throwable) {
+      null
+    } finally {
+      runCatching { retriever.release() }
+    }
+  }
+
+  private fun trackFrameRate(path: String): Double? {
+    val extractor = MediaExtractor()
+    return try {
+      extractor.setDataSource(path)
+      (0 until extractor.trackCount)
+        .map { extractor.getTrackFormat(it) }
+        .firstOrNull { it.getString(MediaFormat.KEY_MIME)?.startsWith("video/") == true }
+        ?.takeIf { it.containsKey(MediaFormat.KEY_FRAME_RATE) }
+        ?.getInteger(MediaFormat.KEY_FRAME_RATE)
+        ?.toDouble()
+    } catch (_: Throwable) {
+      null
+    } finally {
+      runCatching { extractor.release() }
+    }
+  }
+
+  /**
+   * The rotation an MP4 declares, or null when it declares none.
+   *
+   * Null is a real answer, not a failure: takes recorded before the recorder started stamping
+   * a hint (2026-08-21) genuinely carry nothing, and inventing 90 for them would rotate a file
+   * that was already being drawn the way it was written.
+   */
+  private fun rotationOf(path: String): Int? {
+    val retriever = MediaMetadataRetriever()
+    return try {
+      retriever.setDataSource(path)
+      retriever
+        .extractMetadata(MediaMetadataRetriever.METADATA_KEY_VIDEO_ROTATION)
+        ?.toIntOrNull()
+        ?.takeIf { it != 0 }
+    } catch (_: Throwable) {
+      null
+    } finally {
+      runCatching { retriever.release() }
+    }
+  }
+
+  fun trim(path: String, startSec: Double, endSec: Double, outDir: File): String {
     val source = File(path)
     require(source.exists()) { "no such clip: $path" }
     require(endSec > startSec) { "trim window is empty" }
 
     val startUs = (startSec * 1_000_000).toLong().coerceAtLeast(0L)
     val endUs = (endSec * 1_000_000).toLong()
-    val out = File(source.parentFile, "trim_${System.currentTimeMillis()}_${source.name}")
+    // Always the cache, never beside the source. For a real take those are the same folder; for
+    // a dev clip they are not, and writing there would litter the developer's own library with
+    // trims — and put them where the cache sweep can never reach them.
+    val out = File(outDir, "trim_${System.currentTimeMillis()}_${source.name}")
 
     val extractor = MediaExtractor()
     var muxer: MediaMuxer? = null
@@ -374,6 +839,11 @@ object SwingClip {
         }
       }
       require(indexMap.isNotEmpty()) { "clip has no video or audio track" }
+
+      // A remux starts from a blank header, so the source's rotation is NOT inherited — carry
+      // it across explicitly or Save turns an upright take back onto its side. Read off the
+      // source rather than recomputed from the camera: the trim has no idea which lens shot it.
+      rotationOf(source.absolutePath)?.let { muxerOut.setOrientationHint(it) }
 
       // PREVIOUS_SYNC, not CLOSEST_SYNC: a seek forward to the next keyframe would start the clip
       // AFTER the moment asked for, which on a swing means losing the takeaway.

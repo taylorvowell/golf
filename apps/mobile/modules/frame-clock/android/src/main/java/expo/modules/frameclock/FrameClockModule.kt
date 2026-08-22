@@ -67,9 +67,6 @@ class FrameClockModule : Module() {
       AsyncFunction("setPlaybackSpeed") { view: FrameClockView, speed: Double ->
         view.setPlaybackSpeed(speed.toFloat())
       }
-      AsyncFunction("setMuted") { view: FrameClockView, muted: Boolean ->
-        view.setMuted(muted)
-      }
       AsyncFunction("getStats") { view: FrameClockView ->
         view.stats()
       }

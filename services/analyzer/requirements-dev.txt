@@ -10,3 +10,8 @@ pytest==9.1.1
 # to a no-op when jsonschema is absent, which silently stops schema enforcement on the
 # producing side.
 jsonschema==4.26.0
+
+# Deploy-side CLI for the Modal worker host. Deliberately NOT in requirements.txt: it is a
+# tool for shipping the container, never a dependency INSIDE it, and adding it there would
+# put the deploy client in the production image.
+modal==1.5.4

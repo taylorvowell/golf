@@ -11,6 +11,49 @@ edited. `docs/decisions/mobile-client.md` holds the *decisions* (what we chose);
 the *mechanics* (how code must be written so those decisions keep holding). Where they overlap,
 the register wins.
 
+## Before you write against a platform API, LOOK IT UP
+
+Three of 2026-08-22's long detours were documented behaviour that was inferred instead of read.
+Each cost multiple device round-trips and each was one query away.
+
+- **`docs-researcher` / context7 before coding an external API you have not used this week** —
+  `expo-video`, `expo-camera`, media3, Reanimated, RN's `Animated`. The rule already exists for
+  Next/Drizzle/MediaPipe; it applies just as hard to anything under `apps/mobile`.
+- **The three that were paid for in device round-trips, so nobody pays again:**
+  - **A `SurfaceView` cannot be clipped, rounded, or reliably stacked.** It is composited by the
+    platform OUTSIDE the view hierarchy, so a parent's `overflow: hidden` never reaches it and a
+    `borderRadius` on it does nothing. Both video components in this app default to one. Pass
+    `surfaceType="textureView"` on any video that must have rounded corners, sit under an overlay,
+    or share a screen with another video. Hit twice: `FrameClockView` (an invisible preview) and
+    `expo-video` (corners that would not round).
+  - **Never mix `useNativeDriver: true` and `false` values in one style object.** Layout properties
+    (`width`, `height`, `top`, `left`) cannot use the native driver, so pairing them with a
+    native-driven `opacity` or `transform` makes React Native reject the layout props outright —
+    *"style property 'top' is not supported by native animated module"* — and the animation simply
+    never happens. Pick one driver per view.
+  - **A parent that sizes itself from an animated child measures zero, and a zero-sized parent
+    receives no touches on Android.** Give the press target explicit dimensions, or make it
+    `StyleSheet.absoluteFill` inside a sized box, so the tappable area is by construction the
+    visible area.
+
+## Diagnose on the DEVICE before editing
+
+The single biggest time sink is editing on a hypothesis. Every question below was answered in one
+command on 2026-08-22, after several edits had already been made against a guess.
+
+- **"My change did not show up."** Is it in the served bundle?
+  `curl "http://127.0.0.1:8082/apps/mobile/index.bundle?platform=android&dev=true" | grep mySymbol`
+  Present there and absent on screen is ALWAYS the device's cache — never the code.
+- **"The video will not play."** Ask the player, not the screen:
+  `adb logcat -d | grep -oE "state=[A-Z]+\([0-9]\), position=[0-9]+"`. A repeating
+  `PLAYING@101517 → BUFFERING@101500` is a seek loop, not a decode failure, and it named the bug
+  in one read after four wrong guesses.
+- **"It crashed / went white."** `adb logcat -d -b crash` carries the real reason, including a
+  Metro 500 body with the failing module path.
+- **The emulator cannot verify this app's video screens.** Two software-decoded surfaces plus a
+  long clip ANRs it. Layout, navigation and wording are what it is for; anything with two players
+  has to be checked on the S25+.
+
 ## Measure, don't argue
 
 - **The frame-sync oracle gates anything touching the player's hot path.** overlayDrift
@@ -147,7 +190,28 @@ along.
 - **The white screen after a native build was the Metro cold-graph race — the script now warms
   the bundle before launching** (`warmBundle()` curls `index.bundle` until it serves). If a white
   page ever appears anyway: `curl "http://127.0.0.1:8082/apps/mobile/index.bundle?platform=android&dev=true"`,
-  then rerun `pnpm --filter mobile phone`. "MainActivity is up" does not prove the bundle loaded.
+  then rerun `pnpm --filter mobile phone`.
+- **Metro reaches the device through `adb reverse`, NOT the LAN address — and that is what makes
+  the dev loop reliable.** `dev-device.mjs` now runs `adb reverse tcp:8082 tcp:8082` and launches
+  against `127.0.0.1:8082`, so the route is the debug transport rather than the network. A LAN
+  address only works while the phone is actually on the LAN, and it silently stops being on the LAN
+  when a **VPN turns on**, when it drops to mobile data, or when DHCP moves it. The failure is the
+  worst shape available: the dev client cannot fetch, boots **the last bundle it downloaded**, and
+  says nothing — so a whole session's changes appear not to exist while being provably present in
+  the served bundle. Measured 2026-08-22 with the phone on `100.106.111.127` (a VPN address) unable
+  to see `10.0.1.107` at all; several rounds of UI work were reviewed against stale JS before the
+  cause was found. **If a change ever seems absent: an in-app reload re-runs the CACHED bundle and
+  cannot help — force-stop and relaunch through the script.** To confirm which side is at fault,
+  grep the served bundle for a symbol you just added
+  (`curl "http://127.0.0.1:8082/apps/mobile/index.bundle?platform=android&dev=true" | grep mySymbol`);
+  present in the bundle but absent on screen is always the device's cache, never the code.
+- **"MainActivity is up" does not prove the bundle loaded, and the script no longer accepts it.**
+  A device can sit on MainActivity showing white with no JS at all — seen 2026-08-21 straight after
+  a native install, while the launcher printed "bundle loaded". `launch()` now also waits for a JS
+  runtime belonging to that device to appear in Metro's inspector registry
+  (`GET /json/list`), which only happens once the bundle has actually been evaluated, and dies
+  pointing at `start.log` when it does not. That registry is also the fastest hand check when a
+  device looks wedged: no entry for it means the bundle never ran.
 - **A wedged Metro must be KILLED before relaunching, and the script does it** — but note the
   trap that broke it once: from Node's `execFileSync`, taskkill flags are `/PID /T /F`; the
   git-bash `//PID` form reaches taskkill literally, errors silently, and the hung process

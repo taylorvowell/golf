@@ -219,11 +219,217 @@ file itself, so a cap reached while JS is busy still yields a playable MP4. It s
 file closed is the worst available failure. Both endings (tap, cap) route through one `settle`
 function so they cannot diverge. A `MediaRecorder.stop()` that throws means the take was too short
 to write a valid MP4 — reported, never left as a zero-byte file.
+**Orientation is stamped into the container, and every remux carries it across.** The sensor is
+mounted landscape and hands the encoder landscape frames however the phone is held, so a portrait
+swing is portrait only because `MediaRecorder.setOrientationHint` says so — read from
+`SENSOR_ORIENTATION` rather than written as 90, since it is a per-sensor fact. `SwingClip.trim`
+re-declares it on its `MediaMuxer`: a remux starts from a blank header and inherits nothing, so
+Save would otherwise put an upright take back on its side. Both halves are required and neither is
+sufficient alone.
 **Bitrate is `w × h × 30 × 0.15 × sqrt(fps/30)`,** replacing `w × h × fps × 0.25`. The old flat
 per-frame allowance asks 124 Mbps at 1080p240 and roughly triples what the encoder needs: at high
 rates adjacent frames are nearly identical, so bits-per-pixel should FALL as the rate rises. The
 constants are provisional until a bitrate sweep is diffed with `scripts/compare_analysis.py`,
 watching **club coverage**, which degrades long before pose does.
+
+### Every video surface in the app is silent
+
+**Decision:** audio exists in this product for ONE purpose — locating the strike — and `SwingClip`
+does that by decoding the track directly, never by playing it. So every `FrameClock` player is
+created with `volume = 0f` and the module exposes **no way to raise it**: `setMuted` was deleted
+rather than defaulted, because a rule every call site has to remember is a rule the next surface
+forgets. `expo-video`'s preview sets `muted` on its own player for the same reason. A clip that
+speaks in a quiet room — or at 8× — is noise, never information (Taylor, 2026-08-22).
+
+### Durations are FILE seconds, and a slow-motion clip's file seconds are not the world's
+
+**Decision:** a phone slow-motion clip records `com.android.capture.fps=240` while its container
+advances at 30, so its timeline runs **eight times slower than reality** and every duration derived
+from it means an eighth of what it looks like. Measured on a real clip: the review window's ±2.5 s
+was ±0.31 real seconds, which is why the backswing fell outside the saved clip. `describe()`
+therefore reports `captureFps` beside the playback rate, `SwingClipRef` carries
+`slowMoFactor = captureFps / fps`, and **every duration on the review screen is written in REAL
+seconds and multiplied through it** — the trim window, the scrub axis's magnified bands, and the
+preview's playback rate. Anything this app records reports no capture rate and the factor stays 1.
+
+### A layout sizes video from a MEASURED ratio: width 100%, height derived, overflow cropped
+
+**Decision:** width fills the container, height is computed from a ratio the player reported, and
+the excess is cropped — never fitted (Taylor, 2026-08-22). The native surface is `MATCH_PARENT` and
+has no opinion about aspect, so a box of the wrong shape does not letterbox, it **distorts**;
+deriving height from width and a measured number makes squashing arithmetically impossible instead
+of something to keep re-tuning. Cropping is **vertical**: the sides of a golf frame hold the club
+and the ball, the top and bottom are sky and mat. The filmstrip follows the same rule from each
+thumbnail's own reported pixel size, centred so half the overhang goes above and half below.
+
+### The review screen keeps a frozen frame, a linear scrubber, and a corner preview
+
+**Decision:** the big picture is the scrub read-out — parked on whatever frame the mark sits on —
+the scrub track is linear in time, and the window Save would cut loops in a small preview in the
+top-right corner. Reverted here on 2026-08-22 after trying the alternative.
+
+**What was tried and dropped**, so it is not re-proposed as new: a warped scrub axis magnified
+around the detected strike, a filmstrip sampled along that axis, a drag magnifier above the
+scrubber, and a big picture that looped the window under a waiting glyph while a finger was down.
+Every piece worked; together they changed the screen more than the problem warranted. The
+capability that survives is `clipThumbnailsAt` in the native module — frames at explicit times
+rather than evenly spaced — which is left in place because it is small, documented, and the only
+awkward part of that experiment to rebuild.
+
+**The corner preview taps to enlarge**, to about three quarters of the video area and back, with a
+small radius on both states and a scale-down on press — pressed feedback on a picture cannot be a
+fill (it would sit behind the video) and must not be opacity. It is sized against the STAGE, not
+the window, because the stage clips its overflow and a panel measured against the screen loses its
+bottom when enlarged; the enlarged shape comes from the video's own measured ratio, fitted to
+whichever axis binds.
+**It carries a cast shadow — a NAMED EXCEPTION to the no-shadows rule** (Taylor, 2026-08-22). The
+register forbids drop shadows because elevation is the surface ramp, but this panel has no surface
+under it: it floats over live footage whose colour changes shot to shot, so on a bright frame its
+edge disappears entirely. That is the same argument that earned `CONTROL_EDGE` its exception for
+controls over the camera picture. Soft and close (`PANEL_SHADOW`) — it separates the panel from the
+swing rather than decorating it, and the exception does not generalise to surfaces that sit on a
+theme colour.
+
+**The shipped seeder is `hf`** (Taylor, 2026-08-22): it keys on the high-frequency click of a
+strike rather than its loudness, which is what separates a golf shot from the other loud things at
+a range. Chosen on judgement against real clips — there are still no labelled strike frames in this
+project, so it is a preference and must never be written down as an accuracy figure. The storage
+key carrying the golfer's own choice was bumped to `v2` with the change, because a stored value
+outranks a default and every device that had opened the picker would otherwise keep seeding with
+the old one.
+
+### A player reports CODED dimensions, so every layout must apply the rotation itself
+
+**Decision:** `ReadyEvent` carries `rotationDegrees` alongside `width`/`height`, and
+`displayAspectRatio(event)` in `FrameClock.types.ts` is the ONE place the rule lives. A portrait
+phone clip is stored 1920x1080 with 90° of rotation in the container; media3 draws it upright but
+`format.width/height` still describe the stored frame, so a box sized from the raw pair squashes
+every portrait video it draws — which is exactly what the review screen did until 2026-08-21.
+**The native surface is `MATCH_PARENT` and has no opinion about aspect**, so a wrong ratio does not
+letterbox, it distorts. A screen showing video therefore owes it a correctly-shaped box; the review
+screen sizes the video to COVER its stage and lets the stage clip the overflow (Taylor: use the
+whole screen rather than letterbox a swing into a tall black frame) — the same centre-crop trick
+the camera preview uses, for the same reason.
+
+### The scrub handle says when it is held
+
+**Decision:** the mark handle takes an aqua fill and a small scale step while a finger is on it
+(Taylor, 2026-08-21) — a fill and a size change, never a border or a shadow. On a drag-only control
+with no pressed state, nothing otherwise distinguishes "I am moving this" from "I am touching the
+screen near it". `onPanResponderTerminate` clears it as well as release: a gesture the system takes
+away never sees a release, and a handle left glowing claims a finger that has gone.
+
+### The review screen previews the clip Save would actually produce
+
+**Decision:** a picture-in-picture in the review screen's bottom-right corner loops the exact
+window Save would cut, at 1x, labelled "Swing preview". The handle answers *where did you hit it*;
+this answers the question the golfer actually has — ***is the whole swing in there?*** — which a
+scrubber position cannot show and which, until now, could only be checked by saving and looking.
+Both the preview and Save read one `windowAround(mark)` helper, because a preview showing a
+different window than the one saved would be worse than no preview.
+**It follows the COMMITTED mark, never the live drag** — the finger lifting, a screen-reader step,
+or detection answering. Re-cutting on every pan event would restart the loop sixty times a second
+and show nothing but its first frame.
+**The loop is a timer that re-arms, not a frame watcher.** media3 offers no loop-a-window
+facility, and the alternative — `emitFrames` plus a JS callback testing every frame against the out
+point — puts a 60 Hz callback on screen for a decoration; over five seconds a timer's drift is well
+below what an eye can see on a re-cut loop. An interval is wrong here where a re-arming timeout is
+right: an interval keeps firing while a seek is still resolving and walks the loop point forward.
+**The preview runs on `expo-video`, NOT on `FrameClockView`, and that is the decision.**
+`FrameClockView` exists for one thing — frame-exact overlay sync — and pays for it with a native
+view whose methods dispatch by view tag. A second instance of it on this screen could not be driven
+at all (`Unable to find … FrameClockView view with tag N`), and its SurfaceView also composited
+*underneath* the first one, so the same feature failed twice for two unrelated reasons and both
+presented identically as "the preview doesn't play". A preview needs none of what that module buys:
+no frame index, no overlay, no drift measurement — a start, an end and a loop. `expo-video`'s
+player is a JS-owned object, so there is no view to fail to resolve. **The generalisation worth
+keeping: reach for `FrameClockView` only where frame-exactness is the product; anywhere else it is
+a liability with a cost.**
+**Exactly ONE seek per window, and `readyToPlay` is not "start over".** That status fires again
+after every buffering stall, so seeking on each occurrence pinned the player forever: measured on
+the emulator, `BUFFERING@101500 → PLAYING@101517 → BUFFERING@101500`, repeating — seventeen
+milliseconds of playback, then yanked back to the window start, which on screen is a perfectly
+correct frame that never advances. The owed seek is held in a ref, paid once, and every later
+`readyToPlay` only resumes. **The generalisation, which this feature learned twice: a recovery
+action wired to a RECURRING event is not recovery, it is a loop** — the same shape as the
+before-the-window test that preceded it.
+**Only the END of the window is tested.** An earlier loop also sent the player back when it read
+as BEFORE the window — intended to recover a stale position, it instead re-seeked on every tick
+while `currentTime` was still catching up to the seek that had just landed, so the preview sat
+frozen on a perfectly correct first frame. A loop only needs to know where it ends. Playback starts
+from a `statusChange` → `readyToPlay` listener, because `useVideoPlayer`'s setup callback runs
+before the file is readable and a `play()` there has nothing to honour.
+**`player.loop` is not used** — it replays the whole FILE, and the file is a minute of walking out
+and walking back. The window is the point, so the loop is a `timeUpdate` listener at 0.1 s
+comparing position against the committed window and sending the player back to its start. The same
+test catches a position *before* the window, which is what a fresh source or a re-cut leaves.
+**Named cost:** this is a second decoder on the same file while the main player holds the first.
+The main one is parked on a frame rather than decoding, but on a 1080p240 clip two sessions are not
+free — this is the surface the "two-decoder reading" HANDOFF row is about.
+**Dependency:** `expo-video` (~57.0.2) enters the app here, with a config plugin, for this preview.
+
+### The impact detector is switchable, and none of its methods has an accuracy number
+
+**Decision:** `detectImpacts` takes a method — **`attack`** (rise vs. a running background, the
+shipped default), **`peak`** (plain loudest window), **`hf`** (rise in a first-difference envelope,
+keying on the broadband *click* rather than loudness), **`flux`** (positive energy change — onset
+strength, which survives a background that is not quiet), **`sharp`** (HF attack weighted by level,
+the two working ideas composed), **`crest`** (peak over RMS — impulsiveness measured without
+loudness, the only scale-free test here), **`decay`** (fast rise AND fast fall, the only test that
+looks forward, which is what separates a strike from anything that sustains) and **`ensemble`**
+(each method normalised against its own best, votes pooled by proximity — agreement is evidence
+where magnitude is not). Eight different physical discriminators, not eight tunings of one; all
+three envelopes are built in a single decode, so switching costs nothing and the ensemble is one
+decode rather than eight.
+**Both ends of a clip are down-weighted** (`EDGE_SEC` = 5 s, ramping to a `EDGE_FLOOR` of 0.15 at
+the very edge, and shrinking on a short clip). A golfer filming alone walks out and walks back, so
+both ends carry footsteps and phone handling — the loud, sharp, non-golf material every method is
+vulnerable to. A **prior, not a filter**: an edge strike still wins when nothing in the interior
+comes close, because "highly unlikely" is the instruction and "impossible" is not. It is switchable
+off, since a prior nobody can disable is a prior nobody can check. The no-candidate fallback moved
+from 2.5 s to 6 s from the end for the same reason — the silent case must not land in the region
+the loud case is told to distrust. Selected from the debug menu,
+persisted, and the review screen names the active method on a dev clip — changing it re-seeds the
+mark in place, so one clip yields four answers without a reload.
+
+**No method here has a measured accuracy, and none may be given one.** There are no hand-labelled
+strike frames in this project, so a preferred method is preferred because a person watched the seed
+land on real clips — a judgement, and it must be written down as one. This is the exact shape of
+the "event accuracy verified ±2 frames" claim that was later found 48 frames wrong; a switchable
+detector makes that error easier to commit, not harder. The seed is also never a measurement in the
+product sense: the analyzer locates the true Impact frame from the club-head low point, and it
+overrides anything this picks or the golfer drags.
+
+### Pre-recorded clips can stand in for a take, from a folder that needs no permission
+
+**Decision:** `__DEV__` builds offer the clips in **`Android/media/<pkg>/dev-clips`** in the debug
+menu; picking one dispatches `dev-take` and lands on the review screen exactly as a finished
+recording would. That folder is the only one that is both writable with **no permission declared**
+and still **visible to Explorer-over-USB and the phone's file manager** — Android 11's scoped-storage
+lockdown covers `Android/data` and `Android/obb` and deliberately not `Android/media`. A public
+folder (`Movies`, `DCIM`) would require `READ_MEDIA_VIDEO`, and a permission declared for a debug
+convenience ships in the release manifest and onto the store's data-safety form. `Android/data/<pkg>/
+files/dev-clips` is still scanned as a fallback — it was the first choice, and `getExternalMediaDirs`
+is deprecated-but-functional, so a device answering null must still have somewhere to look; only the
+primary folder is ever NAMED, because a drawer offering two paths gets files put in the wrong one.
+Rate is derived as **frames ÷ duration**, not read from `CAPTURE_FRAMERATE`: a phone slow-motion file
+is captured at 240 and plays at 30, and the frame clock needs the rate the container advances at.
+**The drawer is triage, not a file list.** Each clip carries a thumbnail, its file name, a
+persisted status (new / tried / saved — `devClipMarks`, keyed by NAME so a clip moved between the
+two folders keeps its verdict) and an **angle tag** guessed from the file name and correctable by
+tapping. The tag is the load-bearing control: `dev-take` stamps the swing with it, and a face-on
+clip stamped `dtl` inverts every lead/trail metric downstream, where it presents as bad analysis
+rather than bad metadata. This drawer is also the project's only source of face-on footage — every
+fixture is down-the-line, so it is the first real film the view-gated and mirroring paths ever see.
+**On a dev clip the bin is a Back arrow, and backing out reopens the library.** The file survives
+whatever happens on the review screen, so a destructive framing would be a lie, and the two-tap
+"try one, reject it, try the next" loop is the reason the drawer exists.
+**A dev take is flagged, and nothing deletes a flagged file.** Save unlinks the source once the
+trim succeeds and Delete unlinks it outright — both correct for a recording, both catastrophic for
+a developer's clip library, so `PendingTake.dev` gates every unlink and `trim` writes to the cache
+rather than beside its source. `dev-take` is also a separate action from `take-ready`, whose
+`mode === "recording"` guard settles the tap-versus-cap race and must not be loosened to admit a
+debug control.
 
 ### The record chain is take → review → trim, governed by the capture spec package
 
