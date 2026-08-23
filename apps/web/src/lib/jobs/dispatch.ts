@@ -8,7 +8,7 @@ import { getAnalysis } from "@/lib/swings";
 import { SOURCE_BUCKET } from "@/lib/media/keys";
 import { getMediaStore } from "@/lib/media/store";
 import { signJobToken } from "@/lib/jobs/token";
-import { envInt, queuePublishOptions } from "@/lib/jobs/policy";
+import { clubVariants, envInt, queuePublishOptions } from "@/lib/jobs/policy";
 import type { Job } from "@/lib/jobs";
 
 /**
@@ -43,6 +43,8 @@ export interface QueueJobSpec {
     view: string;
     handedness: string;
     club_detector: string | null;
+    /** Stated explicitly on every spec — see policy.clubVariants (JOBS_CLUB_VARIANTS). */
+    club_variants: boolean;
   };
 }
 
@@ -88,6 +90,7 @@ export async function enqueueReanalysis(
       view: analysis.video.view,
       handedness: analysis.video.handedness,
       club_detector: clubDetector,
+      club_variants: clubVariants(),
     },
   });
 }
@@ -133,6 +136,7 @@ export async function enqueueCapture(
       view: view.view,
       handedness,
       club_detector: detector === "none" ? null : detector,
+      club_variants: clubVariants(),
     },
   });
 }

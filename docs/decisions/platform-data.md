@@ -122,23 +122,33 @@ is the mobile app.
 ### Job dispatch is Upstash QStash; job state lives in Postgres; the worker runs on Modal
 
 **Decision:** Upstash QStash dispatches analysis jobs and job state stays in Postgres — the
-queue carries dispatch, never truth. The loop is **built and proven locally** against the QStash
-dev server (`pnpm --filter web queue:e2e`): dispatcher (`lib/jobs/dispatch.ts`) → QStash →
-worker HTTP server (`service/server.py`) → `pipeline.run()` → artifacts and events back through
-`/api/internal/jobs/*`. The queue path sits behind `JOBS_DRIVER=queue`, opt-in and never
-inferred, with the spawn path still the local default. **The worker host is Modal** — a
-signature-verified HTTP endpoint QStash pushes to, serverless GPU with scale-to-zero and
-per-second billing, which is the honest shape for a job that runs ~76s a few times an hour and
-is idle the rest of the time. **Scheduled work uses QStash schedules, never a second scheduler.**
-Only the production credentials remain, in `../HANDOFF.md`.
+queue carries dispatch, never truth. The loop runs in two shapes off one dispatcher
+(`lib/jobs/dispatch.ts`, behind `JOBS_DRIVER=queue`, opt-in and never inferred; spawn stays
+the local default): **locally** against the QStash dev server and `service/server.py`, and
+**deployed** on **Modal** (`service/modal_app.py`, app `swingsage-analyzer`), where
+production QStash pushes to a signature-verified public endpoint
+(`…--swingsage-ingress.modal.run/jobs`). **Proven end-to-end on the real rails 2026-08-23**:
+production QStash → Modal ingress → L4 runner → artifacts and events back through
+`/api/internal/jobs/*` → job `done`, view revision advanced, `analysis.json` published.
+**On Modal the worker is split, because Modal caps a web request at ~150s**: a small CPU
+`ingress` verifies the QStash signature and the schema-2 spec at the door (including the
+club-detector-exists rule), `spawn`s the pipeline onto an L4 GPU function (one job per
+container, `max_containers` caps spend, per-user fairness stays QStash flowControl), and
+acks 200 immediately. **Retry semantics move with the split:** QStash's retries +
+failureCallback now cover only failure to *accept* (endpoint down, spawn failure, bad spec);
+mid-run infra failures are retried by Modal (`retries=2` on the runner, with a best-effort
+breadcrumb into the job log); a job that still dies goes silent and the step-05 heartbeat
+reconcile settles it `failed`. Refusals (`PipelineError`) are unchanged — terminal `failed`
+event, never retried. **Scheduled work uses QStash schedules, never a second scheduler.**
 **Gotchas:** The worker sees only URLs and a signed per-job token — no DB or storage
-credential; the web app stays the single owner of media addressing, and internal-route writes
-run under the enqueuing user's identity (no elevation on a request path, D26). A
-`PipelineError` is an answer: the worker acks it 200 so QStash never retries a deterministic
-refusal; only infrastructure failures 5xx into the retry schedule. `WORKER_CLUB_DETECTOR` must
-be set explicitly (path or `none`) — the club detector is never defaulted, per the standing
-trap.
-**See:** ARCHIVE D9, D18.
+credential (D26); the Modal secret holds exactly the two signing keys, the worker's own
+public URL, and the club-weights signed URL. `WORKER_PUBLIC_URL` must byte-match the
+web side's `WORKER_URL` — signature verification binds to it. `WORKER_CLUB_DETECTOR` must be
+set explicitly (path or `none`), and on Modal it is the in-container path
+`/mnt/models/app/runs/clubhead/weights/best.pt` — from Git Bash, only with
+`MSYS_NO_PATHCONV=1`, or MSYS rewrites it into a `C:/Program Files/Git/…` path the worker
+refuses at the door. Modal CLI commands need `PYTHONUTF8=1` on this machine.
+**See:** ARCHIVE D9, D18; D64.
 
 ### Queue policy: fairness, dead letters, orphans, backpressure
 
@@ -163,13 +173,16 @@ counted by swing ownership join, not RLS visibility (which would count coach-rea
 infra failures reach the DLQ, so the failure callback firing always means infrastructure.
 Every done event self-reports `elapsedS` (true pipeline seconds) into the job log — telemetry,
 never a golfer-facing surface.
-**Capacity model (measured 2026-08-18, this machine, feeding the SLO row below):** a 5.4s
-60fps clip (322 CFR frames) took **341s end-to-end** on CPU pose + GTX 1080 club detector —
-worker single-flight ⇒ ~10.5 jobs/hour/worker. Step 01 measured CUDA pose 2.32× (70.4 →
-30.4 ms/frame); pose is roughly half the wall clock, so a CUDA host projects to ~4.5 min/job
-(~13/hr) and the p95 < 180s SLO still fails on a single worker of this class — meeting it
-needs a faster host class and/or horizontal workers behind per-user flow control, which is
-exactly the sizing question the worker-host HANDOFF decision (spend) must answer.
+**Capacity model (measured 2026-08-23 on the production host — Modal L4, 8 vCPU, pro_2, CUDA
+proven at 26.1 ms/frame pose):** production shape (`club_variants=false`) runs **124.6s**
+pipeline time ⇒ ~28 jobs/hour/container, ~115/hr at the configured `max_containers=4`, and
+the **p95 < 180s SLO is met on a single container with ~55s of headroom** for queue wait and
+upload. The dev shape (variants on) runs **676.6s** on the same container — the `variants`
+stage alone is 570s on Modal vCPUs (slower per-core than the dev desktop), so the SLO is
+**unmeetable with variants on**: the variants-off production default is a prerequisite for
+the SLO, not an optimisation. Cost is roughly $0.03–0.05/swing at L4 per-second pricing.
+Cold-start cost (8.4GB image pull + model load from the volume) is real but not yet
+isolated as a number — measure it before quoting p95 for a cold fleet.
 **See:** ARCHIVE D9, D18, D26.
 
 ### The analysis bottleneck is the club-trace variants, not pose
@@ -178,8 +191,9 @@ exactly the sizing question the worker-host HANDOFF decision (spend) must answer
 the `variants` stage — **eight full club re-solves kept so a human can compare club solutions on
 real pixels** — is **72%**, and the two pose passes together are **11%**. `variants` is a
 development instrument (`AnalysisRequest.club_variants`, default `True`); a production job sets it
-`False` and the job drops to ~76s with no new hardware. Pose on CUDA is worth a further ~18s, so
-the ORDER is **variants first, host second**.
+`False` and the job drops to ~76s on the dev desktop, **124.6s measured on the deployed Modal
+L4 (2026-08-23)** — against 676.6s with variants on there, so the ratio holds on the real
+host. Pose on CUDA is worth a further ~18s, so the ORDER is **variants first, host second**.
 **Gotchas:** This corrects the attribution in the capacity model below — the 4.5-6.8 min/job figure
 was real, but reading it as "pose is slow, therefore buy a GPU" was wrong by roughly a factor of
 six. Never turn `club_variants` off for FIXTURE runs: comparing solutions on real pixels is exactly
@@ -192,8 +206,14 @@ end-to-end latency budget and every remaining lever. ARCHIVE D18, D53.
 
 **Decision:** Every model file the pipeline loads is declared in
 `services/analyzer/service/models.py` with a `sha256`, a size and a source, and is fetched at
-container start by `service/entrypoint.sh` — never baked into an image layer, because these
-files are retrained and overwritten locally and a layer would version them silently. Public
+container start by `service/entrypoint.sh` (Docker) or once onto the `swingsage-models`
+volume by `modal run …::fetch_models` (Modal, with a hash-only re-check at every container
+start) — never baked into an image layer, because these files are retrained and overwritten
+locally and a layer would version them silently. On Modal the volume is **symlinked to the
+real asset paths** at container start: the `SWINGSAGE_MODEL_ROOT`/`SWINGSAGE_RTMLIB_CACHE`
+overrides relocate only models.py's own fetch-and-check, and the pipeline's loaders (pose.py,
+rtmlib's cache) never read them — an override-only deployment passes preflight and then
+cannot load a model, which is exactly how it failed on 2026-08-23. Public
 assets (the MediaPipe landmarker, the MMPose RTMW/RTMPose onnx) carry their URL literally.
 The one private asset, the fine-tuned club-head `best.pt`, carries an env var name instead
 (`SWINGSAGE_CLUB_WEIGHTS_URL`) and is published through the media store the web app already
@@ -252,11 +272,17 @@ and an insert policy cannot express that safely; the table has no INSERT policy 
 Grouped delivery (D60's collapsing conversation messages) is a data-model property: a partial
 unique index on `(user_id, group_key) where read_at is null` folds repeat events into one open
 row whose `count` grows; reading closes the group. The inbox is PERSONAL — owner-only RLS, no
-`has_coach_access` — and the client's only write is `read_at`, enforced by a column-level
-grant. The kind list is one enum, mirrored between the table check and
-`api.schema.json#/definitions/notification`, grown additively and always together. API:
+`has_coach_access` — and the client's only writes are `read_at` (enforced by a column-level
+grant) and DELETE of its own rows. The kind list is one enum, mirrored between the table check
+and `api.schema.json#/definitions/notification`, grown additively and always together. API:
 `GET /api/v1/notifications` returns list + unread count in one answer;
-`POST /api/v1/notifications/read` acks by ids or all (body, never an `/:id` route).
+`POST /api/v1/notifications/read` acks by ids or all; `DELETE /api/v1/notifications` dismisses
+by ids — all three take ids in the BODY, never an `/:id` route, because the inbox is acted on
+in batches. Dismissal (migration 0018) is a hard delete and a LOCAL act: the swing, the message
+and the goal behind an event are their own rows in their own tables, so a notification is only
+ever the pointer, and there is no history a `dismissed_at` flag would preserve. Every count the
+client shows after a write is the server's, never a local decrement — two devices share one
+inbox.
 **Gotchas:** 0008's default privileges hand `authenticated` full write on every new table —
 0013 must revoke back down (the RLS suite caught the ack policy exposing every column).
 `app.notify` is safe only while the `app` schema stays out of PostgREST's exposed list.

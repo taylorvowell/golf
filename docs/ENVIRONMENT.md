@@ -210,8 +210,21 @@ this is the second active project on Free, and it is the production database.
 | | |
 |---|---|
 | **Region-specific endpoint — the default 404s** | `QSTASH_URL=https://qstash-us-east-1.upstash.io`. The documented default `https://qstash.upstash.io` resolves to **eu-central-1** and returns `404 user not found in this region` for this account. Always use the URL from the credentials sheet, never the default from the docs. |
-| Verified | `GET {QSTASH_URL}/v2/schedules` → HTTP 200, 2026-08-22. |
+| Verified | `GET {QSTASH_URL}/v2/schedules` → HTTP 200, 2026-08-22. Delivered a real job to the Modal worker end-to-end 2026-08-23. |
 | CLI | `upstash` v0.3.0 is installed but **unauthenticated** (`upstash auth login`). Not required — the REST API works with the token. |
+
+## Modal — the analyzer worker host (D64)
+
+| | |
+|---|---|
+| Workspace / profile | `taylorvowell` (the CLI profile is correct — one of the two CLIs on this machine that is) |
+| App | **`swingsage-analyzer`** — deployed 2026-08-23 from `services/analyzer/service/modal_app.py` |
+| Endpoint | `https://taylorvowell--swingsage-ingress.modal.run` — `GET /healthz`, `POST /jobs` (QStash-signature-verified). The label is namespaced on purpose: a bare `label="ingress"` claims the workspace-global name `taylorvowell--ingress` |
+| Secret | **`swingsage-analyzer`**, exactly 4 keys: `QSTASH_CURRENT_SIGNING_KEY`, `QSTASH_NEXT_SIGNING_KEY`, `WORKER_PUBLIC_URL` (= the endpoint + `/jobs`, byte-exact), `SWINGSAGE_CLUB_WEIGHTS_URL` (signed URL from `models:publish`, 365-day TTL, minted 2026-08-23). `modal secret create --force` replaces the WHOLE secret — always re-supply all 4 |
+| Volume | **`swingsage-models`** — manifest assets under `/mnt/models/app/{models,runs}` + `/mnt/models/rtmlib`, plus the bench fixture at `/mnt/models/fixtures/pro_2.mp4`. Symlinked to the real asset paths at container start because the `SWINGSAGE_MODEL_ROOT`/`SWINGSAGE_RTMLIB_CACHE` overrides relocate only fetch-and-check, not the pipeline's loaders — found the hard way 2026-08-23 |
+| Runner | L4 GPU, 8 vCPU, 16 GB, `timeout=1800`, Modal retries ×2, `max_containers=4` (the spend guard), one job per container at a time |
+| **CLI needs `PYTHONUTF8=1`** | Same cp1252 fault as `modal skills install` (machine-faults table): `modal deploy`/`run` die mid-output without it. Prefix every Modal command |
+| Measured 2026-08-23 (pro_2, L4, CUDA-proven at 26.1 ms/frame pose) | variants-off **124.6s**; variants-on **676.6s** (the `variants` stage alone is 570s on Modal vCPUs). Capacity model in `docs/decisions/platform-data.md` |
 
 ## Google OAuth
 

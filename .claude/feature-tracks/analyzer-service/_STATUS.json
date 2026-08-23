@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "featureName": "analyzer-service",
-  "currentStep": "07",
+  "currentStep": null,
   "phase": "Platform Foundation",
-  "lastUpdated": "2026-08-19T20:17:33Z",
+  "lastUpdated": "2026-08-23T17:19:30Z",
   "steps": {
     "01": {
       "status": "complete",
@@ -36,18 +36,11 @@
       "note": "Every model asset the pipeline loads now has a committed sha256 and a stated source (service/models.py), and a container that cannot get one refuses to start. Four assets: MediaPipe landmarker + RTMW wholebody + RTMPose body from public URLs, and the PRIVATE club-head best.pt from SWINGSAGE_CLUB_WEIGHTS_URL - published through the media store the web app already owns (pnpm --filter web models:publish -> swing-models bucket, CONTENT-ADDRESSED key, prints hash + signed URL), so D26 holds: the worker still has no storage credential. Hash is verified on the temp file BEFORE the atomic rename, so a partial download can never become the loaded model; server.py runs the same check before binding; entrypoint.sh bootstraps then execs (SWINGSAGE_SKIP_MODEL_BOOTSTRAP=1 for the in-image test suite). Closed the step-03 open item (best.pt had no fetch path) and added the worker-side half of the never-default-the-club-detector rule: a stated-but-absent detector is now a SpecError at spec parse, not a failure after five minutes of pose. PROVEN: fresh container exits 1 naming all three assets and their sources; the MediaPipe manifest URL really fetched and hashed to the committed value in-container. Gates: analyzer 189/2s/1x (+24), web tsc+lint clean, vitest 206 (+14). Split from the original step-06 declaration - the deploy half is step 07 and stays BLOCKED on the worker-host HANDOFF row."
     },
     "07": {
-      "status": "not-started",
-      "note": "Declared, file not yet authored (lazy). The deploy half, split out of the original step 06: choose and provision the worker host (BLOCKED on the OPEN HANDOFF row - spend, Taylor), production QStash credentials, then the deployed loop re-proven end-to-end and the capacity model re-measured on the real host class against the p95<180s SLO."
+      "status": "complete",
+      "completedAt": "2026-08-23T17:19:30Z",
+      "note": "DEPLOYED AND PROVEN ON THE REAL RAILS. service/modal_app.py expresses the worker as Modal app swingsage-analyzer: a CPU ingress (stdlib ASGI, QStash-signature-verified against WORKER_PUBLIC_URL, full schema-2 spec validation at the door incl. the club-detector-exists rule) that SPAWNS an L4 GPU Runner (one job/container, max_containers=4, timeout 1800, Modal retries x2) - forced by Modal's ~150s web-request cap, so retry semantics moved: QStash retries cover only failure-to-accept; mid-run infra failures are Modal's retries; terminal silence settles via the step-05 heartbeat sweep. Model assets live on the swingsage-models volume, SYMLINKED to the real asset paths at container start - the SWINGSAGE_MODEL_ROOT/RTMLIB_CACHE overrides relocate only fetch-and-check and the pipeline's loaders never read them (first bench failed exactly there; rtmlib also silently re-downloaded an unpinned model past the manifest). E2E PASSED against production QStash (us-east-1) with the local web app behind a cloudflared tunnel: variants-on loop completed (460-frame clip, job done, view rev 2->3), then the harness PASS in production shape on a 1213-frame 240fps on-device recording ('PASS: job done, view ready at revision 2 (fps 240)'). MEASURED on L4, CUDA-proven (session providers checked, pose 26.1 ms/frame): variants-off 124.6s (p95<180s SLO MET with headroom), variants-on 676.6s (SLO unmeetable; a long clip exceeds the runner timeout) - so JOBS_CLUB_VARIANTS landed on dispatch (default TRUE - the variants-off production default stays Taylor's pending call, the knob is its mechanism). Also: QUEUE_E2E_TIMEOUT_MIN on the harness; swing-models storage bucket created in the dev Supabase project (models:publish's bucket never existed hosted); ingress logs every refusal. Two deploy-day traps found and documented: MSYS path-conversion mangles the in-container detector path (MSYS_NO_PATHCONV=1) and the Modal CLI needs PYTHONUTF8=1 on Windows. Gates: analyzer suite green (+12 gate/ASGI tests), web tsc+lint clean vitest 249 (+2), healthz 200, unsigned POST 401, modal app list deployed. Remaining project-level: web app's own production deploy is platform-foundation step 10; cold-start p95 not yet isolated."
     }
   },
-  "blockers": [
-    {
-      "step": "07",
-      "classification": "USER-ACTION-NEEDED",
-      "description": "Step 07 (deploy) needs the analyzer worker host chosen and provisioned - the OPEN HANDOFF row 'Decide the analyzer worker host' (strategic + spend, Taylor's call). Production QStash credentials are the same gate (vendor dashboard + spend). Every non-spend prerequisite closed with step 06; the HANDOFF row itself says 'Tell Claude which and the track continues'. The row also notes it is reasonable to park this until closer to launch, since variants-off-in-production recovers most of the latency without hardware.",
-      "requiredAction": "Taylor answers the HANDOFF row: pick the worker host (GPU host like Modal/RunPod/Fly GPU vs Railway-on-CPU), or explicitly park step 07 and move the spine to the next priority track. Then re-run /build.",
-      "loggedAt": "2026-08-19T20:17:33Z"
-    }
-  ],
+  "blockers": [],
   "skipped": []
 }

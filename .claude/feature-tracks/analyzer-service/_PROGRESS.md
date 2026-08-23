@@ -4,6 +4,64 @@ Append-only. One entry per completed step: timestamp, what changed, anything wor
 
 ---
 
+## 07 - Deploy to Modal
+**Completed:** 2026-08-23 17:19 UTC
+**Phase:** Platform Foundation
+**Summary:** The worker is deployed on Modal (app `swingsage-analyzer`, endpoint
+`https://taylorvowell--swingsage-ingress.modal.run`) and the loop is proven on the real
+rails: production QStash (us-east-1) delivered real jobs to the signature-verified ingress,
+which spawns an L4 GPU Runner running the unchanged `jobrun` pipeline; artifacts and events
+came back through the local web app behind a cloudflared tunnel; `queue:e2e` **PASSED** in
+production shape on a 1213-frame 240fps on-device recording, and a variants-on loop also ran
+to `done` (view revision advanced) proving the long path. Capacity re-measured on the real
+host, CUDA-proven (26.1 ms/frame pose): **variants-off 124.6s — the p95<180s SLO is met with
+headroom; variants-on 676.6s — unmeetable**, so `JOBS_CLUB_VARIANTS` landed on dispatch
+(default TRUE; flipping production to off stays Taylor's pending call in the speed doc).
+Gates: analyzer suite green (+12), web tsc+lint+vitest 249 green, healthz 200, unsigned POST
+401, `modal app list` deployed.
+**Notes:** Modal's ~150s web-request cap forced the ingress/spawn split, and the retry story
+moved with it (QStash covers accept-failures; Modal retries mid-run; step-05 heartbeat sweep
+settles terminal silence) — full taxonomy in `docs/decisions/platform-data.md`. Three
+things learned the hard way, all now documented: the `SWINGSAGE_MODEL_ROOT`/`RTMLIB_CACHE`
+overrides relocate only fetch-and-check while the pipeline's loaders read the real paths
+(fixed by symlinking the volume; the override-only shape passed preflight then couldn't load
+a model, and rtmlib quietly re-downloaded an unpinned model past the manifest); Git Bash's
+MSYS path conversion mangles the in-container detector path inside the spec
+(`MSYS_NO_PATHCONV=1`); the Modal CLI needs `PYTHONUTF8=1` on this machine. Also created the
+`swing-models` storage bucket in the dev Supabase project — `models:publish` had only ever
+been proven against the local driver. Cold-start p95 is not yet isolated (flagged in the
+capacity entry); the web app's own production deploy is platform-foundation step 10.
+
+---
+
+## 07 - Deploy to Modal — UNBLOCKED (no step work yet)
+**Unblocked:** 2026-08-22 20:49 UTC
+**Phase:** Platform Foundation
+**Summary:** The `USER-ACTION-NEEDED` blocker that has held step 07 since 2026-08-19 is cleared.
+The worker host question is answered — **Modal** (D64) — and every credential the step was
+waiting on now exists and has been verified by calling the vendor, not by reading a doc.
+**Notes:** No step-07 work has been done; the file is still unauthored. What changed is only
+that nothing external is missing any more. Verified 2026-08-22:
+- **Modal** — CLI authenticated, profile `taylorvowell`.
+- **QStash production** — token + both signing keys live. **Endpoint is region-specific:**
+  `https://qstash-us-east-1.upstash.io`. The documented default `qstash.upstash.io` resolves to
+  eu-central-1 and returns `404 user not found in this region` for this account. `GET /v2/schedules`
+  against the correct URL returns 200.
+- **Supabase production** — `swingsage-prod` (`nprxxjeavdlsqthnofof`, us-east-1), `ACTIVE_HEALTHY`,
+  schema empty (0 users, no `public` tables). Migrations can be applied over the Supabase **MCP**
+  with no DB password; the `supabase` **CLI** is logged into a different account and must not be used.
+- **R2** — `swing-source`, `swing-artifacts`, `swing-models` created (location hint `enam`, matching
+  the DB region). Two token tiers exist: object-scoped keys for the runtime driver, admin keys for
+  bucket management. An object-tier token 403s on `ListBuckets`/`CreateBucket`.
+- **Vercel** — project `golf` under team `taylorvowells-projects`, repo linked, 16 Supabase env vars
+  injected. A bare `vercel` command outside this repo targets the WRONG account.
+
+Remaining for step 07 is entirely Claude's: author the file, deploy the worker to Modal, re-prove
+the loop end-to-end on the real host class, and re-measure the capacity model against the
+p95 < 180s SLO — which step 05 measured as unmet on a single CPU worker (~4.5–6.8 min/job).
+
+---
+
 ## 06 - Model Assets and Container Bootstrap
 **Completed:** 2026-08-18 17:05 UTC
 **Phase:** Platform Foundation

@@ -258,6 +258,64 @@ locally: enqueue with the worker process DOWN — after QStash's 3 retries the f
 (`/api/internal/jobs/<id>/failure`) settles the job `failed` with the `dlqId` in its log; if
 it never fires, the pending-timeout sweep settles it on the next poll instead.
 
+### The deployed worker — Modal (production host, D64)
+
+The same loop with production QStash and the worker on Modal (`service/modal_app.py`,
+analyzer-service step 07). **Always prefix Modal CLI commands with `PYTHONUTF8=1`** — without
+it the CLI dies mid-output on the Windows cp1252 codec (the `modal skills` fault in
+ENVIRONMENT.md, same cause). All commands from the repo root, venv interpreter:
+
+```bash
+# Deploy (or redeploy after any service/swingsage change — the image rebuilds from the
+# Dockerfile with the repo .dockerignore rules; ~2-4 min when layers are cached)
+PYTHONUTF8=1 services/analyzer/.venv/Scripts/python.exe -m modal deploy services/analyzer/service/modal_app.py
+
+# One-time (and after a club-detector retrain): populate the model volume from the manifest
+PYTHONUTF8=1 services/analyzer/.venv/Scripts/python.exe -m modal run services/analyzer/service/modal_app.py::fetch_models
+
+# Capacity bench on the real host — refuses to run if CUDA silently fell back to CPU
+PYTHONUTF8=1 services/analyzer/.venv/Scripts/python.exe -m modal run services/analyzer/service/modal_app.py::bench
+```
+
+The app is `swingsage-analyzer`; the endpoint is
+`https://taylorvowell--swingsage-ingress.modal.run` (`/healthz`, `POST /jobs`). Everything it
+needs is in the **Modal secret `swingsage-analyzer`** (4 keys): the two QStash signing keys,
+`WORKER_PUBLIC_URL` (must byte-match the web side's `WORKER_URL` — the standing signature
+trap), and `SWINGSAGE_CLUB_WEIGHTS_URL`. **Club-detector retrain refresh path:**
+`pnpm --filter web models:publish` (MEDIA_DRIVER=supabase) → update the hash in
+`service/models.py` and the URL in the secret (`modal secret create swingsage-analyzer
+--from-dotenv <file> --force` — all 4 keys, it replaces the whole secret) → `fetch_models` →
+redeploy. Model assets live on the `swingsage-models` volume, symlinked to the real asset
+paths at container start; weights are never image layers.
+
+Web-side env for the deployed worker (the queue block in `.env`, or Vercel env in
+production): `WORKER_URL=https://taylorvowell--swingsage-ingress.modal.run/jobs`,
+`WORKER_CLUB_DETECTOR=/mnt/models/app/runs/clubhead/weights/best.pt` (the in-container
+path), production `QSTASH_URL`/`QSTASH_TOKEN`, and an `APP_INTERNAL_BASE_URL` the worker can
+reach from the internet — **never localhost**.
+
+To e2e against the deployed worker while the web app still runs locally, tunnel it
+(cloudflared quick tunnel needs no account) and override per-invocation:
+
+```bash
+cloudflared tunnel --url http://127.0.0.1:3000   # prints https://<random>.trycloudflare.com
+MSYS_NO_PATHCONV=1 \
+QSTASH_URL=<prod url> QSTASH_TOKEN=<prod token> \
+WORKER_URL=https://taylorvowell--swingsage-ingress.modal.run/jobs \
+APP_INTERNAL_BASE_URL=https://<random>.trycloudflare.com \
+WORKER_CLUB_DETECTOR=/mnt/models/app/runs/clubhead/weights/best.pt \
+pnpm --filter web queue:e2e
+```
+
+`MSYS_NO_PATHCONV=1` is load-bearing from Git Bash: without it MSYS rewrites the
+`/mnt/...` detector path into `C:/Program Files/Git/mnt/...` inside the spec, and the
+worker refuses the job at the door (`delivery refused 400` in `modal app logs`).
+
+Retry semantics on Modal differ from the local worker by design: the delivery is acked at
+the door (Modal caps web requests at ~150s), so QStash retries cover only failure-to-accept;
+mid-run infra failures are retried by Modal itself, and a job that still dies is settled by
+the step-05 heartbeat sweep. `docs/decisions/platform-data.md` has the full taxonomy.
+
 ### Turning on-device dev clips into a session in the swing log
 
 The clip library on the S25+ (`/sdcard/Android/media/com.swingsage.spike/dev-clips`) holds long

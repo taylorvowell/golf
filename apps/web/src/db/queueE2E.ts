@@ -8,6 +8,7 @@ import { SOURCE_BUCKET, sourceKey } from "../lib/media/keys";
 import { getMediaStore } from "../lib/media/store";
 import { isPublished } from "../lib/media/publish";
 import { enqueueReanalysis } from "../lib/jobs/dispatch";
+import { envInt } from "../lib/jobs/policy";
 
 /**
  * The queue loop, end to end, against the REAL local stack — analyzer-service step 04's
@@ -27,7 +28,9 @@ import { enqueueReanalysis } from "../lib/jobs/dispatch";
  */
 
 const POLL_MS = 2000;
-const TIMEOUT_MS = 12 * 60 * 1000;
+// 12 min covers the local loop; a hosted worker adds cold start, and a variants-on job on
+// Modal runs ~11.3 min of pipeline alone — override per-invocation when e2e-ing the deploy.
+const TIMEOUT_MS = envInt("QUEUE_E2E_TIMEOUT_MIN", 12) * 60 * 1000;
 
 function fail(msg: string): never {
   console.error(`FAIL: ${msg}`);
