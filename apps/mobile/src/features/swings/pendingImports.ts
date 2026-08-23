@@ -156,7 +156,17 @@ async function extractThumb(localId: string, clipPath: string): Promise<void> {
     // midpoint falls in a long GOP yields a row with no picture for no good reason. It skips the
     // misses and returns what it got, so asking for three and taking the first is three chances
     // at the same cost per hit.
-    const frames = await HighSpeedCamera.clipThumbnails?.(
+    // NOT an optional call. `clipThumbnails?.()` on a module that does not expose it returns
+    // undefined silently, which is indistinguishable from "the clip had no frames" — and that is
+    // exactly what a row with no picture and no warning looks like. If the method is missing, say
+    // so.
+    if (typeof HighSpeedCamera?.clipThumbnails !== "function") {
+      throw new Error(
+        "the capture module has no clipThumbnails — the installed build predates it, so a " +
+          "native rebuild is needed (pnpm --filter mobile emu:native / phone:native)",
+      );
+    }
+    const frames = await HighSpeedCamera.clipThumbnails(
       clipPath.replace(/^file:\/\//, ""),
       3,
       THUMB_WIDTH,

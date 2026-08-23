@@ -1,12 +1,22 @@
-import { Text, View } from "react-native";
+import { useEffect, useRef } from "react";
+import { Animated, Easing, Pressable, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { ChevronDown } from "lucide-react-native";
+import type { SwingSummary } from "@swingsage/schema/contract";
 
-import { ScoreOrb, SwingTimelineList } from "../../design/system";
+import {
+  Collapse,
+  SCROLL_PRESS_DELAY_MS,
+  ScoreOrb,
+  SwingTimelineList,
+  formatDayTitle,
+} from "../../design/system";
 import { FONT_BODY } from "../../design/system/typography";
 import { useTheme } from "../../theme";
 import { SessionTags } from "./SessionTags";
 import { SessionThumb } from "./SessionThumb";
-import { sessionSwingItems } from "./sessionTimeline";
+import { pendingSwingItems, sessionSwingItems } from "./sessionTimeline";
+import type { PendingImport } from "./pendingImports";
 import { sessionStats, type SwingSession } from "./sessions";
 import { SessionTitle } from "./SessionTitle";
 
@@ -19,13 +29,39 @@ import { SessionTitle } from "./SessionTitle";
  */
 export function LatestSessionCard({
   session,
+  open,
+  onToggle,
   onOpenSwing,
+  onDeleteSwing,
+  pending = [],
+  removingId = null,
 }: {
   session: SwingSession;
+  /** Controlled by the log — every session on the log collapses, this one included (Taylor,
+   *  2026-08-22): a featured card that could not be shut was the one row you had to scroll past. */
+  open: boolean;
+  onToggle: () => void;
   onOpenSwing: (id: string) => void;
+  /** Raises the request — the confirmation lives on the log, which owns the network call. */
+  onDeleteSwing: (swing: SwingSummary, number: number) => void;
+  /** Imports still arriving into this session — drawn above the real swings, mid-pipeline. */
+  pending?: readonly PendingImport[];
+  /** The swing being deleted — it animates out of the list before it unmounts. */
+  removingId?: string | null;
 }) {
   const t = useTheme();
   const stats = sessionStats(session);
+
+  /** The chevron turns rather than swapping glyph — the older rows' control, unchanged. */
+  const turn = useRef(new Animated.Value(open ? 1 : 0)).current;
+  useEffect(() => {
+    Animated.timing(turn, {
+      toValue: open ? 1 : 0,
+      duration: 200,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [open, turn]);
 
   // The title IS the date now, so the meta line keeps only what the title doesn't say.
   const timeLine = new Date(session.start).toLocaleTimeString(undefined, {
@@ -33,7 +69,10 @@ export function LatestSessionCard({
     minute: "2-digit",
   });
 
-  const items = sessionSwingItems(session, onOpenSwing);
+  const items = [
+    ...pendingSwingItems(session, pending),
+    ...sessionSwingItems(session, onOpenSwing, onDeleteSwing, removingId),
+  ];
 
   return (
     <View
@@ -44,16 +83,32 @@ export function LatestSessionCard({
         backgroundColor: t.surface,
       }}
     >
-      {/* .session-head */}
-      <View
-        style={{
+      {/* .session-head — now the accordion's header, exactly as on the older rows. */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel={`${session.name ?? formatDayTitle(session.start)}, ${
+          session.swings.length
+        } swings`}
+        accessibilityHint={open ? "Hides the swings" : "Shows the swings in this session"}
+        onPress={onToggle}
+        unstable_pressDelay={SCROLL_PRESS_DELAY_MS}
+        style={({ pressed }) => ({
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "space-between",
           gap: 12,
-        }}
+          marginHorizontal: -8,
+          marginVertical: -6,
+          paddingHorizontal: 8,
+          paddingVertical: 6,
+          borderRadius: 10,
+          backgroundColor: pressed ? t.surface2 : "transparent",
+        })}
       >
-        <SessionThumb session={session} />
+        {/* The arriving import's own frame stands in until an analysed one exists, so a session
+            created seconds ago has a face rather than a grey square. */}
+        <SessionThumb session={session} pendingThumb={pending[0]?.thumbPath ?? null} />
         <View style={{ flex: 1, minWidth: 0 }}>
           <SessionTitle session={session} size={15} />
           {/* How it was filmed, then when — one line under the date. */}
@@ -74,7 +129,23 @@ export function LatestSessionCard({
         </View>
         {/* The session's average, in the same circle face as every other average. */}
         {stats.avg !== null && <ScoreOrb score={stats.avg} size={56} caption="Avg" />}
-      </View>
+        <Animated.View
+          style={{
+            transform: [
+              {
+                rotate: turn.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: ["0deg", "180deg"],
+                }),
+              },
+            ],
+          }}
+        >
+          <ChevronDown size={20} color={t.muted} strokeWidth={2.4} />
+        </Animated.View>
+      </Pressable>
+
+      <Collapse open={open} topGap={14}>
       {/* .session-progress — thumb + labels + line. */}
       {stats.avg !== null && (
         <View
@@ -82,7 +153,6 @@ export function LatestSessionCard({
             flexDirection: "row",
             alignItems: "center",
             gap: 12,
-            marginTop: 14,
           }}
         >
           <View style={{ flex: 1 }}>
@@ -129,6 +199,7 @@ export function LatestSessionCard({
       )}
       {/* .swing-stack-mini — the session's swings, newest first. */}
       <SwingTimelineList compact items={items} style={{ marginTop: 12 }} />
+      </Collapse>
     </View>
   );
 }

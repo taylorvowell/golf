@@ -1,8 +1,11 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { Animated, Easing, Pressable, Text, View } from "react-native";
 import { ChevronDown } from "lucide-react-native";
+import type { SwingSummary } from "@swingsage/schema/contract";
 
 import {
+  Collapse,
+  PendingDots,
   SCROLL_PRESS_DELAY_MS,
   ScoreOrb,
   SwingTimelineList,
@@ -14,7 +17,8 @@ import { SessionTags } from "./SessionTags";
 import { SessionThumb } from "./SessionThumb";
 import { sessionStats, type SwingSession } from "./sessions";
 import { SessionTitle } from "./SessionTitle";
-import { sessionSwingItems } from "./sessionTimeline";
+import { pendingSwingItems, sessionSwingItems } from "./sessionTimeline";
+import type { PendingImport } from "./pendingImports";
 
 /**
  * One past session on the log — a header that EXPANDS, never a link (Taylor).
@@ -26,14 +30,27 @@ import { sessionSwingItems } from "./sessionTimeline";
  */
 export function SessionRow({
   session,
+  open,
+  onToggle,
   onOpenSwing,
+  onDeleteSwing,
+  pending = [],
+  removingId = null,
 }: {
   session: SwingSession;
+  /** Controlled by the log — one accordion is open at a time, and any of them may be shut. */
+  open: boolean;
+  onToggle: () => void;
   onOpenSwing: (id: string) => void;
+  /** Raises the request — the confirmation lives on the log, which owns the network call. */
+  onDeleteSwing: (swing: SwingSummary, number: number) => void;
+  /** Imports still arriving into this session — drawn above the real swings, mid-pipeline. */
+  pending?: readonly PendingImport[];
+  /** The swing being deleted — it animates out of the list before it unmounts. */
+  removingId?: string | null;
 }) {
   const t = useTheme();
   const styles = useStyles();
-  const [open, setOpen] = useState(false);
   const stats = sessionStats(session);
   const time = new Date(session.start).toLocaleTimeString(undefined, {
     hour: "numeric",
@@ -41,17 +58,15 @@ export function SessionRow({
   });
 
   /** The chevron turns rather than swapping glyph — the same control in two states. */
-  const turn = useRef(new Animated.Value(0)).current;
-  const toggle = () => {
-    const next = !open;
-    setOpen(next);
+  const turn = useRef(new Animated.Value(open ? 1 : 0)).current;
+  useEffect(() => {
     Animated.timing(turn, {
-      toValue: next ? 1 : 0,
+      toValue: open ? 1 : 0,
       duration: 200,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
-  };
+  }, [open, turn]);
 
   return (
     <View style={styles.card}>
@@ -62,12 +77,16 @@ export function SessionRow({
         accessibilityLabel={`${session.name ?? formatDayTitle(session.start)}${
           stats.avg !== null ? `, average ${stats.avg}` : ""
         }, ${session.swings.length} swings`}
-        accessibilityHint={open ? "Hides the swings" : "Shows the swings in this session"}
-        onPress={toggle}
+        accessibilityHint={
+          open ? "Hides the swings" : "Shows the swings in this session"
+        }
+        onPress={onToggle}
         unstable_pressDelay={SCROLL_PRESS_DELAY_MS}
-        style={({ pressed }) => [styles.head, pressed && styles.pressed]}
+        style={styles.head}
       >
-        <SessionThumb session={session} />
+        {/* The arriving import's own frame stands in until an analysed one exists, so a session
+            created seconds ago has a face rather than a grey square. */}
+        <SessionThumb session={session} pendingThumb={pending[0]?.thumbPath ?? null} />
         <View style={{ flex: 1, minWidth: 0 }}>
           <SessionTitle session={session} size={13} />
           {/* What kind of session, how it was filmed, then when — one line under the date. */}
@@ -76,7 +95,11 @@ export function SessionRow({
             <Text style={styles.meta}>{time}</Text>
           </View>
         </View>
-        {stats.avg !== null ? (
+        {pending.length > 0 && stats.avg === null ? (
+          // A session that is nothing BUT arrivals has no average to show yet, and "Not scored"
+          // would be a verdict on swings that have not been analysed.
+          <PendingDots color={t.aqua} size={6} />
+        ) : stats.avg !== null ? (
           <ScoreOrb score={stats.avg} size={56} caption="Avg" />
         ) : (
           <Text style={styles.notScored}>Not scored</Text>
@@ -97,34 +120,34 @@ export function SessionRow({
         </Animated.View>
       </Pressable>
 
-      {open ? (
-        <SwingTimelineList
-          compact
-          items={sessionSwingItems(session, onOpenSwing)}
-          style={{ marginTop: 12 }}
-        />
-      ) : null}
+      <Collapse open={open} topGap={0}>
+        <View style={styles.body}>
+          <SwingTimelineList
+            compact
+            items={[
+              ...pendingSwingItems(session, pending),
+              ...sessionSwingItems(
+                session,
+                onOpenSwing,
+                onDeleteSwing,
+                removingId,
+              ),
+            ]}
+          />
+        </View>
+      </Collapse>
     </View>
   );
 }
 
 const useStyles = themedStyles((t) => ({
-  card: { padding: 16, borderRadius: 14, backgroundColor: t.surface },
-  // Negative margin + matching padding: the pressed fill gets breathing room around the row's
-  // content without moving anything — the box the golfer sees is unchanged.
-  head: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    marginHorizontal: -8,
-    marginVertical: -6,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 10,
-  },
+  // The card holds no padding of its own — the header owns it, so the header's box IS the card.
+  // No pressed fill: the accordion's own movement is the feedback here (Taylor, 2026-08-22).
+  card: { borderRadius: 14, backgroundColor: t.surface, overflow: "hidden" },
+  head: { flexDirection: "row", alignItems: "center", gap: 12, padding: 16 },
+  // The card's padding, on the side the header cannot reach.
+  body: { paddingHorizontal: 16, paddingBottom: 16 },
   metaRow: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 5 },
   meta: { color: t.textSoft, fontFamily: FONT_BODY.regular, fontSize: 13 },
   notScored: { color: t.muted2, fontFamily: FONT_BODY.bold, fontSize: 12 },
-  // Pressed is one step up the surface ramp — a fill, never opacity (ListRow's rule).
-  pressed: { backgroundColor: t.surface2 },
 }));
