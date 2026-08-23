@@ -151,19 +151,27 @@ async function extractThumb(localId: string, clipPath: string): Promise<void> {
     const { default: HighSpeedCamera } = await import(
       "../../../modules/high-speed-camera/src"
     );
+    // THREE samples, not one. The extractor asks for the frame nearest a sync point and returns
+    // nothing when there is none close enough — one request is one chance, and a clip whose
+    // midpoint falls in a long GOP yields a row with no picture for no good reason. It skips the
+    // misses and returns what it got, so asking for three and taking the first is three chances
+    // at the same cost per hit.
     const frames = await HighSpeedCamera.clipThumbnails?.(
       clipPath.replace(/^file:\/\//, ""),
-      1,
+      3,
       THUMB_WIDTH,
     );
+    if (__DEV__) console.log("[import] thumbnail frames", clipPath, JSON.stringify(frames));
     const path = frames?.[0]?.path;
     const current = pending.get(localId);
     // The run may have finished and been dropped while the frame was being pulled.
     if (!path || !current) return;
     pending.set(localId, { ...current, thumbPath: path });
     publish();
-  } catch {
-    // No picture: the row keeps its ghost, which is the honest "nothing to show yet".
+  } catch (err) {
+    // No picture: the row keeps its ghost, which is the honest "nothing to show yet". Loud in
+    // dev, because a silently-swallowed extractor is exactly how this looked "not implemented".
+    if (__DEV__) console.warn("[import] thumbnail extraction failed", clipPath, err);
   }
 }
 
