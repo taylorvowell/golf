@@ -31,25 +31,62 @@ machine-level faults that have already cost time.
 | Last known address | `10.0.1.123:39593` (2026-08-12; was .125 the day before — the IP moves too, just rarely). **The port changes on every reboot** — the IP usually does not. |
 | Bluetooth shutter remote | Taylor owns an **Autumn tech Bluetooth shutter button** (camera-remote style). Pairs as a Bluetooth HID keyboard and sends volume-key presses; the session screen claims those keys via `modules/shutter-remote` so a press starts/stops recording. The phone's own volume rocker triggers the same path, and `adb shell input keyevent 24` simulates a press for testing. |
 
-**Connecting.** Pairing survives reboots, so this is normally one command:
+**Connecting is a COMMAND, never an ask** (Taylor, 2026-08-22 — *"ive never had to give you the
+debug shit before just find it"*). Wireless debugging picks a new random port every time it is
+toggled, and this file used to send someone to read it off the phone. It is discoverable from this
+PC:
 
 ```bash
-adb connect 10.0.1.123:PORT      # PORT read off the phone; IP is usually stable
+node scripts/adb-phone.mjs       # already-connected → cached port → mDNS → port sweep
 adb devices -l                   # must say `device`, not `unauthorized`
 ```
 
-Read `IP:PORT` off *Developer options → Wireless debugging* — the number on the **main** screen,
-not the pairing dialog's (that one is single-use and disappears).
+The rungs, cheapest first: whatever `adb devices` already lists; the last port that worked
+(`.adb-phone.json`, gitignored — a port survives until wireless debugging is toggled, so it is
+usually still live after a PC reboot); `adb mdns services`; then a TCP sweep of **30000–50000** on
+every 10.x neighbour in the ARP table, which takes about twenty seconds and has never failed.
+`scripts/env-probe.mjs` runs the two cheap rungs at session start, so a phone that was connected
+yesterday is simply connected again.
 
-**Try `adb mdns services` first.** On 2026-08-11 it returned nothing (along with a `/24` ping sweep
-and a 5555/5037 port scan), but on 2026-08-20 it resolved the phone (`adb-R3CY10EZ19E-…_adb-tls-connect._tcp
-10.0.1.123:42323`) and the connection came up without reading anything off the screen — so it works
-at least sometimes. If mdns is silent and the probe says the phone is not connected, the fallback
-is still someone reading the two numbers off *Developer options → Wireless debugging*.
+**mDNS is unreliable on this device and is not the answer.** It resolved the phone on 2026-08-20
+and returned nothing on 2026-08-11 and 2026-08-22 with wireless debugging demonstrably on. The
+sweep is what makes the finder deterministic. Measured 2026-08-22: phone at `10.0.1.123`, port
+`33787`, found by sweep in ~20s after mDNS came back empty.
 
 ---
 
 ## Machine-level faults
+
+### Two CLIs are logged into the WRONG account
+
+Taylor has two identities on this machine, and three CLIs disagree about which is current:
+
+| CLI | Account it uses | Correct? |
+|---|---|---|
+| `vercel` | `summittape` / team `summit-78555d07` by default | **No** — fixed for this repo by `.vercel/project.json`; outside it, pass `--scope taylorvowells-projects` |
+| `supabase` | **summittape** — `supabase projects list` shows `summittape-staging` (org `dtkcusaoawffmcalbnwd`) | **No.** A `supabase db push` from this repo would target the wrong account. Use the Supabase **MCP** instead, which is correctly on taylorvowell's org. |
+| `eas` / `modal` | `taylorvowell@gmail.com` | Yes |
+
+### `gh` CLI cannot authenticate — and a stale env var shadows the fix
+
+Found 2026-08-22. **Both** credential sources are invalid, and they fail independently:
+
+```
+X Failed to log in to github.com using token (GITHUB_TOKEN) — the token in GITHUB_TOKEN is invalid.
+X Failed to log in to github.com account taylorvowell (keyring) — the token in keyring is invalid.
+```
+
+**The trap is precedence:** `gh` prefers `GITHUB_TOKEN` over the keyring, so `gh auth login` on its
+own re-authenticates the keyring and then keeps failing, because the bad env var still wins. Unset
+it first, in a **new** shell, then log in:
+
+```
+setx GITHUB_TOKEN ""      # then open a NEW terminal — setx does not affect the current one
+gh auth login -h github.com
+```
+
+Blocks `gh` PRs/issues/`gh api` only. Vercel's GitHub connection is server-side and unaffected;
+`git` over HTTPS to `https://github.com/taylorvowell/golf.git` is unaffected.
 
 | Fault | Status |
 |---|---|
@@ -63,6 +100,7 @@ is still someone reading the two numbers off *Developer options → Wireless deb
 | **A long-running Metro can silently HANG** — found 2026-08-17: node was still listening on `0.0.0.0:8081`, connections were ACCEPTED, but nothing was ever served — even `curl 127.0.0.1:8081/status` timed out with 0 bytes, and the phone's dev client showed `ECONNREFUSED` (a full accept-queue sends RSTs), which reads exactly like a firewall problem. It is not one: Node's allow-rules were verified fine and no block rules exist. | Diagnose by curling `/status` on **loopback first** — if loopback hangs, it is Metro, not the network. Kill the pid (`netstat -ano \| grep :8081`) and restart (`pnpm --filter mobile start`); the phone reached `10.0.1.107:8081` immediately once Metro was fresh. Rule out the qstash squatter (next row) and ProtonVPN (above) with the same netstat first. |
 | **`expo run:android --device` matches Expo's own device names, not adb serials** — `--device adb-…_adb-tls-connect._tcp` and `--device SM-S936U1` both fail with *"Could not find device with name"*; the name that works for the S25+ is the underscore model form **`SM_S936U1`**. | Use `npx expo run:android --device SM_S936U1` (wireless adb must already be connected — mDNS: `adb mdns services`). Setting `ANDROID_SERIAL` alone does not help device selection. |
 | **`expo run:android --device` leaves an arm64-only `app-debug.apk` that CRASHES the emulator on open** — building for the S25+ builds only that device's ABI (`arm64-v8a`), overwriting the universal debug APK. The x86_64 emulator still *installs* it (its abilist advertises arm64 translation) but SoLoader dies on launch with `SoLoaderDSONotFoundError: couldn't find DSO to load: libreactnative.so`, so "the app keeps closing" on the emulator after any phone-targeted build. Found 2026-08-18. | Rebuild multi-ABI before an emulator deploy: `cd apps/mobile/android && unset ANDROID_SDK_ROOT && ./gradlew assembleDebug -PreactNativeArchitectures=arm64-v8a,x86_64` (gradle.properties' four-ABI default is overridden by expo's `-P` flag, not edited). Check with `aapt list …/app-debug.apk \| grep ^lib/`. A clean uninstall does NOT fix it — the APK itself lacks x86_64 libs. |
+| **The AVD can come up with NO adb ports and never register** — `qemu-system-x86_64.exe` runs, the window paints, every startup check passes, and `adb devices` stays empty forever because 5554/5555 are never bound (`netstat -ano | grep 127.0.0.1:555` returns nothing). Seen 2026-08-23 after force-killing qemu mid-write; `-ports 5554,5555`, `-wipe-data` and a full adb kill-server/start-server cycle all failed to recover it, and the log stalls right after `Critical: Failed to load opengl32sw`. | Do NOT `taskkill //F` qemu — close the emulator window or `adb -s emulator-5554 emu kill`, which lets it flush. Once wedged, retrying the same launch is wasted time: the recovery is deleting `~/.android/avd/swingsage.avd/*.lock` and the corrupt `quickbootChoice.ini`, or recreating the AVD from `avdmanager`. The PHONE is unaffected and stays the faster route to an interactive check. |
 | **`qstash.exe` can squat Metro's port 8081** — found 2026-08-13 bound to `127.0.0.1:8081` after Metro exited, so the dev client sat on "Loading from …:8081" forever and `curl 127.0.0.1:8081/status` answered 404 (`Cannot GET /`). Explained same day: the QStash dev server's **log server** listens on 8081 (main server 8080), and killing the `npx @upstash/qstash-cli dev` wrapper **orphans the `qstash.exe` child**, which keeps both ports. | Diagnose with `netstat -ano \| grep :8081` and `tasklist //FI "PID eq <pid>"` — if the listener is not `node`, Metro is not running no matter what the port probe says. Restarting Metro (`npx expo start --dev-client`) binds the wildcard address and coexists with the loopback-only squatter — but **coexistence only saves the LAN path, never the emulator**. A specific `127.0.0.1` bind beats a wildcard bind for loopback traffic, and the emulator reaches the host through loopback both ways (`adb reverse` → `localhost`, and `10.0.2.2`), so it keeps hitting QStash and shows a WHITE SCREEN. Confirmed 2026-08-18: `curl 127.0.0.1:8081/status` → 404 `Cannot GET /status` while `curl 10.0.1.107:8081/status` → 200 `packager-status:running`, same moment, same Metro. Fix without killing the queue — relaunch the dev client on the LAN URL: `adb -s emulator-5554 shell am start -a android.intent.action.VIEW -d "swingsage://expo-development-client/?url=http%3A%2F%2F10.0.1.107%3A8081"` (`MSYS_NO_PATHCONV=1` first, or Git Bash rewrites the path). After stopping the QStash dev server, `tasklist //FI "IMAGENAME eq qstash.exe"` and `taskkill //PID <pid> //F` the survivor — the wrapper's death does not take the child with it. |
 | **Metro moved to :8082, and one command now guarantees a device loads** — three unrelated faults produced the same white screen (a hung Metro that still accepts connections, a freshly `adb install`ed dev client with no server URL sitting on `DevLauncherActivity`, and the qstash squatter on loopback:8081). Diagnosing between them by hand cost time twice on 2026-08-18. | `pnpm --filter mobile phone` (add `:native` after a Kotlin/`app.json` change; `emu`/`emu:native` for the AVD). It health-checks Metro by the BODY of `/status`, restarts it if it listens without answering, optionally rebuilds multi-ABI and installs, launches the dev client at the LAN URL, and fails loudly if the app is still on `DevLauncherActivity`. Do not go back to raw `adb install` — that is the step that leaves the dev client with no server URL. |
 | **The S25+ runs THREE-BUTTON navigation** (`adb shell settings get secure navigation_mode` → `0`; `2` is gesture) — so Android draws its own translucent **contrast scrim** behind the nav bar, which reads as "the app has a grey bar at the bottom" even though the theme sets `android:navigationBarColor` to transparent and the app is edge-to-edge. The desktop emulator defaults to gesture navigation and therefore never shows it, so this is invisible on the AVD. | `apps/mobile/plugins/withTransparentNavBar.js` sets `android:enforceNavigationBarContrast=false` (API 29+), which is the only switch for that scrim. It is native config: `npx expo prebuild -p android --clean` then `pnpm --filter mobile phone:native`. Under gesture navigation it changes nothing, because there is no scrim to remove. |
@@ -92,7 +130,10 @@ number.
 | URL | `https://xjcjqwcmwoouxczrrvar.supabase.co` |
 | Publishable key | `sb_publishable_y76ZD3rEE38_yt-gW34Z6Q_aZ6a3d4q` — public by design |
 | Secret key | `apps/web/.env` only. Never in a client bundle, never printed. |
-| One project, not three | D10 — dev/staging/prod separation is money and belongs to step 10. |
+| Org | `vercel_icfg_zFmUzg8N8tvg3nrzfsm3sOE5` ("taylorvowell's projects") — **a Vercel-managed org**, created through the Vercel Marketplace integration, not directly on supabase.com |
+| Org plan | **Free.** Verified 2026-08-22: a new project in this org costs **$0/mo**. |
+| Billing path | **Through Vercel, not Supabase.** A Vercel-managed org is upgraded from the Vercel dashboard's integration page — going to supabase.com billing is the wrong door. |
+| Other projects in the org | `jars-application` (`mwicmqgvwcevoyoikunc`) + `jars-spac` (`ezwsyjvilpcxnantpujj`), both `INACTIVE`/paused, us-east-1, PG15 — a different product, **slated for deletion** (see `HANDOFF.md`; the MCP has no project-delete, so it is a dashboard action). **Paused projects do not count against Free's 2-active-project cap**, so `golf-swing` + `swingsage-prod` are the two active slots either way. The *preview* project is the third and is what forces Pro. |
 | **Hosted schema LAGS local** | Hosted migrations stop at `0009a` (2026-08-20): 0010–0014 (queue runner/heartbeat, roles/profiles/goals, notifications, profile trim) exist only on the local Docker Postgres, which is the dev database of record. `golfer_profiles` does not exist hosted. Sync belongs to platform-foundation step 10. |
 
 **Which auth providers are actually on** is a dashboard setting, so read it from the project rather
@@ -103,10 +144,74 @@ curl -s https://xjcjqwcmwoouxczrrvar.supabase.co/auth/v1/settings \
      -H "apikey: sb_publishable_y76ZD3rEE38_yt-gW34Z6Q_aZ6a3d4q"
 ```
 
-As of 2026-08-11: `google: true`, `email: true`, `phone: false`, `apple: false`. Phone needs a paid
-SMS provider plus A2P 10DLC registration, and a **hosted** project has no test-number setting — the
-free phone path requires a local `supabase start` stack (D31). There is no `supabase/` directory in
+Re-verified **2026-08-22**: `google: true`, `email: true`, `phone: true`, `apple: false`, and
+`sms_provider: "twilio_verify"` — Taylor wired **Twilio Verify** in the dashboard on 2026-08-22.
+Read `sms_provider` together with `phone`: the field defaults to the string `twilio` even when
+nothing is configured, so `twilio` + `phone: false` means *unset*, and only `twilio_verify` +
+`phone: true` means live. `swingsage-prod` still reads the unset pair and needs the same setup.
+**Twilio Verify, not Programmable SMS, is deliberate:** Twilio exempts verification-only traffic
+from A2P 10DLC registration and includes Fraud Guard against SMS pumping, which is why the
+registration hand-off closed as not-applicable. The trade is ~$0.058/verification vs ~$0.008 for a
+raw SMS, and Twilio — not Supabase — owns the message body and code length, so there is no template
+to edit on our side.
+
+**A hosted project DOES have test phone numbers, and this doc said the opposite until 2026-08-22.**
+Auth → Sign In / Providers → Phone → **Test OTP** maps a fixed number to a fixed code: Supabase
+short-circuits both calls, so no SMS is sent, nothing is charged, and the code never expires.
+Configured on `golf-swing` for Taylor's mobile (Taylor, 2026-08-22). The zero-cost development path
+therefore needs no `supabase start` stack, which is what D31 assumed it required. **The number and
+its code are deliberately not written here** — together they are a standing sign-in for that
+project, and this file is committed. They live in the dashboard, and the number alone is in
+`apps/web/.env` as `AUTH_ALLOWED_PHONES`, which is gitignored. There is no `supabase/` directory in
 the repo yet; the CLI is installed (2.104.0).
+
+## Supabase — project `swingsage-prod` (production)
+
+Created 2026-08-22 via the MCP API, in the same Vercel-managed org as `golf-swing`. **$0/mo** —
+this is the second active project on Free, and it is the production database.
+
+| | |
+|---|---|
+| Ref | `nprxxjeavdlsqthnofof` |
+| URL | `https://nprxxjeavdlsqthnofof.supabase.co` |
+| Region | **`us-east-1`, chosen deliberately** — it is the same AWS region as Vercel's default function region `iad1`, so the API and the database co-locate with no `vercel.json` override. Do **not** "fix" this to match `golf-swing`'s `us-west-2`; dev-region parity buys nothing and cross-continent production round trips cost every request. |
+| Publishable key | `sb_publishable_2xtD_fKXE5MnVw6t0OcO0w_UjNOOjFJ` — public by design |
+| Secret key | Not readable over the API. Taylor pastes it into `production-credentials.local.txt`. |
+| DB password | **Not set to anything known.** The project was created without one, so it must be reset from Project Settings → Database before the direct connection string works. |
+| Schema | **Empty, verified 2026-08-22** — `auth` schema present with **0 users**, and **no `public` tables at all**. Migrations are `platform-foundation` step 10. |
+| Migrations without a password | `mcp__supabase__apply_migration` works against this project over the management API, so the DB password is **not** needed to apply schema. It *is* needed for `APP_DATABASE_URL`, whose `swingsage_app` non-superuser role `db:migrate` creates. |
+| Auth providers | None configured yet. Google needs the release-keystore SHA-1, which does not exist until the first EAS build. |
+
+## Vercel
+
+| | |
+|---|---|
+| Project | **`golf`** — `https://golf-pi-eight.vercel.app`, Node 24.x, GitHub-connected. Created 2026-08-22. |
+| Team | **`taylorvowells-projects`** ("taylorvowell's projects") — the same account the Supabase org `vercel_icfg_zFmUzg8N8tvg3nrzfsm3sOE5` belongs to. |
+| Env vars | **16 Supabase vars, injected by the Vercel↔Supabase integration** (connected 2026-08-22, Preview + Production, marked Sensitive so values are write-only): `SUPABASE_URL`, `SUPABASE_SECRET_KEY`, `SUPABASE_ANON_KEY`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_JWT_SECRET`, the three `NEXT_PUBLIC_SUPABASE_*`, and `POSTGRES_{URL,URL_NON_POOLING,PRISMA_URL,HOST,USER,PASSWORD,DATABASE}`. **`SUPABASE_SECRET_KEY` happens to match the name the code already uses.** Still absent and Claude's to add: `DATABASE_URL`, `APP_DATABASE_URL`, `SUPABASE_JWKS_URL`, `QSTASH_*`, `WORKER_*`, `REPLICATE_API_TOKEN`, `AUTH_ALLOWED_EMAILS`. |
+| Preview shares the production DB | The integration was connected for **Production + Preview** with no Supabase branching (branching is Pro). A preview deploy therefore writes to `swingsage-prod`. Acceptable while there is no data; the fix is the third Supabase project, which is also the Pro trigger. |
+| Plan | Hobby (free). Upgrade to Pro before the store listing goes live — see `decisions/platform-data.md`. |
+| **CLI defaults to the WRONG team** | `vercel whoami` returns **`summittape`**, and a bare `vercel project ls` fetches from team **`summit-78555d07`** (`summittape`, `command-center`, `ridgelinewells`, `web` — a different business). SwingSage is invisible from that scope. **Every Vercel command must pass `--scope taylorvowells-projects`**, or be run after `vercel link` writes `.vercel/project.json`. A deploy run without it lands in the wrong account. |
+| Repo link | **Linked 2026-08-22.** `.vercel/project.json` → `prj_NQzYmaeByZTGhUFiLQ49HQD2EskB` / `team_unoTKDmjIrRA4ZpSmd1G7z17`. Any Vercel command run from the repo root now resolves to `taylorvowells-projects/golf` with no `--scope` flag; the wrong-team trap above only bites outside this directory. Linking also wrote a root `.env.local` holding a `VERCEL_OIDC_TOKEN` — gitignored, and **not** the app's config, which stays in `apps/web/.env`. |
+
+## Cloudflare — account `Taylorvowell@gmail.com's Account`
+
+| | |
+|---|---|
+| Account ID | `29a846d28a4d7875137080db6e9a4680` |
+| Domain | `swingsage.io`, with CNAMEs pointing at Vercel (Taylor, 2026-08-22) |
+| R2 buckets | **Created 2026-08-22**, location hint `enam` to match `swingsage-prod` in us-east-1: `swing-source`, `swing-artifacts`, `swing-models` — the exact names in `apps/web/src/lib/media/keys.ts`. |
+| **Two token tiers, and the difference bites** | An **Object Read & Write** R2 token is S3-only and bucket-scoped: it *cannot* `ListBuckets` or `CreateBucket` and returns `403 AccessDenied` on both. Bucket management needs **Admin Read & Write**. Both are in `production-credentials.local.txt` (`R2_TOKEN`/`R2_ACCESS_KEY_ID` object-tier, `R2_ADMIN_*` admin-tier). Use the object-tier keys for the app's runtime driver; the admin keys are provisioning-only. |
+| **An empty zone list means nothing** | `GET /client/v4/zones` with **either** R2 token returns `success: true` with `[]`, because an R2-scoped token carries no `Zone:Read`. That is *not* evidence the domain is missing — it was read that way once. To actually inspect DNS, a token with `Zone:Read` is required, and none is issued (deliberately — nothing in the build needs DNS-edit rights). |
+| R2 needs no DNS | Media is private buckets + short-lived signed URLs on `<account>.r2.cloudflarestorage.com`. A `media.` custom domain is a later CDN optimisation, never a prerequisite. |
+
+## Upstash QStash
+
+| | |
+|---|---|
+| **Region-specific endpoint — the default 404s** | `QSTASH_URL=https://qstash-us-east-1.upstash.io`. The documented default `https://qstash.upstash.io` resolves to **eu-central-1** and returns `404 user not found in this region` for this account. Always use the URL from the credentials sheet, never the default from the docs. |
+| Verified | `GET {QSTASH_URL}/v2/schedules` → HTTP 200, 2026-08-22. |
+| CLI | `upstash` v0.3.0 is installed but **unauthenticated** (`upstash auth login`). Not required — the REST API works with the token. |
 
 ## Google OAuth
 
