@@ -491,7 +491,7 @@ export const notifications = pgTable("notifications", {
   kind: text("kind", {
     enum: [
       // golfer (§29 + D55 + D60 + D62)
-      "analysis_ready", "coach_request_approved", "coach_request_declined",
+      "analysis_ready", "analysis_failed", "coach_request_approved", "coach_request_declined",
       "swing_reviewed", "coach_comment", "coach_annotation", "coach_message",
       "coach_plan", "subscription_event", "goal_assigned", "goal_achieved",
       "goal_regressed", "lesson_sent", "conversation_reply", "review_answered",

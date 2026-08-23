@@ -1,0 +1,204 @@
+import { useEffect, useState } from "react";
+
+import { ANALYSIS_STAGES, getProcessing, subscribeProcessing } from "../session/processing";
+
+/**
+ * Imports that are still running, and which session each one will land in.
+ *
+ * **The toast is not enough** (Taylor, 2026-08-22). A toast is a moment; the log is the place the
+ * swing is going, and a golfer who uploads a clip and then looks at their log should see it
+ * arriving there — in the right session, with the stage it is on — rather than an unchanged
+ * screen and a notification that has already faded. If the import minted a session that has no
+ * swings yet, the log shows that session too: an empty card is the honest picture of "a session
+ * exists and its first swing is on its way".
+ *
+ * **Module-level, like `processing` itself, and for the same reason.** The log screen is not
+ * mounted for most of an import — the golfer picks a clip and goes to look at something else —
+ * so a hook that owned this would forget every run it started. This store subscribes to the
+ * pipeline directly and any screen can read it whenever it happens to be on.
+ *
+ * A successful run is dropped once `refreshSwings` has had a beat to land the real row, so the
+ * placeholder is replaced rather than blinking out and back in.
+ *
+ * **A FAILED run stays** (Taylor, 2026-08-22). It used to be dropped on the grounds that the toast
+ * had already said what happened — but a toast is gone in four seconds and the golfer is often
+ * not looking at the screen when an upload dies. The row is where they will look, so the row is
+ * what has to answer: it keeps the swing's place, swaps its picture for an error mark, and says
+ * the reason in the analyzer's own words. It leaves only when the golfer dismisses it, which also
+ * deletes the empty swing the failed run left on the server.
+ */
+
+export interface PendingImport {
+  localId: string;
+  /** Always known — `importSwing` resolves the session BEFORE it starts the run. */
+  sessionId: string;
+  /** Epoch ms, for the placeholder session's own start until a real row exists. */
+  startedAt: number;
+  /** The stage in a golfer's words, straight from the job row. Never derived from a clock. */
+  stage: string;
+  stageIndex: number;
+  /**
+   * The server's swing id, when ingest got far enough to mint one.
+   *
+   * A failed import usually leaves a real, empty swing row behind: `createCapture` succeeds and
+   * then the bytes do not land. The cleanup hook deletes it, so the golfer's log is not left
+   * holding a swing with no video in it.
+   */
+  swingId: string | null;
+  /**
+   * A frame pulled straight out of the picked file, as a local JPEG path — the row's picture
+   * while there is no analysed thumbnail to serve.
+   *
+   * Null until the extraction lands (a few hundred ms) and null forever if it fails, in which
+   * case the row keeps its breathing ghost. Taken from the MIDDLE of the clip, which for a
+   * swing video is the part with a golfer in it — the first frame is usually an empty mat and
+   * somebody's foot.
+   */
+  thumbPath: string | null;
+}
+
+const pending = new Map<string, PendingImport>();
+const listeners = new Set<() => void>();
+/** A new array identity per change — the hook's state, and what makes React re-render. */
+let snapshot: PendingImport[] = [];
+
+function publish(): void {
+  snapshot = [...pending.values()].sort((a, b) => a.startedAt - b.startedAt);
+  for (const listener of listeners) listener();
+}
+
+/** How long the placeholder outlives a successful run — one refresh's worth of grace. */
+const SETTLE_MS = 900;
+
+/**
+ * Start watching an import. Called by `importSwing` once the session is resolved, so the row can
+ * appear in the log before a single byte has been uploaded.
+ */
+export function trackImport(
+  localId: string,
+  sessionId: string,
+  startedAt: number,
+  /** The picked file, so the row can show a frame of it while the pipeline runs. */
+  clipPath?: string,
+): void {
+  if (pending.has(localId)) return;
+  pending.set(localId, {
+    localId,
+    sessionId,
+    startedAt,
+    stage: ANALYSIS_STAGES[0],
+    stageIndex: 0,
+    swingId: null,
+    thumbPath: null,
+  });
+  publish();
+
+  if (clipPath) void extractThumb(localId, clipPath);
+
+  const off = subscribeProcessing(localId, () => {
+    const run = getProcessing(localId);
+    if (!run) return;
+    if (run.phase === "done") {
+      off();
+      setTimeout(() => {
+        pending.delete(localId);
+        publish();
+      }, SETTLE_MS);
+      return;
+    }
+    const current = pending.get(localId);
+    if (!current) return;
+
+    if (run.phase === "failed") {
+      off();
+      pending.delete(localId);
+      publish();
+      // An upload that never landed leaves an empty swing behind — ingest mints the row before
+      // the bytes move. A swing with no video is not something to leave in a golfer's log, so it
+      // goes with the placeholder. A run that DID reach the analyzer is left alone: that swing
+      // has a video, and a failed analysis is never a reason to destroy footage.
+      if (!run.analysisStarted && run.swingId) onOrphan?.(run.swingId);
+      return;
+    }
+
+    if (current.stage === run.stage && current.stageIndex === run.stageIndex) return;
+    pending.set(localId, {
+      ...current,
+      stage: run.stage,
+      stageIndex: run.stageIndex,
+      swingId: run.swingId,
+    });
+    publish();
+  });
+}
+
+/**
+ * One frame out of the picked clip, for the row to show while it uploads.
+ *
+ * Best-effort in every direction: the native extractor is Android-only, the file may be in a
+ * container it cannot read, and none of that is worth telling a golfer about — the row simply
+ * keeps its ghost. `count: 1` samples the clip's midpoint, which is where a swing actually is.
+ *
+ * The path is passed WITHOUT its `file://` scheme: the extractor opens a `File`, and a URI
+ * reaches it as a filename that does not exist.
+ *
+ * The native module is imported HERE rather than at the top of the file. A top-level import
+ * resolves `requireNativeModule` for everything that transitively reaches this store — which is
+ * the whole swing log — so the log's tests would each have to mock a camera to render a list.
+ */
+async function extractThumb(localId: string, clipPath: string): Promise<void> {
+  try {
+    const { default: HighSpeedCamera } = await import(
+      "../../../modules/high-speed-camera/src"
+    );
+    const frames = await HighSpeedCamera.clipThumbnails?.(
+      clipPath.replace(/^file:\/\//, ""),
+      1,
+      THUMB_WIDTH,
+    );
+    const path = frames?.[0]?.path;
+    const current = pending.get(localId);
+    // The run may have finished and been dropped while the frame was being pulled.
+    if (!path || !current) return;
+    pending.set(localId, { ...current, thumbPath: path });
+    publish();
+  } catch {
+    // No picture: the row keeps its ghost, which is the honest "nothing to show yet".
+  }
+}
+
+/** Twice the row's 34pt box, so it stays sharp on a 3x screen without decoding a full frame. */
+const THUMB_WIDTH = 96;
+
+/**
+ * Where an orphaned swing goes to be cleaned up.
+ *
+ * A module-level hook rather than a parameter because the failure arrives on the PIPELINE's
+ * callback, not on anything a screen called — there is nobody to hand a deleter to at that
+ * moment. `App` installs it once.
+ */
+let onOrphan: ((swingId: string) => void) | null = null;
+
+export function setOrphanCleanup(fn: ((swingId: string) => void) | null): void {
+  onOrphan = fn;
+}
+
+/** Sign-out, and the tests' reset seam — the same rule `clearProcessing` follows. */
+export function clearPendingImports(): void {
+  pending.clear();
+  publish();
+}
+
+export function usePendingImports(): PendingImport[] {
+  const [items, setItems] = useState(snapshot);
+  useEffect(() => {
+    const listener = () => setItems(snapshot);
+    listeners.add(listener);
+    // The store may have moved between render and effect — read once on the way in.
+    listener();
+    return () => {
+      listeners.delete(listener);
+    };
+  }, []);
+  return items;
+}

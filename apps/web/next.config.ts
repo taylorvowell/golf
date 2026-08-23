@@ -29,6 +29,24 @@ const nextConfig: NextConfig = {
    * schema it came from. Next has to be told to transpile it like first-party code.
    */
   transpilePackages: ["@swingsage/schema"],
+  experimental: {
+    /**
+     * Swing clips are tens to hundreds of megabytes, and Next's default is 10 MB.
+     *
+     * The default does not reject an oversized body — it **buffers the first 10 MB and carries
+     * on**, so the upload answers 200, a truncated MP4 lands in the store, and the failure
+     * surfaces minutes later as `ffprobe` exiting 1 inside the analyzer. That is exactly how a
+     * phone import failed on 2026-08-22: two stored files, both 10 MiB to within a few hundred
+     * bytes, both unreadable.
+     *
+     * This only affects the LOCAL upload route (`swings/[id]/source`), which exists so the capture
+     * loop runs with no cloud account; with a signing driver the bytes never reach this server at
+     * all. `media-pipeline` replaces that route with resumable chunks and this ceiling stops
+     * mattering — until then the route also verifies `content-length` against what it received,
+     * so a truncation can never again be stored as if it were a whole video.
+     */
+    proxyClientMaxBodySize: "1gb",
+  },
 };
 
 export default nextConfig;

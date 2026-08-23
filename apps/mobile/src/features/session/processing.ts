@@ -39,6 +39,14 @@ export interface ProcessingState {
   viewId: string | null;
   /** Why it failed, in the analyzer's own words. Null unless `phase === "failed"`. */
   message: string | null;
+  /**
+   * Whether the clip actually reached the server and an analysis was started.
+   *
+   * It decides what a failure MEANS. False and the swing row is empty — the bytes never landed,
+   * there is nothing to watch, and the row is litter to be cleaned up. True and the golfer has a
+   * video on the server that simply has no analysis yet, which is theirs to keep.
+   */
+  analysisStarted: boolean;
 }
 
 /**
@@ -212,6 +220,7 @@ function blank(): ProcessingState {
     swingId: null,
     viewId: null,
     message: null,
+    analysisStarted: false,
   };
 }
 
@@ -256,6 +265,8 @@ async function run(localId: string, input: ProcessingInput): Promise<void> {
   } catch (err) {
     return fail(localId, state, err, "The upload landed but analysis wouldn't start.");
   }
+
+  state = { ...state, analysisStarted: true };
 
   if (!input.analyze || !("id" in job)) {
     // Nothing to wait for: the bytes are stored and no run was asked for. Done means done here,

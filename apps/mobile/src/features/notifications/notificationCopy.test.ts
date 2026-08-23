@@ -16,6 +16,7 @@ const DAY = 24 * HOUR;
  *  entry in the look map fails HERE as well as at the type level. */
 const ALL_KINDS: Notification["kind"][] = [
   "analysis_ready",
+  "analysis_failed",
   "coach_request_approved",
   "coach_request_declined",
   "swing_reviewed",

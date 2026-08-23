@@ -5,6 +5,7 @@ import { api } from "../../platform/client";
 import { calendarDate, createSession } from "../session/sessionApi";
 import type { CaptureView } from "../session/sessionState";
 import { startProcessing } from "../session/processing";
+import { trackImport } from "./pendingImports";
 import { primeSession } from "./useSessions";
 
 /**
@@ -144,6 +145,10 @@ export async function importSwing(input: {
   // than adopted afterwards — a swing that briefly has no session would group by time and jump
   // rows in the log as soon as the session arrived.
   const sessionId = await sessionForToday(input.sessions);
+
+  // Registered BEFORE the pipeline starts, so the log shows the swing arriving from the first
+  // frame of the upload rather than once the server has said something back.
+  trackImport(localId, sessionId, Date.now(), input.clip.uri);
 
   startProcessing(localId, {
     clip: {

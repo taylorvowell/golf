@@ -5,6 +5,9 @@ import { ApiClientError } from "../../platform/api";
 import { api } from "../../platform/client";
 import { reportUpgradeRequired, upgradeDetailOf } from "../../platform/VersionGate";
 import { supabase } from "../auth/supabase";
+import { setOrphanCleanup } from "./pendingImports";
+import { clearPendingImports } from "./pendingImports";
+import { dropSessionFromCache } from "./useSessions";
 
 /**
  * The golfer's swing log.
@@ -68,11 +71,17 @@ function notifyCacheChanged(): void {
  * next refresh as a bug. Throws on failure so the caller can say so.
  */
 export async function deleteSwing(id: string): Promise<void> {
-  await api.request<SwingDeletion>(`swings/${encodeURIComponent(id)}`, { method: "DELETE" });
+  const result = await api.request<SwingDeletion>(`swings/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
   if (lastGood) {
     lastGood = lastGood.filter((s) => s.id !== id);
     notifyCacheChanged();
   }
+  // Emptying a session deletes it, server-side — the id comes back so the cached log drops the
+  // row rather than drawing a session with nothing in it (Taylor, 2026-08-22). There is no
+  // session delete of its own; this is the only way one goes.
+  if (result.sessionDeleted) dropSessionFromCache(result.sessionDeleted);
 }
 
 /**
@@ -98,7 +107,24 @@ export async function refreshSwings(): Promise<void> {
 // SIGNED_OUT fires on explicit sign-out and between two different users' sessions, which is
 // exactly when a seeded list would otherwise draw one golfer's swings for another.
 supabase.auth.onAuthStateChange((event) => {
-  if (event === "SIGNED_OUT") clearSwingsCache();
+  if (event === "SIGNED_OUT") {
+    clearSwingsCache();
+    // An import in flight belongs to the account that started it — a placeholder row surviving
+    // a sign-out would draw one golfer's incoming swing on another's log.
+    clearPendingImports();
+  }
+});
+
+/**
+ * Wire the import pipeline's orphan cleanup to the real deletion.
+ *
+ * An upload that never landed leaves a swing row with no video — ingest mints the row before the
+ * bytes move. That is not something to leave in a golfer's log, and the pipeline's failure
+ * callback has nobody to hand a deleter to, so the wiring is made once here at module scope
+ * rather than by whichever screen happened to be mounted.
+ */
+setOrphanCleanup((swingId) => {
+  void deleteSwing(swingId).catch(() => {});
 });
 
 export function useSwings(): SwingsHook {

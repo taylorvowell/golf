@@ -381,6 +381,10 @@ export interface SwingDeletion {
    * Objects removed across the source and artifact buckets for this swing.
    */
   mediaObjects: number;
+  /**
+   * The session this swing was the last one in, removed with it. A session is an organizing layer over swings (D29) and has no meaning without any — so emptying one deletes it, and the client is told which so its cached log drops the row rather than drawing an empty session. Null whenever the session still has swings, and absent on a swing that never had one.
+   */
+  sessionDeleted?: string | null;
 }
 /**
  * One inbox row (§29 + D55 + D60). Grouped delivery is a property of the ROW, not of a delivery channel: rows sharing an open groupKey collapse server-side into one row whose `count` says how many events it stands for, which is how conversation messages avoid one entry per message.
@@ -395,6 +399,7 @@ export interface Notification {
    */
   kind:
     | "analysis_ready"
+    | "analysis_failed"
     | "coach_request_approved"
     | "coach_request_declined"
     | "swing_reviewed"

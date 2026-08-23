@@ -73,12 +73,12 @@ export function useImportSwing(sessions: readonly SessionSummary[]): ImportHook 
     })();
   }, [toast]);
 
-  const confirm = useCallback(
-    (view: CaptureView) => {
-      const clip = pending;
-      setPending(null);
-      if (!clip) return;
-
+  /**
+   * Start a run and watch it. Split out of `confirm` so a failure's Retry can call exactly the
+   * same thing — a retry that took a different path would be a second import flow to keep right.
+   */
+  const run = useCallback(
+    (clip: PickedClip, view: CaptureView) => {
       void (async () => {
         let localId: string;
         try {
@@ -92,8 +92,9 @@ export function useImportSwing(sessions: readonly SessionSummary[]): ImportHook 
           toast({
             id: "import-failed-start",
             title: "Couldn't add that swing",
-            detail: err instanceof Error ? err.message : String(err),
+            detail: `${err instanceof Error ? err.message : String(err)} — tap to try again.`,
             icon: VideoOff,
+            onPress: () => run(clip, view),
           });
           return;
         }
@@ -107,9 +108,9 @@ export function useImportSwing(sessions: readonly SessionSummary[]): ImportHook 
 
         let done = false;
         const off = subscribeProcessing(localId, () => {
-          const run = getProcessing(localId);
-          if (!run || done) return;
-          if (run.phase === "done") {
+          const state = getProcessing(localId);
+          if (!state || done) return;
+          if (state.phase === "done") {
             done = true;
             // The list is refreshed BEFORE the toast, so tapping it lands on a log that already
             // has the swing rather than on one that is about to.
@@ -122,25 +123,37 @@ export function useImportSwing(sessions: readonly SessionSummary[]): ImportHook 
               });
             });
           }
-          if (run.phase === "failed") {
+          if (state.phase === "failed") {
             done = true;
             toast({
               id: `${localId}-failed`,
               title: "That swing didn't analyse",
-              // The analyzer's own sentence: "we couldn't find a swing in this clip" and "the
-              // upload was refused" need different actions from the golfer.
-              detail: run.message ?? "The analysis didn't finish.",
+              // The pipeline's own sentence: "we couldn't find a swing in this clip" and "the
+              // upload was refused" need different actions from the golfer. The whole card is
+              // the retry — a toast carries its deep link and nothing else (mobile-client),
+              // and here the useful destination is another attempt.
+              detail: `${state.message ?? "The analysis didn't finish."} Tap to try again.`,
               icon: VideoOff,
+              onPress: () => run(clip, view),
             });
-            // The swing row and its video still exist — a failed analysis never deletes a
-            // golfer's footage — so the log refresh is right either way.
+            // The placeholder has already left the log and any empty swing behind it is being
+            // cleaned up; refresh so the list agrees.
             void refreshSwings();
           }
         });
         watching.current.push(off);
       })();
     },
-    [handedness, pending, toast],
+    [handedness, toast],
+  );
+
+  const confirm = useCallback(
+    (view: CaptureView) => {
+      const clip = pending;
+      setPending(null);
+      if (clip) run(clip, view);
+    },
+    [pending, run],
   );
 
   const cancel = useCallback(() => setPending(null), []);

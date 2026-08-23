@@ -723,6 +723,13 @@
         "mediaObjects": {
           "type": "integer",
           "description": "Objects removed across the source and artifact buckets for this swing."
+        },
+        "sessionDeleted": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "The session this swing was the last one in, removed with it. A session is an organizing layer over swings (D29) and has no meaning without any — so emptying one deletes it, and the client is told which so its cached log drops the row rather than drawing an empty session. Null whenever the session still has swings, and absent on a swing that never had one."
         }
       }
     },
@@ -750,6 +757,7 @@
           "description": "The §29 taxonomy (+ D55 focus-goal events, + D60 lesson/conversation events). An enum so no client or emitter can mint a free-text kind; growing it is additive and shape-lock-legal.",
           "enum": [
             "analysis_ready",
+    "analysis_failed",
             "coach_request_approved",
             "coach_request_declined",
             "swing_reviewed",

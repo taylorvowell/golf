@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { withUser } from "@/db/session";
-import { swingViews as viewsTable } from "@/db/schema";
+import { swings as swingsTable, swingViews as viewsTable } from "@/db/schema";
 import { syncSwingScore } from "@/db/scores";
 import { mediaAddress, type ResolvedView } from "@/db/views";
 import { getAnalysis } from "@/lib/swings";
@@ -38,6 +38,24 @@ export async function markViewReady(
   await withUser(actorId, (t) => syncSwingScore(t, { ...view, revision })).catch(() => {});
 }
 
+/**
+ * Flip a view to `failed`, and TELL the golfer.
+ *
+ * The notification is emitted here rather than by each runner because this is the one place a
+ * view becomes failed — spawn, hosted worker, orphan sweep, every path lands on this function.
+ * An emitter per runner is an emitter one of them forgets.
+ *
+ * Why an inbox row at all: an analysis can take minutes and a golfer does not sit and watch it,
+ * so a toast fires at somebody who has put the phone down. `analysis_failed` sits beside
+ * `analysis_ready` as the other end of the same event — the pipeline finished, one way or the
+ * other — and the reason travels as the body so the row can be acted on rather than merely
+ * noticed. It carries no `groupKey`: two swings that failed for two different reasons are two
+ * things to read, not one row saying "2".
+ *
+ * Best-effort, like the status write it follows. A notification that could not be minted must
+ * never stop a view from being marked failed — that would leave the swing analysing forever,
+ * which is strictly worse than a missing inbox row.
+ */
 export async function markViewFailed(
   actorId: string,
   viewId: string,
@@ -46,4 +64,23 @@ export async function markViewFailed(
   await withUser(actorId, (t) => t.update(viewsTable)
     .set({ status: "failed", failureReason: reason })
     .where(eq(viewsTable.id, viewId))).catch(() => {});
+
+  await withUser(actorId, async (t) => {
+    const [row] = await t
+      .select({ swingId: viewsTable.swingId, ownerId: swingsTable.userId })
+      .from(viewsTable)
+      .innerJoin(swingsTable, eq(swingsTable.id, viewsTable.swingId))
+      .where(eq(viewsTable.id, viewId))
+      .limit(1);
+    if (!row) return;
+    const { notify } = await import("@/lib/notifications");
+    await notify(t, {
+      userId: row.ownerId,
+      kind: "analysis_failed",
+      title: "A swing couldn't be analysed",
+      body: reason,
+      // The swing is still watchable — its video is on the server — so the row deep-links to it.
+      data: { swingId: row.swingId, viewId },
+    });
+  }).catch(() => {});
 }

@@ -55,6 +55,33 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   if (bytes.byteLength === 0) {
     return Response.json({ error: "empty upload" }, { status: 400, headers: noStore });
   }
+
+  /**
+   * Refuse a body that arrived short of what the client said it was sending.
+   *
+   * Next buffers a request body up to `proxyClientMaxBodySize` and, past that, **keeps the first
+   * N bytes and carries on** — no error to the client, no exception here. So a clip over the
+   * ceiling is stored as a truncated MP4 that answers 200, and the failure surfaces minutes later
+   * as `ffprobe` exiting 1 inside the analyzer, pointing at the analyzer instead of at the
+   * upload. That happened on 2026-08-22 and cost the whole import.
+   *
+   * The ceiling is raised in `next.config.ts`, but a ceiling is a number someone can outgrow
+   * again; this check is what makes outgrowing it loud. Same discipline as `completeCapture`,
+   * one step earlier: the claim is verified, never believed.
+   */
+  const declared = Number(req.headers.get("content-length") ?? "");
+  if (Number.isFinite(declared) && declared > 0 && bytes.byteLength !== declared) {
+    return Response.json(
+      {
+        error: "truncated upload",
+        message:
+          `only ${bytes.byteLength} of ${declared} bytes arrived — the video was cut off in ` +
+          "transit and has NOT been saved. Try again on a stronger connection.",
+      },
+      { status: 400, headers: noStore },
+    );
+  }
+
   await store.put(SOURCE_BUCKET, key, bytes, contentType);
 
   // Deliberately does NOT mark the view uploaded or enqueue anything. Landing the bytes and

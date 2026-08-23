@@ -17,6 +17,7 @@ import {
   Reply,
   Target,
   TrendingDown,
+  TriangleAlert,
   Trophy,
   UserPlus,
   Video,
@@ -70,6 +71,9 @@ export interface NotificationLook {
 export const NOTIFICATION_LOOK: Record<Notification["kind"], NotificationLook> = {
   // Golfer — the swing itself
   analysis_ready: { icon: Activity, tone: "accent" },
+  // `bad`, not `muted`: an analysis that did not finish is a setback the golfer may want to act
+  // on, and bookkeeping tone would bury it under the rows that need nothing from them.
+  analysis_failed: { icon: TriangleAlert, tone: "bad" },
   swing_reviewed: { icon: ClipboardCheck, tone: "accent" },
 
   // Golfer — the coach relationship
@@ -163,6 +167,7 @@ const FOLD_NOUN: Partial<Record<Notification["kind"], string>> = {
   coach_comment: "comments",
   coach_annotation: "annotations",
   analysis_ready: "swings analysed",
+  analysis_failed: "swings that didn't analyse",
   golfer_swing: "new swings",
   drill_done: "drills done",
   lesson_viewed: "lesson views",

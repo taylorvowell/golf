@@ -1556,6 +1556,7 @@
     "type": "string",
     "enum": [
       "\"achievement_earned\"",
+      "\"analysis_failed\"",
       "\"analysis_ready\"",
       "\"coach_annotation\"",
       "\"coach_comment\"",
@@ -1838,6 +1839,9 @@
   },
   "api#/definitions/swingDeletion/properties/mediaObjects": {
     "type": "integer"
+  },
+  "api#/definitions/swingDeletion/properties/sessionDeleted": {
+    "type": "null|string"
   },
   "api#/definitions/swingDeletion/properties/swingId": {
     "type": "string"
