@@ -235,12 +235,36 @@ commit: the manifest hash changes in the same commit as the re-publish, or the c
 
 **Decision:** local / preview / production, each with its own Supabase project, storage buckets
 and secrets.
-**Status:** **Partly met.** One project exists (`golf-swing`, the local/dev one); `swingsage-prod`
-is created in the production-stack pass. Supabase Free allows **2 active projects**, so dev +
-production fit. **The preview project is what forces Supabase Pro** — it is the third, and it is
-also the cheapest reason to upgrade. Until then, preview deployments point at the production
-project's schema on a separate branch, which is a real (and named) shortfall, not a design.
+**Status:** **Partly met.** `golf-swing` (dev) and `swingsage-prod` (production, fully migrated
+2026-08-23 — 19 migrations, journal stamped, `swingsage_app` role live through the pooler, zero
+advisor findings) both exist. **The preview project is what forces Supabase Pro** — it is the
+third, and it is also the cheapest reason to upgrade. Until then, preview deployments point at
+the production project, which is a real (and named) shortfall, not a design.
 **See:** ARCHIVE D10.
+
+### The deployed app's auth home is `golf-swing` until the cutover; data is `swingsage-prod`
+
+**Decision:** The Vercel deployment validates sessions against **`golf-swing`** (the project
+where Google sign-in, Twilio Verify and the test OTP already work) while its DATA lives in
+**`swingsage-prod`** (`APP_DATABASE_URL` → `swingsage_app` through the pooler). This is the
+same auth/data split local development has always run (hosted auth + local Postgres, mirrored
+by `app.ensure_profile`), so no code knows about it. It exists because wiring auth on
+`swingsage-prod` needs dashboard visits (Google client paste, Twilio Verify) — a HANDOFF row —
+and the dev-install goal must not block on one.
+**Gotchas:** `users.id` IS the auth uid, so the cutover re-keys accounts — do it while Taylor's
+own test account is the only data (`docs/HANDOFF.md` row), never after real golfers exist. The
+four auth env names on Vercel (`SUPABASE_URL`, `SUPABASE_SECRET_KEY`, the two `NEXT_PUBLIC_*`)
+are the ONLY place the choice lives; the integration-injected `POSTGRES_*` vars still point at
+`swingsage-prod` and are unused by the app (it reads `APP_DATABASE_URL`).
+
+### Production queue jobs run variants-off (`JOBS_CLUB_VARIANTS=false` on Vercel)
+
+**Decision:** The deployed dispatcher enqueues `club_variants: false`. On the L4 worker the
+dev shape is 676.6s and can exceed the runner's own 1800s timeout on long clips — a default
+that FAILS jobs is not a product option, so production runs the shape that meets the SLO
+(124.6s). The variants instrument is untouched everywhere else: fixture runs, `burnin.py`, and
+the local spawn path keep it ON, and the flag is one env var to flip if Taylor rules otherwise.
+**See:** the capacity model above; `.claude/architecture/swing-analysis-speed-2026-08-18.md` §5.
 
 ### SLO targets
 
@@ -337,7 +361,7 @@ the roster below is the whole roster — **any vendor not on this list is not in
 | Concern | Vendor | Why this one |
 |---|---|---|
 | Auth + Postgres | **Supabase** — Free now, **Pro ($25/mo) at launch** | Once media moved to R2, Pro buys exactly three things: no 7-day idle pause, daily backups, and more than 2 active projects. None binds before there is user data or a preview environment, and **the upgrade is in-place** — same project, same URL, same keys, no migration. **Upgrade trigger: the third environment, or the first real golfer's swings.** PITR is a further paid add-on and is NOT needed. |
-| Object storage | **Cloudflare R2** | Zero egress. Same Cloudflare account as DNS, so no new vendor. |
+| Object storage | **Cloudflare R2** | Zero egress. Same Cloudflare account as DNS, so no new vendor. **Driver live 2026-08-23** (`lib/media/r2Store.ts`, `MEDIA_DRIVER=r2`, object-tier keys): proven against the real bucket — signed GET serves 206 ranges, presigned PUT lands, move/remove work. |
 | DNS + domain + CDN | **Cloudflare** (free + ~$12/yr) | |
 | API + coach/admin web | **Vercel** — Hobby now, **Pro ($20/mo/seat) at launch** | Native host for `apps/web`. Hobby's bar is *revenue* — ads, payments, client work, a monetized product — and a pre-launch project with no store listing and no payment flow is none of them. Its caps (100 GB transfer, 1M edge requests, 1M invocations, 4 CPU-hours/mo) are far above solo-dev volume, and custom domains, SSL, previews and Fluid compute are all included. **Upgrade triggers: the store listing goes live, or a route needs Pro's 800s function ceiling (only coach-chat SSE will).** |
 | Analyzer worker | **Modal** | Serverless GPU, scale-to-zero, per-second billing. ~$0.02/swing at L4. |

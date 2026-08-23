@@ -316,6 +316,31 @@ the door (Modal caps web requests at ~150s), so QStash retries cover only failur
 mid-run infra failures are retried by Modal itself, and a job that still dies is settled by
 the step-05 heartbeat sweep. `docs/decisions/platform-data.md` has the full taxonomy.
 
+### The deployed web app — Vercel production (www.swingsage.io)
+
+One command, from the repo root:
+
+```bash
+node scripts/deploy-web.mjs
+```
+
+It builds locally with production env (from `production-credentials.local.txt` + constants in
+the script), repairs what @vercel/next's **Windows** build gets wrong (backslashed symlink
+targets; function filesets missing `.next/server/chunks`, most of `next/dist`, and next's dep
+packages; 4k+ over-traced LOCAL files — `services/`, `.media/`, `.env` — that must never
+ship), then `vercel deploy --prebuilt --prod` and smokes `/api/v1/client`.
+
+**Never `vercel deploy` without `--prebuilt` from this machine**: Vercel's own Linux builders
+split this app past Hobby's 12-function cap, and the archive path once shipped `apps/web/.env`
+into the build (the D43 guard refused to start — that guard is the only reason it was caught).
+`.vercelignore` now excludes env files and build dirs. The durable replacement for the whole
+script is a Linux CI build (step 10's remaining CI work); when that lands, this section
+shrinks to "push".
+
+Smoke checks that prove it deployed: `/api/v1/client` → 200 contract JSON; `/api/v1/swings`
+→ 401 (and 401 with a garbage bearer); the same with `x-swingsage-client-version: 0.0.1` →
+426; `/signin` → 200.
+
 ### Turning on-device dev clips into a session in the swing log
 
 The clip library on the S25+ (`/sdcard/Android/media/com.swingsage.spike/dev-clips`) holds long

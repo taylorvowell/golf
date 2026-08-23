@@ -1,0 +1,27 @@
+# The Vercel deploy is apps/web + the shared packages. Everything else is either another
+# runtime (mobile, analyzer -> Modal) or local-only data — excluding it keeps the upload small
+# and stops the archive racing a concurrent gradle/pytest build's temp files.
+apps/mobile
+services
+fixtures
+out
+docs
+spikes
+.claude
+.github
+*.local.txt
+# Local env files must NEVER reach a deploy: the CLI tarball does not honor .gitignore, and a
+# shipped apps/web/.env once put DEV_USER_EMAIL (the dev auth bypass) into a production build —
+# the D43 guard refused to start, which is the only reason it was caught at build time.
+.env
+.env.*
+apps/web/.env
+apps/web/.env.*
+!apps/web/.env.example
+# Local build state must never reach the server build: an uploaded apps/web/.next from a
+# Windows/turbopack incremental build contaminated the server's own build badly enough to
+# defeat function bundling (31 functions → the Hobby 12 cap) and to mix chunk graphs across
+# builds. The server always builds clean.
+apps/web/.next
+.vercel/output
+node_modules

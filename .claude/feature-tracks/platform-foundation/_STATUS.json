@@ -1,12 +1,14 @@
 {
   "schemaVersion": 1,
   "featureName": "platform-foundation",
-  "currentStep": "08",
+  "currentStep": "10",
   "phase": "Platform Foundation",
-  "lastUpdated": "2026-08-20T19:58:47Z",
+  "lastUpdated": "2026-08-23T20:05:00Z",
   "steps": {
     "10": {
-      "status": "not-started"
+      "status": "in-progress",
+      "startedAt": "2026-08-23T17:55:00Z",
+      "note": "Order override at Taylor's direction 2026-08-23 ('go' on the off-LAN plan): 10 ran before 08. DAY-ONE SUBSTANCE SHIPPED, step stays in-progress on the named remainder. DONE: swingsage-prod fully migrated (19 migrations via MCP, drizzle journal stamped, swingsage_app role live THROUGH THE POOLER \u2014 aws-0-us-east-1, SCRAM verifier required, md5 refused; proven: connect + set local role authenticated + RLS answers; 13-table parity, 0 advisors). r2Store.ts driver live and proven on the real bucket (206 ranges via signed GET, presigned PUT, move/remove) \u2014 step 09's appended amendment closed. Vercel production DEPLOYED and VERIFIED at www.swingsage.io: /api/v1/client 200 contract, swings 401/401, forced-upgrade 426 against the REAL deployed API, /signin 200. 20 env vars mapped (auth interim golf-swing / data swingsage-prod split \u2014 decisions entry + cutover HANDOFF row; JOBS_CLUB_VARIANTS=false in prod \u2014 decisions entry). Deploys are node scripts/deploy-web.mjs (local build + --prebuilt): Vercel's Linux builders split this app past Hobby's 12-function cap and the Windows local build needed five defect classes repaired (backslashed symlinks; filesets missing .next chunks, next runtime, dep packages; 4k+ over-traced local files incl .env \u2014 the D43 guard caught that one). Release APK built (universal, Vercel URL baked, Metro-free) \u2014 install blocked ONLY on the phone being reachable (HANDOFF row). REMAINING for this step: Linux CI build+oracle gating (retires deploy-web.mjs), preview env (waits Supabase Pro), mobile store distribution (BLOCKED Taylor rows: Apple, package rename), deploy/rollback docs in ARCHITECTURE.md, and the first real swing through the hosted loop (Vercel->QStash->Modal->Vercel \u2014 needs the phone)."
     },
     "01": {
       "status": "complete",
@@ -35,7 +37,7 @@
     "06": {
       "status": "complete",
       "completedAt": "2026-08-11T03:35:00Z",
-      "note": "Shipped in two halves by D28: the additive equipment/session/organization model (migration 0005), then the §7.1 multi-view restructure and uuid swing identity (migration 0006, D30). All ten analysed fixtures survived with their scores; verified by src/db/multiView.test.ts and the Playwright end-to-end path."
+      "note": "Shipped in two halves by D28: the additive equipment/session/organization model (migration 0005), then the \u00a77.1 multi-view restructure and uuid swing identity (migration 0006, D30). All ten analysed fixtures survived with their scores; verified by src/db/multiView.test.ts and the Playwright end-to-end path."
     },
     "07": {
       "status": "complete",
@@ -57,6 +59,12 @@
       "kind": "USER-ACTION-NEEDED",
       "summary": "Apple Developer enrolment, A2P 10DLC, Android package rename - all OPEN/BLOCKED rows in docs/HANDOFF.md",
       "recordedAt": "2026-08-18T19:28:05Z"
+    },
+    {
+      "step": "10",
+      "kind": "USER-ACTION-NEEDED",
+      "summary": "Phone unreachable (wireless debugging off) \u2014 the release APK install + first hosted swing are the last mile; HANDOFF row added 2026-08-23",
+      "recordedAt": "2026-08-23T20:05:00Z"
     }
   ],
   "skipped": []

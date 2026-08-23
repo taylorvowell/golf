@@ -20,6 +20,32 @@ closing.
 
 ---
 
+## 10 - Environments, Secrets, and Release Pipeline — day one: the hosted stack is live
+**Progress note:** 2026-08-23 20:05 UTC (step stays in-progress — remainder named below)
+**Phase:** Platform Foundation
+**Summary:** Taylor's off-LAN directive ("go") ran step 10 ahead of 08. In one day:
+`swingsage-prod` fully migrated (19 migrations over the MCP, drizzle journal stamped,
+`swingsage_app` proven through the pooler — `aws-0-us-east-1`, SCRAM verifier required, md5
+refused, wrong-host reads as tenant-not-found); the R2 driver written and proven live
+(206 ranges via signed GET, presigned PUT, move/remove — step 09's amendment closed);
+**Vercel production deployed and verified at `https://www.swingsage.io`** — contract 200,
+auth 401s, forced-upgrade 426 against the real deployed API, sign-in page 200; 20 env vars
+mapped with two recorded decisions (auth-home interim on `golf-swing` with a cutover HANDOFF
+row; `JOBS_CLUB_VARIANTS=false` in production); and the off-LAN release APK built (universal,
+Vercel URL verified in the bundle, Metro-free).
+**Notes:** Deploys are `node scripts/deploy-web.mjs` — Vercel's own Linux builders split this
+app past Hobby's 12-function cap, so production is a local build + `--prebuilt`, with the
+Windows builder's five defect classes repaired deterministically (backslashed symlink targets;
+function filesets missing `.next/server/chunks`, most of `next/dist`, and next's dep packages;
+4k+ over-traced local files including `.env` — which the D43 guard caught in a production
+build, the save of the day). The Linux CI build that retires the script is this step's
+headline remainder, with: preview env (Supabase Pro trigger), store distribution (BLOCKED
+Taylor rows), ARCHITECTURE.md deploy/rollback docs, and the first real swing through
+Vercel→QStash→Modal→Vercel — blocked only on the phone being reachable (HANDOFF row; APK
+waiting). Metro was stopped for the pnpm install; restart with `pnpm --filter mobile start`.
+
+---
+
 ## 05 - Roles, Onboarding, and Profiles — amendment 2: the six-answer profile
 **Logged:** 2026-08-20 23:59 UTC
 **Phase:** Platform Foundation

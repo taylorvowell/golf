@@ -53,7 +53,7 @@ export interface UploadTarget {
 }
 
 export interface MediaStore {
-  readonly kind: "local" | "supabase";
+  readonly kind: "local" | "supabase" | "r2";
   /** Whether this driver can mint a URL the browser fetches directly (a CDN/signed-URL path). */
   readonly canRedirect: boolean;
 
@@ -140,13 +140,18 @@ let cached: MediaStore | null = null;
  * as a missing swing. Defaulting to local also means a fresh clone can run the pipeline before it
  * has any credential at all, which is step 09's own requirement.
  */
-export function mediaDriverName(): "local" | "supabase" {
+export function mediaDriverName(): "local" | "supabase" | "r2" {
+  if (process.env.MEDIA_DRIVER === "r2") return "r2";
   return process.env.MEDIA_DRIVER === "supabase" ? "supabase" : "local";
 }
 
 export async function getMediaStore(): Promise<MediaStore> {
   if (cached) return cached;
-  if (mediaDriverName() === "supabase") {
+  const driver = mediaDriverName();
+  if (driver === "r2") {
+    const { r2Store } = await import("./r2Store");
+    cached = r2Store();
+  } else if (driver === "supabase") {
     const { supabaseStore } = await import("./supabaseStore");
     cached = supabaseStore();
   } else {

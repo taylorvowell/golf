@@ -104,8 +104,10 @@ One artifact per analysed video, the single interface between analyzer and any c
 
 ### Frame sync is the #1 perceived-quality feature
 
-Overlay drift during scrubbing is what users notice. Normalize to CFR 60 fps so
-`frame = round(currentTime * fps)` is exact — VFR phone video *will* break this. The seek target
+Overlay drift during scrubbing is what users notice. Normalize to CFR **at the capture rate**
+(`video.cfr_target_fps`: 240/120 for high-speed takes, 60 otherwise — never resample a
+high-speed take down, that discards real frames) so `frame = round(currentTime * fps)` is
+exact — VFR phone video *will* break this. The seek target
 is **per-platform**: `(frame + 0.5) / fps` in the web player (HTML video seeks to the frame
 *containing* a time), but `frame / fps` on Android — media3 resolves seeks **forward**, so the
 web rule costs exactly one frame on every seek there (D40, measured 0% vs 100% exact). Use
@@ -138,10 +140,18 @@ usual reason a pipeline change "doesn't show up".
   number moves the way the band assumes.
 - **Coverage percentages have overstated club quality three separate times.** Always run
   `scripts/checkclub.py` and look at the club drawn over the real frame before believing them.
-- **No accuracy number in this project is independently verifiable yet.** There are no
-  hand-labelled event frames and no club-head position-error metric, so anything tuned on
-  smoothness is unfalsifiable. Event accuracy was once claimed "verified ±2 frames" while
-  Address was 48 frames early.
+- **Almost no accuracy number in this project is independently verifiable.** There is still no
+  club-head position-error metric and no hand-labelled *event* frames, so anything tuned on
+  smoothness remains unfalsifiable. Event accuracy was once claimed "verified ±2 frames" while
+  Address was 48 frames early. **The one exception is the audio strike:**
+  `services/analyzer/scripts/audio_truth.json` holds hand-labelled strike times for the five raw
+  takes, and `checkaudio.py --truth` scores against them — five clips, one golfer, one indoor
+  bay, enough to reject a method and not enough to trust a figure from.
+- **The stored Impact event is wrong on at least one fixture, by 40 frames.** On `7wood-1` the
+  ball leaves the mat at 5.08 s while `out/7wood-1/analysis.json` says Impact at 5.75 s. The
+  audio witness (`audio_impact.agrees`) is what caught it, and every band boundary downstream of
+  Impact is wrong on that swing. Ground truth for all ten fixtures' event frames does not exist
+  yet; build it with `checkstrip.py` before trusting — or "fixing" — any event.
 - **Golden snapshots prove nothing has *changed*, not that anything is *right*.** A snapshot
   taken while Address was wrong would have locked that in.
 - **Always pass `--club-detector runs/clubhead/weights/best.pt`** when re-running `burnin.py`
@@ -160,8 +170,9 @@ the template in `.claude/ai-instructions/00 - README.md`). The macro index is
 
 The track marked `spine: true` is what `/build` targets; exactly one active track may carry it,
 and the flag moves forward as phases complete. **Resolve it from `.claude/ROADMAP.json` every
-time — it moves, and a name written here goes stale.** As of 2026-08-12 it is `mobile-player`;
-`platform-foundation` and `mobile-app-shell` remain active and launch-blocking behind it.
+time — it moves, and a name written here goes stale.** As of 2026-08-23 it is
+`platform-foundation` (steps 09–10: hosted media + the production web deploy);
+`mobile-app-shell` remains active and launch-blocking behind it.
 
 - `/build` — advance the spine track. `/feature <name>` — advance any track.
 - `/roadmap` — the macro picture (read-only). `/status`, `/verify`, `/skip`, `/reset-step`,
@@ -222,6 +233,38 @@ Fixtures live in `fixtures/` (gitignored) — 10 analysis-ready clips, with the 
 phone originals in `fixtures/raw/`. All are down-the-line and right-handed; **there is no
 face-on and no left-handed fixture**, so every view-gated and mirroring path is untested
 against real footage.
+
+## Which tool reaches which vendor — check this before you reach for a CLI
+
+**Taylor has two identities on this machine** — `taylorvowell@gmail.com` (SwingSage) and
+`summittape` (a different business) — and several CLIs default to the **wrong** one. A command that
+looks like it worked may have hit the other account. Account facts, ids and refs live in
+[`docs/ENVIRONMENT.md`](docs/ENVIRONMENT.md); this table is only *which tool to pick*.
+
+| Vendor | **Use this** | Never / caution |
+|---|---|---|
+| **Supabase** | the **`supabase` MCP** — correct org, and `apply_migration` works with no DB password | ❌ the `supabase` **CLI** is logged into **summittape**; `db push` would hit the wrong account |
+| **GitHub** | the **`github` MCP** — verified working | ❌ the `gh` CLI is broken (both tokens invalid, and a stale `GITHUB_TOKEN` shadows the keyring fix) |
+| **Vercel** | the **`vercel` CLI, from the repo root** — `.vercel/project.json` pins it to `taylorvowells-projects/golf` | ⚠️ outside this repo it defaults to `summittape`/`summit-78555d07` — pass `--scope taylorvowells-projects`. The Vercel **MCP** needs interactive OAuth and is unavailable |
+| **Cloudflare / R2** | the **REST API with a bearer token** from `production-credentials.local.txt`. Two tiers: `R2_ADMIN_*` for bucket management, `R2_ACCESS_KEY_ID`/`R2_SECRET_ACCESS_KEY` (S3, object-scoped) for the app driver | ⚠️ an object-tier token 403s on `ListBuckets`/`CreateBucket`. `wrangler` is **not installed**. No token has `Zone:Read`, so **an empty zone list is a permission artifact, never proof a domain is missing** |
+| **Upstash QStash** | the **REST API**, always at `QSTASH_URL` (`https://qstash-us-east-1.upstash.io`) | ⚠️ the documented default `qstash.upstash.io` is **eu-central-1** and 404s for this account. The `upstash` CLI is installed but unauthenticated |
+| **Modal** | the **`modal` CLI** via the analyzer venv — profile `taylorvowell` | — |
+| **Expo / EAS** | the **`eas` CLI** — `taylorvowell@gmail.com` | — |
+| **Anthropic** | key in `production-credentials.local.txt`; called through **Vercel AI Gateway** at runtime | — |
+| **Railway** | **nothing.** Railway is struck from the stack (D64) | ❌ the Railway MCP is still connected — **never use it**; deploying there would contradict a recorded decision |
+
+**The production projects, by name** — anything else with a similar name belongs to another product:
+
+| Vendor | Project | Ref / id |
+|---|---|---|
+| Supabase (prod) | `swingsage-prod` | `nprxxjeavdlsqthnofof` (us-east-1) |
+| Supabase (dev) | `golf-swing` | `xjcjqwcmwoouxczrrvar` (us-west-2) |
+| Vercel | `golf`, team `taylorvowells-projects` | `prj_NQzYmaeByZTGhUFiLQ49HQD2EskB` |
+| Cloudflare R2 | `swing-source`, `swing-artifacts`, `swing-models` | account `29a846d28a4d7875137080db6e9a4680` |
+| GitHub | `taylorvowell/golf` (public) | default branch `main` |
+
+**`production-credentials.local.txt`** (repo root, gitignored) is the one place every production
+secret lives during setup. Read it; never print a value from it, and never commit it.
 
 ## Verification strategy
 
@@ -313,10 +356,23 @@ looked healthy and were wrong. Build the debug view when the work starts, not af
     screenshotting is the wrong move: it turns a one-minute edit into a fifteen-minute one, and
     any unrelated breakage it uncovers hijacks the task. (Taylor, 2026-08-18, after an icon swap
     did exactly that.)
-  - **The S25+ is Taylor's daily-driver phone — NEVER drive it without him saying so in the
-    current conversation.** `adb shell input`, taps, force-stop/relaunch and screenshot loops all
-    need an explicit go-ahead each time, even when the device is connected and input is landing.
-    Read-only queries (`adb devices`, `pidof`, `dumpsys`) are always fine.
+  - **The S25+ is Taylor's daily-driver phone. Two tiers, and the line moved on 2026-08-22.**
+    - **Installing and relaunching is YOURS — do it, do not ask.** `pnpm --filter mobile phone`
+      (add `:restart` / `:native` as the runbook says) force-stops and relaunches the app, and
+      Taylor's standing instruction is that Claude runs it whenever the work needs the change on
+      glass: *"you do the force stop and relaunch. you are allowed to do this when you need to."*
+      Handing him the command was the wrong move. Read-only queries (`adb devices`, `pidof`,
+      `dumpsys`, `logcat`) were always fine and still are.
+    - **A phone that is not connected is not a hand-off either.** `node scripts/adb-phone.mjs`
+      finds it — cached port, then mDNS, then a port sweep of the LAN (~20s, has never failed).
+      Wireless debugging's port changes every toggle, and asking Taylor to read it off the screen
+      is the exact instinct he rejected on 2026-08-22: *"ive never had to give you the debug shit
+      before just find it"*.
+    - **DRIVING it still needs a go-ahead in the current conversation** — `adb shell input`, taps,
+      swipes, typing, screenshot loops. Those are him using his own phone; relaunching an app is
+      not. Ask each time, as before.
+    - This does not change who VERIFIES. The relaunch is Claude putting the build in front of him;
+      the judgement on whether it looks right is still his (the final-verification rule above).
   - **`adb` commands must always name their target** (`adb -s emulator-5554 …`) — with both
     attached, a bare `adb shell input` is a coin flip that can land on his phone.
   - **The emulator does not replace the phone for anything measured.** It is software-rendered
