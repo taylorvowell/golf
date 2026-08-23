@@ -719,6 +719,20 @@ answered 244/396 frames against 90%+ on the other nine — never a reason to cha
 Provenance for the pick is `burnin.py`'s `TRACE_MODES` and `club.py`'s `smooth_trace`, whose
 `measured()` gate is what makes a trace refuse to draw through undetected frames in the first place.
 
+### The club-head trace is OFF by default
+
+**Decision (Taylor, 2026-08-22):** `DEFAULT_TOGGLES` draws the **stick figure only**. The
+club-head trace stays off until it is reliable enough to lead with; the Overlays sheet still
+offers it, and `grow` stays on so turning it back on behaves exactly as before.
+**Gotchas:** The trace is simultaneously the most compelling image the pipeline produces and the
+one most likely to be wrong, and a drawn line that misses the ball does not read as "the trace is
+off" — it reads as the whole analysis being wrong. A default is what a first-time golfer is told
+the product claims, so it can only carry work that is already trustworthy. This does not touch the
+solution pick or the sparse-trace rule above: the line is unchanged, it is simply not what the page
+opens with. The `__DEV__` variant lab still forces club + trace + grow on, because comparing
+solutions is what it is for.
+**Scope:** Mobile. The web player's own defaults are unchanged — it is the R&D surface.
+
 ### The Ideal Swing design system is the app's one visual language
 
 **Decision (Taylor, 2026-08-14):** The app's theme and every page match the reference mockups in
@@ -981,6 +995,17 @@ dead at the finish makes a golfer press play for every look at the same two fram
 ½×, ¼×, ⅒× and are applied natively (`setPlaybackSpeed`) — a JS timer would drop frames and show a
 quarter of the swing while calling it slow motion.
 
+### A `Sheet` resets its entrance only once it has really gone
+
+**Decision:** `Sheet` clears `opened` in the exit animation's completion callback, and
+`onPanelLayout` ignores a layout that arrives while `visible` is false.
+**Gotchas:** Clearing it the moment `visible` flipped left a window in which any re-layout during
+the 200 ms exit re-ran the ENTRANCE and sprang the panel back onto the screen, stuck half-open.
+That is not an exotic case: a caller that clears its data as it closes changes the panel's
+content, which is a re-layout. The import sheet hit it on its first run. A sheet whose content
+changes as it dismisses should also hold the last value for the length of the exit, so nothing
+visibly reflows on the way out.
+
 ### `DeckSheet` — one panel primitive, built on `Modal`
 
 **Decision:** Secondary content on a screen whose primary content fills the viewport lives in a
@@ -1096,25 +1121,32 @@ stay a chip row rather than becoming tiles: there are dozens of fields and every
 tile to say what an angle looks like, and the chips choose which.
 **Scope:** A group the artifact cannot support is still hidden, never disabled.
 
-### Three speeds, no loop button, no frame stepper
+### Three speeds as a vertical toggle; play rides the scrub; no restart, no loop button, no frame stepper
 
-**Decision:** The speed control is three rates — `1x` · `0.5x` · `0.1x` — and nothing else.
-Looping is permanently on and has no control. There is no frame-stepper overlay and no speed
-picker sheet. One skin carries it (the legacy dock died with `SwingPlayer`, 2026-08-17): the
-report's video-open player bar draws the three rates as the mockup's **pill group**
-(`.report-v2-speed`, slowest first) beside its aqua play cap and the **Compare** pill
-(`ReportPlayerBar`; the overlays opener is the top layers orb).
-**Gotchas:** Three speeds, not four — a quarter sat between two rates that already do their jobs
-(half is "the whole shape, slower", a tenth is for the transition, which is over in about four
-frames) and made each segment narrow enough to mis-tap. Labels are plain decimals: a `¼` glyph is a
-font risk on Android for no gain. The pill's position is `index × SEGMENT` with a fixed segment
-width, so there is no layout pass and no first-render frame with the pill in the wrong place, and it
-animates on `translateX` under the native driver so it never touches the JS thread the overlay draws
-on. Removing the loop button removed the only place its behaviour was observable, so
-`useFramePlayer.test.ts` now carries it — default on, restart-at-window-start without pausing,
-stop-at-end when off.
+**Decision:** The transport is **two controls, placed where they are used** (Taylor, 2026-08-22).
+`PlayCap` — the aqua gradient cap — sits at the far right of the **scrub's own row**, because the
+playhead and the thing that moves it are one control surface. `SpeedToggle` stands on the **left,
+above the transport**, as a vertical column in the capture screen's zoom-rail language: same 34px
+rail, same 148px height, same aqua, same small-caps label (`SPEED`) underneath. The rates are still
+three — `1x` · `0.5x` · `0.1x`, fastest at the top so "more is up" matches zoom — and looping is
+still permanently on with no control. There is no frame stepper and no speed sheet. **The restart
+button is deleted:** the swing loops, so "play it again from the start" was a control for something
+the player already does on its own.
+**Gotchas:** Speed is a **toggle, not a slider** — zoom is continuous and speed is three rates, so
+the aqua handle *switches* between stops rather than being dragged; it springs between them under
+the native driver, because snapping between two stops in one frame reads as three buttons rather
+than one control. The handle is a **circle** of the rail's width, centred in whichever stop is
+selected, and the rail carries **no `CONTROL_EDGE`** (Taylor, 2026-08-22) — over footage the
+outline read as a box drawn around the control rather than as the control's own shape. Three speeds, not four — a quarter sat between two rates that already do their
+jobs (half is "the whole shape, slower", a tenth is for the transition, which is over in about four
+frames). Labels are plain decimals: a `¼` glyph is a font risk on Android for no gain. The handle
+resolves to the **nearest** stop rather than an exact match, so a rate this column does not carry
+(the dev lab) never parks it off the rail. Removing the loop button removed the only place its
+behaviour was observable, so `useFramePlayer.test.ts` carries it — default on, restart-at-window-
+start without pausing, stop-at-end when off.
 **Scope:** Speed is still applied natively (`setPlaybackSpeed`) — a JS timer would drop frames and
-show a tenth of the swing while calling it slow motion.
+show a tenth of the swing while calling it slow motion. `ReportPlayerBar` is gone; the two pieces
+live in `ReportTransport.tsx`.
 
 ### One player: the legacy SwingPlayer surface is deleted
 
@@ -1150,6 +1182,40 @@ summaries and goals want the same faces. The ring's `null` progress draws the tr
 abstaining shape, distinct from zero.
 **Gotchas:** D23 stands untouched: the overlay stays on plain `View`s (that was a measurement).
 
+### The standalone swing page names the swing, and you swipe sideways between swings
+
+**Decision (Taylor, 2026-08-22):** The swing page opens with a heading over the picture, under the
+app header: **`Swing N`**, and beneath it the **session's date**, a **pill for the angle** (`DTL`,
+`Front` or `Dual`) and a **pill for the capture rate** (`60 fps`). It is **left-aligned, small and
+tight** — a label on a picture, not a page title; a centred 24pt heading competed with the swing it
+names. The corner carries **favourite only**: the score circle is gone (the scorecard is already on
+screen — a second copy of the number floating in the corner is chrome nobody asked for) and so is
+delete (a destructive action one mis-tap from the play button, and the swing log already owns it).
+A **sideways drag moves to the next swing**: the whole video area travels with
+the finger and the neighbour comes in behind it, so both swings are on screen for the whole
+gesture. The order is the log's own — newest session first, newest swing first inside it — so a
+swipe moves the way the list they tapped moves.
+**Gotchas:** The swipe changes **state, not route**. Pushing a route per swing would build a back
+stack ten deep out of what is, to the golfer, one screen; the route param seeds the current id and
+re-seeds when it changes, so every door still lands where it aimed. The neighbours are **stills,
+never players** — three live decoders on one screen is what wedges a phone, and the still is the
+same poster frame the real layer paints under its own video, so the hand-off at the end of the
+slide is not a swap. The heading's top is computed identically in both the page and the peek
+(`inset.top + APP_HEADER_BAR`) or it jumps by a status bar's height the moment a slide lands. The
+gesture is `PanResponder` and only claims a drag that is unambiguously sideways: a horizontal
+paging `ScrollView` would become an ancestor of the scrub, whose own responder grants on
+touch-down, and a native scroller fighting a JS responder over the same drag is what makes a scrub
+feel unreliable. It stands down entirely while the analysis card is up — a diagonal finger
+scrolling a scorecard must not change swing. The app **frame stays put**: the main menu and the
+header render outside the swipe, because a frame that slides off and back reads as the whole app
+moving rather than the swing changing.
+**Scope:** The standalone page only — the score circle stays on the after-swing screen
+(`scoreDoor`), where the score ARRIVING is the analysis finishing. Inside a session the swing list
+sheet is still how you move between swings: there the session, not the log, is the set you are in.
+The fps pill is the one frame-rate number that is product rather than instrument — it is a fact
+about the FOOTAGE, not a live counter, and a golfer can act on it (a 30 fps clip cannot show what
+a 120 one can).
+
 ### The swing log is a sheet of sessions, and the row is "Swing N" · date · score
 
 **Decision:** The log groups swings into practice **sessions** (`sessionize`): the newest as the
@@ -1171,10 +1237,27 @@ same person on the same mat, so they carry no per-row information; one still on 
 header says where you were. The latest card carries no LATEST pill and no tinted wrap — its
 position at the top already says it (Taylor 2026-08-17, declutter pass). The sheet rests at the
 backdrop's edge on first paint (`initialOffset` 0) so the hero is fully visible on load.
-**Gotchas:** A session is **inferred from time** — swings ≤ 2 h apart — because the contract
-carries no session id yet and no capture flow mints session rows. When it does, the contract
-grows `sessionId` (additive, D41) and `sessions.ts` switches to it; the screens never see the
-difference. `createdAt` is normalized (seconds vs ms differ silently by 50 years) in one place.
+The hero's two doors are **Record** and **Upload**. Record opens session mode; Upload picks a
+video from the library, asks the one thing a file cannot answer — which angle it was filmed from
+— and then runs the identical path a recorded swing runs (`processing.ts`, same ingest, same
+analyzer). There is no "imported" flag and no second ingest route: a swing is a swing, and a
+parallel path would be a second place for every rule about handedness, sessions and quarantine to
+drift. **An import joins the day's session**, creating one only when that day has none, because a
+golfer emptying a bucket's worth of clips out of their camera roll is describing one practice
+session, not fifteen of one swing each. The day is the day of the IMPORT: a video file does not
+reliably carry when it was filmed, and dating a session from a guess would put swings on a day the
+golfer was not at the range. Progress is reported through the app toaster rather than a blocking
+spinner — an import takes as long as an analysis does, and the log's job is browsing.
+**Gotchas:** Interactive hero content lives in `SheetOverBackdrop`'s `backdropChrome`, **never in
+`backdrop`**. The backdrop is painted in a layer beneath the scroll view, and a scroll view
+swallows every touch inside its bounds — so a button rendered there is visible, looks pressable,
+and does nothing. Record and Upload were dead for exactly this reason until 2026-08-22; marking
+the spacer `pointerEvents="none"` does not help, because that removes the spacer from hit-testing
+rather than handing the touch to another layer.
+A session is **inferred from time** — swings ≤ 2 h apart — for every swing with no `sessionId`,
+which is every swing recorded before session mode. Swings that carry one group by it and gain
+their name and mode; the two kinds coexist in one log by design and always will.
+`createdAt` is normalized (seconds vs ms differ silently by 50 years) in one place.
 An unscored swing reads "not scored" and is absent from `best`, never a zero.
 
 ### Home leads with the next session's focus, and the focus is aggregated, not copied

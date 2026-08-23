@@ -143,7 +143,13 @@ export function Sheet({
       easing: Easing.in(Easing.cubic),
       useNativeDriver: true,
     }).start(({ finished }) => {
-      if (finished) setMounted(false);
+      if (!finished) return;
+      setMounted(false);
+      // Reset only once the panel is really gone. Doing it the moment `visible` flipped opened a
+      // window in which a re-layout mid-exit — which is ordinary, because a caller that clears
+      // its data as it closes changes the panel's content — re-ran the ENTRANCE below and
+      // sprang the sheet back onto the screen, half-dismissed and stuck there.
+      opened.current = false;
     });
   }, [height, screenHeight, translate]);
 
@@ -158,15 +164,15 @@ export function Sheet({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
-  useEffect(() => {
-    if (!visible) opened.current = false;
-  }, [visible]);
+
 
   const onPanelLayout = useCallback(
     (e: LayoutChangeEvent) => {
       const h = e.nativeEvent.layout.height;
       if (h <= 0) return;
       setHeight(h);
+      // A layout that arrives while the panel is on its way out must not be read as an entrance.
+      if (!visible) return;
       if (opened.current) return;
       opened.current = true;
       // Parked at its own height first, so the entrance travels exactly the panel's height —
@@ -179,7 +185,7 @@ export function Sheet({
       const rest = screenHeight * restHeightFraction;
       settle(h > rest + 32 ? h - rest : 0);
     },
-    [restHeightFraction, screenHeight, settle, translate],
+    [restHeightFraction, screenHeight, settle, translate, visible],
   );
 
   // The backdrop reads the panel's position rather than being animated alongside it — two

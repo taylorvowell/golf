@@ -25,6 +25,8 @@ import { LatestSessionCard } from "../features/swings/LatestSessionCard";
 import { SessionRow } from "../features/swings/SessionRow";
 import { logStats, sessionStats, sessionize } from "../features/swings/sessions";
 import { useSessions } from "../features/swings/useSessions";
+import { ImportSheet } from "../features/swings/ImportSheet";
+import { useImportSwing } from "../features/swings/useImportSwing";
 import { useSwings } from "../features/swings/useSwings";
 import { useAppNavigation } from "../navigation";
 import { themedStyles, useTheme } from "../theme";
@@ -59,11 +61,10 @@ export function SwingLogScreen() {
   );
   const older = sessions.slice(1);
   /**
-   * The import door's seam. Picking clips, confirming view/handedness and minting the session
-   * they land in are session-mode step 06 — this holds the shape so the button's placement is
-   * settled before the flow behind it exists.
+   * The import door. Past the picker an imported clip takes the exact path a recorded swing
+   * takes — same ingest, same analyzer, same session — so there is no second kind of swing.
    */
-  const onImport = () => {};
+  const importer = useImportSwing(sessionRows);
   const log = useMemo(() => logStats(sessions), [sessions]);
 
   // A session just ended (D61): play the arrival — a saving beat, then the card springs in
@@ -97,8 +98,14 @@ export function SwingLogScreen() {
   const shownSessions = log.sessions + (landed ? 1 : 0);
   const shownSwings = log.swings + (landed && arrival ? arrival.swings : 0);
 
-  const hero = (
-    <HeroBackdrop overscan={HERO_PARALLAX.cap}>
+  /**
+   * The hero's CONTENT, handed to `backdropChrome` rather than to the backdrop itself.
+   *
+   * The gradient is painted below the scroll view; anything the golfer taps has to be inside it
+   * or the touch is swallowed. Record and Upload were rendered in the backdrop and were
+   * therefore visible, pressable-looking and completely dead — see `SheetOverBackdrop`.
+   */
+  const heroContent = (
       <View
         style={[styles.heroContent, { paddingTop: insets.top + APP_HEADER_BAR }]}
         // The sheet's resting edge is derived from this, so the gap below the hero is the same
@@ -126,7 +133,7 @@ export function SwingLogScreen() {
               testID="swing-log-upload"
               label="Upload"
               icon={(c) => <Upload size={14} color={c} strokeWidth={2.4} />}
-              onPress={onImport}
+              onPress={importer.begin}
             />
           </View>
         </View>
@@ -164,14 +171,16 @@ export function SwingLogScreen() {
           </View>
         ) : null}
       </View>
-    </HeroBackdrop>
   );
+
+  const hero = <HeroBackdrop overscan={HERO_PARALLAX.cap} />;
 
   return (
     <View style={{ flex: 1 }}>
     <SheetOverBackdrop
       testID="swing-log"
       backdrop={hero}
+      backdropChrome={heroContent}
       backdropHeight={backdropHeight}
       parallax={HERO_PARALLAX}
       // 0 = the sheet rests at the backdrop's edge on first paint. The mockup's 170 rode the
@@ -226,8 +235,8 @@ export function SwingLogScreen() {
           <View style={styles.centre}>
             <Text style={styles.emptyTitle}>No swings yet</Text>
             <Text style={styles.emptyDetail}>
-              Recording and upload arrive with the capture release. Swings you add will
-              appear here.
+              Record a swing, or upload one you have already filmed — it will appear here once
+              it has been analysed.
             </Text>
           </View>
         ) : null}
@@ -261,6 +270,15 @@ export function SwingLogScreen() {
       bell={<NotificationBell hero onPress={() => navigation.navigate("Notifications")} />}
       onProfile={() => navigation.navigate("Profile")}
       profileTestID="swing-log-profile"
+    />
+
+    {/* Asked once per import, over the log rather than on a screen of its own — picking a clip
+        and saying which way the camera pointed is one action, not a flow. */}
+    <ImportSheet
+      visible={importer.pending !== null}
+      clip={importer.pending}
+      onClose={importer.cancel}
+      onConfirm={importer.confirm}
     />
     </View>
   );

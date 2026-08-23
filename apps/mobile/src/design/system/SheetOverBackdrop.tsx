@@ -68,6 +68,7 @@ export function SheetOverBackdrop({
   presentDrop,
   onBackdropTap,
   backdropTapLabel = "Show the video",
+  backdropChrome,
   children,
   stickyFooter,
   backdropOverlay,
@@ -110,6 +111,22 @@ export function SheetOverBackdrop({
    *  The tap is the host's to interpret; drags still scroll. */
   onBackdropTap?: () => void;
   backdropTapLabel?: string;
+  /**
+   * The backdrop's INTERACTIVE content — a hero's title row, its action pills, anything the
+   * golfer taps up there.
+   *
+   * It exists because `backdrop` is painted in a layer BENEATH this scroll view, and a scroll
+   * view swallows every touch inside its own bounds: a button rendered in `backdrop` is visible,
+   * looks pressable, and cannot be pressed on Android. Marking the spacer `pointerEvents="none"`
+   * does not help — that removes the spacer from hit-testing, it does not hand the touch to a
+   * different layer. The swing log's Record and Upload doors were dead for exactly this reason.
+   *
+   * So interactive hero content goes HERE: inside the scroll view (so it takes touches) and
+   * before the sheet card (so the card still paints over it), translated by `scrollY + parallax`
+   * so it stays glued to the ground painted below it. `backdrop` keeps the gradient and the
+   * glow — the parts nobody touches.
+   */
+  backdropChrome?: ReactNode;
   children: ReactNode;
   /** Floats at the screen's bottom edge over the sheet; slides away while open. */
   stickyFooter?: ReactNode;
@@ -195,6 +212,14 @@ export function SheetOverBackdrop({
       ),
     [scrollY, openAnim],
   );
+  /**
+   * Screen position of the painted backdrop, expressed in the scroll content's coordinates.
+   *
+   * The content scrolls up by `scrollY` while the ground sinks by `parallaxY`, so chrome that
+   * must sit ON the ground has to add both back. Anything less and the buttons drift off the
+   * hero they belong to as soon as the golfer scrolls.
+   */
+  const chromeY = useMemo(() => Animated.add(scrollY, parallaxY), [scrollY, parallaxY]);
   const footerFade = useMemo(
     () => openAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }),
     [openAnim],
@@ -294,6 +319,25 @@ export function SheetOverBackdrop({
           />
         ) : (
           <View style={{ height: backdropHeight }} pointerEvents="none" />
+        )}
+        {/* The backdrop's own interactive content, glued to the ground painted beneath it.
+            No opacity gating and no `open` condition: a hero's buttons are not chrome that
+            comes and goes, they are the hero. `box-none` so the gaps between them fall through
+            to the scroll view and the sheet still drags from anywhere. */}
+        {backdropChrome != null && (
+          <Animated.View
+            testID={testID ? `${testID}-chrome` : undefined}
+            pointerEvents="box-none"
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              transform: [{ translateY: chromeY }],
+            }}
+          >
+            {backdropChrome}
+          </Animated.View>
         )}
         {/* Backdrop chrome: present only while open; 0→1 / 24→0 like `.video-open`'s shell.
             BEFORE the sheet card on purpose — the card paints over it at every scroll

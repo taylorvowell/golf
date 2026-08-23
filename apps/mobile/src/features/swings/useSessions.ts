@@ -61,8 +61,11 @@ export function useSessions(): SessionsHook {
       const body = await api.request<SessionListResponse>("sessions", {
         signal: controller.signal,
       });
-      lastGood = body.sessions;
-      if (liveRef.current) setSessions(body.sessions);
+      // Shape-checked rather than trusted: this list only decides titles and quarantine, so a
+      // malformed answer degrades to time-inferred grouping instead of throwing inside a screen.
+      const rows = Array.isArray(body.sessions) ? body.sessions : [];
+      lastGood = rows;
+      if (liveRef.current) setSessions(rows);
     } catch (err) {
       if (!liveRef.current || controller.signal.aborted) return;
       // A 401 clears the cache — one golfer's session names must never outlive their session.

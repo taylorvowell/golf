@@ -28,6 +28,20 @@ jest.mock("../navigation", () => ({ useAppNavigation: () => ({ navigate: mockNav
 
 import { SwingLogScreen } from "./SwingLogScreen";
 import { clearSwingsCache, useSwings } from "../features/swings/useSwings";
+import { clearSessionsCache } from "../features/swings/useSessions";
+import { ToastProvider } from "../features/toast/ToastProvider";
+
+/**
+ * Mounted with the app toaster above it, because the screen genuinely needs one: the Upload door
+ * reports an import's progress through it, and a screen rendered without the provider it uses in
+ * the app is a harness testing a different component.
+ */
+const renderScreen = () =>
+  render(
+    <ToastProvider>
+      <SwingLogScreen />
+    </ToastProvider>,
+  );
 
 function swing(over: Record<string, unknown> = {}) {
   return {
@@ -58,6 +72,7 @@ beforeEach(() => {
   // The list cache is module-level by design (it is what lets the detail screen open without a
   // serial refetch); tests reset it so each one exercises a cold start unless it says otherwise.
   clearSwingsCache();
+  clearSessionsCache();
 });
 
 describe("SwingLogScreen", () => {
@@ -66,14 +81,14 @@ describe("SwingLogScreen", () => {
     // The score renders in several mockup slots at once (hero ring, avg box, swing ring) —
     // what is pinned is that the numbered swing row and the ROUNDED score are on screen, not
     // slot count. Rows say "Swing N", never `label` — golfers do not type titles.
-    const { getByText, getAllByText } = await render(<SwingLogScreen />);
+    const { getByText, getAllByText } = await renderScreen();
     await waitFor(() => expect(getByText("Swing 1")).toBeTruthy());
     expect(getAllByText("72").length).toBeGreaterThan(0);
   });
 
   it("never renders a network failure as an empty swing log", async () => {
     mockRequest.mockRejectedValue(new TypeError("Network request failed"));
-    const { getByText, getByTestId, queryByText } = await render(<SwingLogScreen />);
+    const { getByText, getByTestId, queryByText } = await renderScreen();
 
     await waitFor(() => expect(getByText("Cannot reach SwingSage")).toBeTruthy());
     expect(queryByText("No swings yet")).toBeNull();
@@ -101,7 +116,7 @@ describe("SwingLogScreen", () => {
 
   it("distinguishes a declined session from an unreachable server", async () => {
     mockRequest.mockRejectedValue(new ApiClientError(401, "unauthorized", "no session"));
-    const { getByText, queryByText } = await render(<SwingLogScreen />);
+    const { getByText, queryByText } = await renderScreen();
 
     await waitFor(() => expect(getByText("Your session has expired")).toBeTruthy());
     expect(queryByText("Cannot reach SwingSage")).toBeNull();
@@ -109,20 +124,20 @@ describe("SwingLogScreen", () => {
 
   it("shows the empty state only when the server actually said zero", async () => {
     mockRequest.mockResolvedValue({ swings: [] });
-    const { getByText } = await render(<SwingLogScreen />);
+    const { getByText } = await renderScreen();
     await waitFor(() => expect(getByText("No swings yet")).toBeTruthy());
   });
 
   it("does not render an unscored swing as zero", async () => {
     mockRequest.mockResolvedValue({ swings: [swing({ overallScore: null, band: null })] });
-    const { getAllByText, queryByText } = await render(<SwingLogScreen />);
+    const { getAllByText, queryByText } = await renderScreen();
     await waitFor(() => expect(getAllByText(/not scored/i).length).toBeGreaterThan(0));
     expect(queryByText("0")).toBeNull();
   });
 
   it("routes to the swing when a card is tapped", async () => {
     mockRequest.mockResolvedValue({ swings: [swing()] });
-    const { getByTestId } = await render(<SwingLogScreen />);
+    const { getByTestId } = await renderScreen();
     await waitFor(() => expect(getByTestId("swing-card-s-1")).toBeTruthy());
     fireEvent.press(getByTestId("swing-card-s-1"));
     expect(mockNavigate).toHaveBeenCalledWith("SwingDetail", { id: "s-1" });
