@@ -37,7 +37,7 @@ export function CoachCard({
           padding: 15,
           borderRadius: 10,
           backgroundColor:
-            t.mode === "dark" ? "rgba(67,205,208,0.10)" : "rgba(67,205,208,0.09)",
+            t.mode === "dark" ? "rgba(45,240,251,0.10)" : "rgba(45,240,251,0.09)",
         },
         style,
       ]}
@@ -59,7 +59,7 @@ export function CoachCard({
       <View style={{ flex: 1, minWidth: 0 }}>
         <Text
           style={{
-            color: t.mode === "dark" ? t.aqua : "#1D7E86",
+            color: t.mode === "dark" ? t.aqua : "#0B5E8C",
             fontFamily: FONT_DISPLAY.black,
             fontSize: 8,
             letterSpacing: 1.12,

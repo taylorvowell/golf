@@ -15,7 +15,7 @@ export function SheetHandle() {
         marginTop: 12,
         marginBottom: 14,
         backgroundColor:
-          t.mode === "dark" ? "rgba(146,156,176,0.30)" : "rgba(135,144,162,0.30)",
+          t.mode === "dark" ? "rgba(141,162,180,0.30)" : "rgba(124,144,163,0.30)",
       }}
     />
   );

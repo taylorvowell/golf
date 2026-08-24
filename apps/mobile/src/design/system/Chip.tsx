@@ -27,7 +27,7 @@ export function Chip({
               minHeight: 28,
               paddingHorizontal: 10,
               borderRadius: 999,
-              backgroundColor: "rgba(7,16,31,0.48)",
+              backgroundColor: "rgba(6,19,31,0.48)",
             }
           : {
               minHeight: 30,

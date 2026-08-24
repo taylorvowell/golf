@@ -17,7 +17,7 @@
         "android.permission.SYSTEM_ALERT_WINDOW"
       ],
       "adaptiveIcon": {
-        "backgroundColor": "#080a0d",
+        "backgroundColor": "#181818",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -49,6 +49,7 @@
         }
       ],
       "./plugins/withTransparentNavBar",
+      "./plugins/withPortraitOnly",
       "expo-video",
       [
         "expo-image-picker",

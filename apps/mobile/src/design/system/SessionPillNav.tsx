@@ -63,7 +63,7 @@ export function SessionPillNav({
           paddingLeft: 10,
           paddingRight: 84,
           borderRadius: 999,
-          backgroundColor: t.mode === "dark" ? "rgba(16,28,50,0.94)" : "rgba(255,255,255,0.94)",
+          backgroundColor: t.mode === "dark" ? "rgba(14,35,56,0.94)" : "rgba(255,255,255,0.94)",
           transform: [
             {
               translateY: slide.interpolate({ inputRange: [0, 1], outputRange: [0, 180] }),
@@ -92,7 +92,7 @@ export function SessionPillNav({
                 alignItems: "center",
                 justifyContent: "center",
                 gap: 5,
-                backgroundColor: item.active ? "rgba(47,70,207,0.12)" : "transparent",
+                backgroundColor: item.active ? "rgba(13,148,219,0.12)" : "transparent",
               }}
             >
               {/* No pressed bed — Taylor tried one on the sticky bars (2026-08-19) and cut it. */}
@@ -124,7 +124,7 @@ export function SessionPillNav({
       >
         {({ pressed }) => (
         <LinearGradient
-          colors={["#57D7D8", "#43CDD0"]}
+          colors={["#5CF4FC", "#2DF0FB"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={{
@@ -141,7 +141,7 @@ export function SessionPillNav({
               inset: 13,
               borderRadius: 999,
               borderWidth: 2,
-              borderColor: "rgba(20,36,79,0.84)",
+              borderColor: "rgba(22,75,126,0.84)",
             }}
           />
           {/* The + drawn as two bars, not a text glyph — font metrics seat a "+" character
@@ -153,7 +153,7 @@ export function SessionPillNav({
                 width: 18,
                 height: 3,
                 borderRadius: 1.5,
-                backgroundColor: "#10204A",
+                backgroundColor: "#0F2E4C",
               }}
             />
             <View
@@ -162,7 +162,7 @@ export function SessionPillNav({
                 width: 3,
                 height: 18,
                 borderRadius: 1.5,
-                backgroundColor: "#10204A",
+                backgroundColor: "#0F2E4C",
               }}
             />
           </View>

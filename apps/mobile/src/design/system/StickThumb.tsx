@@ -6,8 +6,8 @@ import { useTheme } from "../../theme";
 /**
  * `.stick-thumb` (Progress mockup): the little stick-figure tile — 56px (48 compact),
  * cobalt/aqua-tinted gradient-ish bed, and an svg figure whose stroke colours are the
- * mockup's literal palette (joints #F7C948, bones #34D1E7, accent #67E08A, trace #7A68FF /
- * #31D6E4 — data-display constants, the same standing as the overlay's web-parity colours).
+ * mockup's literal palette (joints #F7C948, bones #2DF0FB, accent #67E08A, trace #8AF7FD /
+ * #5CF4FC — data-display constants, the same standing as the overlay's web-parity colours).
  * Path data comes per-instance: each focus area shows its own pose.
  */
 export interface StickFigure {
@@ -27,10 +27,10 @@ export interface StickFigure {
 
 export const STICK = {
   joint: "#F7C948",
-  bone: "#34D1E7",
+  bone: "#2DF0FB",
   accent: "#67E08A",
-  trace: "#7A68FF",
-  trace2: "#31D6E4",
+  trace: "#8AF7FD",
+  trace2: "#5CF4FC",
 } as const;
 
 export function StickThumb({
@@ -55,7 +55,7 @@ export function StickThumb({
           justifyContent: "center",
           // .stick-thumb bed: cobalt 16% → aqua 10% (flattened to the midpoint tint).
           backgroundColor:
-            t.mode === "dark" ? "rgba(63,87,218,0.20)" : "rgba(47,70,207,0.13)",
+            t.mode === "dark" ? "rgba(31,169,239,0.20)" : "rgba(13,148,219,0.13)",
         },
         style,
       ]}

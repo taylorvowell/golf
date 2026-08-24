@@ -555,6 +555,9 @@ export interface DismissalSaveResponse {
  */
 export interface ProfilePublic {
   displayName: string;
+  /**
+   * Absolute https URL = a sign-in provider's photo, fetched as-is. App-relative path (`users/<id>/avatar?r=<rev>`) = a photo uploaded through POST /profile/avatar, resolved against the API base WITH the caller's bearer token — the standing media-URL rule. Uploads answer the whole profile body; the URL is revision-addressed, so a changed photo is a new URL, never new bytes behind an old one.
+   */
   avatarUrl: string | null;
   bio: string | null;
   region: string | null;

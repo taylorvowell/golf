@@ -309,7 +309,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    backgroundColor: "rgba(7,16,31,0.72)",
+    backgroundColor: "rgba(6,19,31,0.72)",
   },
   viewChipText: {
     color: COLORS.text,
@@ -356,7 +356,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.22)",
   },
   dotActive: { backgroundColor: COLORS.aqua, width: 18 },
-  dotDone: { backgroundColor: "rgba(67,205,208,0.5)" },
+  dotDone: { backgroundColor: "rgba(45,240,251,0.5)" },
   transport: {
     flexDirection: "row",
     alignItems: "center",

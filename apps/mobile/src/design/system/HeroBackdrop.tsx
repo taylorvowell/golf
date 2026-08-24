@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { View, type StyleProp, type ViewStyle } from "react-native";
+import { type StyleProp, type ViewStyle } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Circle, Defs, RadialGradient, Stop } from "react-native-svg";
 

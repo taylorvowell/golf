@@ -1,8 +1,9 @@
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
 import { FONT_BODY } from "../../design/system/typography";
 import { COLORS } from "../../theme";
 import { ANALYSIS_STAGES } from "./processing";
+import { SwingLoader } from "../../design/system/SwingLoader";
 
 /**
  * The analyzing bar (§9.6): a staged progress track shown while a swing's analysis runs.
@@ -38,7 +39,7 @@ export function AnalyzingBar({ stage, stageIndex }: AnalyzingBarProps) {
       <View style={styles.row}>
         {/* The spinner says "still working" between stage changes, which are up to a few seconds
             apart — the segmented track alone can sit still long enough to look stuck. */}
-        <ActivityIndicator size="small" color={COLORS.aqua} style={styles.spinner} />
+        <SwingLoader size={18} ground="dark" />
         <View style={styles.track}>
           {ANALYSIS_STAGES.map((name, i) => (
             <View key={name} style={[styles.segment, i <= lit && styles.segmentDone]} />
@@ -63,8 +64,6 @@ const styles = StyleSheet.create({
   },
   label: { color: COLORS.text, fontFamily: FONT_BODY.semiBold, fontSize: 10.5 },
   row: { flexDirection: "row", alignItems: "center", gap: 6 },
-  // Scaled down from the platform's "small" so it belongs beside a 3pt track.
-  spinner: { transform: [{ scale: 0.62 }], width: 14, height: 14 },
   track: { flex: 1, flexDirection: "row", gap: 3 },
   kind: {
     color: "rgba(255,255,255,0.45)",

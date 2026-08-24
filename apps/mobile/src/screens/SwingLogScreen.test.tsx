@@ -5,7 +5,7 @@ import { ApiClientError } from "../platform/api";
 /**
  * The invariant under test is not the layout, it is the refusal to guess.
  *
- * A request that never reached the server must never render as "No swings yet". That reads as data
+ * A request that never reached the server must never render as the first-run empty state. That reads as data
  * loss to the one person who would know the difference, and it is the mobile instance of the
  * project's standing rule that an uncertain answer is never presented as fact. The rule outlived
  * the placeholder screen it was first written for, which is the point of restating it here rather
@@ -25,6 +25,21 @@ jest.mock("../platform/client", () => ({
   },
 }));
 jest.mock("../navigation", () => ({ useAppNavigation: () => ({ navigate: mockNavigate, goBack: jest.fn() }) }));
+// The header's avatar door reads the auth session; these tests are about refusal-to-guess
+// invariants, not identity, so the session is the same signed-in stub HomeScreen's suite uses.
+jest.mock("../features/auth/AuthProvider", () => ({
+  useAuth: () => ({
+    status: "signed-in",
+    session: null,
+    userId: "u-1",
+    email: "golfer@example.com",
+    avatarUrl: null,
+    firstName: "Taylor",
+    signInWithGoogle: jest.fn(),
+    signOut: jest.fn(),
+  }),
+  onAccessTokenRefreshed: () => () => undefined,
+}));
 
 import { SwingLogScreen } from "./SwingLogScreen";
 import { clearSwingsCache, useSwings } from "../features/swings/useSwings";
@@ -91,7 +106,7 @@ describe("SwingLogScreen", () => {
     const { getByText, getByTestId, queryByText } = await renderScreen();
 
     await waitFor(() => expect(getByText("Cannot reach SwingSage")).toBeTruthy());
-    expect(queryByText("No swings yet")).toBeNull();
+    expect(queryByText("Get started")).toBeNull();
     expect(getByTestId("swing-log-retry")).toBeTruthy();
   });
 
@@ -124,8 +139,11 @@ describe("SwingLogScreen", () => {
 
   it("shows the empty state only when the server actually said zero", async () => {
     mockRequest.mockResolvedValue({ swings: [] });
-    const { getByText } = await renderScreen();
-    await waitFor(() => expect(getByText("No swings yet")).toBeTruthy());
+    const { getByText, queryByTestId } = await renderScreen();
+    await waitFor(() => expect(getByText("Get started")).toBeTruthy());
+    // First run swaps the hero's small pills for the empty state's two large doors.
+    expect(queryByTestId("swing-log-record")).toBeNull();
+    expect(queryByTestId("swing-log-empty-record")).toBeTruthy();
   });
 
   it("does not render an unscored swing as zero", async () => {

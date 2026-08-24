@@ -1,6 +1,5 @@
 import type {
   SessionCreateRequest,
-  SessionPatchRequest,
   SessionResponse,
   SessionSummary,
 } from "@swingsage/schema/contract";
@@ -9,15 +8,15 @@ import { api } from "../../platform/client";
 import type { SessionType } from "./sessionState";
 
 /**
- * Session mode's two writes: mint the session, and rename it.
+ * Session mode's one write: mint the session.
  *
  * A session row is created on the FIRST recorded swing, never on entering session mode (D61) —
- * a golfer who opens the camera and walks away leaves nothing behind. So the name and type live
- * in the reducer until the first Save, and this module is what turns them into a row.
+ * a golfer who opens the camera and walks away leaves nothing behind. So the type lives in the
+ * reducer until the first Save, and this module is what turns it into a row.
  *
- * `name` is sent only when the golfer actually renamed the session. The app's own "Session 4" is
- * a number it counted, and storing it would make every session look named to the swing log,
- * which keeps its date title precisely when the name is null.
+ * `name` is always null from session mode. The app's own "Session 4" is a number it counted, and
+ * storing it would make every session look named to the swing log, which keeps its date title
+ * precisely when the name is null.
  */
 
 export async function createSession(input: {
@@ -36,22 +35,6 @@ export async function createSession(input: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  return session;
-}
-
-export async function renameSession(
-  sessionId: string,
-  name: string | null,
-): Promise<SessionSummary> {
-  const body: SessionPatchRequest = { name };
-  const { session } = await api.request<SessionResponse>(
-    `sessions/${encodeURIComponent(sessionId)}`,
-    {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    },
-  );
   return session;
 }
 

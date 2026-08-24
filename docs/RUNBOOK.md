@@ -1208,7 +1208,37 @@ sits flush to the page gutter). With the bubble back on, the two overlap. The bu
 `EXDevMenuShowFloatingActionButton`, which would need an `app.json` config change and a
 `prebuild --clean` + rebuild — not worth it for a preference that is one command.
 
-## 14. Regenerating the app icons
+## 14. Regenerating the brand artwork
+
+Two generators, both driven by `apps/mobile/assets/brand/swingsage-logo.svg`. Replace that file and
+run BOTH — they read the same source but not each other, so running only one leaves the app and the
+launcher wearing different artwork.
+
+```
+cd apps/mobile
+node scripts/make-brand.mjs        # rewrites src/design/system/brandPaths.ts
+node scripts/make-icons.mjs        # rewrites the five PNGs in assets/
+node scripts/fit-swing-plane.mjs   # prints SWING_PLANE + a PNG of the fit; paste the numbers
+```
+
+`fit-swing-plane.mjs` is the odd one out: it PRINTS rather than writes, and its numbers are pasted
+into `src/design/system/orbitGeometry.ts` by hand. It measures the ellipse the swoosh actually
+draws — the source has no stroke centreline to read, so the fit is derived from the filled shape's
+distance field. It also writes a PNG of the fit over the artwork; look at that before believing a
+number.
+
+`brandPaths.ts` is GENERATED — never hand-edit it. It claimed to be generated for months while no
+generator existed, and went stale on every logo swap; `make-brand.mjs` is what made the claim true.
+It asserts the fill GROUPS it expects (the AI slabs, the swing arc) rather than a path count, so a
+legitimate redraw that changes the number of paths still passes while a fill that quietly changed
+fails loudly.
+
+The swing arc's gradient does NOT live in the SVG — the source paints it a flat colour. The ramps
+(`SWING_STOPS`, `SWING_STOPS_ON_LIGHT`) and the light-surface ink live in the generator, and
+`SwingGradient` in `BrandLogo.tsx` is the single component that draws them. The full colour table
+is in [`docs/decisions/mobile-client.md`](decisions/mobile-client.md) § Brand rendering.
+
+## 15. Regenerating the app icons
 
 All five launcher/splash assets come from `apps/mobile/assets/brand/swingsage-logo.svg` — the
 mark only, no wordmark. Never hand-edit the PNGs; edit the SVG (or the script) and re-run:
@@ -1219,11 +1249,69 @@ node scripts/make-icons.mjs        # rewrites the five PNGs in assets/, 1024x102
 npx expo prebuild -p android --clean   # regenerates android/ mipmaps from them
 ```
 
-It writes `icon.png` (opaque white, iOS + Android legacy), `android-icon-background.png`
-(flat white plate), `android-icon-foreground.png` and `android-icon-monochrome.png` (transparent,
-inside Android's safe zone) and `splash-icon.png` (transparent, drawn at `imageWidth` 150).
-`sharp` does the rasterizing and is already a transitive dependency of `apps/mobile`.
+It writes `icon.png` (the plate with the mark, iOS + Android legacy),
+`android-icon-background.png` (the plate alone), `android-icon-foreground.png` and
+`android-icon-monochrome.png` (transparent, inside Android's safe zone) and `splash-icon.png`
+(transparent, drawn at `imageWidth` 150 over the white splash). `sharp` does the rasterizing and
+is already a transitive dependency of `apps/mobile`.
+
+In practice `pnpm --filter mobile phone:native` covers the prebuild + install in one command.
 
 **Gotcha:** `expo run:android` does NOT regenerate an existing `android/`, so an icon change
-without `prebuild --clean` never reaches the device. The launcher also caches aggressively —
-uninstall before reinstalling if the old icon persists.
+without `prebuild --clean` never reaches the device. `dev-device.mjs`'s prebuild gate now hashes
+the asset BYTES app.json points at, not just app.json — regenerating the PNGs alone used to leave
+the gate saying "not stale" while gradle packaged the previous artwork's mipmaps, which read
+exactly like "the new icon didn't apply".
+
+### Forcing the launcher to show a new icon
+
+One UI caches launcher icons in its own database, so a reinstall alone leaves the OLD icon on the
+home screen and in the drawer — the change looks like it never landed. Bust the cache instead of
+uninstalling (which would lose app data) or re-adding the shortcut by hand:
+
+```
+D="-s $(node scripts/adb-phone.mjs --print)"      # or the address env-probe reported
+adb $D shell pm disable-user com.swingsage.spike
+adb $D shell pm enable com.swingsage.spike
+adb $D shell am force-stop com.sec.android.app.launcher
+adb $D shell monkey -p com.sec.android.app.launcher -c android.intent.category.HOME 1
+```
+
+The disable/enable fires `PACKAGE_CHANGED`, which makes the launcher drop its cached bitmap; the
+force-stop makes it re-read on the next HOME. Non-destructive — app data and the home-screen
+layout both survive. Confirm with `adb $D exec-out screencap -p > icon.png`.
+
+### The adaptive icon shows only the middle 66 %, and that changes the ARTWORK
+
+A launcher masks an adaptive icon down to its central ~66 %; everything outside is cropped. Two
+consequences the generator now encodes, both of which produced a wrong-looking icon first:
+
+* **A background gradient must finish inside the mask.** Running the falloff out to the canvas
+  corner puts every dark stop outside the window, so the visible disc is the bright half of the
+  gradient with nothing to fall to — it reads as flat colour. `MASK_REACH` vs `CORNER_REACH`.
+* **A foreground's size is a fraction of the VISIBLE area, not the canvas.** The same number used
+  against the canvas makes the Android mark about a fifth larger than the iOS one.
+
+## 16. Persona demo accounts — reseeding and rotating
+
+Seven real accounts the mobile debug menu's persona picker signs in as (emails, names and what
+each holds: `docs/ENVIRONMENT.md` § Persona demo accounts). All scripts run from `apps/web/`.
+
+```
+node --env-file=.env scripts/seed-persona-auth.mjs      # create/update the auth users
+node scripts/gen-persona-seed.mjs                       # regen persona-seed.sql from the manifest
+# run persona-seed.sql on the DATA project as postgres (supabase MCP execute_sql)
+MEDIA_DRIVER=r2 R2_ACCOUNT_ID=… R2_ACCESS_KEY_ID=… R2_SECRET_ACCESS_KEY=… \
+  node --env-file=.env --import tsx scripts/publish-persona-media.ts   # artifacts → R2 (idempotent)
+```
+
+* **Never delete `scripts/persona-manifest.json` casually** — its uuids are what the DB rows and
+  the published R2 prefixes share. Re-minting it orphans the published objects.
+* **Rotate the password** by editing `PERSONA_PASSWORD` (`apps/web/.env`) and
+  `EXPO_PUBLIC_PERSONA_PASSWORD` (`apps/mobile/.env`) to the same new value, re-running the auth
+  seeder, then restarting Metro (EXPO_PUBLIC_* is inlined at bundle time).
+* **New persona email?** Add it to `AUTH_ALLOWED_EMAILS` locally AND on Vercel production
+  (`vercel env rm/add` + redeploy), or its requests 401.
+* On the phone: debug pill → Persona → pick a card. Picking signs the current session OUT (that
+  is what clears per-user caches); "Real data" signs the persona out and returns to the sign-in
+  screen for your own account.

@@ -85,7 +85,7 @@ export function InstructorScreen() {
 }
 
 /** Lavender at 16% — the same bed the profile drawer's inert tiles use. */
-const LAVENDER_BED = "rgba(133,141,194,0.16)";
+const LAVENDER_BED = "rgba(126,147,168,0.16)";
 
 const useStyles = themedStyles((t) => ({
   root: { flex: 1, backgroundColor: t.bg },

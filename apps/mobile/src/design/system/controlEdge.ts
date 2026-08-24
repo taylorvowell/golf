@@ -12,7 +12,7 @@ import type { ViewStyle } from "react-native";
  * no edge at all. The outline draws the control's shape, which is precisely what the rule
  * permits.
  *
- * The colour is the app's aqua highlight (`AQUA[500]`, #43CDD0) at 20% (Taylor, 2026-08-21):
+ * The colour is the app's aqua highlight (`AQUA[500]`, #2DF0FB) at 20% (Taylor, 2026-08-21):
  * it ties the capture controls to the same accent the zoom fill, the switcher's active
  * segment and the review handle already use, so the whole surface reads as one system rather
  * than as neutral chrome with aqua bits inside it. Deliberately faint — an edge that defines
@@ -20,5 +20,5 @@ import type { ViewStyle } from "react-native";
  */
 export const CONTROL_EDGE: ViewStyle = {
   borderWidth: 1,
-  borderColor: "rgba(67,205,208,0.2)",
+  borderColor: "rgba(45,240,251,0.2)",
 };

@@ -93,7 +93,7 @@ Blocks `gh` PRs/issues/`gh api` only. Vercel's GitHub connection is server-side 
 | **`modal skills install` silently loses ~30% of its docs on Windows** — the installer writes files with the system default codec (cp1252), so every Modal doc containing a non-Latin-1 character dies with `'charmap' codec can't encode character`. Found 2026-08-22: 45 of 153 doc resources failed, and the run still left a *usable-looking* skill behind — 205 files, `SKILL.md` present, no obvious sign a third of the reference material was missing. | **Fixed by forcing Python UTF-8 mode.** Always install and update with `PYTHONUTF8=1`: `PYTHONUTF8=1 services/analyzer/.venv/Scripts/python.exe -m modal skills install --claude -y` (and the same for `modal skills update`). Verify by count — a clean run ends with `Installed Modal skill to ...` and no warning line, and `find .claude/skills/modal -type f | wc -l` is 205 with 204 `.md` references. |
 | **`python3` is a Microsoft Store stub, not Python** — `C:\Users\taylo\AppData\Local\Microsoft\WindowsApps\python3` is Windows' app-execution alias. It resolves, so `command -v python3` succeeds and any doc saying `python3 -m <anything>` *looks* runnable — but executing it opens the Microsoft Store or fails with no useful error. Found 2026-08-22 when `python3 -m modal setup` would not run. | **Permanent — never write `python3` in a command for this machine.** `python` is real Python 3.13.7 (`C:\Python313`) and `py` is the 3.13.14 launcher. For anything analyzer-related the answer is neither: use the venv interpreter, `services\analyzer\.venv\Scripts\python.exe`, which is where analyzer deps actually live. |
 | **ProtonVPN blocks phone→PC LAN traffic** — with ProtonVPN connected, the phone cannot reach `10.0.1.107:3000` (and even the PC cannot curl its own LAN IP), so the app's swing list spins and then reads "Cannot reach SwingSage". Node's firewall allow-rules are fine; it is Proton's own firewall. Found 2026-08-12. | **Workaround exists.** Either enable *Allow LAN connections* in ProtonVPN (or disconnect it), or bypass the LAN entirely: `adb reverse tcp:3000 tcp:3000` + set `EXPO_PUBLIC_API_BASE_URL=http://localhost:3000` in `apps/mobile/.env` + restart Metro (env is inlined at bundle time). Revert the .env after — the documented LAN value is what non-adb sessions expect. |
-| **`ANDROID_SDK_ROOT` contains its own name** — the value is literally `ANDROID_SDK_ROOT=C:\Users\taylo\AppData\Local\Android\Sdk`. AGP prefers it over the correct `ANDROID_HOME` and dies with *"The filename, directory name, or volume label syntax is incorrect"*, which names nothing. | **Still broken.** Workaround: `unset ANDROID_SDK_ROOT` before any `gradlew` invocation. Permanent fix is a Windows *user* environment variable edit. `expo run:android` is unaffected — it writes `local.properties`. |
+| **`ANDROID_SDK_ROOT` contains its own name** — the value is literally `ANDROID_SDK_ROOT=C:\Users\taylo\AppData\Local\Android\Sdk`. AGP prefers it over the correct `ANDROID_HOME` and dies with *"The filename, directory name, or volume label syntax is incorrect"*, which names nothing. | **Fixed 2026-08-24** — the user variable now holds the bare path, set with `[Environment]::SetEnvironmentVariable('ANDROID_SDK_ROOT', $env:LOCALAPPDATA + '\Android\Sdk', 'User')`. Shells opened before that still carry the broken value; `export ANDROID_SDK_ROOT=\"$ANDROID_HOME\"` repairs one in place. |
 | **Samsung *Accidental touch protection* blocks every `adb shell input`** — when the proximity sensor is covered (phone face-down or under something), `com.samsung.android.gesture`'s PocketProximityManager raises an `UnintentionalLcdOn` window that consumes all injected touches. Taps and swipes report success and land nowhere, so a UI automation run reads as "the app did not respond". | **Not fixable over adb.** `settings put system screen_off_pocket 0`, `dumpsys sensorservice restrict <pkg>` and `am force-stop com.samsung.android.gesture` were all tried on 2026-08-12 and none dismissed it. Someone has to uncover the phone. `screen_off_pocket` is now left at `0` and `svc power stayon true` is set, which should stop it recurring; check `dumpsys window \| grep mCurrentFocus` for `UnintentionalLcdOn` before blaming the app. |
 | **`ffmpeg` on this machine is 9.0 and has REMOVED `-vsync`** — every recipe on the internet still says `-vsync 0`, and ffmpeg 9 answers *"Unrecognized option 'vsync'"* and aborts before reading the input. | Use `-fps_mode passthrough`. `scripts/checkoverlay.ts` does. The failure is at least loud — an abort, not a silently wrong frame. |
 | **NDK `27.1.12297006` was an empty stub** — a directory with only a `.installer` marker. RN 0.86 asks for that exact version and failed on *"did not have a source.properties file"*. | Fixed — the stub was deleted and Gradle re-downloaded it. |
@@ -166,6 +166,36 @@ its code are deliberately not written here** — together they are a standing si
 project, and this file is committed. They live in the dashboard, and the number alone is in
 `apps/web/.env` as `AUTH_ALLOWED_PHONES`, which is gitignored. There is no `supabase/` directory in
 the repo yet; the CLI is installed (2.104.0).
+
+### Persona demo accounts (2026-08-24)
+
+Seven REAL auth users on `golf-swing`, one per debug persona — the mobile debug menu's persona
+picker signs in as them (`apps/mobile/src/features/debug/persona.tsx` owns the email ↔ persona
+mapping). Their data rows live in **`swingsage-prod`** and their media in **R2**, because the
+phone talks to the deployed API.
+
+| Persona | Email | Name | Seeded data |
+|---|---|---|---|
+| existing (default demo) | `persona-existing@swingsage.dev` | Marcus Webb | 8 swings / 2 sessions + Pro Swing reference |
+| new-user | `persona-new@swingsage.dev` | Jordan Lee | nothing — first-open state |
+| newby | `persona-newby@swingsage.dev` | Priya Nair | no swings; intro spotlights pre-dismissed |
+| trial | `persona-trial@swingsage.dev` | Danny Ortiz | 4 swings / 1 session + reference |
+| pro | `persona-pro@swingsage.dev` | Sophie Chen | 5 swings / 2 sessions + reference |
+| coach (Instructor tier) | `persona-coach@swingsage.dev` | Dave Kim | 3 swings / 1 session + reference; coach role + approved link to Marcus |
+| admin | `persona-admin@swingsage.dev` | Alex Morgan | admin role, no swings |
+
+- **One shared password** — `PERSONA_PASSWORD` in `apps/web/.env` and
+  `EXPO_PUBLIC_PERSONA_PASSWORD` in `apps/mobile/.env` (both gitignored; never in a release
+  bundle path). Rotate by editing both and re-running the auth seeder.
+- **Scripts** (`apps/web/scripts/`): `seed-persona-auth.mjs` (auth users, idempotent),
+  `gen-persona-seed.mjs` (mints `persona-manifest.json` + `persona-seed.sql` — the manifest's
+  uuids are what the DB rows AND media addresses share, keep it), `publish-persona-media.ts`
+  (copies fixture artifacts to R2 under each persona's derived prefix; needs `MEDIA_DRIVER=r2`
+  + R2 creds).
+- **`AUTH_ALLOWED_EMAILS`** on Vercel production includes all seven (updated 2026-08-24);
+  the same list is mirrored in `apps/web/.env`.
+- Swings are clones of the analyzer fixtures (`p-<persona>-<stem>` media keys) — real analysed
+  swings with real artifacts, not mocks.
 
 ## Supabase — project `swingsage-prod` (production)
 

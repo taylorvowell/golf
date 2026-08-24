@@ -22,6 +22,21 @@ jest.mock("../platform/client", () => ({
 jest.mock("../navigation", () => ({
   useAppNavigation: () => ({ navigate: mockNavigate, goBack: jest.fn() }),
 }));
+// The header's avatar door reads the auth session; these tests are about honesty invariants,
+// not identity, so the session is the same signed-in stub HomeScreen's suite uses.
+jest.mock("../features/auth/AuthProvider", () => ({
+  useAuth: () => ({
+    status: "signed-in",
+    session: null,
+    userId: "u-1",
+    email: "golfer@example.com",
+    avatarUrl: null,
+    firstName: "Taylor",
+    signInWithGoogle: jest.fn(),
+    signOut: jest.fn(),
+  }),
+  onAccessTokenRefreshed: () => () => undefined,
+}));
 
 import { ProgressScreen } from "./ProgressScreen";
 import { clearSwingsCache } from "../features/swings/useSwings";

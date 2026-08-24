@@ -52,9 +52,13 @@ async function migrateLegacyIntroDismissals(): Promise<void> {
 
 export interface SpotlightRailProps {
   navigation: Navigation;
+  /** Mockup mode (Home's filler toggle): show every eligible card regardless of dismissals —
+   *  and without waiting on the dismissal store, whose no-flash gate otherwise blanks the
+   *  deck when the GET has not landed. Never set from product logic. */
+  showDismissed?: boolean;
 }
 
-export function SpotlightRail({ navigation }: SpotlightRailProps) {
+export function SpotlightRail({ navigation, showDismissed = false }: SpotlightRailProps) {
   const dismissals = useDismissals();
   const entitlement = useEntitlement();
   const { session } = useAuth();
@@ -105,10 +109,11 @@ export function SpotlightRail({ navigation }: SpotlightRailProps) {
   }, [entitlement, createdAt, state, sessions]);
 
   // After every hook: the no-flash gate, then the empty-deck collapse.
-  if (dismissals.kind !== "ready") return null;
+  if (!showDismissed && dismissals.kind !== "ready") return null;
 
+  const dismissed = dismissals.kind === "ready" ? dismissals.keys : new Set<string>();
   const deck = SPOTLIGHTS.filter(
-    (def) => !dismissals.keys.has(spotlightKey(def.id)) && def.eligible(ctx),
+    (def) => (showDismissed || !dismissed.has(spotlightKey(def.id))) && def.eligible(ctx),
   );
   if (deck.length === 0) return null;
 

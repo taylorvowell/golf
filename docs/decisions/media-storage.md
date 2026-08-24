@@ -84,6 +84,26 @@ disk; the seam maps between them.
 renamed or re-analysed. This is why re-analysis does not break media resolution.
 **See:** ARCHIVE D30, D33.
 
+### Profile photos live in the artifact bucket, re-encoded, revision-addressed
+
+**Decision:** An uploaded profile photo is stored at `u/<userId>/avatar/<rev>.jpg` in
+`swing-artifacts` — under the user's own prefix so the account-deletion sweep removes it with
+everything else, and no new bucket or retention rule exists for it. The upload
+(`POST /api/v1/profile/avatar`, raw bytes; the client crops square first with the platform
+picker) is always re-encoded server-side with sharp — EXIF applied then stripped, 512² cover,
+JPEG — never stored as received. `users.avatar_url` holds an **app-relative path**
+(`users/<id>/avatar?r=<rev>`) for uploaded photos and an absolute `https://` URL for provider
+(Google) photos; clients tell them apart by shape and resolve relative paths against the API
+base with the bearer token, like every other media URL. A new photo mints a new revision (URLs
+are immutable, caches never go stale); the old object is deleted only after the pointer moves.
+Serving (`GET /api/v1/users/[id]/avatar`) is gated by `users_select_self` RLS — self or approved
+coach, the same policy the roster reads through. The mobile fallback order is uploaded photo →
+provider photo → the generic silhouette (never an initial; blue-family: `surfaceBlue` bed,
+`muted` figure). The client also downscales before upload (`expo-image-manipulator`, longest
+side 512, JPEG ~0.85): the picker's square crop keeps camera resolution, and a 12 MP square on
+the wire becomes 512px on the server anyway — the client pass is bandwidth, the server pass is
+trust, and neither replaces the other. A failed shrink falls back to uploading the original.
+
 ### Storage-level RLS is deferred, deliberately and with a reason
 
 **Decision:** No `storage.objects` policies yet. The media driver holds a credential that bypasses

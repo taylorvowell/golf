@@ -1,5 +1,5 @@
 import { useCallback, useState, type ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View, type ViewStyle } from "react-native";
+import { Pressable, StyleSheet, Text, type ViewStyle } from "react-native";
 
 import { DECK } from "./tokens";
 

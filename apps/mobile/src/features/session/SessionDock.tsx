@@ -71,6 +71,7 @@ export function SessionDock({
   const [modeOpen, setModeOpen] = useState(false);
   const modeLabel = MODES.find((m) => m.type === sessionType)?.label ?? "Analysis";
   const busy = mode !== "idle";
+  const counting = mode === "countdown";
 
   return (
     <>
@@ -197,7 +198,10 @@ export function SessionDock({
         center={
           <SessionRecordButton
             stop={busy}
-            label={busy ? "Stop" : "Record Swing"}
+            // Before the camera rolls the button ABORTS; after it, it stops. Same tap, two
+            // different promises, so they no longer wear the same face (Taylor, 2026-08-23).
+            cancel={counting}
+            label={counting ? "Cancel countdown" : busy ? "Stop" : "Record Swing"}
             onPress={
               // Stopping a countdown puts the golfer back where they came FROM (Taylor,
               // 2026-08-21). Mid-session that is the swing they were just looking at; on the
@@ -230,7 +234,7 @@ const styles = StyleSheet.create({
     gap: 4,
     padding: 5,
     borderRadius: 999,
-    backgroundColor: "rgba(16,28,50,0.96)",
+    backgroundColor: "rgba(14,35,56,0.96)",
     zIndex: 2,
   },
   // A single column ABOVE the item — three full words do not fit side by side, and stacked
@@ -242,7 +246,7 @@ const styles = StyleSheet.create({
     gap: 4,
     padding: 5,
     borderRadius: 18,
-    backgroundColor: "rgba(16,28,50,0.96)",
+    backgroundColor: "rgba(14,35,56,0.96)",
     zIndex: 2,
   },
   modeOption: {

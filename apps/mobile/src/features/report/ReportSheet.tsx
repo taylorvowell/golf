@@ -174,7 +174,7 @@ export function ReportSheet({
               height: 168,
               borderRadius: 12,
               overflow: "hidden",
-              backgroundColor: "#101A2A",
+              backgroundColor: "#0E2338",
             }}
           >
             {({ pressed }) => (
@@ -203,14 +203,14 @@ export function ReportSheet({
                     backgroundColor: t.aqua,
                   }}
                 >
-                  <Play size={16} color="#10204A" fill="#10204A" strokeWidth={0} />
+                  <Play size={16} color="#0F2E4C" fill="#0F2E4C" strokeWidth={0} />
                 </View>
                 {/* Pressed reads as a shade over the footage — a fill on top, because a surface
                     swap has nothing to show through a photograph. */}
                 {pressed ? (
                   <View
                     pointerEvents="none"
-                    style={{ position: "absolute", inset: 0, backgroundColor: "rgba(7,16,31,0.28)" }}
+                    style={{ position: "absolute", inset: 0, backgroundColor: "rgba(6,19,31,0.28)" }}
                   />
                 ) : null}
               </>

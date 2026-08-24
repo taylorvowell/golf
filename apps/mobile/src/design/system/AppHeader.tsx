@@ -72,6 +72,7 @@ export function AppHeader({
   chromePx,
   onProfile,
   bell,
+  avatar,
   profileTestID = "open-profile",
 }: {
   hero?: boolean;
@@ -94,6 +95,15 @@ export function AppHeader({
    * — an inbox opened mid-swing is a golfer who stopped recording.
    */
   bell?: ReactNode;
+  /**
+   * The signed-in golfer's face (Taylor, 2026-08-24) — a second door to the same profile
+   * drawer, between the bell and the menu glyph. A SLOT for the same leaf reason the bell is:
+   * the face comes from the auth session and the profile store, and the design system owns
+   * where it sits, never what it knows. Pressing it fires `onProfile`; while the header is
+   * sealed (no `onProfile`) it is not drawn at all — a face that ignores the tap reads as
+   * broken, and session mode seals doors on purpose.
+   */
+  avatar?: ReactNode;
   profileTestID?: string;
 }) {
   const insets = useSafeAreaInsets();
@@ -159,9 +169,37 @@ export function AppHeader({
           gap: 10,
         }}
       >
-        <BrandLogo height={26} color={hero ? "#FFFFFF" : undefined} />
+        {/* 16, not the 26 the old lockup wanted: this artwork is drawn tight, so the wordmark
+            spans the full height rather than sitting inside padding. */}
+        <BrandLogo height={16} color={hero ? "#FFFFFF" : undefined} />
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
         {bell}
+        {onProfile && avatar ? (
+          <Pressable
+            testID={`${profileTestID}-avatar`}
+            accessibilityRole="button"
+            accessibilityLabel="Profile and settings"
+            onPress={onProfile}
+            hitSlop={8}
+            style={({ pressed }) => [
+              {
+                width: 34,
+                height: 34,
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 17,
+                // Same press bed as the menu glyph — the ring shows around the smaller face.
+                backgroundColor: pressed
+                  ? hero
+                    ? "rgba(255,255,255,0.22)"
+                    : t.pressBed
+                  : "transparent",
+              },
+            ]}
+          >
+            {avatar}
+          </Pressable>
+        ) : null}
         {onProfile ? (
         <Pressable
           testID={profileTestID}

@@ -7,24 +7,39 @@
  * read through. This file is just the paint on the shelf, so that swapping a ramp (a rebrand,
  * a contrast fix) is one edit that cannot miss a screen.
  *
- * Every hex below is copied verbatim from the Ideal Swing reference
- * (`.claude/ideal-swing-design-system.html`, `:root` / `html[data-theme="dark"]` blocks).
- * If a value here disagrees with the mockup, the mockup wins.
+ * **This file carries the four-anchor blue** (Taylor, 2026-08-23): `#2DF0FB` highlight, `#0D94DB`
+ * middle, `#164B7E` dark, `#172B4E` darkest. Every ramp below is one of those four plus the steps
+ * between them, so the whole app is one hue family rather than a navy and an unrelated aqua.
+ *
+ * `#172B4E` is the floor: nothing in the app is darker, so the dark theme's ground IS that anchor
+ * and its surface ramp climbs out of it rather than down toward black.
+ *
+ * Which anchor a ramp takes is decided by what sits ON it. `COBALT` carries white text, so it runs
+ * from the middle down into the dark. `AQUA` never has white on it, so it keeps the highlight.
+ *
+ * It replaces the Ideal Swing reference palette (`.claude/ideal-swing-design-system.html`), whose
+ * values are what to restore if this scheme is rejected. Ramp NAMES are unchanged on purpose —
+ * `COBALT` means "the primary-action ramp" and `AQUA` means "the highlight ramp"; renaming them
+ * would touch 175 call sites for no change in behaviour.
  */
 
 /** The brand navy ramp — text on light, grounds and heroes on dark. */
 export const NAVY = {
-  950: "#0B1633",
-  900: "#10204A",
-  800: "#14244F",
-  700: "#1E3881",
+  950: "#172B4E",
+  900: "#1B3560",
+  800: "#164B7E",
+  700: "#1E5F9E",
 } as const;
 
-/** Cobalt — primary actions and selected states. */
+/**
+ * The primary-action ramp — primary actions and selected states. Runs from the palette's MIDDLE
+ * anchor down into its DARK one, because white text sits on these: the highlight is too light to
+ * carry it, which is the whole reason the scheme has three anchors and not one.
+ */
 export const COBALT = {
-  700: "#243ABB",
-  600: "#2F46CF",
-  500: "#3F57DA",
+  700: "#164B7E",
+  600: "#0D94DB",
+  500: "#1FA9EF",
 } as const;
 
 /**
@@ -33,16 +48,16 @@ export const COBALT = {
  * colour identity.
  */
 export const AQUA = {
-  600: "#2FA8AB",
-  500: "#43CDD0",
-  400: "#57D7D8",
-  300: "#7CE0E2",
-  100: "#DDF7F5",
+  600: "#0D94DB",
+  500: "#2DF0FB",
+  400: "#5CF4FC",
+  300: "#8AF7FD",
+  100: "#D5FDFE",
 } as const;
 
 /** The secondary voice — coach glyphs, quiet emphasis. */
 export const LAVENDER = {
-  500: "#858DC2",
+  500: "#7E93A8",
 } as const;
 
 /** Semantic outcome colours — identical in both themes. */
@@ -63,9 +78,9 @@ export const ON_DARK = "#FFFFFF";
  * gradient instead of looking like a different product.
  */
 export const INK = {
-  900: "#04070F",
-  800: "#080D1D",
-  700: "#0D1428",
+  900: "#101F3A",
+  800: "#142544",
+  700: "#172B4E",
 } as const;
 
 /** The dark theme's shadow ink (the mockup's dark shadows are pure black rgba). */
@@ -85,44 +100,46 @@ export const VIDEO_AMBER = "#F59E0B";
  * controls legible in sunlight. Born here so every hex in the app has one home.
  */
 export const DECK_SHADES = {
-  raisedTop: "#232B35",
-  raisedBottom: "#151B23",
-  sunkTop: "#0E131A",
-  sunkBottom: "#161D26",
+  raisedTop: "#25395F",
+  raisedBottom: "#152648",
+  sunkTop: "#101E39",
+  sunkBottom: "#1A2C50",
 } as const;
 
 /** The light theme's surfaces and text, verbatim from the mockup `:root`. */
 export const LIGHT_SURFACES = {
-  bg: "#F2F5FB",
-  bgElevated: "#F8FAFE",
+  bg: "#F1F6FB",
+  bgElevated: "#F7FAFE",
   surface: "#FFFFFF",
-  surface2: "#F1F4FA",
-  surface3: "#E7ECF4",
-  surfaceBlue: "#ECF3FF",
-  text: "#14244F",
-  textSoft: "#5F6980",
-  muted: "#8790A2",
-  muted2: "#A4ABBA",
-  heroStart: "#162753",
-  heroMid: "#1E3881",
-  heroEnd: "#2F46CF",
+  surface2: "#EFF5FA",
+  surface3: "#E3EDF5",
+  surfaceBlue: "#E6F5FD",
+  text: "#172B4E",
+  textSoft: "#4F6478",
+  muted: "#7C90A3",
+  muted2: "#A3B3C1",
+  // Darkest anchor climbing to the middle one — white reads on every stop.
+  heroStart: "#172B4E",
+  heroMid: "#164B7E",
+  heroEnd: "#0D94DB",
   glass: "rgba(255,255,255,0.88)",
 } as const;
 
 /** The dark theme's surfaces and text, verbatim from `html[data-theme="dark"]`. */
 export const DARK_SURFACES = {
-  bg: "#07101F",
-  bgElevated: "#0B1528",
-  surface: "#101C32",
-  surface2: "#15223A",
-  surface3: "#1B2A44",
-  surfaceBlue: "#13234A",
-  text: "#F6F9FF",
-  textSoft: "#C4CBDA",
-  muted: "#929CB0",
-  muted2: "#6E7A91",
-  heroStart: "#0E1D42",
-  heroMid: "#173375",
-  heroEnd: "#334FD2",
-  glass: "rgba(16,28,50,0.88)",
+  // The ground IS the darkest anchor, and the ramp climbs out of it — see the header note.
+  bg: "#172B4E",
+  bgElevated: "#1B3157",
+  surface: "#203961",
+  surface2: "#26426D",
+  surface3: "#2D4C7A",
+  surfaceBlue: "#1B4576",
+  text: "#F2F9FF",
+  textSoft: "#C0D2E0",
+  muted: "#93A8C0",
+  muted2: "#70859E",
+  heroStart: "#172B4E",
+  heroMid: "#164B7E",
+  heroEnd: "#1FA9EF",
+  glass: "rgba(32,57,97,0.88)",
 } as const;

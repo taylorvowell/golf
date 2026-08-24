@@ -40,9 +40,9 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(7,16,31,0.56)", // .report-full-pill's glass (blur is a named deviation)
+    backgroundColor: "rgba(6,19,31,0.56)", // .report-full-pill's glass (blur is a named deviation)
   },
   // Pressed deepens the glass — a fill, never opacity: dimming a translucent orb over footage
   // makes it vanish into the picture instead of reading as held.
-  pressed: { backgroundColor: "rgba(7,16,31,0.8)" },
+  pressed: { backgroundColor: "rgba(6,19,31,0.8)" },
 });

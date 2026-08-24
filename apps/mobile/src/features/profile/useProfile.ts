@@ -92,6 +92,38 @@ export async function saveProfile(patch: ProfilePatchRequest): Promise<ProfileRe
   }
 }
 
+/**
+ * Seed the cache from a response another route confirmed — the avatar upload and delete answer
+ * with the whole profile body, the same reconcile-to-confirmed rule `saveProfile` follows.
+ */
+export function primeProfile(confirmed: ProfileResponse): void {
+  lastGood = confirmed;
+  notifyChanged();
+}
+
+/**
+ * The public half's `avatarUrl` from the CACHE, without fetching.
+ *
+ * Deliberately passive: `Avatar` mounts in the header of nearly every surface, and giving it the
+ * full `useProfile` would fire a profile GET per mount. The cache is warm in any real session —
+ * the onboarding launcher loads the profile at startup — so this only ever lags on a cold cache,
+ * where the provider-photo/silhouette fallback is the correct picture anyway.
+ */
+export function useAvatarUrl(): string | null {
+  // The deep optional chain is deliberate: this renders in the header of every screen, so a
+  // malformed cache (a test seam, a bad merge) must read as "no photo", never as a crash.
+  const [url, setUrl] = useState<string | null>(lastGood?.public?.avatarUrl ?? null);
+  useEffect(() => {
+    const onChanged = () => setUrl(lastGood?.public?.avatarUrl ?? null);
+    listeners.add(onChanged);
+    onChanged();
+    return () => {
+      listeners.delete(onChanged);
+    };
+  }, []);
+  return url;
+}
+
 export interface ProfileHook {
   state: ProfileState;
   refresh: () => void;

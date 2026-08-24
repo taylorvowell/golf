@@ -45,6 +45,8 @@ export function OnboardingLauncher() {
         {
           title: "Profile",
           inline: true,
+          // Pinned: profile-related state lives up top with the persona picker.
+          pinned: true,
           actions: [
             {
               key: "run-onboarding",

@@ -1052,7 +1052,7 @@ const COMPARE_GAP = 4;
 
 const styles = StyleSheet.create({
   // .report-v2-video-layer's ground — the deep navy behind a picture that never fills exactly.
-  backdropRoot: { flex: 1, backgroundColor: "#081426" },
+  backdropRoot: { flex: 1, backgroundColor: "#061320" },
   stageRow: {
     flex: 1,
     flexDirection: "row",
@@ -1071,7 +1071,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(7,16,31,0.56)", // .report-full-pill (blur is a named deviation)
+    backgroundColor: "rgba(6,19,31,0.56)", // .report-full-pill (blur is a named deviation)
   },
   viewPillText: {
     color: "#FFFFFF",
@@ -1105,14 +1105,14 @@ const styles = StyleSheet.create({
   // Flush right in BOTH builds — the dev bubble is cleared by dropping the stack down instead
   // (see the `top` the shell passes), because nudging it left changes the layout being designed.
   cornerOrbs: { position: "absolute", right: 16, alignItems: "flex-end", gap: 8 },
-  layersOrbOn: { backgroundColor: "rgba(67,205,208,0.28)" },
+  layersOrbOn: { backgroundColor: "rgba(45,240,251,0.28)" },
   layersOrb: {
     width: 40,
     height: 40,
     borderRadius: 20,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(7,16,31,0.56)",
+    backgroundColor: "rgba(6,19,31,0.56)",
   },
   layersOrbPressed: { opacity: 0.7 },
   tapDisc: {
@@ -1121,7 +1121,7 @@ const styles = StyleSheet.create({
     borderRadius: 39,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(7,16,31,0.62)",
+    backgroundColor: "rgba(6,19,31,0.62)",
   },
   // Mockup: color-mix(aqua-500 70%, white) — pre-mixed here, RN has no color-mix.
 
@@ -1139,7 +1139,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     // Lighter glass (Taylor, 2026-08-19, was 0.66): the controls should sit ON the footage,
     // not curtain it.
-    backgroundColor: "rgba(7,16,31,0.38)",
+    backgroundColor: "rgba(6,19,31,0.38)",
   },
 
   overlayFailed: { justifyContent: "flex-end", padding: 14 },

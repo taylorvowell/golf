@@ -121,6 +121,31 @@ a role check ends up standing in for an access-control boundary. Roles are reada
 holder, not by an approved coach: which roles an account holds is not part of what §24 grants.
 **See:** ARCHIVE D32; `PROJECT_MAIN.md` §3, §4.4, §31.
 
+### Debug personas are real seeded accounts, and the picker signs in as them
+
+**Decision:** The mobile debug menu's persona picker ("New user", "Newby", "Existing", "Trial",
+"Pro", "Coach", "Admin") is an **account swap, not a render swap**: each persona is a real auth
+user on the dev auth project with its own name, and the populated personas own real analysed
+swings (fixture clones) in the data project with artifacts in object storage — so every surface
+shows exactly what that user sees. One shared password (`PERSONA_PASSWORD` /
+`EXPO_PUBLIC_PERSONA_PASSWORD`, machine-local env) drives `signInWithPassword`; the picker
+signs OUT first so the SIGNED_OUT event clears every per-user cache before the next identity
+loads. The active persona is DERIVED from the session's email — whoever is signed in IS the
+state — and there is no mock mode: real data always. The picker's first tile is Taylor's own
+account (avatar remembered device-locally); the subscription-state chips filter to the states
+the active persona can coherently be in. `apps/mobile/src/features/debug/persona.tsx` owns
+the email ↔ persona mapping; the seeders live in `apps/web/scripts/`
+(`seed-persona-auth.mjs`, `gen-persona-seed.mjs` + `persona-manifest.json`,
+`publish-persona-media.ts`).
+**Scope:** Entitlement scenarios are still forced client-side per persona — billing has no
+server state yet; the seeded subscription rows take over when it does. Admin is a role row on
+Alex Morgan's account; true view-any-user impersonation stays a future server-side,
+audited feature — never shared credentials.
+**Gotchas:** The manifest's uuids are load-bearing — media addresses derive from
+(owner, swing, view, revision), so re-minting the manifest orphans the published objects.
+Persona emails must be in `AUTH_ALLOWED_EMAILS` wherever that gate is set, or every persona
+request 401s in a way that reads as a broken session.
+
 ### The profile splits public from private by TABLE, and age is a range
 
 **Decision:** §5.1's "sensitive information is not automatically public" is expressed as shape, not

@@ -1,9 +1,9 @@
-import { LinearGradient } from "expo-linear-gradient";
 import { StyleSheet, Text, View } from "react-native";
 
 import { Button, DualViewIcon, SCROLL_PRESS_DELAY_MS } from "../../design/system";
 import { displayLine, FONT_BODY, FONT_DISPLAY } from "../../design/system/typography";
-import { AQUA, INK, NAVY, ON_DARK } from "../../theme/palette";
+import { AQUA, ON_DARK } from "../../theme/palette";
+import { SpotlightBed } from "./templates/SpotlightBed";
 
 export interface MultiviewCardProps {
   onPress: () => void;
@@ -23,17 +23,7 @@ export interface MultiviewCardProps {
  */
 export function MultiviewCard({ onPress, testID }: MultiviewCardProps) {
   return (
-    <LinearGradient
-      testID={testID}
-      colors={[INK[900], INK[800], NAVY[950]]}
-      locations={[0, 0.55, 1]}
-      start={{ x: 0, y: 0 }}
-      end={{ x: 1, y: 1 }}
-      style={styles.card}
-    >
-      <View style={styles.art}>
-        <DualViewIcon size={64} color={AQUA[400]} strokeWidth={1.4} />
-      </View>
+    <SpotlightBed testID={testID} style={styles.card}>
       <View style={styles.body}>
         <Text style={styles.eyebrow} numberOfLines={1}>
           Multiview
@@ -52,39 +42,50 @@ export function MultiviewCard({ onPress, testID }: MultiviewCardProps) {
           style={styles.cta}
         />
       </View>
-    </LinearGradient>
+      {/* The art panel: full-height, its own quiet ground with an aqua wash behind the mark.
+          The DualView mark is ~2.1× its `size` wide (two frames + the exchange arrow), so 44
+          is what actually FITS a ~104pt panel — 64 was breaking the box. */}
+      <View style={styles.art}>
+        <View style={styles.artGlow} />
+        <DualViewIcon size={44} color={AQUA[400]} strokeWidth={1.2} />
+      </View>
+    </SpotlightBed>
   );
 }
 
 /** Fixed-dark, like ProCard — `StyleSheet.create` because there is nothing for a theme to change. */
 const styles = StyleSheet.create({
+  /* Layout only — the ground is SpotlightBed, one dark material for the whole deck. */
   card: {
-    flex: 1,
     flexDirection: "row",
-    alignItems: "center",
-    gap: 14,
+    alignItems: "stretch",
+    gap: 12,
     padding: 16,
-    borderRadius: 14,
-    overflow: "hidden",
   },
-  /* The placeholder art bed — the real photo/screenshot pair lands here. */
+  /* The placeholder art panel — the real photo/screenshot pair lands here as an <Image>. */
   art: {
-    width: 84,
-    alignSelf: "stretch",
+    width: 104,
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.06)",
+    overflow: "hidden",
+    backgroundColor: "rgba(255,255,255,0.05)",
   },
-  body: { flex: 1, minWidth: 0 },
+  /* The wash the mark sits in — a soft aqua pool, not a spotlight. */
+  artGlow: {
+    position: "absolute",
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: "rgba(45,240,251,0.10)",
+  },
+  body: { flex: 1, minWidth: 0, justifyContent: "center" },
   eyebrow: {
     color: AQUA[400],
     fontFamily: FONT_DISPLAY.black,
     fontSize: 8,
     letterSpacing: 1.12,
     textTransform: "uppercase",
-    /* Room for the carousel frame's X. */
-    paddingRight: 30,
   },
   title: {
     marginTop: 4,

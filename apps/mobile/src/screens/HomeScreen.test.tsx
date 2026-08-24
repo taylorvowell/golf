@@ -140,7 +140,7 @@ describe("HomeScreen", () => {
     // number rides the rail, not the hero. The cue appears twice by design — hero and strip.
     expect(await findByTestId("home-focus")).toBeTruthy();
     // The greeting is the hero's; the card names the moment.
-    expect(await findByText("Hey Taylor")).toBeTruthy();
+    expect(await findByText(/Hey Taylor/)).toBeTruthy();
     expect(await findByText(/next time out/i)).toBeTruthy();
     expect(await findByText("Hip turn")).toBeTruthy();
     expect((await findAllByText("clear the lead hip")).length).toBeGreaterThanOrEqual(1);

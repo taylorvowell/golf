@@ -77,10 +77,10 @@ const FADE_ABOVE = 76;
  * A fade tinted per theme is invisible in light mode: white running into the near-white `bg`
  * has nothing to show. The dark ramp reads on both grounds, and the bottom stop is hidden
  * behind the bar anyway — only the transparent end of it is ever on screen, which is the part
- * doing the work. `#0B1528` is the dark theme's `bgElevated`, stated literally here because
+ * doing the work. `#0A1A29` is the dark theme's `bgElevated`, stated literally here because
  * this is deliberately NOT theme-following; the value is a constant of the design.
  */
-const FADE_STOPS = ["#0B152800", "#0B152859", "#0B152880"] as const;
+const FADE_STOPS = ["#0A1A2900", "#0A1A2959", "#0A1A2980"] as const;
 
 /**
  * What a tab screen must leave clear at the bottom of its scroll, on top of its own padding

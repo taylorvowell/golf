@@ -88,7 +88,7 @@ const LIGHT_BASE: IdealTokens = {
   ...LIGHT_SURFACES,
   // 13%, not subtler: at 7% the blend over the pure-white nav bar was ~#EFF0F2 — invisible on
   // glass during a real tap (Taylor, 2026-08-19, "the circle is not showing").
-  pressBed: "rgba(31,42,68,0.13)",
+  pressBed: "rgba(23,43,78,0.13)",
   cobalt: COBALT[600],
   cobaltPressed: COBALT[700],
   aqua: AQUA[500],
@@ -107,7 +107,7 @@ const DARK_BASE: IdealTokens = {
   cobalt: COBALT[500],
   cobaltPressed: COBALT[600],
   aqua: AQUA[500],
-  aquaSoft: "rgba(67,205,208,0.16)",
+  aquaSoft: "rgba(45,240,251,0.16)",
   lavender: LAVENDER[500],
   good: SEMANTIC.good,
   bad: SEMANTIC.bad,

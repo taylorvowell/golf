@@ -1354,6 +1354,36 @@
   "api#/definitions/deprecation/properties/version": {
     "ref": "#/definitions/apiVersion"
   },
+  "api#/definitions/dismissalListResponse": {
+    "type": "object",
+    "required": [
+      "keys"
+    ]
+  },
+  "api#/definitions/dismissalListResponse/properties/keys": {
+    "type": "array"
+  },
+  "api#/definitions/dismissalListResponse/properties/keys/items": {
+    "type": "string"
+  },
+  "api#/definitions/dismissalSaveRequest": {
+    "type": "object",
+    "required": [
+      "key"
+    ]
+  },
+  "api#/definitions/dismissalSaveRequest/properties/key": {
+    "type": "string"
+  },
+  "api#/definitions/dismissalSaveResponse": {
+    "type": "object",
+    "required": [
+      "ok"
+    ]
+  },
+  "api#/definitions/dismissalSaveResponse/properties/ok": {
+    "type": "boolean"
+  },
   "api#/definitions/golferProfilePrivate": {
     "type": "object"
   },

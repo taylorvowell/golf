@@ -78,11 +78,11 @@ export const DECK = {
    */
   glass: {
     /** A floating control over the video — the back cap, the overlays chip. */
-    soft: "rgba(10,16,28,0.72)",
+    soft: "rgba(7,19,31,0.72)",
     /** The dock. Denser, because the transport must never be ambiguous against a bright frame. */
-    dock: "rgba(13,20,34,0.86)",
+    dock: "rgba(10,26,41,0.86)",
     /** A sheet. Denser still — it is a page, not a control. */
-    sheet: "rgba(7,13,24,0.97)",
+    sheet: "rgba(5,15,25,0.97)",
     /** A recessed group inside glass — the speed segment's well. */
     well: "rgba(0,0,0,0.25)",
     /** A flat, unlit control on glass — the frame stepper's keys. */

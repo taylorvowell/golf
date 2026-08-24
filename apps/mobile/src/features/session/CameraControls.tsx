@@ -27,7 +27,7 @@ const TRACK_WIDTH = 34;
 /** The handle is a circle of the rail's width, and it travels INSIDE the rail — never past it. */
 const THUMB = TRACK_WIDTH;
 /** The travelled part of the rail: aqua, but translucent enough that the pill still reads. */
-const AQUA_FILL = "rgba(67,205,208,0.34)";
+const AQUA_FILL = "rgba(45,240,251,0.34)";
 /** Ratios within this much of 1x land exactly on it — the one stop worth keeping. */
 const DETENT = 0.06;
 

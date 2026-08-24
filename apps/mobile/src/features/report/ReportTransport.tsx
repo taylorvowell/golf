@@ -139,17 +139,17 @@ export const PlayCap = memo(function PlayCap({
       style={({ pressed }) => [styles.playCap, disabled && styles.dim, pressed && styles.pressed]}
     >
       <LinearGradient
-        // Mockup: linear-gradient(145deg, #66E1E1 0%, aqua-500 58%, #35BFC4 100%).
-        colors={["#66E1E1", "#43CDD0", "#35BFC4"]}
+        // Mockup: linear-gradient(145deg, #8AF7FD 0%, aqua-500 58%, #0D94DB 100%).
+        colors={["#8AF7FD", "#2DF0FB", "#0D94DB"]}
         locations={[0, 0.58, 1]}
         start={{ x: 0.15, y: 0 }}
         end={{ x: 0.85, y: 1 }}
         style={styles.playFace}
       >
         {playing ? (
-          <Pause size={16} color="#10204A" fill="#10204A" strokeWidth={0} />
+          <Pause size={16} color="#0F2E4C" fill="#0F2E4C" strokeWidth={0} />
         ) : (
-          <Play size={16} color="#10204A" fill="#10204A" strokeWidth={0} />
+          <Play size={16} color="#0F2E4C" fill="#0F2E4C" strokeWidth={0} />
         )}
       </LinearGradient>
     </Pressable>

@@ -581,7 +581,7 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: "rgba(255,255,255,0.22)",
   },
-  momentDone: { backgroundColor: "rgba(67,205,208,0.5)" },
+  momentDone: { backgroundColor: "rgba(45,240,251,0.5)" },
   momentActive: { backgroundColor: COLORS.aqua },
   transport: {
     flexDirection: "row",

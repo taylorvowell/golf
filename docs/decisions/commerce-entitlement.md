@@ -37,14 +37,21 @@ cannot be independently verified.
 position-error metric, so no accuracy number in this project is independently verifiable. Event
 accuracy was once claimed "verified ±2 frames" while Address was 48 frames early.
 
-### Two plans: Free and Pro
+### Three plans: Free, Pro, and Instructor
 
-**Decision:** One paid tier. Free and Pro, nothing else.
+**Decision:** One golfer paid tier (Pro) plus the **Instructor** tier — everything Pro has,
+plus the instructor tools (roster, student swings, review/annotate/message, assigned drills).
+An instructor **cannot have an instructor**: the find-an-instructor directory, the connected
+card and every link-a-coach door hide on the tier (`canHaveInstructor()` in `plans.ts`), and
+no Pro upsell is ever shown to one. Instructor is **granted through instructor onboarding,
+never sold on the in-app paywall** — `PAID_TIER` stays `pro`, and its store products and price
+land with the coach platform.
 
 | Tier | Monthly | Annual | Analyses/mo |
 |---|---|---|---|
 | Free | — | — | 0 new (history + re-watch of existing reports retained) |
 | Pro | $16.99 | **$119.99** | 100 |
+| Instructor | TBD (coach platform) | TBD | 100 |
 | Top-up | — | $9.99 / 50 analyses | — |
 
 **Scope:** Trial is **21 days, capped at 15 analyses** — three weekends in a weather-dependent
@@ -52,6 +59,7 @@ sport, with the cap bounding trial compute exposure to ~$0.40. Monthly is delibe
 above the annual equivalent: golf churns seasonally and annual is the retention mechanism. The
 top-up is a **consumable, not a tier** — it is what lets one paid plan carry a golfer practising
 far above the average without an unlimited allowance, and it surfaces only when a month runs out.
+Trials are a golfer concept: an Instructor is never mid-trial and never on the golfer ladder.
 **Gotchas:** Free is a **post-trial resting state, not an on-ramp** — it keeps what was already
 analysed and grants no new analyses. A conventional freemium on-ramp converts ~5× worse, and the
 tier still satisfies §30's requirement that a Free tier exist. **Unlimited analysis can never be a

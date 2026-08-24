@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import type { SwingSummary } from "@swingsage/schema/contract";
 
@@ -11,6 +11,7 @@ import { windowBounds } from "./frames";
 import { phaseBands, type PhaseBand } from "./phaseBands";
 import { playbackWindow } from "./overlay/playbackWindow";
 import { useAnalysis } from "./useAnalysis";
+import { SwingLoader } from "../../design/system/SwingLoader";
 
 /**
  * Put this swing next to another one.
@@ -98,7 +99,7 @@ export function ComparePanel({
       </View>
 
       {state.kind === "loading" ? (
-        <ActivityIndicator color={COLORS.muted} style={styles.spinner} />
+        <SwingLoader size={48} ground="dark" style={styles.spinner} />
       ) : list.length === 0 ? (
         <Text style={styles.empty}>
           {tab === "reference"
@@ -233,7 +234,7 @@ function Comparison({
       />
 
       {state.kind === "loading" ? (
-        <ActivityIndicator color={COLORS.muted} style={styles.spinner} />
+        <SwingLoader size={48} ground="dark" style={styles.spinner} />
       ) : refBands.length === 0 ? (
         <Text style={styles.empty}>
           That swing has no analysis, so its phases cannot be timed. The score and tempo above are

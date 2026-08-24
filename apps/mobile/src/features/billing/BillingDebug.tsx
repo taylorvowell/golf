@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 
 import { useDebugGroups } from "../debug/DebugOverlay";
+import { PERSONA_SCENARIOS, usePersona } from "../debug/persona";
 import type { Denial } from "./entitlement";
 import { SCENARIOS, useEntitlement, useEntitlementScenario } from "./entitlement";
 import { REQUIRED_TIER } from "./plans";
@@ -26,14 +27,25 @@ import { UpgradeSheet } from "./UpgradeSheet";
 export function BillingDebug() {
   const { scenarioId, setScenarioId } = useEntitlementScenario();
   const { usage, tier } = useEntitlement();
+  const persona = usePersona();
   const [denial, setDenial] = useState<Denial | null>(null);
 
-  const groups = useMemo(
-    () => [
+  const groups = useMemo(() => {
+    // Only the states the ACTIVE persona can coherently be in — a Pro subscriber cannot be
+    // mid-trial, and a brand-new free user has no billing history at all (the group hides).
+    // Taylor's own account (null persona) keeps the full list, minus "never subscribed",
+    // which the free personas carry.
+    const allowed = persona ? PERSONA_SCENARIOS[persona] : null;
+    const scenarios = SCENARIOS.filter((s) =>
+      allowed ? allowed.includes(s.id) : s.id !== "free-never",
+    );
+    return [
       {
         title: "Subscription state",
         inline: true,
-        actions: SCENARIOS.map((scenario) => ({
+        // Pinned: subscription state lives up top with the persona picker.
+        pinned: true,
+        actions: scenarios.map((scenario) => ({
           key: `scenario-${scenario.id}`,
           label: scenario.id === scenarioId ? `● ${scenario.label}` : scenario.label,
           detail:
@@ -45,6 +57,7 @@ export function BillingDebug() {
       {
         title: "Upgrade moments",
         inline: true,
+        pinned: true,
         actions: [
           {
             key: "denial-allowance",
@@ -72,9 +85,8 @@ export function BillingDebug() {
           },
         ],
       },
-    ],
-    [scenarioId, setScenarioId, tier, usage],
-  );
+    ];
+  }, [persona, scenarioId, setScenarioId, tier, usage]);
 
   useDebugGroups("billing", groups);
 

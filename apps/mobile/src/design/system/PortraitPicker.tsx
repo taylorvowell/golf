@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { ImageSourcePropType } from "react-native";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
@@ -29,6 +30,18 @@ export interface PortraitOption {
   blurb?: string;
   /** Absent while art is being added — the card falls back to the initial. */
   image?: ImageSourcePropType;
+  /** Glyph art instead of a photograph (an icon-faced option) — drawn centred on the card's
+   *  bed. `image` wins when both are given. */
+  art?: ReactNode;
+  /** Very small one-liner under the name, on the card itself — what this option IS. */
+  caption?: string;
+}
+
+/** Rows of `size` — a picker with more faces than fit one row chunks, never shrinks. */
+function chunk<T>(items: readonly T[], size: number): T[][] {
+  const rows: T[][] = [];
+  for (let i = 0; i < items.length; i += size) rows.push([...items.slice(i, i + size)]);
+  return rows;
 }
 
 export function PortraitPicker({
@@ -37,6 +50,8 @@ export function PortraitPicker({
   onSelect,
   testIDPrefix = "portrait",
   accessibilityLabelFor,
+  columns,
+  compact = false,
 }: {
   options: readonly PortraitOption[];
   selectedId: string;
@@ -44,14 +59,22 @@ export function PortraitPicker({
   testIDPrefix?: string;
   /** Overrides the spoken label; defaults to name + blurb. */
   accessibilityLabelFor?: (o: PortraitOption) => string;
+  /** Cards per row; extra options wrap onto further rows (short last rows keep card width
+   *  via invisible spacers). Omit for the classic one-row picker. */
+  columns?: number;
+  /** Dense-surface variant (the debug sheet): squarer cards, tighter gaps, smaller type. */
+  compact?: boolean;
 }) {
   const t = useTheme();
   const chosen = options.find((o) => o.id === selectedId) ?? options[0];
+  const rows = columns ? chunk(options, columns) : [options];
+  const gap = compact ? 6 : 9;
 
   return (
-    <View>
-      <View style={{ flexDirection: "row", gap: 9 }}>
-        {options.map((o) => {
+    <View style={{ gap }}>
+      {rows.map((row, rowIndex) => (
+      <View key={`row-${rowIndex}`} style={{ flexDirection: "row", gap }}>
+        {row.map((o) => {
           const selected = o.id === chosen?.id;
           return (
             <Pressable
@@ -66,8 +89,8 @@ export function PortraitPicker({
               unstable_pressDelay={SCROLL_PRESS_DELAY_MS}
               style={({ pressed }) => ({
                 flex: 1,
-                aspectRatio: 0.78,
-                borderRadius: 16,
+                aspectRatio: compact ? 0.94 : 0.78,
+                borderRadius: compact ? 12 : 16,
                 overflow: "hidden",
                 backgroundColor: t.surface2,
                 // Pressing lifts the veil rather than fading the card — a press on an
@@ -84,15 +107,17 @@ export function PortraitPicker({
                 />
               ) : (
                 <View style={[StyleSheet.absoluteFill, { alignItems: "center", justifyContent: "center" }]}>
-                  <Text
-                    style={{
-                      color: t.muted2,
-                      fontFamily: FONT_DISPLAY.black,
-                      fontSize: 34,
-                    }}
-                  >
-                    {o.name.slice(0, 1)}
-                  </Text>
+                  {o.art ?? (
+                    <Text
+                      style={{
+                        color: t.muted2,
+                        fontFamily: FONT_DISPLAY.black,
+                        fontSize: 34,
+                      }}
+                    >
+                      {o.name.slice(0, 1)}
+                    </Text>
+                  )}
                 </View>
               )}
 
@@ -125,53 +150,76 @@ export function PortraitPicker({
               <View
                 style={{
                   position: "absolute",
-                  left: 10,
-                  right: 10,
-                  bottom: 9,
+                  left: compact ? 7 : 10,
+                  right: compact ? 7 : 10,
+                  bottom: compact ? 6 : 9,
                   flexDirection: "row",
                   alignItems: "center",
-                  gap: 6,
+                  gap: compact ? 4 : 6,
                 }}
               >
-                <Text
-                  numberOfLines={1}
-                  style={{
-                    flex: 1,
-                    color: "#FFFFFF",
-                    fontFamily: FONT_DISPLAY.extraBold,
-                    fontSize: 14,
-                    lineHeight: displayLine(14),
-                  }}
-                >
-                  {o.name}
-                </Text>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text
+                    numberOfLines={1}
+                    style={{
+                      color: "#FFFFFF",
+                      fontFamily: FONT_DISPLAY.extraBold,
+                      fontSize: compact ? 9.5 : 14,
+                      lineHeight: displayLine(compact ? 9.5 : 14),
+                    }}
+                  >
+                    {o.name}
+                  </Text>
+                  {o.caption ? (
+                    <Text
+                      numberOfLines={1}
+                      style={{
+                        marginTop: 1,
+                        color: "rgba(255,255,255,0.66)",
+                        fontFamily: FONT_BODY.regular,
+                        fontSize: compact ? 6.5 : 9,
+                        lineHeight: compact ? 8 : 11,
+                      }}
+                    >
+                      {o.caption}
+                    </Text>
+                  ) : null}
+                </View>
                 {selected ? (
                   <View
                     style={{
-                      width: 19,
-                      height: 19,
+                      width: compact ? 15 : 19,
+                      height: compact ? 15 : 19,
                       borderRadius: 10,
                       alignItems: "center",
                       justifyContent: "center",
                       backgroundColor: "#FFFFFF",
                     }}
                   >
-                    <Check size={12} color={t.cobalt} strokeWidth={3.4} />
+                    <Check size={compact ? 9 : 12} color={t.cobalt} strokeWidth={3.4} />
                   </View>
                 ) : null}
               </View>
             </Pressable>
           );
         })}
+        {/* A short last row keeps its cards the width of every other row's. */}
+        {columns
+          ? Array.from({ length: columns - row.length }).map((_, i) => (
+              <View key={`spacer-${i}`} style={{ flex: 1 }} />
+            ))
+          : null}
       </View>
+      ))}
 
       {/* Whoever is chosen, said once — instead of three blurbs competing under three faces. */}
       {chosen && (chosen.tag || chosen.blurb) ? (
         <View
           style={{
-            marginTop: 10,
-            padding: 14,
-            borderRadius: 14,
+            marginTop: compact ? 0 : 1,
+            paddingHorizontal: compact ? 10 : 14,
+            paddingVertical: compact ? 8 : 14,
+            borderRadius: compact ? 10 : 14,
             backgroundColor: t.surfaceBlue,
           }}
         >
@@ -180,7 +228,7 @@ export function PortraitPicker({
               style={{
                 color: t.cobalt,
                 fontFamily: FONT_DISPLAY.black,
-                fontSize: 8,
+                fontSize: compact ? 7 : 8,
                 letterSpacing: 1.2,
                 textTransform: "uppercase",
               }}
@@ -191,10 +239,10 @@ export function PortraitPicker({
           {chosen.blurb ? (
             <Text
               style={{
-                marginTop: chosen.tag ? 6 : 0,
+                marginTop: chosen.tag ? (compact ? 3 : 6) : 0,
                 color: t.text,
                 fontFamily: FONT_BODY.regular,
-                fontSize: 12,
+                fontSize: compact ? 11 : 12,
                 lineHeight: 17,
               }}
             >

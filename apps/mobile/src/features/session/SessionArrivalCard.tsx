@@ -1,9 +1,10 @@
 import { useEffect, useRef } from "react";
-import { ActivityIndicator, Animated, StyleSheet, Text, View } from "react-native";
+import { Animated, StyleSheet, Text, View } from "react-native";
 import { CircleCheck } from "lucide-react-native";
 
 import { FONT_BODY, FONT_DISPLAY } from "../../design/system/typography";
 import { useTheme } from "../../theme";
+import { SwingLoader } from "../../design/system/SwingLoader";
 
 /**
  * The just-ended session landing in the Swing Log (Taylor, step-03 iteration): a "Saving
@@ -38,7 +39,7 @@ export function SessionArrivalCard({ phase, title, swings }: SessionArrivalCardP
   if (phase === "saving") {
     return (
       <View style={[styles.card, { backgroundColor: t.surface }]} testID="session-saving">
-        <ActivityIndicator size="small" color={t.cobalt} />
+        <SwingLoader size={26} />
         <Text style={[styles.savingText, { color: t.muted }]}>Saving session…</Text>
       </View>
     );

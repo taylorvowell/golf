@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Animated,
   Easing,
   PanResponder,
@@ -20,7 +19,7 @@ import {
   type FrameClockHandle,
 } from "../../../modules/frame-clock/src/FrameClock.types";
 import HighSpeedCamera, { type ImpactMethod } from "../../../modules/high-speed-camera/src";
-import { CoachLoader } from "../../design/system";
+import { CoachLoader, SwingLoader } from "../../design/system";
 import { FONT_BODY, FONT_DISPLAY } from "../../design/system/typography";
 import { PRESS_SUNK } from "../../design/system/press";
 import { COLORS, SEMANTIC } from "../../theme";
@@ -497,10 +496,12 @@ export function SwingReview({
         />
         <View style={styles.hintBlock}>
           <Text style={styles.hint}>Slide to the moment you hit the ball</Text>
-          {/* Says the quiet part out loud (Taylor, 2026-08-21). Without it the golfer assumes
-              the mark has to be frame-perfect and spends thirty seconds on a job that has a
-              second of tolerance — the analyzer finds the real impact frame regardless. */}
-          <Text style={styles.hintSub}>Doesn&rsquo;t have to be exact — just get close</Text>
+          {/* The mark is only half the job: the window is cut AROUND it, so a mark placed at the
+              very end of a clip cuts a swing with no follow-through. Says the failure out loud
+              rather than letting it be discovered in the report (Taylor, 2026-08-23). */}
+          <Text style={styles.hintSub}>
+            Make sure the preview includes your full backswing and follow through
+          </Text>
         </View>
 
         {/* Deliberately tall: this is the only precision the screen asks for, and a thin track
@@ -622,7 +623,7 @@ export function SwingReview({
             style={({ pressed }) => [styles.save, pressed && styles.pressedHard]}
           >
             {saving ? (
-              <ActivityIndicator color={COLORS.text} />
+              <SwingLoader size={40} ground="dark" />
             ) : (
               <>
                 <Check size={26} color={COLORS.text} strokeWidth={2.6} />
@@ -708,19 +709,24 @@ const styles = StyleSheet.create({
   /** Opaque on purpose — the video is clipped at the stage, and the text needs its own ground
    *  rather than whatever frame happens to be behind it. */
   controls: { paddingHorizontal: 18, paddingTop: 16, gap: 14, backgroundColor: COLORS.bg },
-  hintBlock: { gap: 3 },
+  /** Both lines are instructions a golfer has to READ before they can act, so they are sized to
+   *  be read at arm's length on a phone held at address — not as fine print under the control
+   *  (Taylor, 2026-08-23). */
+  hintBlock: { gap: 5 },
   hint: {
     color: COLORS.text,
     fontFamily: FONT_DISPLAY.black,
-    fontSize: 12,
-    letterSpacing: 0.8,
+    fontSize: 16,
+    letterSpacing: 0.4,
     textTransform: "uppercase",
     textAlign: "center",
   },
   hintSub: {
-    color: COLORS.muted,
+    // The screen's accent — the same colour as the handle it is telling the golfer to move.
+    color: COLORS.aqua,
     fontFamily: FONT_BODY.regular,
-    fontSize: 11,
+    fontSize: 13,
+    lineHeight: 18,
     textAlign: "center",
   },
 

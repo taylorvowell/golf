@@ -17,6 +17,7 @@ import { SideDrawer, type DrawerClose } from "../design/system";
 import { displayLine, FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
 import { Avatar } from "../features/profile/Avatar";
 import { useEntitlement } from "../features/billing/entitlement";
+import { canHaveInstructor, PLANS } from "../features/billing/plans";
 import { ProCard } from "../features/billing/ProCard";
 import { useInstructor } from "../features/instructor/useInstructor";
 import { useAuth } from "../features/auth/AuthProvider";
@@ -105,15 +106,19 @@ export function ProfileScreen() {
                 gets one card rather than a badge on every locked control. On Pro it becomes a
                 quiet status line: continuing to sell to someone who already bought is the
                 clutter rule's second test failing. */}
-            {tier === "pro" ? (
+            {tier === "free" ? (
+              <ProCard onPress={() => close(() => navigation.navigate("Upgrade"))} />
+            ) : (
               <View style={styles.planRow}>
                 <Text style={styles.microLabel}>Plan</Text>
-                <Text style={styles.planName}>SwingSage Pro</Text>
+                <Text style={styles.planName}>{`SwingSage ${PLANS[tier].name}`}</Text>
               </View>
-            ) : (
-              <ProCard onPress={() => close(() => navigation.navigate("Upgrade"))} />
             )}
 
+            {/* An instructor cannot HAVE an instructor — the whole block (connected card AND
+                the directory door) is for golfers only. */}
+            {canHaveInstructor(tier) ? (
+              <>
             <Text style={styles.section}>Instructor</Text>
 
             {instructor ? (
@@ -187,6 +192,8 @@ export function ProfileScreen() {
                 </View>
               </View>
             )}
+              </>
+            ) : null}
 
             <Text style={styles.section}>Menu</Text>
             <View style={styles.group}>

@@ -93,7 +93,7 @@ export interface Entitlement {
   remaining: number;
 }
 
-const TIER_RANK: Record<Tier, number> = { free: 0, pro: 1 };
+const TIER_RANK: Record<Tier, number> = { free: 0, pro: 1, instructor: 2 };
 
 /** A tier grants a capability when it sits at or above the capability's required tier. */
 function tierGrants(tier: Tier, capability: Capability): boolean {
@@ -151,6 +151,16 @@ export const SCENARIOS: Scenario[] = [
     status: "active",
     trialDaysLeft: null,
     used: 22,
+    renewsOn: "1 Sep 2027",
+    resetsOn: "1 Sep",
+  },
+  {
+    id: "instructor",
+    label: "Instructor",
+    tier: "instructor",
+    status: "active",
+    trialDaysLeft: null,
+    used: 18,
     renewsOn: "1 Sep 2027",
     resetsOn: "1 Sep",
   },

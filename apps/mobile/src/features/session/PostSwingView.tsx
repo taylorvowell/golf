@@ -14,7 +14,6 @@ import { AnalysisCompleteOverlay } from "./AnalysisCompleteOverlay";
 import { AnalysisFailedNotice } from "./AnalysisFailedNotice";
 import { AnalyzingBar } from "./AnalyzingBar";
 import { LocalClipPlayer } from "./LocalClipPlayer";
-import { SessionHeading } from "./SessionHeading";
 import { SessionSwingDock } from "./SessionSwingDock";
 import type { SessionAction, SessionState, SessionSwing } from "./sessionState";
 import { SessionSwingListSheet } from "./sheets/SessionSwingListSheet";
@@ -291,12 +290,6 @@ export function PostSwingView({ state, dispatch, swing, onEndSession }: PostSwin
           style={[styles.localBack, { top: insets.top + 8 }]}
           testID="post-swing-back"
         />
-        {/* Which swing of which session — the same heading the capture screen carries, so
-            the two read as one place (Taylor, 2026-08-21). Not editable here: renaming
-            belongs where the session is being set up, not where a swing is being watched. */}
-        <View style={[styles.heading, { top: insets.top + 10 }]} pointerEvents="none">
-          <SessionHeading title={state.title} swingNumber={swing.number} />
-        </View>
         {progress ? (
           <View style={[styles.analyzingSlot, { bottom: navBarBottomInset(insets.bottom) + 74 }]}>
             {progress}
@@ -371,7 +364,6 @@ const styles = StyleSheet.create({
   localRoot: { flex: 1, backgroundColor: "#000" },
   localBack: { position: "absolute", left: 16 },
   // Centred across the screen, clear of the back orb on the left.
-  heading: { position: "absolute", left: 68, right: 68 },
   fallback: { flex: 1, backgroundColor: COLORS.bg, justifyContent: "center", padding: 24, gap: 8 },
   fallbackTitle: {
     color: COLORS.text,

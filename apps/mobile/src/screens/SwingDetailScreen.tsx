@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Animated, StyleSheet, Text, View } from "react-native";
+import { Animated, StyleSheet, Text, View } from "react-native";
 import { Star } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { TAB_LABELS, tabIcon } from "../design/TabBar";
-import { APP_HEADER_BAR, AppHeader, WaveNav, type WaveNavItem } from "../design/system";
+import { APP_HEADER_BAR, AppHeader, SwingLoader, WaveNav, type WaveNavItem } from "../design/system";
+import { Avatar } from "../features/profile/Avatar";
 import { CornerOrb } from "../features/report/VideoLayer";
 import { SwingHeading } from "../features/report/SwingHeading";
 import { SwingPage } from "../features/report/SwingPage";
@@ -57,7 +58,7 @@ export function SwingDetailScreen({ id }: SwingDetailScreenProps) {
   if (state.kind === "loading") {
     return (
       <View style={styles.centre}>
-        <ActivityIndicator color={COLORS.muted} />
+        <SwingLoader size={40} ground="dark" />
       </View>
     );
   }
@@ -239,6 +240,7 @@ function StandaloneSwingPage({
         <AppHeader
           hero
           chromePx={chromePx}
+          avatar={<Avatar size={26} />}
           onProfile={() => navigation.navigate("Profile")}
           profileTestID="swing-profile"
         />

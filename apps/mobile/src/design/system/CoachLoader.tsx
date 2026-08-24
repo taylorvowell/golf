@@ -77,9 +77,9 @@ export function CoachLoader({ size = 128 }: { size?: number }) {
         <Svg width={size} height={size}>
           <Defs>
             <SvgGradient id="coach-loader-tail" x1="0" y1="0" x2="1" y2="1">
-              <Stop offset="0" stopColor="#42CBCE" stopOpacity="1" />
-              <Stop offset="0.55" stopColor="#2F46CF" stopOpacity="0.8" />
-              <Stop offset="1" stopColor="#2F46CF" stopOpacity="0" />
+              <Stop offset="0" stopColor="#2DF0FB" stopOpacity="1" />
+              <Stop offset="0.55" stopColor="#0D94DB" stopOpacity="0.8" />
+              <Stop offset="1" stopColor="#0D94DB" stopOpacity="0" />
             </SvgGradient>
           </Defs>
           {/* A faint full track under the comet, so the orbit reads as a path, not a shard. */}

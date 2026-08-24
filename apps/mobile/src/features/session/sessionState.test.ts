@@ -34,12 +34,6 @@ it("names the session from its number", () => {
   expect(s.title).toBe("Session 3");
 });
 
-it("renames, and drops a whitespace rename", () => {
-  const s = sessionReducer(base(), { type: "rename", title: "Morning grind" });
-  expect(s.title).toBe("Morning grind");
-  expect(sessionReducer(s, { type: "rename", title: "   " }).title).toBe("Morning grind");
-});
-
 it("changes type while empty and locks it after the first swing", () => {
   let s = sessionReducer(base(), { type: "set-type", sessionType: "video_only" });
   expect(s.sessionType).toBe("video_only");
@@ -301,29 +295,19 @@ it("shutter press within 3s of a stop is the double click on Stop — ignored", 
 });
 
 describe("the name the server stores", () => {
-  it("keeps the app's own numbering off the record, and a golfer's rename on it", () => {
+  it("keeps the app's own numbering off the record", () => {
+    // Numbering is not a name: the server would store it and every session in the log would look
+    // named, which is exactly what keeps the date title from ever printing. `createSession` sends
+    // null; the number is only ever the arrival card's label.
     let s = base();
     expect(s.title).toBe("Session 3");
-    // Numbering is not a rename: the server would store this as a name and every session in the
-    // log would look renamed, which is exactly what keeps the date title from ever printing.
-    expect(s.renamed).toBe(false);
 
     s = sessionReducer(s, { type: "set-default-title", title: "Session 7" });
     expect(s.title).toBe("Session 7");
-    expect(s.renamed).toBe(false);
-
-    s = sessionReducer(s, { type: "rename", title: "Wedge day" });
-    expect(s.title).toBe("Wedge day");
-    expect(s.renamed).toBe(true);
   });
 
-  it("never lets late numbering overwrite a rename or a minted session", () => {
-    // The count arrives from the network, so it can land after the golfer has already typed.
-    const renamed = sessionReducer(base(), { type: "rename", title: "Wedge day" });
-    expect(sessionReducer(renamed, { type: "set-default-title", title: "Session 9" }).title).toBe(
-      "Wedge day",
-    );
-
+  it("never lets late numbering overwrite a minted session", () => {
+    // The count arrives from the network, so it can land after the session is real.
     const minted = sessionReducer(base(), { type: "session-minted", sessionId: "s1" });
     expect(sessionReducer(minted, { type: "set-default-title", title: "Session 9" }).title).toBe(
       "Session 3",

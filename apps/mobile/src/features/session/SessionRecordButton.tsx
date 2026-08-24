@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { Plus } from "lucide-react-native";
+import { Plus, X } from "lucide-react-native";
 
 import { FONT_DISPLAY } from "../../design/system/typography";
 import { PRESS_SUNK_HARD } from "../../design/system/press";
@@ -15,19 +15,35 @@ import { useAppTheme } from "../../theme";
  * — change one and the two bars stop reading as the same bar. `stop` latches it into the white
  * square. `plus` marks the after-swing dock's copy, where the control starts the NEXT swing —
  * a bare ring there says "recording", and a plus says "another one" (Taylor).
+ *
+ * **No drawn label** (Taylor, 2026-08-23). The shell's `+` carries none, and a caption under this
+ * one sat the red circle ~15px lower than the plus it is meant to BE — two bars that swap under
+ * the same thumb, with the one control that must never move landing in two places. `label` is
+ * still the screen-reader name; it just is not painted.
  */
 
 export interface SessionRecordButtonProps {
   stop: boolean;
+  /**
+   * The countdown is running — the button ABORTS a take that has not started rather than
+   * stopping one that has (Taylor, 2026-08-23).
+   *
+   * Those are different actions and used to wear the same white square, so the golfer could not
+   * tell from the ball whether the camera was already rolling. An X in a ring says "this never
+   * happened", and it is the only state that carries a drawn caption: the glyph alone is not a
+   * word, and the caption sits absolutely below the face so the circle itself does not move.
+   */
+  cancel?: boolean;
   /** Draws a `+` inside the ring — the "record another swing" reading. */
   plus?: boolean;
+  /** Announced, never drawn — see the note above. */
   label: string;
   onPress: () => void;
   testID?: string;
 }
 
 const SIZE = 58; // RecordButton's `compact` size, verbatim.
-/** The ring and the stop square, as fractions of the face — they scaled with the old 74. */
+/** The `+` ring and the stop square, as fractions of the face — they scaled with the old 74. */
 const RING = Math.round(SIZE * 0.7);
 const STOP = Math.round(SIZE * 0.32);
 // Press darkens the face rather than fading it — a translucent record control shows the bar
@@ -42,24 +58,24 @@ const REC_FACE_PRESSED = ["#CE4159", "#B72636"] as const;
  * where nothing was being recorded, and taught the golfer that red sometimes means "go to
  * the place where you record". Cobalt keeps it the primary action without the promise.
  */
-const NEW_FACE = ["#5B8DEF", "#2F6BE0"] as const;
-const NEW_FACE_PRESSED = ["#4A78D2", "#2557BE"] as const;
-const STOP_FACE = ["#3A4358", "#2B3345"] as const;
-const STOP_FACE_PRESSED = ["#2D3546", "#1F2532"] as const;
+const NEW_FACE = ["#1FA9EF", "#1FA9EF"] as const;
+const NEW_FACE_PRESSED = ["#0D94DB", "#0D94DB"] as const;
+const STOP_FACE = ["#31414F", "#22303D"] as const;
+const STOP_FACE_PRESSED = ["#243340", "#1A2530"] as const;
 
 export function SessionRecordButton({
   stop,
+  cancel = false,
   plus = false,
   label,
   onPress,
   testID,
 }: SessionRecordButtonProps) {
-  // The bar under this control wears the app's light fill (see `SessionNav`), so the two
-  // colours that used to read against a dark bar have to come from the theme: a white-on-white
-  // label is invisible, and a white glass halo has nothing to sit on.
+  // The bar under this control wears the app's light fill (see `SessionNav`), so the halo
+  // colour comes from the theme — white glass has nothing to sit on there.
   const t = useAppTheme();
   return (
-    <View style={styles.slot}>
+    <View>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={label}
@@ -89,23 +105,40 @@ export function SessionRecordButton({
             // shade leaves them unsure whether the tap landed — so they tap again.
             style={[styles.face, pressed && styles.facePressed]}
           >
-            {stop ? (
-              <View style={[styles.stopSquare, pressed && styles.stopSquarePressed]} />
-            ) : (
+            {cancel ? (
               <View style={styles.ring}>
-                {plus ? <Plus size={RING - 14} color="rgba(255,255,255,0.9)" strokeWidth={2.8} /> : null}
+                <X size={RING - 16} color="rgba(255,255,255,0.9)" strokeWidth={3} />
+              </View>
+            ) : stop ? (
+              <View style={[styles.stopSquare, pressed && styles.stopSquarePressed]} />
+            ) : plus ? (
+              <View style={styles.ring}>
+                <Plus size={RING - 14} color="rgba(255,255,255,0.9)" strokeWidth={2.8} />
+              </View>
+            ) : (
+              /* The face says what the button does, in words (Taylor, 2026-08-23) — the outer
+                 caption is gone and the ring went with it. The dot is the record light every
+                 camera has ever put beside that word. */
+              <View style={styles.recRow}>
+                <View style={styles.recDot} />
+                <Text style={styles.rec}>REC</Text>
               </View>
             )}
           </LinearGradient>
         )}
       </Pressable>
-      <Text style={[styles.label, { color: t.muted }]}>{label}</Text>
+      {/* Absolutely positioned, so adding it costs the face no height — a caption in the flow
+          pushed the circle off the line the shell's `+` sits on (see the note above). */}
+      {cancel ? (
+        <View style={styles.caption} pointerEvents="none">
+          <Text style={styles.captionText}>Cancel</Text>
+        </View>
+      ) : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  slot: { alignItems: "center", gap: 5 },
   halo: {
     width: SIZE + 12,
     height: SIZE + 12,
@@ -120,7 +153,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  // The ring and the square DRAW the control's shape (the sanctioned border use).
+  // The ring and the square DRAW the control's shape (the sanctioned border use). The ring
+  // is the `plus` face only — the red face wears the REC dot instead.
   ring: {
     width: RING,
     height: RING,
@@ -130,6 +164,23 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  caption: { position: "absolute", top: "100%", left: 0, right: 0, alignItems: "center" },
+  captionText: {
+    color: "#FFFFFF",
+    fontFamily: FONT_DISPLAY.black,
+    fontSize: 9,
+    lineHeight: 12,
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
+  },
+  recRow: { flexDirection: "row", alignItems: "center", gap: 4 },
+  recDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: "#FFFFFF" },
+  rec: {
+    color: "#FFFFFF",
+    fontFamily: FONT_DISPLAY.black,
+    fontSize: 13,
+    letterSpacing: 0.4,
+  },
   /** The louder of the two shared outdoor presses — this is the control that must not be
    * missed from arm's length. */
   facePressed: PRESS_SUNK_HARD,
@@ -137,11 +188,4 @@ const styles = StyleSheet.create({
   /** The square shrinks further and rounds off, so the glyph moves too — motion at the centre
    * of the control is what the eye actually catches. */
   stopSquarePressed: { transform: [{ scale: 0.78 }], borderRadius: 8 },
-  label: {
-    fontFamily: FONT_DISPLAY.black,
-    fontSize: 8,
-    letterSpacing: 0.4,
-    textTransform: "uppercase",
-    textAlign: "center",
-  },
 });

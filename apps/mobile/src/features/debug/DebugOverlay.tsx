@@ -7,11 +7,12 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { DevSettings, Pressable, StyleSheet, Text, View } from "react-native";
+import { DevSettings, Pressable, StyleSheet, Text } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { WAVE_NAV_CLEARANCE } from "../../design/system/WaveNav";
 import { FONT_DISPLAY } from "../../design/system/typography";
+import { navigationRef } from "../../navigation";
 import { DebugSheet, type DebugGroup } from "../session/sheets/DebugSheet";
 
 /**
@@ -104,6 +105,25 @@ function DebugHost({ children }: { children: ReactNode }) {
     () => [
       ...Object.values(contributed).flat(),
       {
+        /* The design system's living spec. It was reachable only from Settings, which meant
+           nobody working on a component ever opened it — the debug menu is the door that is
+           already open when you are building. Via `navigationRef` because this provider sits
+           OUTSIDE the navigator, so there is no `useNavigation` to reach for here. */
+        title: "Reference",
+        inline: true,
+        actions: [
+          {
+            key: "style-guide",
+            label: "Style guide",
+            detail: "SystemGalleryScreen — every primitive in the current theme, with its name.",
+            onPress: () => {
+              if (navigationRef.isReady()) navigationRef.navigate("SystemGallery");
+              setOpen(false);
+            },
+          },
+        ],
+      },
+      {
         /* The standard dev-client controls, put back inside THIS menu (Taylor, 2026-08-19)
            after the floating bubble was hidden — one debug door, not two. Reload JS is the
            sheet's own refresh button (`onRefresh` below), not a group entry. */
@@ -139,7 +159,7 @@ function DebugHost({ children }: { children: ReactNode }) {
         ],
       },
     ],
-    [contributed, devMenuOpen, hidden],
+    [contributed, devMenuOpen, hidden, setOpen],
   );
 
   return (

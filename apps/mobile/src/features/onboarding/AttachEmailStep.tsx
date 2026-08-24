@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
 
-import { Button, Input } from "../../design/system";
+import { Button, Input, SwingLoader } from "../../design/system";
 import { FONT_BODY } from "../../design/system/typography";
 import { themedStyles, useTheme } from "../../theme";
 import {
@@ -145,7 +145,7 @@ export function AttachEmailStep({ onDone }: { onDone: () => void }) {
         </>
       )}
 
-      {busy ? <ActivityIndicator color={t.lavender} /> : null}
+      {busy ? <SwingLoader size={30} /> : null}
       {error ? (
         <Text style={styles.error} accessibilityRole="alert">
           {error}

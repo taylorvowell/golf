@@ -49,6 +49,7 @@ export { SideDrawer, type DrawerClose } from "./SideDrawer";
 export { SheetHandle } from "./SheetHandle";
 export { Sheet, type SheetProps } from "./Sheet";
 export { PoseOutline } from "./PoseOutline";
+export { UserSilhouette } from "./UserSilhouette";
 export { DualViewIcon } from "./DualViewIcon";
 export { CAPTURE_POSES } from "./capturePoses";
 export {

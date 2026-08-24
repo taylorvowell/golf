@@ -76,7 +76,7 @@ export const QrPlaceholder = memo(function QrPlaceholder({ value, size }: QrPlac
   return (
     <Svg width={size} height={size} viewBox={`0 0 ${span} ${span}`}>
       <Rect x={0} y={0} width={span} height={span} rx={1.5} fill="#FFFFFF" />
-      <Path d={modules} fill="#0B1528" />
+      <Path d={modules} fill="#0A1A29" />
       {finders.map(([row, col]) => (
         <Rect
           key={`${row}-${col}`}
@@ -86,7 +86,7 @@ export const QrPlaceholder = memo(function QrPlaceholder({ value, size }: QrPlac
           height={7}
           rx={1}
           fill="none"
-          stroke="#0B1528"
+          stroke="#0A1A29"
           strokeWidth={1}
         />
       ))}
@@ -98,7 +98,7 @@ export const QrPlaceholder = memo(function QrPlaceholder({ value, size }: QrPlac
           width={3}
           height={3}
           rx={0.6}
-          fill="#0B1528"
+          fill="#0A1A29"
         />
       ))}
     </Svg>

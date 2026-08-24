@@ -1,36 +1,29 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Modal, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { Plus, Trash2, Upload, X, type LucideIcon } from "lucide-react-native";
 import type { SwingSummary } from "@swingsage/schema/contract";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { Avatar } from "../features/profile/Avatar";
 import { CountUp } from "../features/session/CountUp";
+import { useDebugGroups } from "../features/debug/DebugOverlay";
 import { ChoiceSheet } from "../features/session/sheets/ChoiceSheet";
 import { SessionArrivalCard } from "../features/session/SessionArrivalCard";
 import { takeSessionArrival } from "../features/session/sessionArrival";
 
-import {
-  APP_HEADER_BAR,
-  AppHeader,
-  HeroBackdrop,
-  ScoreRing,
-  HERO_PARALLAX,
-  HERO_SHEET_GAP,
-  SheetOverBackdrop,
-  useChromeScroll,
-  WAVE_NAV_CLEARANCE,
-} from "../design/system";
-import { displayLine, FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
+import { APP_HEADER_BAR, AppHeader, HERO_PARALLAX, HERO_SHEET_GAP, HeroBackdrop, ScoreRing, SheetOverBackdrop, SwingLoader, useChromeScroll, WAVE_NAV_CLEARANCE } from "../design/system";
+import { displayLine, FONT_DISPLAY } from "../design/system/typography";
 import { StatusMessage } from "../design/StatusMessage";
 import { NotificationBell } from "../features/notifications/NotificationBell";
 import { LatestSessionCard } from "../features/swings/LatestSessionCard";
 import { SessionRow } from "../features/swings/SessionRow";
 import { logStats, mergeByDay, sessionize, type SwingSession } from "../features/swings/sessions";
-import { cancelImportForSwing, dismissImport, usePendingImports, type PendingImport } from "../features/swings/pendingImports";
+import { cancelImportForSwing, dismissImport, usePendingImports } from "../features/swings/pendingImports";
 import { useSessions } from "../features/swings/useSessions";
+import { FirstSwingCta } from "../features/swings/FirstSwingCta";
 import { ImportSheet } from "../features/swings/ImportSheet";
 import { useImportSwing } from "../features/swings/useImportSwing";
-import { deleteSwing, refreshSwings, useSwings } from "../features/swings/useSwings";
+import { deleteSwing, useSwings } from "../features/swings/useSwings";
 import { SwingReview } from "../features/session/SwingReview";
 import { useToast } from "../features/toast/ToastProvider";
 import { useAppNavigation } from "../navigation";
@@ -96,7 +89,7 @@ export function SwingLogScreen() {
    * on the server (`sessionForToday` created it and primed the cache), so this is showing
    * something that exists, not predicting one.
    */
-  const sessions = useMemo(() => {
+  const liveSessions = useMemo(() => {
     if (pending.length === 0) return real;
     // A run whose session already has a card just rides that card. Only a session with NOTHING
     // in it yet needs one synthesized — and it is a real row on the server (`sessionForToday`
@@ -124,6 +117,32 @@ export function SwingLogScreen() {
     // Merged again so a brand-new session lands INSIDE today's card rather than beside it.
     return mergeByDay([...extra, ...real]);
   }, [pending, real, sessionRows]);
+
+  // Debug: the first-run empty state, forceable over a log holding real swings — deleting them
+  // all is the only other way to reach it. Dev builds only; release never reads it true.
+  const [forceEmpty, setForceEmpty] = useState(false);
+  const sessions = __DEV__ && forceEmpty ? EMPTY_SESSIONS : liveSessions;
+  useDebugGroups(
+    "swing-log",
+    useMemo(
+      () => [
+        {
+          title: "Swing log",
+          toggles: [
+            {
+              key: "force-empty-log",
+              label: "Force empty log",
+              detail:
+                "Render the first-run Get started state — hero pills hidden, two large Record/Upload doors — without deleting the account's swings.",
+              value: forceEmpty,
+              onChange: setForceEmpty,
+            },
+          ],
+        },
+      ],
+      [forceEmpty],
+    ),
+  );
 
   /** The runs each CARD is carrying — matched on the card's parts, because a day's card stands
    *  for every session row recorded that day. */
@@ -264,6 +283,13 @@ export function SwingLogScreen() {
   const shownSwings = log.swings + (landed && arrival ? arrival.swings : 0);
 
   /**
+   * The first-run moment: the server said zero and nothing is arriving. The hero's small
+   * Record/Upload pills hide and `FirstSwingCta`'s two large doors take over — one obvious
+   * next step instead of two 31-px pills competing with an empty sheet.
+   */
+  const firstRun = state.kind === "ok" && sessions.length === 0 && arrivalPhase == null;
+
+  /**
    * The hero's CONTENT, handed to `backdropChrome` rather than to the backdrop itself.
    *
    * The gradient is painted below the scroll view; anything the golfer taps has to be inside it
@@ -287,20 +313,24 @@ export function SwingLogScreen() {
             holding clips they have not put anywhere yet. */}
         <View style={styles.heroTitleRow}>
           <Text style={styles.heroTitle}>Swings</Text>
-          <View style={styles.heroActions}>
-            <HeroAction
-              testID="swing-log-record"
-              label="Record"
-              icon={Plus}
-              onPress={() => navigation.navigate("Record")}
-            />
-            <HeroAction
-              testID="swing-log-upload"
-              label="Upload"
-              icon={Upload}
-              onPress={importer.begin}
-            />
-          </View>
+          {/* Hidden on first run: the empty state's two large doors are the same destinations,
+              and two entrances to each would make neither read as THE way in. */}
+          {!firstRun && (
+            <View style={styles.heroActions}>
+              <HeroAction
+                testID="swing-log-record"
+                label="Record"
+                icon={Plus}
+                onPress={() => navigation.navigate("Record")}
+              />
+              <HeroAction
+                testID="swing-log-upload"
+                label="Upload"
+                icon={Upload}
+                onPress={importer.begin}
+              />
+            </View>
+          )}
         </View>
         {/* .log-v2-summary — the whole log's story (Taylor 2026-08-17): session + swing
             counts left, the all-swings average in the ring. The latest session's own numbers
@@ -366,7 +396,7 @@ export function SwingLogScreen() {
       <View style={[styles.sheetContent, { paddingBottom: 120 + WAVE_NAV_CLEARANCE + insets.bottom }]}>
         {state.kind === "loading" ? (
           <View style={styles.centre} testID="swing-log-loading">
-            <ActivityIndicator color={t.muted} />
+            <SwingLoader size={40} />
           </View>
         ) : null}
 
@@ -408,14 +438,11 @@ export function SwingLogScreen() {
           />
         ) : null}
 
-        {state.kind === "ok" && sessions.length === 0 && arrivalPhase == null ? (
-          <View style={styles.centre}>
-            <Text style={styles.emptyTitle}>No swings yet</Text>
-            <Text style={styles.emptyDetail}>
-              Record a swing, or upload one you have already filmed — it will appear here once
-              it has been analysed.
-            </Text>
-          </View>
+        {firstRun ? (
+          <FirstSwingCta
+            onRecord={() => navigation.navigate("Record")}
+            onUpload={importer.begin}
+          />
         ) : null}
 
         {state.kind === "ok" && latest ? (
@@ -457,6 +484,7 @@ export function SwingLogScreen() {
       hero
       chromePx={chromePx}
       bell={<NotificationBell hero onPress={() => navigation.navigate("Notifications")} />}
+      avatar={<Avatar size={26} />}
       onProfile={() => navigation.navigate("Profile")}
       profileTestID="swing-log-profile"
     />
@@ -659,21 +687,10 @@ const useStyles = themedStyles((t) => ({
   olderList: { marginTop: 14, gap: 10 },
 
   centre: { alignItems: "center", justifyContent: "center", gap: 10, padding: 24, minHeight: 260 },
-  emptyTitle: {
-    color: t.text,
-    fontFamily: FONT_DISPLAY.extraBold,
-    fontSize: 17,
-    textAlign: "center",
-  },
-  emptyDetail: {
-    color: t.muted,
-    fontFamily: FONT_BODY.regular,
-    fontSize: 13,
-    lineHeight: 19,
-    textAlign: "center",
-    maxWidth: 300,
-  },
 }));
+
+/** Stable identity for the forced-empty debug state, so downstream memos don't churn. */
+const EMPTY_SESSIONS: SwingSession[] = [];
 
 /**
  * How long a deleted row takes to leave — the veil (130) plus the slide (190) plus a beat.

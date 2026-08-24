@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
 
-import { Button, DisplayText, Eyebrow, Input } from "../../design/system";
+import { Button, DisplayText, Eyebrow, Input, SwingLoader } from "../../design/system";
 import { FONT_BODY } from "../../design/system/typography";
 import { themedStyles, useTheme } from "../../theme";
 import {
@@ -163,7 +163,7 @@ export function PhoneSignInScreen({ onCancel }: { onCancel: () => void }) {
         </View>
       )}
 
-      {busy ? <ActivityIndicator color={t.lavender} /> : null}
+      {busy ? <SwingLoader size={30} /> : null}
       {error ? (
         <Text style={styles.error} accessibilityRole="alert">
           {error}

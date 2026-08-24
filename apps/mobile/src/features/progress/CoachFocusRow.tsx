@@ -17,7 +17,7 @@ export function CoachFocusRow({ priority }: { priority: ProgressPriority }) {
     priority.level === "high"
       ? { bg: "rgba(229,87,100,0.14)", fg: t.bad }
       : priority.level === "med"
-        ? { bg: t.mode === "dark" ? "rgba(63,87,218,0.20)" : "rgba(47,70,207,0.12)", fg: t.cobalt }
+        ? { bg: t.mode === "dark" ? "rgba(31,169,239,0.20)" : "rgba(13,148,219,0.12)", fg: t.cobalt }
         : { bg: "rgba(40,168,107,0.14)", fg: t.good };
 
   return (

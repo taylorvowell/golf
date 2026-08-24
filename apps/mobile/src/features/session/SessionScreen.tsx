@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Animated,
   BackHandler,
   Easing,
+  Modal,
   StyleSheet,
   Text,
   View,
@@ -17,11 +17,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import HighSpeedCamera from "../../../modules/high-speed-camera/src";
 import type { HighSpeedCameraViewRef } from "../../../modules/high-speed-camera/src/HighSpeedCameraView";
 
-import { AppHeader, APP_HEADER_BAR, useNavVisibility } from "../../design/system";
+import { APP_HEADER_BAR, AppHeader, SwingLoader, useNavVisibility } from "../../design/system";
 import { FONT_DISPLAY } from "../../design/system/typography";
 import { useAppNavigation } from "../../navigation";
-import { COLORS, SEMANTIC } from "../../theme";
+import { COLORS, FixedDarkTheme } from "../../theme";
+import { Avatar } from "../profile/Avatar";
 import { useHandedness } from "../profile/useProfile";
+import { ImportSheet } from "../swings/ImportSheet";
+import { useImportSwing } from "../swings/useImportSwing";
 import { primeSession, useSessions } from "../swings/useSessions";
 import { useSessionPipeline } from "./useSessionPipeline";
 import { CameraControls } from "./CameraControls";
@@ -39,15 +42,13 @@ import {
   SAVE_PAD_S,
   STOP_TIMEOUT_MS,
 } from "./captureConstants";
-import { FpsPicker } from "./FpsControl";
+import { UploadPill } from "./UploadPill";
 import { ViewToggle } from "./ViewToggle";
 import { RecordingFrame } from "./RecordingFrame";
 import { SessionDock } from "./SessionDock";
-import { SessionHeading } from "./SessionHeading";
 import { SESSION_NAV_CLEARANCE } from "./SessionNav";
-import { SessionTitle } from "./SessionTitle";
 import { SwingExitSheet } from "./sheets/SwingExitSheet";
-import { calendarDate, createSession, renameSession } from "./sessionApi";
+import { calendarDate, createSession } from "./sessionApi";
 import { stageSessionArrival } from "./sessionArrival";
 import { loadSessionDefaults } from "./sessionDefaults";
 import {
@@ -238,8 +239,9 @@ export function SessionScreen() {
     onRecordError,
     setPreviewLive,
     onTakeStarted,
-    // The golfer's pick, or the app's ceiling — the ladder still resolves the real rate.
-    state.fpsChoice ?? MAX_FPS_REQUEST,
+    // Always the app's ceiling (Taylor, 2026-08-23): capture is the highest rate the open lens
+    // offers, never a picked one — the ladder resolves what the device can actually honour.
+    MAX_FPS_REQUEST,
   );
 
   /** Save on the review screen: trim to the chosen window, then mint the swing. */
@@ -356,34 +358,23 @@ export function SessionScreen() {
   // so a slow answer can never overwrite either.
   const { sessions: sessionRows, loading: sessionsLoading } = useSessions();
   const sessionNumber = sessionsLoading ? null : sessionRows.length + 1;
+
+  /**
+   * The import door, the same one the swing log carries: a clip already on the phone gets the
+   * identical picker → angle → mark-impact → upload path a recorded take gets. The camera screen
+   * is where a golfer holding footage actually stands, so it earns a door of its own.
+   */
+  const importer = useImportSwing(sessionRows, () =>
+    // An upload lands in the DAY's session, not the one being recorded here, so saving it takes
+    // the golfer to the log where it will appear (Taylor, 2026-08-23) — a recorded take stays put
+    // and goes to the after-swing screen. Through `leave` so the surface slides out rather than
+    // popping mid-animation.
+    leave(() => navigation.navigate("Tabs", { screen: "SwingLog" })),
+  );
   useEffect(() => {
     if (sessionNumber == null) return;
     dispatch({ type: "set-default-title", title: `Session ${sessionNumber}` });
   }, [sessionNumber]);
-
-  /**
-   * The golfer renamed the session. Before the first swing that is purely local — there is no row
-   * to name yet — and after it, the name is PATCHed and the confirmed answer primes the log's
-   * cache so a log already on screen shows it.
-   *
-   * Fire-and-forget on purpose: a rename that loses the network must not block the field or
-   * revert under the golfer's cursor. The reducer holds the name either way, and the next
-   * rename re-sends it.
-   */
-  const sessionIdRef = useRef(state.sessionId);
-  useEffect(() => {
-    sessionIdRef.current = state.sessionId;
-  }, [state.sessionId]);
-  const onRename = useCallback((title: string) => {
-    touched.current = true;
-    dispatch({ type: "rename", title });
-    const id = sessionIdRef.current;
-    if (id) {
-      void renameSession(id, title)
-        .then(primeSession)
-        .catch(() => {});
-    }
-  }, []);
 
   /**
    * The session becomes REAL on the first saved swing, never on opening the camera (D61).
@@ -403,8 +394,8 @@ export function SessionScreen() {
     minting.current = true;
     void createSession({
       // The app's own "Session 4" is never sent as a name — null is what keeps the log's date
-      // title, and only a name the golfer typed replaces it.
-      name: state.renamed ? state.title : null,
+      // title.
+      name: null,
       sessionType: state.sessionType,
       date: calendarDate(new Date()),
     })
@@ -415,7 +406,7 @@ export function SessionScreen() {
       .catch(() => {
         minting.current = false;
       });
-  }, [state.renamed, state.sessionId, state.sessionType, state.swings.length, state.title]);
+  }, [state.sessionId, state.sessionType, state.swings.length]);
 
   // The real pipeline: every saved swing uploads, enqueues (unless the session is video-only),
   // and polls its job. The reducer's `swing-ready` / `swing-failed` actions are the seam, and the
@@ -567,9 +558,6 @@ export function SessionScreen() {
             view={state.view}
             zoom={state.zoom}
             onZoomRange={(range) => dispatch({ type: "set-zoom-range", range })}
-            onCaptureConfig={(e) =>
-              dispatch({ type: "set-capture-rates", rates: e.nativeEvent.rates ?? [] })
-            }
             cameraRef={cameraRef}
             onRecordingEnded={onRecordingEnded}
           >
@@ -578,57 +566,28 @@ export function SessionScreen() {
             ) : null}
 
 
-            {/* Top scrim + header chrome — all of it gone while armed. */}
+            {/* Top scrim + header chrome — all of it gone while armed. The gradient carries no
+                content of its own; it is what keeps the brand, the profile door and the pills
+                legible over bright footage. */}
             <Animated.View
               pointerEvents={idle ? "box-none" : "none"}
               style={[StyleSheet.absoluteFill, { opacity: chromeFade }]}
             >
               <LinearGradient
                 colors={["rgba(6,10,20,0.88)", "rgba(6,10,20,0.55)", "rgba(6,10,20,0)"]}
-                style={[styles.scrim, { paddingTop: insets.top + APP_HEADER_BAR + 6 }]}
-                pointerEvents="box-none"
-              >
-                {/* Once a session exists it announces WHERE you are, not that it is new
-                    (Taylor, 2026-08-21) — the same heading the after-swing screen carries, so
-                    moving between the two never costs a re-orientation. */}
-                {state.swings.length > 0 ? (
-                  <SessionHeading
-                    title={state.title}
-                    swingNumber={state.swings.length + 1}
-                    onRename={onRename}
-                  />
-                ) : (
-                  <View style={styles.titleRow}>
-                    <View style={styles.newPill}>
-                      <Text style={styles.newPillText}>New Session</Text>
-                    </View>
-                    <View style={styles.titleSlot}>
-                      <SessionTitle
-                        title={state.title}
-                        onRename={onRename}
-                      />
-                    </View>
-                  </View>
-                )}
-              </LinearGradient>
+                style={[styles.scrim, { height: insets.top + APP_HEADER_BAR + 74 }]}
+                pointerEvents="none"
+              />
 
-              {/* The capture-rate pill, top right under the header (Taylor, 2026-08-23): what
-                  the next take will record at, tappable when the lens offers a choice. Lives in
-                  the idle chrome, so arming fades it — the RECORDING pill is RecordingFrame's. */}
+              {/* The upload door, top right under the header (Taylor, 2026-08-23) — for a clip
+                  filmed elsewhere. Lives in the idle chrome, so arming fades it. There is no
+                  capture-rate control: recording is always the highest rate the lens offers, and
+                  what it RESOLVED to is the RECORDING pill's job. */}
               <View
-                // Below the heading row, not beside it — the title is centred and can run
-                // long, and the two must never collide over footage.
-                style={[styles.fpsSlot, { top: insets.top + APP_HEADER_BAR + 62 }]}
+                style={[styles.uploadSlot, { top: insets.top + APP_HEADER_BAR + 8 }]}
                 pointerEvents="box-none"
               >
-                <FpsPicker
-                  rates={state.captureRates}
-                  value={state.fpsChoice}
-                  onSelect={(fps) => {
-                    touched.current = true;
-                    dispatch({ type: "set-fps", fps });
-                  }}
-                />
+                <UploadPill onPress={importer.begin} />
               </View>
 
               {/* Controls rail — everything you touch while FRAMING THIS phone, in one column:
@@ -679,7 +638,7 @@ export function SessionScreen() {
                 treatment cannot flash back for the frame between stop and review. */}
             {stopping ? (
               <View style={styles.stopping} pointerEvents="auto">
-                <ActivityIndicator size="large" color="#FFFFFF" />
+                <SwingLoader size={76} ground="dark" />
                 <Text style={styles.stoppingText}>Processing</Text>
               </View>
             ) : null}
@@ -745,6 +704,7 @@ export function SessionScreen() {
             chromePx={headerScroll}
             // The one door off this screen that is not End. Sealed while a session is
             // running — leaving mid-session is what "End session" is for.
+            avatar={<Avatar size={26} />}
             onProfile={locked ? undefined : () => navigation.navigate("Profile")}
           />
         </Animated.View>
@@ -760,6 +720,41 @@ export function SessionScreen() {
         }}
       />
       <SessionTypeInfoSheet visible={sheet === "info"} onClose={() => setSheet(null)} />
+
+      {/* Asked once per import: picking a clip and saying which way the camera pointed is one
+          action, not a flow. */}
+      <ImportSheet
+        visible={importer.pending !== null}
+        clip={importer.pending}
+        onClose={importer.cancel}
+        onConfirm={importer.confirm}
+      />
+
+      {/* The mark-impact pass an import earns, identical to a recorded take's — nothing uploads
+          until the golfer has seen the window and said save. Its own Modal window ABOVE the
+          camera surface, so this screen's own chrome cannot float over the Save button. */}
+      <Modal
+        visible={importer.reviewing !== null}
+        // NOT "fade": Android animates the WINDOW's alpha and the camera shows straight through.
+        animationType="none"
+        statusBarTranslucent
+        navigationBarTranslucent
+        onRequestClose={importer.discardReview}
+      >
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }]}>
+          <FixedDarkTheme>
+            {importer.reviewing ? (
+              <SwingReview
+                take={importer.reviewing.take}
+                saving={importer.savingReview}
+                onSave={importer.saveReview}
+                onDelete={importer.discardReview}
+                importMode
+              />
+            ) : null}
+          </FixedDarkTheme>
+        </View>
+      </Modal>
       <SwingExitSheet
         visible={exitOpen}
         onClose={() => setExitOpen(false)}
@@ -805,15 +800,7 @@ const styles = StyleSheet.create({
   // Transparent ground: the previous screen shows through while the surface slides.
   root: { flex: 1, backgroundColor: "transparent" },
   sliding: { flex: 1, backgroundColor: COLORS.bg },
-  scrim: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 16,
-    paddingBottom: 34,
-    gap: 12,
-  },
+  scrim: { position: "absolute", top: 0, left: 0, right: 0 },
   stopping: {
     position: "absolute",
     top: 0,
@@ -835,22 +822,7 @@ const styles = StyleSheet.create({
   },
   /** Right edge, vertically placed by the screen (the header's height is an inset away). The
    *  dropdown grows DOWN from here over the footage, which box-none keeps tappable around it. */
-  fpsSlot: { position: "absolute", right: 14 },
-  titleRow: { flexDirection: "row", alignItems: "center", gap: 10 },
-  titleSlot: { flex: 1, minWidth: 0 },
-  newPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 999,
-    backgroundColor: SEMANTIC.good,
-  },
-  newPillText: {
-    color: "#FFFFFF",
-    fontFamily: FONT_DISPLAY.black,
-    fontSize: 10,
-    letterSpacing: 0.8,
-    textTransform: "uppercase",
-  },
+  uploadSlot: { position: "absolute", right: 14, alignItems: "flex-end" },
   // Each rail exists in both positions — the profile's handedness picks which (see above).
   controlsRailLeft: { position: "absolute", left: 16, alignItems: "flex-start", gap: 14 },
   controlsRailRight: { position: "absolute", right: 16, alignItems: "flex-end", gap: 14 },

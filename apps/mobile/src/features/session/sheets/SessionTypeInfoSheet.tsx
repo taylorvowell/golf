@@ -2,7 +2,7 @@ import { Text, View } from "react-native";
 
 import { Sheet } from "../../../design/system/Sheet";
 import { FONT_BODY, FONT_DISPLAY } from "../../../design/system/typography";
-import { COLORS, appStyles, useAppTheme } from "../../../theme";
+import { appStyles } from "../../../theme";
 
 /**
  * The info door beside the session-type toggle (D61): what each mode does, in a golfer's

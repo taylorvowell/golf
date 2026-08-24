@@ -25,6 +25,7 @@ import { VersionGate } from "./src/platform/VersionGate";
 import { TabBar } from "./src/design/TabBar";
 import { BillingDebug } from "./src/features/billing/BillingDebug";
 import { EntitlementProvider } from "./src/features/billing/entitlement";
+import { PersonaDebug } from "./src/features/debug/persona";
 import { AiCoachPreferencesScreen } from "./src/screens/AiCoachPreferencesScreen";
 import { CoachScreen } from "./src/screens/CoachScreen";
 import { DeleteAccountRoute } from "./src/screens/DeleteAccountRoute";
@@ -314,6 +315,9 @@ function Root() {
                 </Stack.Navigator>
                 {/* Inside the container: its sheet navigates to Upgrade. */}
                 <BillingDebug />
+                {/* Beside it, not above: the persona select forces entitlement scenarios,
+                    so it needs the same provider. */}
+                <PersonaDebug />
                 {/* Auto-opens onboarding while it is unfinished; contributes the debug door. */}
                 <OnboardingLauncher />
                 </NavigationContainer>

@@ -11,6 +11,7 @@ import {
 import { X } from "lucide-react-native";
 
 import { useTheme } from "../../theme";
+import { SCROLL_PRESS_DELAY_MS } from "./press";
 
 /**
  * The house carousel: center-aligned cards with both neighbours peeking, snap-to-center on
@@ -38,8 +39,10 @@ import { useTheme } from "../../theme";
  * what lets `snapToInterval` do the snapping instead of hand-rolled offset math.
  */
 
-const PEEK = 26;
-const GAP = 10;
+/* The neighbours "just barely" show (Taylor, 2026-08-24) — the peek is a hint that there is
+   more, not a preview of it. */
+const PEEK = 10;
+const GAP = 8;
 /** Copies of the deck backing the loop. Middle copy is home; the outer two are runway. */
 const COPIES = 3;
 
@@ -58,6 +61,12 @@ export interface SnapCarouselProps {
   onDismiss?: (key: string) => void;
   /** Accessibility label for the X, per card. Falls back to a generic label. */
   dismissLabel?: (key: string) => string;
+  /**
+   * True when the carousel sits on a DARK ground that is not a themed surface (the hero
+   * gradient): the frame's X and the dots swap to glass/white-alpha, because the light
+   * theme's surface tokens vanish against navy.
+   */
+  onDark?: boolean;
   testID?: string;
 }
 
@@ -66,6 +75,7 @@ export function SnapCarousel({
   cardHeight,
   onDismiss,
   dismissLabel,
+  onDark,
   testID,
 }: SnapCarouselProps) {
   const t = useTheme();
@@ -143,34 +153,41 @@ export function SnapCarousel({
     scrollRef.current?.scrollTo({ x: home * interval, animated: false });
   }, [looping, interval, n]);
 
-  const dismissCentered = useCallback(() => {
-    const item = items[logicalRef.current];
-    if (!item || !onDismiss) return;
-    // The reflow (neighbour sliding into the hole, or the whole component collapsing on the
-    // last card) is the parent removing the item; configuring here animates that commit.
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    onDismiss(item.key);
-  }, [items, onDismiss]);
+  const dismiss = useCallback(
+    (key: string) => {
+      if (!onDismiss) return;
+      // The reflow (neighbour sliding into the hole, or the whole component collapsing on the
+      // last card) is the parent removing the item; configuring here animates that commit.
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      onDismiss(key);
+    },
+    [onDismiss],
+  );
 
   // An empty deck renders NOTHING — the parent slot must collapse, not reserve space.
   if (n === 0) return null;
 
-  const centeredKey = items[Math.min(logical, n - 1)]?.key ?? "";
-  const dismissA11y = dismissLabel?.(centeredKey) ?? "Dismiss this card";
+  /** One slot: the card plus ITS OWN X (Taylor, 2026-08-24 — the X rides the card, so it
+   *  scrolls with it and there is never a frame-fixed control floating over a moving deck). */
+  const slot = (item: SnapCarouselItem, key: string) => (
+    <View key={key} style={{ width: cardWidth, height: cardHeight }}>
+      {item.render(cardWidth)}
+      {onDismiss ? (
+        <DismissX
+          label={dismissLabel?.(item.key) ?? "Dismiss this card"}
+          onPress={() => dismiss(item.key)}
+          onDark={onDark}
+        />
+      ) : null}
+    </View>
+  );
 
   // One card: no loop, no scroll, no dots — a static centered card with the same geometry.
   if (!looping) {
     return (
       <View testID={testID} onLayout={onLayout} style={{ width: "100%" }}>
         {width > 0 ? (
-          <View style={{ paddingHorizontal: PEEK + GAP }}>
-            <View style={{ width: cardWidth, height: cardHeight }}>
-              {items[0].render(cardWidth)}
-            </View>
-            {onDismiss ? (
-              <DismissX label={dismissA11y} onPress={dismissCentered} />
-            ) : null}
-          </View>
+          <View style={{ paddingHorizontal: PEEK + GAP }}>{slot(items[0], items[0].key)}</View>
         ) : (
           <View style={{ height: cardHeight }} />
         )}
@@ -182,39 +199,27 @@ export function SnapCarousel({
     <View testID={testID} onLayout={onLayout} style={{ width: "100%" }}>
       {width > 0 ? (
         <>
-          <View>
-            <ScrollView
-              ref={scrollRef}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              snapToInterval={interval}
-              // One card per gesture — a hard fling must not skate past its neighbour.
-              disableIntervalMomentum
-              decelerationRate="fast"
-              onScroll={onScroll}
-              scrollEventThrottle={16}
-              onMomentumScrollEnd={onSettle}
-              onScrollEndDrag={onSettle}
-              contentContainerStyle={{
-                paddingHorizontal: PEEK + GAP,
-                gap: GAP,
-              }}
-            >
-              {Array.from({ length: COPIES }, (_, copy) =>
-                items.map((item) => (
-                  <View
-                    key={`${copy}:${item.key}`}
-                    style={{ width: cardWidth, height: cardHeight }}
-                  >
-                    {item.render(cardWidth)}
-                  </View>
-                )),
-              )}
-            </ScrollView>
-            {onDismiss ? (
-              <DismissX label={dismissA11y} onPress={dismissCentered} />
-            ) : null}
-          </View>
+          <ScrollView
+            ref={scrollRef}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            snapToInterval={interval}
+            // One card per gesture — a hard fling must not skate past its neighbour.
+            disableIntervalMomentum
+            decelerationRate="fast"
+            onScroll={onScroll}
+            scrollEventThrottle={16}
+            onMomentumScrollEnd={onSettle}
+            onScrollEndDrag={onSettle}
+            contentContainerStyle={{
+              paddingHorizontal: PEEK + GAP,
+              gap: GAP,
+            }}
+          >
+            {Array.from({ length: COPIES }, (_, copy) =>
+              items.map((item) => slot(item, `${copy}:${item.key}`)),
+            )}
+          </ScrollView>
           <View style={{ flexDirection: "row", justifyContent: "center", gap: 5, marginTop: 10 }}>
             {items.map((item, i) => (
               <View
@@ -223,7 +228,8 @@ export function SnapCarousel({
                   width: i === logical ? 14 : 5,
                   height: 5,
                   borderRadius: 999,
-                  backgroundColor: i === logical ? t.aqua : t.surface3,
+                  backgroundColor:
+                    i === logical ? t.aqua : onDark ? "rgba(255,255,255,0.35)" : t.surface3,
                 }}
               />
             ))}
@@ -237,32 +243,54 @@ export function SnapCarousel({
 }
 
 /**
- * The frame's dismiss affordance — one X, one place, over whichever card is centered, so
- * every card is dismissed the same way (and a bespoke card cannot forget to offer it).
- * Sits OUTSIDE the ScrollView, so its press is never claimed by the scroll gesture and it
- * keeps instant feedback. Press is a fill step up the ramp, per the tap-state rule.
+ * Each card's dismiss affordance — a bare, subtle, semi-transparent X (Taylor, 2026-08-24:
+ * no bed, no circle), rendered by the slot so every card earns the same X in the same corner
+ * and it scrolls WITH its card. Inside the scroller, so it carries the scroll-press delay.
+ * Press brightens the glyph — the footage/glass opacity carve-out, since there is no surface
+ * ramp behind a bare icon.
  */
-function DismissX({ label, onPress }: { label: string; onPress: () => void }) {
+function DismissX({
+  label,
+  onPress,
+  onDark,
+}: {
+  label: string;
+  onPress: () => void;
+  onDark?: boolean;
+}) {
   const t = useTheme();
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
-      hitSlop={12}
+      hitSlop={14}
+      unstable_pressDelay={SCROLL_PRESS_DELAY_MS}
       onPress={onPress}
-      style={({ pressed }) => ({
+      style={{
         position: "absolute",
-        top: 8,
-        right: PEEK + GAP + 8,
-        width: 28,
-        height: 28,
-        borderRadius: 14,
+        top: 10,
+        right: 10,
+        width: 24,
+        height: 24,
         alignItems: "center",
         justifyContent: "center",
-        backgroundColor: pressed ? t.surface3 : t.surface2,
-      })}
+      }}
     >
-      <X size={15} color={t.muted} strokeWidth={2.5} />
+      {({ pressed }) => (
+        <X
+          size={16}
+          color={
+            onDark
+              ? pressed
+                ? "rgba(255,255,255,0.95)"
+                : "rgba(255,255,255,0.55)"
+              : pressed
+                ? t.text
+                : t.muted
+          }
+          strokeWidth={2.5}
+        />
+      )}
     </Pressable>
   );
 }

@@ -23,6 +23,7 @@ import {
 } from "../design/system";
 import { displayLine, FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
 import { CoachAvatar } from "../features/coach/CoachAvatar";
+import { Avatar } from "../features/profile/Avatar";
 import { useCoach } from "../features/coach/useCoach";
 import {
   COACH_DRILLS,
@@ -284,6 +285,7 @@ export function CoachScreen() {
         hero
         chromePx={chromePx}
         bell={<NotificationBell hero onPress={() => navigation.navigate("Notifications")} />}
+        avatar={<Avatar size={26} />}
         onProfile={() => navigation.navigate("Profile")}
         profileTestID="coach-profile"
       />
@@ -304,7 +306,7 @@ function FocusAreaRow({ area, stageWidth }: { area: CoachFocusArea; stageWidth: 
     area.level === "high"
       ? { bg: "rgba(229,87,100,0.14)", fg: t.bad }
       : area.level === "med"
-        ? { bg: t.mode === "dark" ? "rgba(63,87,218,0.20)" : "rgba(47,70,207,0.12)", fg: t.cobalt }
+        ? { bg: t.mode === "dark" ? "rgba(31,169,239,0.20)" : "rgba(13,148,219,0.12)", fg: t.cobalt }
         : { bg: "rgba(40,168,107,0.14)", fg: t.good };
 
   return (
@@ -412,7 +414,7 @@ const useStyles = themedStyles((t) => ({
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: t.mode === "dark" ? "rgba(67,205,208,0.14)" : "rgba(67,205,208,0.12)",
+    backgroundColor: t.mode === "dark" ? "rgba(45,240,251,0.14)" : "rgba(45,240,251,0.12)",
   },
   tipBody: { flex: 1, minWidth: 0 },
   tipTitle: {
@@ -434,10 +436,10 @@ const useStyles = themedStyles((t) => ({
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 12,
-    backgroundColor: t.mode === "dark" ? "rgba(67,205,208,0.10)" : "rgba(67,205,208,0.09)",
+    backgroundColor: t.mode === "dark" ? "rgba(45,240,251,0.10)" : "rgba(45,240,251,0.09)",
   },
   tipDrillLabel: {
-    color: t.mode === "dark" ? t.aqua : "#1D7E86",
+    color: t.mode === "dark" ? t.aqua : "#0B5E8C",
     fontFamily: FONT_DISPLAY.black,
     fontSize: 8,
     letterSpacing: 1.12,
@@ -460,7 +462,7 @@ const useStyles = themedStyles((t) => ({
     marginTop: 12,
     padding: 15,
     borderRadius: 14,
-    backgroundColor: t.mode === "dark" ? "rgba(67,205,208,0.10)" : "rgba(67,205,208,0.09)",
+    backgroundColor: t.mode === "dark" ? "rgba(45,240,251,0.10)" : "rgba(45,240,251,0.09)",
   },
   stanceIcon: {
     width: 46,
@@ -471,7 +473,7 @@ const useStyles = themedStyles((t) => ({
     backgroundColor: t.aqua,
   },
   stanceEyebrow: {
-    color: t.mode === "dark" ? t.aqua : "#1D7E86",
+    color: t.mode === "dark" ? t.aqua : "#0B5E8C",
     fontFamily: FONT_DISPLAY.black,
     fontSize: 8,
     letterSpacing: 1.12,
@@ -522,7 +524,7 @@ const useStyles = themedStyles((t) => ({
   areaStage: {
     borderRadius: 10,
     overflow: "hidden",
-    backgroundColor: "#0B1528",
+    backgroundColor: "#0A1A29",
   },
 
   /* Drills */

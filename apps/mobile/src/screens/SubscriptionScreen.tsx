@@ -83,7 +83,8 @@ export function SubscriptionScreen() {
         </Panel>
       )}
 
-      {tier !== "pro" && (
+      {/* Only Free is sold to — an Instructor already holds everything Pro has. */}
+      {tier === "free" && (
         <Button
           testID="subscription-upgrade"
           label="Upgrade to Pro"

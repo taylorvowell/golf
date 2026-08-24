@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useRef } from "react";
+import { Fragment, useCallback, useEffect, useRef, type ReactNode } from "react";
 import { Pressable, Switch, Text, View } from "react-native";
 import { RotateCw } from "lucide-react-native";
 
@@ -50,6 +50,12 @@ export interface DebugGroup {
   inline?: boolean;
   actions?: DebugAction[];
   toggles?: DebugToggle[];
+  /** Custom control rendered ABOVE the toggle block, in contribution order — the persona
+   *  picker's slot. The group's title is not drawn for content; the control names itself. */
+  content?: ReactNode;
+  /** Action groups that belong UP TOP with the persona picker (profile/subscription state) —
+   *  rendered before the toggle block instead of after it. */
+  pinned?: boolean;
 }
 
 export interface DebugSheetProps {
@@ -89,6 +95,47 @@ export function DebugSheet({ visible, onClose, groups, onRefresh }: DebugSheetPr
 
   const toggles = groups.flatMap((group) => group.toggles ?? []);
   const actionGroups = groups.filter((group) => group.actions?.length);
+  // Profile/subscription state stays up top with the persona picker; everything else — and
+  // the toggle block — sits below it (Taylor, 2026-08-24).
+  const pinnedGroups = actionGroups.filter((group) => group.pinned);
+  const restGroups = actionGroups.filter((group) => !group.pinned);
+
+  const renderActionGroup = (group: DebugGroup) => (
+    <Fragment key={group.title}>
+      <Text style={styles.group}>{group.title}</Text>
+
+      {group.inline && group.actions ? (
+        <View style={styles.chipRow}>
+          {group.actions.map((action) => (
+            <Pressable
+              key={action.key}
+              accessibilityRole="button"
+              accessibilityLabel={action.label}
+              onPress={() => run(action.onPress)}
+              style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
+              testID={`debug-${action.key}`}
+            >
+              <Text style={styles.chipLabel}>{action.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : (
+        group.actions?.map((action) => (
+          <Pressable
+            key={action.key}
+            accessibilityRole="button"
+            accessibilityLabel={action.label}
+            onPress={() => run(action.onPress)}
+            style={({ pressed }) => [styles.row, pressed && styles.pressed]}
+            testID={`debug-${action.key}`}
+          >
+            <Text style={styles.label}>{action.label}</Text>
+            <Text style={styles.run}>RUN</Text>
+          </Pressable>
+        ))
+      )}
+    </Fragment>
+  );
 
   return (
     <Sheet visible={visible} onClose={onClose} testID="debug-sheet">
@@ -112,6 +159,12 @@ export function DebugSheet({ visible, onClose, groups, onRefresh }: DebugSheetPr
           ) : null}
         </View>
 
+        {groups.map((group, i) =>
+          group.content ? <Fragment key={`content-${i}`}>{group.content}</Fragment> : null,
+        )}
+
+        {pinnedGroups.map(renderActionGroup)}
+
         {toggles.map((toggle) => (
           <View key={toggle.key} style={styles.row}>
             <Text style={styles.label}>{toggle.label}</Text>
@@ -125,42 +178,7 @@ export function DebugSheet({ visible, onClose, groups, onRefresh }: DebugSheetPr
           </View>
         ))}
 
-        {actionGroups.map((group) => (
-          <Fragment key={group.title}>
-            <Text style={styles.group}>{group.title}</Text>
-
-            {group.inline && group.actions ? (
-              <View style={styles.chipRow}>
-                {group.actions.map((action) => (
-                  <Pressable
-                    key={action.key}
-                    accessibilityRole="button"
-                    accessibilityLabel={action.label}
-                    onPress={() => run(action.onPress)}
-                    style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
-                    testID={`debug-${action.key}`}
-                  >
-                    <Text style={styles.chipLabel}>{action.label}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            ) : (
-              group.actions?.map((action) => (
-                <Pressable
-                  key={action.key}
-                  accessibilityRole="button"
-                  accessibilityLabel={action.label}
-                  onPress={() => run(action.onPress)}
-                  style={({ pressed }) => [styles.row, pressed && styles.pressed]}
-                  testID={`debug-${action.key}`}
-                >
-                  <Text style={styles.label}>{action.label}</Text>
-                  <Text style={styles.run}>RUN</Text>
-                </Pressable>
-              ))
-            )}
-          </Fragment>
-        ))}
+        {restGroups.map(renderActionGroup)}
       </View>
     </Sheet>
   );

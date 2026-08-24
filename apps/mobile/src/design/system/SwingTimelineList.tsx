@@ -11,6 +11,7 @@ import {
 import { Trash2 } from "lucide-react-native";
 
 import { PendingDots } from "./PendingDots";
+import { Shimmer } from "./Shimmer";
 import { ANALYSIS_STAGES } from "../../features/session/processing";
 
 import { SCROLL_PRESS_DELAY_MS } from "./press";
@@ -161,26 +162,32 @@ export function SwingTimelineList({
               borderRadius: 10,
               // Pressed is a fill step plus a slight compression (Button's press idiom) — the
               // ramp step alone is a ~4% shade shift and reads as nothing on a bright screen.
-              // A swing that is still arriving is a COBALT card with white ink (Taylor,
-              // 2026-08-22), never a dimmed one: dimming reads as disabled, and this row is the
-              // most alive thing on the screen. It is also the only fill on the log that is not
-              // a surface-ramp step, which is exactly why it cannot be mistaken for a swing.
+              // A swing that is still arriving is a soft AQUA bed under a sweeping shimmer
+              // (Taylor, 2026-08-23) — it used to be a solid cobalt slab with white ink, which
+              // shouted louder than any finished swing and said "different" rather than
+              // "working". Aqua is the app's activity accent and the motion is the actual
+              // claim; the ink stays the list's own, so the row already reads as the swing it
+              // is about to become. Still not a surface-ramp step, so it cannot be mistaken
+              // for a finished one.
               backgroundColor: item.failed
                 ? t.bad
                 : item.pending
-                  ? t.cobalt
+                  ? t.aquaSoft
                   : pressed
                     ? t.surface3
                     : t.surface2,
+              overflow: item.pending ? "hidden" : undefined,
               transform: [{ scale: pressed ? 0.98 : 1 }],
             })}
           >
+          {/* Behind the row's content, clipped to the card. */}
+          {item.pending ? <Shimmer radius={10} /> : null}
           {item.leading}
           <View style={{ flex: 1, minWidth: 0, paddingVertical: 12 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
               <Text
                 style={{
-                  color: item.pending || item.failed ? t.onDark : t.text,
+                  color: item.failed ? t.onDark : t.text,
                   fontFamily: FONT_DISPLAY.black,
                   fontSize: compact ? 15 : 16,
                 }}
@@ -205,10 +212,7 @@ export function SwingTimelineList({
                     style={{
                       flexShrink: 1,
                       minWidth: 0,
-                      color:
-                        item.pending || item.failed
-                          ? t.onDark
-                          : tone[item.subtitleTone ?? "neutral"],
+                      color: item.failed ? t.onDark : tone[item.subtitleTone ?? "neutral"],
                       fontFamily: FONT_BODY.regular,
                       fontSize: 12,
                     }}
@@ -222,7 +226,7 @@ export function SwingTimelineList({
               <View style={{ marginTop: 6, gap: 5 }}>
                 <Text
                   style={{
-                    color: item.pending ? t.onDark : t.textSoft,
+                    color: t.textSoft,
                     fontFamily: FONT_BODY.bold,
                     fontSize: 11,
                   }}
@@ -238,15 +242,15 @@ export function SwingTimelineList({
                         flex: 1,
                         height: 3,
                         borderRadius: 99,
-                        // On the cobalt card the unlit segments are white at low alpha — the
-                        // surface ramp has nothing to say on a fill that is not part of it.
+                        // Lit segments are cobalt on the aqua bed: aqua on aqua has nothing
+                        // to say, and the unlit track is the ramp's own step in both states.
                         backgroundColor:
                           index <=
                           Math.max(0, Math.min(ANALYSIS_STAGES.length - 1, item.progress!.stageIndex))
-                            ? t.aqua
-                            : item.pending
-                              ? "rgba(255,255,255,0.28)"
-                              : t.surface3,
+                            ? item.pending
+                              ? t.cobalt
+                              : t.aqua
+                            : t.surface3,
                       }}
                     />
                   ))}
@@ -258,7 +262,7 @@ export function SwingTimelineList({
               per-swing scores recede beneath it (Taylor 2026-08-17). */}
           {item.failed ? null : item.pending ? (
             <View style={{ width: compact ? 44 : 48, alignItems: "center" }}>
-              <PendingDots color={t.aqua} size={6} />
+              <PendingDots color={t.cobalt} size={6} />
             </View>
           ) : (
             item.score != null && <ScoreOrb muted score={item.score} size={compact ? 44 : 48} />

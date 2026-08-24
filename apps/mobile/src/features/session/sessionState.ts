@@ -129,16 +129,12 @@ export interface SessionSwing {
 export const SHUTTER_DEBOUNCE_MS = 3_000;
 
 export interface SessionState {
-  /** The editable half of the name — "Session N". The date half is fixed (`dateLabel`). */
-  title: string;
   /**
-   * Whether `title` is a name the GOLFER chose, as opposed to the app's own "Session N".
-   *
-   * The server stores a name only when this is true, because null there is what tells the swing
-   * log to keep its date title. Without the distinction every session would arrive looking
-   * renamed and the log could never print a date again.
+   * The app's own numbering — "Session N". Never shown on the capture screen and never sent to
+   * the server as a name: null there is what tells the swing log to keep its date title. It is
+   * the label the log's arrival card says out loud when a session ends.
    */
-  renamed: boolean;
+  title: string;
   dateLabel: string;
   /**
    * The server's session row, once the first swing minted it (D61), or null while the session
@@ -153,19 +149,6 @@ export interface SessionState {
   zoom: CameraZoom;
   /** Probed per lens — a flip re-reports it, so the slider never outlives its camera. */
   zoomRange: ZoomRange;
-  /**
-   * Every fixed high-speed rate the open lens really offers, highest first — the native
-   * probe's answer (`onCaptureConfig.rates`), never a hardcoded list. Empty until the camera
-   * reports, and empty on a lens with no high-speed mode, which renders no picker rather than
-   * a fake one (the zoom-range pattern).
-   */
-  captureRates: number[];
-  /**
-   * The rate the golfer picked, or null for "the highest the device offers" — the default,
-   * because a slow-motion product silently recording slower than it could is the failure the
-   * fps pill exists to expose. Only ever a member of `captureRates`.
-   */
-  fpsChoice: number | null;
   swings: SessionSwing[];
   /**
    * The finished recording awaiting the golfer's Save/Delete, or null. While set, the
@@ -184,9 +167,8 @@ export interface SessionState {
 }
 
 export type SessionAction =
-  | { type: "rename"; title: string }
-  /** The app's own numbering ("Session 4"), from the count of sessions the server holds. Not a
-   *  rename: it must never make the session look named to the log. */
+  /** The app's own numbering ("Session 4"), from the count of sessions the server holds. Never
+   *  a name: it must never make the session look named to the log. */
   | { type: "set-default-title"; title: string }
   /** The server confirmed the session row. Only ever set once — the first swing mints it. */
   | { type: "session-minted"; sessionId: string }
@@ -196,10 +178,6 @@ export type SessionAction =
   | { type: "set-zoom"; zoom: CameraZoom }
   /** The native preview reporting CONTROL_ZOOM_RATIO_RANGE for the lens it just opened. */
   | { type: "set-zoom-range"; range: ZoomRange }
-  /** The native preview reporting the fixed high-speed rates the opened lens offers. */
-  | { type: "set-capture-rates"; rates: number[] }
-  /** The golfer picking a capture rate from the pill's dropdown. Between recordings only. */
-  | { type: "set-fps"; fps: number }
   /** Record pressed: idle → countdown, or straight to recording when the delay is 0. */
   | { type: "arm" }
   | { type: "countdown-done" }
@@ -266,7 +244,6 @@ export function initialSessionState(
 ): SessionState {
   return {
     title: `Session ${sessionNumber}`,
-    renamed: false,
     dateLabel: sessionDateLabel(when),
     sessionId: null,
     sessionType: "swing_analysis",
@@ -275,8 +252,6 @@ export function initialSessionState(
     view: "dtl",
     zoom: 1,
     zoomRange: NO_ZOOM,
-    captureRates: [],
-    fpsChoice: null,
     swings: [],
     pendingTake: null,
     reviewing: null,
@@ -286,14 +261,10 @@ export function initialSessionState(
 
 export function sessionReducer(state: SessionState, action: SessionAction): SessionState {
   switch (action.type) {
-    case "rename": {
-      const title = action.title.trim();
-      return title.length === 0 ? state : { ...state, title, renamed: true };
-    }
     case "set-default-title": {
-      // Never over a name the golfer typed, and never once the session is real — the numbering
-      // arrives asynchronously and must not win a race against either.
-      if (state.renamed || state.sessionId !== null) return state;
+      // Never once the session is real — the numbering arrives asynchronously and must not win
+      // a race against the minted row.
+      if (state.sessionId !== null) return state;
       const title = action.title.trim();
       return title.length === 0 ? state : { ...state, title };
     }
@@ -340,27 +311,6 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
           ? defaultZoomFor(state.view, range)
           : Math.min(max, Math.max(min, state.zoom)),
       };
-    }
-    case "set-capture-rates": {
-      const rates = action.rates.filter((r) => Number.isFinite(r) && r > 0);
-      return {
-        ...state,
-        captureRates: rates,
-        // A pick the new lens cannot honour reverts to "highest" rather than silently
-        // recording at whatever the ladder lands on — the pill must never promise a rate
-        // the device no longer offers.
-        fpsChoice:
-          state.fpsChoice !== null && rates.includes(state.fpsChoice)
-            ? state.fpsChoice
-            : null,
-      };
-    }
-    case "set-fps": {
-      // Between recordings only (the zoom rule) — mid-take it would claim a rate the running
-      // file was not configured at. Only rates the probe offered: the picker lists real
-      // configurations, so anything else is a stale dispatch.
-      if (state.mode !== "idle" || !state.captureRates.includes(action.fps)) return state;
-      return { ...state, fpsChoice: action.fps };
     }
     case "arm": {
       // An unreviewed take is the only copy of that swing — nothing records over it.

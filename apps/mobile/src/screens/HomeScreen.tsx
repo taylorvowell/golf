@@ -8,13 +8,17 @@ import {
   View,
 } from "react-native";
 import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
+import { VideoView, useVideoPlayer } from "expo-video";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { SwingSummary } from "@swingsage/schema/contract";
 
-import { APP_HEADER_BAR, AppHeader, Button, Chip, Delta, formFigureFor, HERO_PARALLAX, HERO_SHEET_GAP, HeroBackdrop, PerformanceCard, ScoreRing, SCROLL_PRESS_DELAY_MS, SheetOverBackdrop, StickThumb, SwingLoader, useChromeScroll, WAVE_NAV_CLEARANCE } from "../design/system";
+import { APP_HEADER_BAR, AppHeader, BrandIcon, Button, Chip, Delta, FORM_FIGURES, formFigureFor, HERO_PARALLAX, HERO_SHEET_GAP, HeroBackdrop, PerformanceCard, ScoreRing, SCROLL_PRESS_DELAY_MS, SheetOverBackdrop, StickThumb, SwingLoader, useChromeScroll, WAVE_NAV_CLEARANCE } from "../design/system";
 import { displayLine, FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
 import { StatusMessage } from "../design/StatusMessage";
 import { useAuth } from "../features/auth/AuthProvider";
+import { Avatar } from "../features/profile/Avatar";
+import { personaHasNoSwings, usePersona } from "../features/debug/persona";
 import {
   aggregateFocus,
   latestDrill,
@@ -23,6 +27,7 @@ import {
   type FocusItem,
   type SessionStats,
 } from "../features/home/homeModel";
+import { isMockSwing, MOCK_DRILL_REEL, type DrillReelItem } from "../features/home/mockHome";
 import { useSessionReports } from "../features/home/useSessionReports";
 import { NotificationBell } from "../features/notifications/NotificationBell";
 import { SpotlightRail } from "../features/spotlights/SpotlightRail";
@@ -53,6 +58,12 @@ import { COLORS, themedStyles, useTheme } from "../theme";
 
 const NO_SWINGS: never[] = [];
 
+/** The get-started door's art: a swing looping behind the ask — the product doing the thing
+ *  the card asks for, in motion. Bundled: this card exists precisely when there is no network
+ *  history to lean on, so it must render instantly and offline. 720×720 — the card takes the
+ *  clip's own square aspect so the whole picture shows, never a crop. */
+const RECORD_SWING_CLIP = require("../../assets/videos/record-swing-video.mp4");
+
 export function HomeScreen() {
   const navigation = useAppNavigation();
   const insets = useSafeAreaInsets();
@@ -72,9 +83,15 @@ export function HomeScreen() {
     () => (state.kind === "ok" ? sessionize(state.swings, sessionRows) : []),
     [state, sessionRows],
   );
-  const stats = useMemo(() => latestSessionStats(sessions, Date.now()), [sessions]);
+  const realStats = useMemo(() => latestSessionStats(sessions, Date.now()), [sessions]);
 
-  const reports = useSessionReports(stats?.session.swings ?? NO_SWINGS);
+  // The debug persona is a REAL signed-in seeded account (features/debug/persona.tsx) — the
+  // screen renders its data like any other user's. The one persona-aware surface left is the
+  // drills reel below, which stays filler while the drill library is architected.
+  const persona = usePersona();
+  const stats = realStats;
+
+  const reports = useSessionReports(realStats?.session.swings ?? NO_SWINGS);
   const focus = useMemo(
     () => (reports.kind === "ok" ? aggregateFocus(reports.reports) : []),
     [reports],
@@ -94,50 +111,65 @@ export function HomeScreen() {
     if (!refs.length) return null;
     return refs.reduce((a, b) => (createdAtMs(a) >= createdAtMs(b) ? a : b));
   }, [state]);
+  const proId = pro?.id ?? null;
 
-  const count = stats?.session.swings.length ?? 0;
+  // The HERO always renders from REAL data — the mock feeds only the sheet's main content
+  // below it (Taylor, 2026-08-24: the mockup must never touch the hero section).
+  const heroStats = realStats;
+  const count = heroStats?.session.swings.length ?? 0;
 
   /**
-   * The hero: who the golfer is, and how the session that just happened went. The figures live
-   * up here rather than under the session rail below — one place for the numbers, and the rail
-   * stays a row of pictures.
+   * The hero: who the golfer is, the spotlight deck, and how the session that just happened
+   * went. The gradient stays in the `backdrop` layer; ALL of the hero's content lives in
+   * `backdropChrome` — the scaffold's rule for anything touchable up here, because content in
+   * the backdrop layer is visible but the scroll view swallows its touches (the swing log's
+   * dead Record door). The carousel would render and never swipe.
    */
-  const hero = (
-    <HeroBackdrop overscan={HERO_PARALLAX.cap}>
-      <View
-        style={[styles.heroContent, { paddingTop: insets.top + APP_HEADER_BAR }]}
-        // The sheet's resting edge is derived from this, so the gap below the hero is the same
-        // on every hero screen instead of falling out of a hand-tuned backdrop height.
-        onLayout={(e) => {
-          const h = Math.round(e.nativeEvent.layout.height);
-          setHeroHeight((prev) => (prev === h ? prev : h));
-        }}
-      >
-        <Text style={styles.heroGreeting}>{firstName ? `Hey ${firstName}` : "Welcome back"}</Text>
-        {state.kind === "ok" && stats !== null ? (
-          <>
-            <Text style={styles.heroEyebrow}>{stats.live ? "Today, so far" : "Last session"}</Text>
-            <View style={styles.heroSummary}>
-              <View style={styles.statRow}>
-                <View style={styles.statBox}>
-                  <Text style={styles.statValue}>{count}</Text>
-                  <Text style={styles.statLabel}>{count === 1 ? "swing" : "swings"}</Text>
-                </View>
-                {stats.best !== null ? (
-                  <View style={styles.statBox}>
-                    <Text style={styles.statValue}>{Math.round(stats.best)}</Text>
-                    <Text style={styles.statLabel}>best</Text>
-                  </View>
-                ) : null}
+  const hero = <HeroBackdrop overscan={HERO_PARALLAX.cap} />;
+  const heroChrome = (
+    <View
+      style={[styles.heroContent, { paddingTop: insets.top + APP_HEADER_BAR + 14 }]}
+      // The sheet's resting edge is derived from this, so the gap below the hero is the same
+      // on every hero screen instead of falling out of a hand-tuned backdrop height.
+      onLayout={(e) => {
+        const h = Math.round(e.nativeEvent.layout.height);
+        setHeroHeight((prev) => (prev === h ? prev : h));
+      }}
+    >
+      <Text style={styles.heroGreeting}>
+        {firstName ? `Hey ${firstName}, welcome back!` : "Welcome back!"}
+      </Text>
+      {/* The spotlight deck — under the greeting, per Taylor. Full-bleed against the hero's
+          padding; on the EMPTY home too, deliberately (a golfer with no swings is exactly who
+          the showcase cards are for). */}
+      {state.kind === "ok" ? (
+        <View style={styles.heroRail}>
+          <SpotlightRail navigation={navigation} />
+        </View>
+      ) : null}
+      {state.kind === "ok" && heroStats !== null ? (
+        <>
+          <Text style={styles.heroEyebrow}>{heroStats.live ? "Today, so far" : "Last session"}</Text>
+          <View style={styles.heroSummary}>
+            <View style={styles.statRow}>
+              <View style={styles.statBox}>
+                <Text style={styles.statValue}>{count}</Text>
+                <Text style={styles.statLabel}>{count === 1 ? "swing" : "swings"}</Text>
               </View>
-              {stats.average !== null ? (
-                <ScoreRing score={Math.round(stats.average)} label="Average" size={88} />
+              {heroStats.best !== null ? (
+                <View style={styles.statBox}>
+                  <Text style={styles.statValue}>{Math.round(heroStats.best)}</Text>
+                  <Text style={styles.statLabel}>best</Text>
+                </View>
               ) : null}
             </View>
-          </>
-        ) : null}
-      </View>
-    </HeroBackdrop>
+            {heroStats.average !== null ? (
+              <ScoreRing score={Math.round(heroStats.average)} label="Average" size={88} />
+            ) : null}
+          </View>
+        </>
+      ) : null}
+    </View>
   );
 
   return (
@@ -145,6 +177,7 @@ export function HomeScreen() {
       <SheetOverBackdrop
         testID="home"
         backdrop={hero}
+        backdropChrome={heroChrome}
         backdropHeight={backdropHeight}
         parallax={HERO_PARALLAX}
         initialOffset={0}
@@ -191,22 +224,26 @@ export function HomeScreen() {
 
           {state.kind === "ok" && stats === null ? (
             <View style={styles.empty} testID="home-empty">
-              <Text style={styles.emptyTitle}>No swings yet</Text>
+              <GetStartedCard navigation={navigation} />
               <Text style={styles.emptyDetail}>
-                Record a swing, or upload one you have already filmed — it will appear here once
-                it has been analysed.
+                Or upload a swing you have already filmed — it appears here once it has been
+                analysed.
               </Text>
             </View>
           ) : null}
 
           {state.kind === "ok" && stats !== null ? (
             <>
-              {/* The hero deck — dismissable feature/promo spotlights, first slot on purpose.
-                  Replaces the stacked deep/stance intro cards, which live in it now. */}
-              <SpotlightRail navigation={navigation} />
               {lead ? <FocusHero lead={lead} drill={drill} live={stats.live} navigation={navigation} /> : null}
-              {lead && lead.checkpoint && pro && pro.id !== lead.exemplarId ? (
-                <CompareStrip lead={lead} proId={pro.id} navigation={navigation} />
+              {lead && lead.checkpoint && proId && proId !== lead.exemplarId ? (
+                <CompareStrip lead={lead} proId={proId} navigation={navigation} />
+              ) : null}
+              {/* Mock-only while the drill library is architected — the section renders from
+                  filler until real drill videos exist to feed it. */}
+              {/* Also on account-backed populated personas: the drill library is still being
+                  architected, so this section stays filler even over real swings. */}
+              {persona !== null && !personaHasNoSwings(persona) ? (
+                <DrillsRail items={MOCK_DRILL_REEL} />
               ) : null}
               {rail.length > 0 ? <FocusRail items={rail} navigation={navigation} /> : null}
               <SessionBlock stats={stats} navigation={navigation} />
@@ -219,6 +256,7 @@ export function HomeScreen() {
         hero
         chromePx={chromePx}
         bell={<NotificationBell hero onPress={() => navigation.navigate("Notifications")} />}
+        avatar={<Avatar size={26} />}
         onProfile={() => navigation.navigate("Profile")}
         profileTestID="home-profile"
       />
@@ -226,10 +264,62 @@ export function HomeScreen() {
   );
 }
 
+/**
+ * The first-load door: shows only while the golfer has never recorded a swing. The full-bleed
+ * footage is the product doing the thing — a swing looping behind the ask — with the ask
+ * written over it and a REC-styled chip echoing the capture screen's own button. A styling
+ * element, not a player: muted, endless, no controls. One tap, one destination: Record.
+ */
+function GetStartedCard({ navigation }: { navigation: Navigation }) {
+  const styles = useStyles();
+  const player = useVideoPlayer(RECORD_SWING_CLIP, (p) => {
+    p.muted = true;
+    p.loop = true;
+    p.play();
+  });
+  return (
+    <Pressable
+      testID="home-get-started"
+      accessibilityRole="button"
+      accessibilityLabel="Get started — record your first swing"
+      onPress={() => navigation.navigate("Record")}
+      unstable_pressDelay={SCROLL_PRESS_DELAY_MS}
+      style={({ pressed }) => [styles.getStarted, pressed && styles.pressed]}
+    >
+      <VideoView
+        player={player}
+        nativeControls={false}
+        contentFit="cover"
+        // The standing rule: every video rides a textureView, or the card's rounding and the
+        // scroll's transforms never reach it.
+        surfaceType="textureView"
+        pointerEvents="none"
+        style={StyleSheet.absoluteFill}
+      />
+      {/* Legibility fade only over the words — the photograph stays the card. */}
+      <LinearGradient
+        colors={["transparent", `${PHOTO_SCRIM}0.55)`, `${PHOTO_SCRIM}0.88)`]}
+        style={overPhoto.getStartedScrim}
+      />
+      <View style={overPhoto.getStartedBody}>
+        <Text style={overPhoto.getStartedEyebrow}>Get started</Text>
+        <Text style={overPhoto.getStartedTitle}>Record your{"\n"}first swing</Text>
+        <View style={overPhoto.getStartedCta}>
+          <View style={overPhoto.getStartedRecDot} />
+          <Text style={overPhoto.getStartedCtaText}>Record</Text>
+        </View>
+      </View>
+    </Pressable>
+  );
+}
+
 /** The deep link every focus door shares: the exemplar swing's report (the one player).
  *  Parking at the priority's checkpoint is deferred until the report player learns it —
  *  see the mobile-client decisions entry (2026-08-17). */
 function openOnSwing(navigation: Navigation, item: FocusItem): void {
+  // Mock filler has no report behind it — the tap lands (pressed state) and goes nowhere,
+  // rather than opening a swing that does not exist.
+  if (isMockSwing(item.exemplarId)) return;
   navigation.navigate("SwingDetail", { id: item.exemplarId });
 }
 
@@ -310,8 +400,11 @@ function CompareStrip({
   navigation: Navigation;
 }) {
   const cp = encodeURIComponent(lead.checkpoint as string);
-  const you = useAuthenticatedImage(`swings/${lead.exemplarId}/frame?checkpoint=${cp}`);
-  const proImg = useAuthenticatedImage(`swings/${proId}/frame?checkpoint=${cp}`);
+  // Mock filler skips the network entirely — the halves draw their stick-figure placeholders,
+  // which is also what a real half shows while its frame resolves.
+  const mock = isMockSwing(lead.exemplarId);
+  const you = useAuthenticatedImage(mock ? null : `swings/${lead.exemplarId}/frame?checkpoint=${cp}`);
+  const proImg = useAuthenticatedImage(mock ? null : `swings/${proId}/frame?checkpoint=${cp}`);
   const [broken, setBroken] = useState(false);
   const styles = useStyles();
   if (broken) return null;
@@ -336,7 +429,11 @@ function CompareStrip({
               cachePolicy="disk"
               onError={() => setBroken(true)}
             />
-          ) : null}
+          ) : (
+            <View style={overPhoto.photoStandIn}>
+              <StickThumb figure={FORM_FIGURES.posture} size={64} />
+            </View>
+          )}
           <View style={overPhoto.compareChip}>
             <Text style={overPhoto.compareChipText}>You</Text>
           </View>
@@ -351,7 +448,11 @@ function CompareStrip({
               cachePolicy="disk"
               onError={() => setBroken(true)}
             />
-          ) : null}
+          ) : (
+            <View style={overPhoto.photoStandIn}>
+              <StickThumb figure={FORM_FIGURES.impact} size={64} />
+            </View>
+          )}
           <View style={[overPhoto.compareChip, overPhoto.compareChipPro]}>
             <Text style={overPhoto.compareChipTextPro}>Pro</Text>
           </View>
@@ -368,6 +469,69 @@ function CompareStrip({
         ) : null}
       </View>
     </Pressable>
+  );
+}
+
+/**
+ * Drills — a swipeable reel of short vertical drill videos, one per fault the session
+ * surfaced. Styled apart from every other card on the screen on purpose: portrait 9:16
+ * video tiles in the photo world with a centred play badge, so the section reads as
+ * "watch this", where the tip cards read as "read this". Tapping opens the drill video
+ * (mock filler opens nothing, same rule as every mock door).
+ */
+function DrillsRail({ items }: { items: DrillReelItem[] }) {
+  const styles = useStyles();
+  const t = useTheme();
+  return (
+    <View testID="home-drills">
+      <View style={styles.drillsHead}>
+        <View style={styles.drillsTitleRow}>
+          {/* The AI coach's mark — these picks are the coach speaking, and the icon says so
+              the same way it does on the Coach tab. */}
+          <BrandIcon name="coach" size={20} color={t.cobalt} />
+          <Text style={styles.drillsTitle}>Your Suggested Drills</Text>
+        </View>
+        <Text style={styles.drillsSub}>Short videos for what you're working on</Text>
+      </View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.slider}
+        testID="home-drills-rail"
+      >
+        {items.map((item) => (
+          <Pressable
+            key={item.id}
+            testID={`home-drill-${item.id}`}
+            accessibilityRole="button"
+            accessibilityLabel={`${item.title}, ${item.duration} drill video for ${item.area}`}
+            onPress={() => {
+              if (isMockSwing(item.id)) return;
+            }}
+            unstable_pressDelay={SCROLL_PRESS_DELAY_MS}
+            style={({ pressed }) => [overPhoto.drillCard, pressed && styles.pressed]}
+          >
+            {/* The video poster's slot — stick-figure stand-in until real drill videos exist. */}
+            <View style={overPhoto.photoStandIn}>
+              <StickThumb figure={formFigureFor(`${item.title} ${item.area}`)} size={64} />
+            </View>
+            <View style={overPhoto.drillPlay}>
+              <View style={overPhoto.drillPlayGlyph} />
+            </View>
+            <View style={overPhoto.drillDuration}>
+              <Text style={overPhoto.drillDurationText}>{item.duration}</Text>
+            </View>
+            <View style={overPhoto.drillScrim} />
+            <View style={overPhoto.drillFoot}>
+              <Text style={overPhoto.drillArea}>{item.area}</Text>
+              <Text style={overPhoto.drillTitle} numberOfLines={2}>
+                {item.title}
+              </Text>
+            </View>
+          </Pressable>
+        ))}
+      </ScrollView>
+    </View>
   );
 }
 
@@ -454,13 +618,26 @@ function SessionBlock({ stats, navigation }: { stats: SessionStats; navigation: 
               typeof swing.overallScore === "number" &&
               Math.round(swing.overallScore) === Math.round(best)
             }
-            onPress={() => navigation.navigate("SwingDetail", { id: swing.id })}
+            onPress={() => {
+              // Same rule as `openOnSwing` — filler slides answer the press and open nothing.
+              if (isMockSwing(swing.id)) return;
+              navigation.navigate("SwingDetail", { id: swing.id });
+            }}
           />
         ))}
       </ScrollView>
     </View>
   );
 }
+
+/** The slides' stand-in art, cycled so a photo-less rail still reads as different swings. */
+const SLIDE_FIGURES = [
+  FORM_FIGURES.setup,
+  FORM_FIGURES.tempo,
+  FORM_FIGURES.impact,
+  FORM_FIGURES.posture,
+  FORM_FIGURES.strike,
+];
 
 function SwingSlide({
   swing,
@@ -473,7 +650,9 @@ function SwingSlide({
   isBest: boolean;
   onPress: () => void;
 }) {
-  const thumb = useAuthenticatedImage(`swings/${swing.id}/thumb?poster=1`);
+  const thumb = useAuthenticatedImage(
+    isMockSwing(swing.id) ? null : `swings/${swing.id}/thumb?poster=1`,
+  );
   const scored = swing.status === "ready" && typeof swing.overallScore === "number";
   const styles = useStyles();
   return (
@@ -489,7 +668,11 @@ function SwingSlide({
     >
       {thumb ? (
         <Image source={thumb} style={StyleSheet.absoluteFill} contentFit="cover" cachePolicy="disk" />
-      ) : null}
+      ) : (
+        <View style={overPhoto.photoStandIn}>
+          <StickThumb figure={SLIDE_FIGURES[(number - 1) % SLIDE_FIGURES.length]} size={72} />
+        </View>
+      )}
       <View style={overPhoto.slideScrim} />
       <Text style={overPhoto.slideNumber}>#{number}</Text>
       <View style={overPhoto.slideFoot}>
@@ -534,6 +717,9 @@ const useStyles = themedStyles((t) => ({
 
   /* The hero — the same gradient ground as the log, Progress and Coach. */
   heroContent: { paddingHorizontal: 18 },
+  /* The spotlight deck's slot: full-bleed against the hero's own padding, with clear air
+     under the greeting so the header reads before the deck does. */
+  heroRail: { marginHorizontal: -18, marginTop: 24 },
   heroGreeting: {
     color: t.onDark,
     fontFamily: FONT_DISPLAY.black,
@@ -583,13 +769,7 @@ const useStyles = themedStyles((t) => ({
     textTransform: "uppercase",
   },
 
-  empty: { alignItems: "center", gap: 10, paddingVertical: 48, paddingHorizontal: 24 },
-  emptyTitle: {
-    color: t.text,
-    fontFamily: FONT_DISPLAY.extraBold,
-    fontSize: 18,
-    textAlign: "center",
-  },
+  empty: { alignItems: "center", gap: 14, paddingVertical: 8 },
   emptyDetail: {
     color: t.textSoft,
     fontFamily: FONT_BODY.regular,
@@ -597,6 +777,18 @@ const useStyles = themedStyles((t) => ({
     lineHeight: 20,
     textAlign: "center",
     maxWidth: 300,
+  },
+
+  /* The first-load door — looping footage with the ask written on it. The card takes the
+     clip's own aspect (720×720) so the entire picture shows, never a crop. */
+  getStarted: {
+    alignSelf: "stretch",
+    marginHorizontal: 16,
+    aspectRatio: 1,
+    borderRadius: 14,
+    backgroundColor: t.surface,
+    overflow: "hidden",
+    justifyContent: "flex-end",
   },
 
   heroCardWrap: { marginHorizontal: 16 },
@@ -671,6 +863,19 @@ const useStyles = themedStyles((t) => ({
   },
   tipCue: { color: t.muted, fontFamily: FONT_BODY.regular, fontSize: 11.5, lineHeight: 16.5 },
 
+  /* Drills — the reel section's chrome. Same header scale as the session block so the
+     screen keeps one rhythm; the cards underneath are what set the section apart. */
+  drillsHead: { paddingHorizontal: 16, marginBottom: 10, gap: 3 },
+  drillsTitleRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  drillsTitle: {
+    color: t.text,
+    fontFamily: FONT_DISPLAY.extraBold,
+    fontSize: 24,
+    lineHeight: displayLine(24),
+    letterSpacing: -0.48,
+  },
+  drillsSub: { color: t.muted, fontFamily: FONT_BODY.regular, fontSize: 11.5 },
+
   sessionHead: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -713,6 +918,18 @@ const useStyles = themedStyles((t) => ({
  * never theme tokens.
  */
 const overPhoto = StyleSheet.create({
+  /** Where a photograph has not arrived (resolving, missing, or mock filler): the design
+   *  system's stick-figure art on the photo ground, dimmed so it reads as a stand-in. */
+  photoStandIn: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    opacity: 0.45,
+  },
   compareRow: { flexDirection: "row", height: 190 },
   compareHalf: { flex: 1, backgroundColor: COLORS.bg },
   compareDivider: { width: StyleSheet.hairlineWidth, backgroundColor: "rgba(255,255,255,0.2)" },
@@ -741,6 +958,129 @@ const overPhoto = StyleSheet.create({
     fontSize: 9,
     letterSpacing: 1.08,
     textTransform: "uppercase",
+  },
+
+  /* The get-started door's words and chrome, all over the photograph. */
+  getStartedScrim: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: "45%",
+  },
+  getStartedBody: { padding: 18, gap: 4 },
+  getStartedEyebrow: {
+    color: COLORS.aqua,
+    fontFamily: FONT_DISPLAY.black,
+    fontSize: 9,
+    letterSpacing: 1.62,
+    textTransform: "uppercase",
+  },
+  getStartedTitle: {
+    color: COLORS.text,
+    fontFamily: FONT_DISPLAY.black,
+    fontSize: 27,
+    lineHeight: displayLine(27),
+    letterSpacing: -0.54,
+  },
+  /* The REC echo: the capture screen's red button, shrunk to a chip-side dot. */
+  getStartedCta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    alignSelf: "flex-start",
+    marginTop: 10,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: "rgba(255,255,255,0.16)",
+  },
+  getStartedRecDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.red,
+  },
+  getStartedCtaText: {
+    color: COLORS.text,
+    fontFamily: FONT_DISPLAY.black,
+    fontSize: 11,
+    letterSpacing: 0.55,
+    textTransform: "uppercase",
+  },
+
+  /* Drill reels — portrait 9:16 video tiles, the section's own shape on the screen. */
+  drillCard: {
+    width: 138,
+    height: 245,
+    borderRadius: 14,
+    backgroundColor: COLORS.bg,
+    overflow: "hidden",
+    justifyContent: "flex-end",
+  },
+  /* Centred play badge: glass circle + a View-drawn triangle (shape-drawing borders are the
+     sanctioned exception to the no-borders rule). */
+  drillPlay: {
+    position: "absolute",
+    top: "50%",
+    left: "50%",
+    marginTop: -19,
+    marginLeft: -19,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: "rgba(255,255,255,0.16)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  drillPlayGlyph: {
+    marginLeft: 3,
+    width: 0,
+    height: 0,
+    borderTopWidth: 7,
+    borderBottomWidth: 7,
+    borderLeftWidth: 11,
+    borderTopColor: "transparent",
+    borderBottomColor: "transparent",
+    borderLeftColor: COLORS.text,
+  },
+  drillDuration: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    backgroundColor: `${PHOTO_SCRIM}0.72)`,
+  },
+  drillDurationText: {
+    color: COLORS.text,
+    fontFamily: FONT_DISPLAY.black,
+    fontSize: 9,
+    letterSpacing: 0.45,
+    fontVariant: ["tabular-nums"],
+  },
+  drillScrim: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: "42%",
+    backgroundColor: `${PHOTO_SCRIM}0.62)`,
+  },
+  drillFoot: { padding: 12, gap: 3 },
+  drillArea: {
+    color: COLORS.aqua,
+    fontFamily: FONT_DISPLAY.black,
+    fontSize: 8,
+    letterSpacing: 0.96,
+    textTransform: "uppercase",
+  },
+  drillTitle: {
+    color: COLORS.text,
+    fontFamily: FONT_DISPLAY.extraBold,
+    fontSize: 14,
+    lineHeight: displayLine(14),
   },
 
   slideScrim: {

@@ -225,10 +225,12 @@ function prebuildIfConfigChanged() {
   // stamp kept there is lost to any out-of-band prebuild (the RUNBOOK tells you to run one)
   // and to every fresh clone, buying a needless full prebuild each time.
   const stampFile = join(MOBILE_DIR, ".expo/prebuild-hash");
-  // app.json AND the config plugins it loads. Hashing app.json alone missed a plugin edit
-  // entirely — the generated manifest changes while the gate says "not stale", which is the
-  // exact drift class this stamp exists to catch.
-  const sources = [join(MOBILE_DIR, "app.json"), ...pluginFiles()];
+  // app.json AND the config plugins it loads AND every asset app.json POINTS AT. Hashing
+  // app.json alone missed a plugin edit entirely, and later missed a regenerated app icon:
+  // `make-icons.mjs` rewrites the PNGs without touching app.json, so the gate said "not stale"
+  // and gradle packaged the mipmaps prebuild had baked from the PREVIOUS artwork. Every symptom
+  // read as "the new icon didn't apply" (2026-08-23). Hash the bytes, not the reference.
+  const sources = [join(MOBILE_DIR, "app.json"), ...pluginFiles(), ...configAssets()];
   const hash = createHash("sha256");
   for (const f of sources) hash.update(readFileSync(f));
   const digest = hash.digest("hex");
@@ -245,6 +247,18 @@ function prebuildIfConfigChanged() {
   mkdirSync(dirname(stampFile), { recursive: true });
   writeFileSync(stampFile, digest);
   ok("prebuilt");
+}
+
+/**
+ * Every asset `app.json` references by path — icons, adaptive layers, the splash image. Read out
+ * of app.json rather than listed here, so a new asset added to the config is covered the day it
+ * lands instead of the day someone remembers this function.
+ */
+function configAssets() {
+  const raw = readFileSync(join(MOBILE_DIR, "app.json"), "utf8");
+  return [...raw.matchAll(/"\.\/([^"]+\.(?:png|jpe?g|svg|webp))"/g)]
+    .map((m) => join(MOBILE_DIR, m[1]))
+    .filter((f) => existsSync(f));
 }
 
 /** Every config plugin `app.json` can pull in — their CONTENTS decide the manifest too. */

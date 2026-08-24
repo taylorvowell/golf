@@ -4,6 +4,7 @@ import { Text, View } from "react-native";
 import { Button, SCROLL_PRESS_DELAY_MS } from "../../../design/system";
 import { displayLine, FONT_BODY, FONT_DISPLAY } from "../../../design/system/typography";
 import { themedStyles } from "../../../theme";
+import { SpotlightBed } from "./SpotlightBed";
 
 export interface FeatureSpotlightProps {
   /** A lucide glyph, rendered inside the aqua tile. Size ~22, color the theme's onDark. */
@@ -24,7 +25,7 @@ export interface FeatureSpotlightProps {
 export function FeatureSpotlight({ icon, eyebrow, title, copy, cta, testID }: FeatureSpotlightProps) {
   const styles = useStyles();
   return (
-    <View testID={testID} style={styles.card}>
+    <SpotlightBed testID={testID} style={styles.card}>
       <View style={styles.icon}>{icon}</View>
       <View style={styles.body}>
         <Text style={styles.eyebrow} numberOfLines={1}>
@@ -45,19 +46,16 @@ export function FeatureSpotlight({ icon, eyebrow, title, copy, cta, testID }: Fe
           />
         ) : null}
       </View>
-    </View>
+    </SpotlightBed>
   );
 }
 
 const useStyles = themedStyles((t) => ({
-  /* The coach accent bed the intro cards wore — one material for every feature spotlight. */
+  /* Layout only — the ground is SpotlightBed, one dark material for the whole deck. */
   card: {
-    flex: 1,
     flexDirection: "row",
     gap: 12,
     padding: 15,
-    borderRadius: 14,
-    backgroundColor: t.mode === "dark" ? "rgba(45,240,251,0.10)" : "rgba(45,240,251,0.09)",
   },
   icon: {
     width: 46,
@@ -69,7 +67,7 @@ const useStyles = themedStyles((t) => ({
   },
   body: { flex: 1, minWidth: 0 },
   eyebrow: {
-    color: t.mode === "dark" ? t.aqua : "#0B5E8C",
+    color: t.aqua,
     fontFamily: FONT_DISPLAY.black,
     fontSize: 8,
     letterSpacing: 1.12,
@@ -79,14 +77,14 @@ const useStyles = themedStyles((t) => ({
   },
   title: {
     marginTop: 4,
-    color: t.text,
+    color: t.onDark,
     fontFamily: FONT_DISPLAY.extraBold,
     fontSize: 15,
     lineHeight: displayLine(15),
   },
   copy: {
     marginTop: 4,
-    color: t.textSoft,
+    color: "rgba(255,255,255,0.72)",
     fontFamily: FONT_BODY.regular,
     fontSize: 10,
     lineHeight: 15,

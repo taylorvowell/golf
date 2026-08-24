@@ -1,4 +1,4 @@
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { Eye, Star, Trash2 } from "lucide-react-native";
@@ -9,6 +9,7 @@ import { FONT_BODY, FONT_DISPLAY } from "../../../design/system/typography";
 import { useTheme } from "../../../theme";
 import { useStarred } from "../../swings/useStarred";
 import type { SessionSwing } from "../sessionState";
+import { SwingLoader } from "../../../design/system/SwingLoader";
 
 /**
  * Quick access to this session's swings (§9.6) — not the Swing Log page, but dressed in its
@@ -122,7 +123,7 @@ function SwingRow({
         <Text style={[styles.rowTitle, { color: t.text }]}>{`Swing ${swing.number}`}</Text>
         {swing.status === "analyzing" ? (
           <View style={styles.statusRow}>
-            <ActivityIndicator size="small" color={t.aqua} />
+            <SwingLoader size={22} />
             <Text style={[styles.statusText, { color: t.muted }]}>analyzing…</Text>
           </View>
         ) : (

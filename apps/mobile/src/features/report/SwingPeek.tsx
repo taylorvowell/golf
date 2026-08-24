@@ -62,7 +62,7 @@ export function SwingPeek({ entry }: { entry: SwingEntry }) {
 const styles = StyleSheet.create({
   // The video layer's own backdrop colour — the strip beside a narrow clip has to match, or the
   // page arriving reads as a different screen.
-  root: { flex: 1, backgroundColor: "#081426" },
+  root: { flex: 1, backgroundColor: "#061320" },
   stageRow: { flex: 1, alignItems: "center", justifyContent: "flex-start" },
   stage: { backgroundColor: "#000", overflow: "hidden" },
   // Left-aligned, clear of the corner orb column on the right. Must match the page.

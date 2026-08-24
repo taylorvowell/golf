@@ -1,5 +1,6 @@
 /**
- * Two plans. Free and Pro. That is the whole ladder (Taylor, 2026-08-19 — "keep it simple").
+ * Three plans. Free, Pro, and Instructor (Taylor, 2026-08-24: instructors are their own tier —
+ * everything Pro has, plus the instructor tools).
  *
  * The prices and the allowance are the accepted decision in
  * `docs/decisions/commerce-entitlement.md`. They live here as **fallback copy only**: on a real
@@ -11,8 +12,7 @@
  * server payload. This file is what the paywall *says*, never what the app *enforces* (§30.1).
  */
 
-/** A golfer is on one of two. Coaches are free and are not on this ladder. */
-export type Tier = "free" | "pro";
+export type Tier = "free" | "pro" | "instructor";
 
 /**
  * Named capabilities — the client mirror of the closed set `packages/schema` will own
@@ -30,7 +30,8 @@ export type Capability =
   | "swing_comparison"
   | "pro_comparison"
   | "dual_device"
-  | "export_share";
+  | "export_share"
+  | "instructor_tools";
 
 export interface Plan {
   tier: Tier;
@@ -82,12 +83,31 @@ export const PLANS: Record<Tier, Plan> = {
     ],
     retention: "Kept for as long as you subscribe",
   },
+  instructor: {
+    tier: "instructor",
+    name: "Instructor",
+    pitch: "Everything in Pro, plus your students.",
+    analysesPerMonth: 100,
+    // Not store-buyable yet — the tier is granted through instructor onboarding, so there is
+    // no fallback price to show. Store products land with the coach platform.
+    priceMonthly: null,
+    priceAnnual: null,
+    annualNote: null,
+    unlocks: [
+      "Everything in Pro",
+      "Your student roster and their swings",
+      "Review, annotate and message students",
+      "Lesson notes and drills you assign",
+    ],
+    retention: "Kept for as long as you subscribe",
+  },
 };
 
-/** The only tier you can buy. */
+/** The only tier you can buy in-app. Instructor is granted, never sold on this paywall. */
 export const PAID_TIER: Tier = "pro";
 
-/** Every capability is Pro. Free keeps what it already has; it does not produce anything new. */
+/** Every golfer capability is Pro; the instructor tools are the Instructor tier's own. Free
+ *  keeps what it already has; it does not produce anything new. */
 export const REQUIRED_TIER: Record<Capability, Tier> = {
   analysis: "pro",
   ai_coach_chat: "pro",
@@ -96,7 +116,17 @@ export const REQUIRED_TIER: Record<Capability, Tier> = {
   pro_comparison: "pro",
   dual_device: "pro",
   export_share: "pro",
+  instructor_tools: "instructor",
 };
+
+/**
+ * An instructor cannot HAVE an instructor (Taylor, 2026-08-24) — the find-an-instructor
+ * directory, the connected-instructor card and every link-a-coach door hide on the
+ * Instructor tier. A rule, not a capability: rank-based `can()` would grant it upward.
+ */
+export function canHaveInstructor(tier: Tier): boolean {
+  return tier !== "instructor";
+}
 
 /** Golfer-facing name for a capability. A refusal says this, never the enum. */
 export const CAPABILITY_LABEL: Record<Capability, string> = {
@@ -107,6 +137,7 @@ export const CAPABILITY_LABEL: Record<Capability, string> = {
   pro_comparison: "Pro comparison",
   dual_device: "Two-phone capture",
   export_share: "Export and share",
+  instructor_tools: "Instructor tools",
 };
 
 /** One sentence on why it is worth having. Shown on the refusal sheet. */
@@ -118,6 +149,7 @@ export const CAPABILITY_PITCH: Record<Capability, string> = {
   pro_comparison: "Put your swing beside a tour pro at the same checkpoint.",
   dual_device: "Down-the-line and face-on at once, from two phones, in sync.",
   export_share: "Send a swing to anyone, with the analysis attached.",
+  instructor_tools: "Your student roster, their swings, and the tools to coach them.",
 };
 
 /**

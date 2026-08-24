@@ -74,7 +74,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     // The report's own `.report-full-pill` glass — this is chrome over footage, not a themed
     // surface, so it names the same translucent navy the view pill has always used.
-    backgroundColor: "rgba(7,16,31,0.56)",
+    backgroundColor: "rgba(6,19,31,0.56)",
   },
   pillText: {
     color: "#FFFFFF",

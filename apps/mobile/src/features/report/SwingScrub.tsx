@@ -54,8 +54,8 @@ export interface SwingScrubProps {
 /** The mockup's `.report-v2-phase.*` skins, keyed by the artifact band they dress. */
 const PHASE_SKIN: Record<PhaseBand["key"], { label: string; fill: string; ink: string }> = {
   setup: { label: "Address", fill: "rgba(255,255,255,0.14)", ink: "rgba(255,255,255,0.88)" },
-  backswing: { label: "Backswing", fill: "rgba(47,70,207,0.88)", ink: "rgba(255,255,255,0.88)" },
-  downswing: { label: "Approach", fill: "rgba(67,205,208,0.84)", ink: "#07213E" },
+  backswing: { label: "Backswing", fill: "rgba(13,148,219,0.88)", ink: "rgba(255,255,255,0.88)" },
+  downswing: { label: "Approach", fill: "rgba(45,240,251,0.84)", ink: "#062033" },
   through: { label: "Impact", fill: "rgba(247,201,72,0.96)", ink: "#3A2A00" },
   runout: { label: "Finish", fill: "rgba(40,168,107,0.9)", ink: "rgba(255,255,255,0.88)" },
 };
@@ -261,7 +261,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     backgroundColor: "rgba(255,255,255,0.18)",
   },
-  trackFill: { height: LINE_HEIGHT, borderRadius: 3, backgroundColor: "#43CDD0" },
+  trackFill: { height: LINE_HEIGHT, borderRadius: 3, backgroundColor: "#2DF0FB" },
   // Centred on WHATEVER the control currently is — the thin line before the artifact lands, the
   // phase row after. Spanning the full height and centring both ways means the handle needs no
   // animation of its own to follow the growth.
@@ -281,7 +281,7 @@ const styles = StyleSheet.create({
     borderRadius: HALO / 2,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(67,205,208,0.24)",
+    backgroundColor: "rgba(45,240,251,0.24)",
   },
   dot: {
     width: DOT,

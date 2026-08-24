@@ -2,6 +2,16 @@ packages:
   - apps/*
   - packages/*
 
+# The deployed web app runs on LINUX; the build happens HERE on Windows. Without the linux
+# pair, sharp's native binding never enters the deploy fileset and the thumb/poster routes
+# 500 in production with "Cannot find module 'sharp-<hash>'" (2026-08-24).
+supportedArchitectures:
+  os:
+    - win32
+    - linux
+  cpu:
+    - x64
+
 # pnpm 10 blocks dependency build scripts unless listed here.
 # sharp backs Next's image optimization; unrs-resolver backs eslint module resolution.
 onlyBuiltDependencies:

@@ -1,8 +1,9 @@
-import { ActivityIndicator, View, type ViewProps } from "react-native";
+import { View, type ViewProps } from "react-native";
 
 import { useAuth } from "./AuthProvider";
 import { themedStyles, useTheme } from "../../theme";
 import { SignInScreen } from "./SignInScreen";
+import { SwingLoader } from "../../design/system/SwingLoader";
 
 export interface AuthGateProps {
   children: ViewProps["children"];
@@ -27,7 +28,7 @@ export function AuthGate({ children }: AuthGateProps) {
   if (status === "loading") {
     return (
       <View style={styles.center}>
-        <ActivityIndicator color={t.lavender} size="large" />
+        <SwingLoader size={76} />
       </View>
     );
   }

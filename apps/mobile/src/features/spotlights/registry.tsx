@@ -105,11 +105,11 @@ export const SPOTLIGHTS: SpotlightDef[] = [
   },
   {
     // The upsell. Tier read, not a capability check, because "should we sell Pro" IS a tier
-    // question — the same read ProfileScreen's upgrade door makes. On Pro it never renders:
-    // continuing to sell to someone who already bought is the clutter rule failing.
+    // question — the same read ProfileScreen's upgrade door makes. Only Free sees it:
+    // Pro already bought, and an Instructor holds everything Pro has.
     id: "pro.v1",
     label: "the SwingSage Pro card",
-    eligible: (ctx) => ctx.tier !== "pro",
+    eligible: (ctx) => ctx.tier === "free",
     render: ({ navigation }) => (
       <FeatureSpotlight
         testID="spotlight-pro"

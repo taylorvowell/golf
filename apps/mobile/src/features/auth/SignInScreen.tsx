@@ -1,9 +1,9 @@
 import { GoogleSigninButton } from "@react-native-google-signin/google-signin";
 import { useState } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
+import { Text, View } from "react-native";
 
 import { useAuth } from "./AuthProvider";
-import { Button, DisplayText, Eyebrow } from "../../design/system";
+import { Button, DisplayText, Eyebrow, SwingLoader } from "../../design/system";
 import { FONT_BODY } from "../../design/system/typography";
 import { themedStyles, useTheme } from "../../theme";
 import { EmailSignInScreen } from "./EmailSignInScreen";
@@ -90,7 +90,7 @@ export function SignInScreen() {
           disabled={busy}
           style={styles.wide}
         />
-        {busy ? <ActivityIndicator color={t.lavender} /> : null}
+        {busy ? <SwingLoader size={30} /> : null}
         {error ? (
           <Text style={styles.error} accessibilityRole="alert">
             {error}

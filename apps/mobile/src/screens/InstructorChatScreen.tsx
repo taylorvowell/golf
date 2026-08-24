@@ -40,7 +40,7 @@ export function InstructorChatScreen() {
 }
 
 /** Aqua at 14% — the coach/instructor accent bed. */
-const AQUA_BED = "rgba(67,205,208,0.14)";
+const AQUA_BED = "rgba(45,240,251,0.14)";
 
 const useStyles = themedStyles((t) => ({
   root: { flex: 1, backgroundColor: t.bg },

@@ -1,7 +1,9 @@
 import { useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { CloudOff, ImageOff, Pencil } from "lucide-react-native";
 
+import { Input } from "../design/system";
 import { displayLine, FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
 import { useAuth } from "../features/auth/AuthProvider";
 import { Avatar } from "../features/profile/Avatar";
@@ -11,23 +13,32 @@ import {
   displayValue,
   type ProfileField,
 } from "../features/profile/profileFields";
-import { IdentitySheet } from "../features/profile/IdentitySheet";
-import { useProfile } from "../features/profile/useProfile";
-import { themedStyles } from "../theme";
+import { changeProfilePhoto, removeProfilePhoto } from "../features/profile/profilePhoto";
+import { saveProfile, useProfile } from "../features/profile/useProfile";
+import { useToast } from "../features/toast/ToastProvider";
+import { themedStyles, useTheme } from "../theme";
 
 /**
  * My profile — six questions, two columns, nothing else (Taylor, 2026-08-20, final shape).
- * The identity card up top edits name + region; each tile below is one answer, tapped open in
- * its editor sheet. The registry (`profileFields.ts`) decides the six — this screen renders
- * whatever it says and adds nothing of its own.
+ * The identity card up top edits IN PLACE (Taylor, 2026-08-24: no second tap into a sheet the
+ * golfer already navigated to): the avatar wears a small edit badge and a tap on it goes
+ * straight to the photo picker, while the pencil swaps name + region to inline inputs with
+ * their own Save / Cancel. Each tile below is one answer, tapped open in its editor sheet. The
+ * registry (`profileFields.ts`) decides the six — this screen renders whatever it says and
+ * adds nothing of its own.
  */
 export function MyProfileScreen() {
   const insets = useSafeAreaInsets();
   const styles = useStyles();
+  const t = useTheme();
+  const toast = useToast();
   const { firstName } = useAuth();
   const { state } = useProfile();
   const [editing, setEditing] = useState<ProfileField | null>(null);
-  const [identityOpen, setIdentityOpen] = useState(false);
+  const [identityEditing, setIdentityEditing] = useState(false);
+  const [name, setName] = useState("");
+  const [where, setWhere] = useState("");
+  const [photoBusy, setPhotoBusy] = useState(false);
 
   if (state.kind !== "ok") {
     // Loading and unreachable draw the same quiet shell — the tiles arrive when the wire
@@ -35,7 +46,95 @@ export function MyProfileScreen() {
     return <View style={styles.root} />;
   }
 
+  const pub = state.profile.public;
   const priv = state.profile.private;
+
+  const changePhoto = async () => {
+    if (photoBusy) return;
+    setPhotoBusy(true);
+    const outcome = await changeProfilePhoto();
+    setPhotoBusy(false);
+    if (outcome === "failed") {
+      toast({
+        id: `avatar-upload-failed-${Date.now()}`,
+        title: "Couldn't save your photo",
+        detail: "Check your connection and try again.",
+        icon: CloudOff,
+      });
+    } else if (outcome === "denied") {
+      toast({
+        id: `avatar-photos-denied-${Date.now()}`,
+        title: "Photos access is off",
+        detail: "Allow photo access in Settings to add a picture.",
+        icon: ImageOff,
+      });
+    }
+  };
+
+  const removePhoto = async () => {
+    if (photoBusy) return;
+    setPhotoBusy(true);
+    const ok = await removeProfilePhoto();
+    setPhotoBusy(false);
+    if (!ok) {
+      toast({
+        id: `avatar-remove-failed-${Date.now()}`,
+        title: "Couldn't remove your photo",
+        detail: "Check your connection and try again.",
+        icon: CloudOff,
+      });
+    }
+  };
+
+  const beginIdentityEdit = () => {
+    // Seeded on ENTRY, not kept live: the inputs hold the golfer's draft, and a background
+    // profile refresh must not rewrite what they are mid-typing.
+    setName(pub.displayName || firstName || "");
+    setWhere(pub.region ?? "");
+    setIdentityEditing(true);
+  };
+
+  const saveIdentity = () => {
+    const trimmed = name.trim();
+    // A blanked name is NOT sent — an account with no display name renders as nothing
+    // everywhere it appears, so the old name stands until a new one replaces it.
+    saveProfile({
+      public: {
+        ...(trimmed ? { displayName: trimmed } : {}),
+        region: where.trim() ? where.trim() : null,
+      },
+    }).catch(() => {
+      toast({
+        id: `identity-save-failed-${Date.now()}`,
+        title: "Couldn't save",
+        detail: "Check your connection and try again.",
+        icon: CloudOff,
+      });
+    });
+    setIdentityEditing(false);
+  };
+
+  const photoButton = (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Change your profile photo"
+      accessibilityState={{ disabled: photoBusy }}
+      testID="profile-photo"
+      onPress={() => void changePhoto()}
+      hitSlop={6}
+      // The press compresses the whole disc — a fill step has nothing to show on a photo.
+      style={({ pressed }) => [styles.photoWrap, pressed && styles.photoWrapPressed]}
+    >
+      <Avatar size={56} />
+      <View style={styles.photoBadge}>
+        {photoBusy ? (
+          <ActivityIndicator size={12} color={t.onDark} />
+        ) : (
+          <Pencil size={11} color={t.onDark} strokeWidth={2.6} />
+        )}
+      </View>
+    </Pressable>
+  );
 
   return (
     <>
@@ -43,27 +142,89 @@ export function MyProfileScreen() {
         style={styles.root}
         contentContainerStyle={[styles.content, { paddingBottom: 32 + insets.bottom }]}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        {/* Tapping identity edits it (§5.1's public half) — name and region, nothing more. */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Edit your name and region"
-          testID="profile-identity"
-          onPress={() => setIdentityOpen(true)}
-          style={({ pressed }) => [styles.head, pressed && styles.headPressed]}
-        >
-          <Avatar size={52} />
-          <View style={styles.headText}>
-            <Text style={styles.headName} numberOfLines={1}>
-              {state.profile.public.displayName || firstName || "Your account"}
-            </Text>
-            {state.profile.public.region ? (
-              <Text style={styles.headMeta} numberOfLines={1}>
-                {state.profile.public.region}
-              </Text>
-            ) : null}
+        {identityEditing ? (
+          <View style={[styles.head, styles.headEditing]}>
+            <View style={styles.headRow}>
+              {photoButton}
+              <View style={styles.editFields}>
+                <Input
+                  label="Name"
+                  value={name}
+                  onChangeText={setName}
+                  autoCapitalize="words"
+                  autoComplete="name"
+                  testID="identity-name"
+                />
+                <Input
+                  label="Where you play"
+                  value={where}
+                  onChangeText={setWhere}
+                  autoCapitalize="words"
+                  placeholder="City or region"
+                  testID="identity-region"
+                />
+              </View>
+            </View>
+            <View style={styles.editActions}>
+              {pub.avatarUrl ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Remove your profile photo"
+                  testID="identity-remove-photo"
+                  onPress={() => void removePhoto()}
+                  style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
+                >
+                  <Text style={[styles.chipLabel, { color: t.bad }]}>Remove photo</Text>
+                </Pressable>
+              ) : null}
+              <View style={{ flex: 1 }} />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Cancel editing"
+                testID="identity-cancel"
+                onPress={() => setIdentityEditing(false)}
+                style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
+              >
+                <Text style={styles.chipLabel}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Save name and region"
+                testID="identity-save"
+                onPress={saveIdentity}
+                style={({ pressed }) => [styles.saveChip, pressed && styles.saveChipPressed]}
+              >
+                <Text style={[styles.chipLabel, { color: t.onDark }]}>Save</Text>
+              </Pressable>
+            </View>
           </View>
-        </Pressable>
+        ) : (
+          <View style={styles.head}>
+            {photoButton}
+            <View style={styles.headText}>
+              <Text style={styles.headName} numberOfLines={1}>
+                {pub.displayName || firstName || "Your account"}
+              </Text>
+              {pub.region ? (
+                <Text style={styles.headMeta} numberOfLines={1}>
+                  {pub.region}
+                </Text>
+              ) : null}
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Edit your name and region"
+              testID="profile-identity-edit"
+              onPress={beginIdentityEdit}
+              hitSlop={6}
+              style={({ pressed }) => [styles.editButton, pressed && styles.editButtonPressed]}
+            >
+              <Pencil size={15} color={t.text} strokeWidth={2.2} />
+            </Pressable>
+          </View>
+        )}
 
         <View style={styles.grid}>
           {PROFILE_FIELDS.map((field) => {
@@ -93,15 +254,6 @@ export function MyProfileScreen() {
       </ScrollView>
 
       <FieldEditorSheet field={editing} onClose={() => setEditing(null)} />
-      {/* Keyed remount so the inputs re-seed from the confirmed values on every open. */}
-      {identityOpen ? (
-        <IdentitySheet
-          visible
-          onClose={() => setIdentityOpen(false)}
-          displayName={state.profile.public.displayName || firstName || ""}
-          region={state.profile.public.region}
-        />
-      ) : null}
     </>
   );
 }
@@ -118,7 +270,8 @@ const useStyles = themedStyles((t) => ({
     borderRadius: 16,
     backgroundColor: t.surface,
   },
-  headPressed: { backgroundColor: t.surface2 },
+  headEditing: { flexDirection: "column", alignItems: "stretch", gap: 12 },
+  headRow: { flexDirection: "row", alignItems: "center", gap: 14 },
   headText: { flex: 1, minWidth: 0, gap: 4 },
   headName: {
     color: t.text,
@@ -127,6 +280,57 @@ const useStyles = themedStyles((t) => ({
     lineHeight: displayLine(17),
   },
   headMeta: { color: t.muted, fontFamily: FONT_BODY.regular, fontSize: 11 },
+
+  photoWrap: { width: 56, height: 56 },
+  photoWrapPressed: { transform: [{ scale: 0.94 }] },
+  /** The "you can change this" affordance — a cobalt disc riding the avatar's edge. */
+  photoBadge: {
+    position: "absolute",
+    right: -3,
+    bottom: -3,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: t.cobalt,
+  },
+
+  editButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: t.surface2,
+  },
+  editButtonPressed: { backgroundColor: t.surface3 },
+
+  editFields: { flex: 1, minWidth: 0, gap: 8 },
+  editActions: { flexDirection: "row", alignItems: "center", gap: 8 },
+  chip: {
+    height: 34,
+    paddingHorizontal: 14,
+    borderRadius: 17,
+    justifyContent: "center",
+    backgroundColor: t.surface2,
+  },
+  chipPressed: { backgroundColor: t.surface3 },
+  chipLabel: {
+    color: t.text,
+    fontFamily: FONT_DISPLAY.black,
+    fontSize: 9,
+    letterSpacing: 0.72,
+    textTransform: "uppercase",
+  },
+  saveChip: {
+    height: 34,
+    paddingHorizontal: 16,
+    borderRadius: 17,
+    justifyContent: "center",
+    backgroundColor: t.cobalt,
+  },
+  saveChipPressed: { backgroundColor: t.cobaltPressed },
 
   /** Two columns, three rows — the whole profile. */
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },

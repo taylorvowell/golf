@@ -1,24 +1,12 @@
 import { useMemo, useState } from "react";
-import { ActivityIndicator, RefreshControl, Text, View } from "react-native";
+import { RefreshControl, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import {
-  APP_HEADER_BAR,
-  AppHeader,
-  Chip,
-  HeroBackdrop,
-  Panel,
-  PanelHead,
-  HERO_PARALLAX,
-  HERO_SHEET_GAP,
-  SheetOverBackdrop,
-  TrendRing,
-  useChromeScroll,
-  WAVE_NAV_CLEARANCE,
-} from "../design/system";
+import { APP_HEADER_BAR, AppHeader, Chip, HERO_PARALLAX, HERO_SHEET_GAP, HeroBackdrop, Panel, PanelHead, SheetOverBackdrop, SwingLoader, TrendRing, useChromeScroll, WAVE_NAV_CLEARANCE } from "../design/system";
 import { displayLine, FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
 import { StatusMessage } from "../design/StatusMessage";
+import { Avatar } from "../features/profile/Avatar";
 import { CoachFocusRow } from "../features/progress/CoachFocusRow";
 import { CompareThenNow } from "../features/progress/CompareThenNow";
 import { MiniTrendTile } from "../features/progress/MiniTrendTile";
@@ -148,7 +136,7 @@ export function ProgressScreen() {
       <View style={[styles.sheetContent, { paddingBottom: 108 + WAVE_NAV_CLEARANCE + insets.bottom }]}>
         {state.kind === "loading" ? (
           <View style={styles.centre}>
-            <ActivityIndicator color={t.muted} />
+            <SwingLoader size={40} />
           </View>
         ) : null}
 
@@ -209,8 +197,8 @@ export function ProgressScreen() {
               {/* .coach-note — aqua→cobalt tint bed. Canned narrative, flagged in the model. */}
               <LinearGradient
                 colors={[
-                  "rgba(67,205,208,0.16)",
-                  t.mode === "dark" ? "rgba(63,87,218,0.14)" : "rgba(47,70,207,0.10)",
+                  "rgba(45,240,251,0.16)",
+                  t.mode === "dark" ? "rgba(31,169,239,0.14)" : "rgba(13,148,219,0.10)",
                 ]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
@@ -242,6 +230,7 @@ export function ProgressScreen() {
       hero
       chromePx={chromePx}
       bell={<NotificationBell hero onPress={() => navigation.navigate("Notifications")} />}
+      avatar={<Avatar size={26} />}
       onProfile={() => navigation.navigate("Profile")}
       profileTestID="progress-profile"
     />

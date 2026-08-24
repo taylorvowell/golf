@@ -119,6 +119,10 @@ const inject = [
   // apps/web/.next/node_modules, which the fileset omits — without these the upload endpoint
   // 500s with "Cannot find module '@aws-sdk/client-s3-<hash>'" (2026-08-23, mid-import).
   ...["@aws-sdk", "@smithy", "@aws-crypto", "@aws", "fast-xml-parser", "strnum", "tslib", "bowser", "uuid", "mnemonist", "obliterator"].flatMap((p) => collect(`node_modules/${p}`)),
+  // sharp (thumb/poster crops): externalized behind a hashed alias like the SDK, PLUS native
+  // bindings — the LINUX pair, which only exists locally because pnpm-workspace.yaml declares
+  // supportedArchitectures. Without these every /thumb 500s in production (2026-08-24).
+  ...["sharp", "@img", "detect-libc", "semver", "color", "color-convert", "color-name", "color-string", "simple-swizzle", "is-arrayish"].flatMap((p) => collect(`node_modules/${p}`)),
 ];
 let stripped = 0, patched = 0;
 const patchConfigs = (dir) => {
@@ -156,17 +160,22 @@ patchConfigs(join(OUT, "functions"));
 const aliasRoot = join(ROOT, "apps", "web", ".next", "node_modules");
 const aliasEntries = [];
 if (existsSync(aliasRoot)) {
-  const scopes = readdirSync(aliasRoot);
-  for (const scope of scopes) {
-    for (const name of readdirSync(join(aliasRoot, scope))) {
-      const p = join(aliasRoot, scope, name);
-      if (!lstatSync(p).isSymbolicLink()) continue;
-      const target = readlinkSync(p).replaceAll("\\", "/");
-      const real = target.slice(target.lastIndexOf("node_modules/"));
-      try { unlinkSync(p); } catch { rmdirSync(p); }
-      symlinkSync(`../../../../../${real}`, p, "dir");
-      aliasEntries.push(`apps/web/.next/node_modules/${scope}/${name}`);
-    }
+  // An alias is either scoped (`@aws-sdk/client-s3-<hash>`) or bare (`sharp-<hash>`). The
+  // bare kind is itself the symlink — descending into it would relink the TARGET's children
+  // instead and leave the alias broken (that was the /thumb 500: sharp's alias never shipped).
+  const relink = (rel, depthToRoot) => {
+    const p = join(aliasRoot, rel);
+    if (!lstatSync(p).isSymbolicLink()) return false;
+    const target = readlinkSync(p).replaceAll("\\", "/");
+    const real = target.slice(target.lastIndexOf("node_modules/"));
+    try { unlinkSync(p); } catch { rmdirSync(p); }
+    symlinkSync(`${"../".repeat(depthToRoot)}${real}`, p, "dir");
+    aliasEntries.push(`apps/web/.next/node_modules/${rel}`);
+    return true;
+  };
+  for (const entry of readdirSync(aliasRoot)) {
+    if (relink(entry, 4)) continue;
+    for (const name of readdirSync(join(aliasRoot, entry))) relink(`${entry}/${name}`, 5);
   }
 }
 if (aliasEntries.length) {
@@ -188,9 +197,12 @@ if (aliasEntries.length) {
 }
 console.log(`fixups: ${linksFixed} symlinks, ${stripped} stripped entries, ${patched} manifests patched, ${inject.length} runtime files injected, ${aliasEntries.length} externals aliases relinked`);
 
-// 5. Ship it.
-console.log("deploying (vercel deploy --prebuilt --prod)…");
-execSync("vercel deploy --prebuilt --prod --yes", { cwd: ROOT, env, stdio: "inherit" });
+// 5. Ship it. --archive=tgz because the loose-file uploader loses the .func SYMLINKS on
+// Windows (CLI 59.x): the build machine then ENOENTs on the aliased functions, and
+// dereferencing them instead multiplies every alias into its own function, straight past the
+// Hobby 12-function cap. A tarball preserves the links (2026-08-24).
+console.log("deploying (vercel deploy --prebuilt --prod --archive=tgz)…");
+execSync("vercel deploy --prebuilt --prod --yes --archive=tgz", { cwd: ROOT, env, stdio: "inherit" });
 
 // 6. Smoke — the three cheap truths.
 const smoke = spawnSync("curl", ["-s", "-o", "/dev/null", "-w", "%{http_code}", "-m", "30", "https://www.swingsage.io/api/v1/client"], { encoding: "utf-8" });

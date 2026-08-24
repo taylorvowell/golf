@@ -109,6 +109,24 @@ export function swingPrefix(userId: string, swingId: string): string {
   return `${userPrefix(userId)}/s/${segment("swingId", swingId)}`;
 }
 
+/**
+ * The golfer's profile photo, in `ARTIFACT_BUCKET` under the user's own prefix — so the account
+ * deletion sweep (`userPrefix`) removes it with everything else and no new bucket or retention
+ * rule is needed. Revision-addressed like artifacts are: an upload writes a NEW key and the old
+ * one is deleted only after the `users.avatar_url` pointer moves, so a client still holding the
+ * previous URL keeps its picture rather than a broken image, and every cache along the way
+ * (expo-image's disk cache, a CDN later) may treat the URL as immutable.
+ */
+export function avatarPrefix(userId: string): string {
+  return `${userPrefix(userId)}/avatar`;
+}
+
+/** `rev` is 12 lowercase hex minted by the upload route — never client-supplied unvalidated. */
+export function avatarKey(userId: string, rev: string): string {
+  if (!/^[0-9a-f]{12}$/.test(rev)) throw new Error(`invalid avatar revision: ${rev}`);
+  return `${avatarPrefix(userId)}/${rev}.jpg`;
+}
+
 /** One analysis run's output. Immutable once written — a re-run writes the next revision. */
 export function revisionPrefix(a: ViewAddress): string {
   if (!Number.isInteger(a.revision) || a.revision < 1) {

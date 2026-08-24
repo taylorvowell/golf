@@ -78,7 +78,7 @@ export function InstructorBubble() {
         style={({ pressed }) => [styles.hit, pressed && styles.pressed]}
       >
         <LinearGradient
-          colors={["#1B3262", "#14244F"]}
+          colors={["#164B7E", "#0F2E4C"]}
           start={{ x: 0, y: 0 }}
           end={{ x: 0, y: 1 }}
           style={styles.disc}

@@ -2,6 +2,7 @@ import { View, type StyleProp, type ViewStyle } from "react-native";
 import Svg, { Circle, Path, Polygon, Rect } from "react-native-svg";
 
 import { BRAND_ICONS, type BrandIconArt, type BrandIconName } from "./brandIconPaths";
+import { MARK_SHAPES, MARK_VIEWBOX, MARK_RATIO } from "./brandPaths";
 import { useTheme } from "../../theme";
 
 /**
@@ -30,6 +31,21 @@ export function BrandIcon({
   color: string;
   style?: StyleProp<ViewStyle>;
 }) {
+  // `coach` is the LOGOMARK, monochrome — not a drawing of a coach (Taylor, 2026-08-23). It is
+  // resolved from `brandPaths` rather than kept as a copy in `brandIconPaths`, because the supplied
+  // copy was traced from an older revision of the logo and silently went stale the moment the
+  // artwork changed. Every caller — the tab bar, the coach screen, the coach loader — follows.
+  if (name === "coach") {
+    const width = sizeBy === "width" ? size : size / MARK_RATIO;
+    return (
+      <Svg width={width} height={width * MARK_RATIO} viewBox={MARK_VIEWBOX} style={style}>
+        {MARK_SHAPES.map((shape, i) =>
+          shape.t === "p" ? <Path key={i} d={shape.d} fill={color} /> : null,
+        )}
+      </Svg>
+    );
+  }
+
   // Widened to the interface: entries without rects/circles otherwise make the union
   // reject the optional-shape reads below.
   const art: BrandIconArt = BRAND_ICONS[name];
@@ -100,7 +116,7 @@ export function BrandIconThumb({
           justifyContent: "center",
           // StickThumb's bed tint, verbatim — the two thumb faces must sit identically.
           backgroundColor:
-            t.mode === "dark" ? "rgba(63,87,218,0.20)" : "rgba(47,70,207,0.13)",
+            t.mode === "dark" ? "rgba(31,169,239,0.20)" : "rgba(13,148,219,0.13)",
         },
         style,
       ]}

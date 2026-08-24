@@ -17,7 +17,7 @@ function fills(t: Theme, variant: TagVariant) {
     case "count": // the session's swing count — solid navy, one step deeper than cobalt
       return { bg: t.heroMid, fg: t.onDark };
     case "best": // .tag-best — aqua 18%
-      return { bg: "rgba(67,205,208,0.18)", fg: t.mode === "dark" ? t.aqua : "#1D7E86" };
+      return { bg: "rgba(45,240,251,0.18)", fg: t.mode === "dark" ? t.aqua : "#0B5E8C" };
     case "good": // .tag-good — green 14%
       return { bg: "rgba(40,168,107,0.14)", fg: t.good };
     case "issue": // .tag-issue — red 12%

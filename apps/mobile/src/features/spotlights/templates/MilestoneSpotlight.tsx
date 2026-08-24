@@ -3,6 +3,7 @@ import { Pressable, Text, View } from "react-native";
 import { SCROLL_PRESS_DELAY_MS } from "../../../design/system";
 import { displayLine, FONT_BODY, FONT_DISPLAY } from "../../../design/system/typography";
 import { themedStyles } from "../../../theme";
+import { SpotlightBed } from "./SpotlightBed";
 
 export interface MilestoneSpotlightProps {
   /** The figure being celebrated — "50", "1 yr". Big type, so two or three characters. */
@@ -23,19 +24,21 @@ export interface MilestoneSpotlightProps {
 export function MilestoneSpotlight({ emblem, title, line, onPress, testID }: MilestoneSpotlightProps) {
   const styles = useStyles();
   const body = (pressed: boolean) => (
-    <View style={[styles.card, pressed && styles.pressed]} testID={testID}>
-      <Text style={styles.emblem} numberOfLines={1}>
-        {emblem}
-      </Text>
-      <View style={styles.body}>
-        <Text style={styles.title} numberOfLines={2}>
-          {title}
+    <SpotlightBed testID={testID}>
+      <View style={[styles.card, pressed && styles.pressed]}>
+        <Text style={styles.emblem} numberOfLines={1}>
+          {emblem}
         </Text>
-        <Text style={styles.line} numberOfLines={2}>
-          {line}
-        </Text>
+        <View style={styles.body}>
+          <Text style={styles.title} numberOfLines={2}>
+            {title}
+          </Text>
+          <Text style={styles.line} numberOfLines={2}>
+            {line}
+          </Text>
+        </View>
       </View>
-    </View>
+    </SpotlightBed>
   );
 
   if (!onPress) return body(false);
@@ -53,14 +56,13 @@ export function MilestoneSpotlight({ emblem, title, line, onPress, testID }: Mil
 }
 
 const useStyles = themedStyles((t) => ({
+  /* Layout only — the ground is SpotlightBed, one dark material for the whole deck. */
   card: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     gap: 16,
     padding: 18,
-    borderRadius: 14,
-    backgroundColor: t.heroMid,
   },
   /* Over the hero ground there is no surface ramp to step — the footage-adjacent carve-out. */
   pressed: { opacity: 0.85 },

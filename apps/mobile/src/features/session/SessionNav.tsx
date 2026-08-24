@@ -48,7 +48,7 @@ const RECORD_LIFT = 8;
 const ROW_PAD = 10;
 const FADE_ABOVE = 76;
 /** The tab bar's dark ramp, verbatim — this bar must read as the same family. */
-const FADE_STOPS = ["#0B152800", "#0B152859", "#0B152880"] as const;
+const FADE_STOPS = ["#0A1A2900", "#0A1A2959", "#0A1A2980"] as const;
 
 export function SessionNav({
   leftItems,
