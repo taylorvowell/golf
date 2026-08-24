@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { useDebugGroups } from "../debug/DebugOverlay";
-import { resetDeepIntro } from "./useDeepIntro";
-import { resetStanceIntro } from "./useStanceIntro";
 
 /**
  * The coach surface's forceable states (the react-native.md rule): the dismissed home
@@ -49,17 +47,8 @@ export function CoachDebug() {
             onChange: setForcePoseArt,
           },
         ],
-        actions: [
-          {
-            key: "reset-intro-cards",
-            label: "Reset intro cards",
-            detail: "Brings BOTH home highlight cards (deep + stance) back after their X.",
-            onPress: () => {
-              resetStanceIntro();
-              resetDeepIntro();
-            },
-          },
-        ],
+        /* The intro cards moved into the spotlight deck (spotlights track) — their reset is
+           the SpotlightRail's "Reset dismissals" action now. */
       },
     ],
     [poseArt],

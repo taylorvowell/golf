@@ -515,6 +515,25 @@ export const notifications = pgTable("notifications", {
   readAt: timestamp("read_at", { withTimezone: true }),
 });
 
+/**
+ * The generic per-user "seen it, never again" store — one row per (user, key), created and
+ * never mutated. Keys are namespaced + versioned by convention (`spotlight.multiview.v1`):
+ * re-showing a reworked surface is a NEW key, not an update, so DELETE exists only for the
+ * dev debug-menu reset (route-gated to non-production on top of the own-rows policy).
+ * Server-side because the promise is "dismiss once, never again on ANY device" — surfaces
+ * whose promise is the opposite (first-run intros a reinstall should revive) stay
+ * device-local and do not belong here. RLS and grants live in migration 0020.
+ */
+export const userDismissals = pgTable(
+  "user_dismissals",
+  {
+    userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    dismissedAt: timestamp("dismissed_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.key] })],
+);
+
 export type ClubRow = typeof clubs.$inferSelect;
 export type NewClubRow = typeof clubs.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -545,3 +564,4 @@ export type NewSwingStageRow = typeof swingStages.$inferInsert;
 export type NotificationRow = typeof notifications.$inferSelect;
 /** The §29 event taxonomy — one vocabulary for emitters, the table, and the API schema. */
 export type NotificationKind = NotificationRow["kind"];
+export type UserDismissalRow = typeof userDismissals.$inferSelect;

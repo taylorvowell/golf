@@ -326,6 +326,25 @@ delivery: push and email fan out from the row, so an emitter never calls a chann
 `apps/web/src/db/notificationsRls.test.ts`;
 `apps/mobile/src/features/notifications/` (the read surface).
 
+### Per-user dismissals are one generic table; a dismissal is a fact, not state
+
+**Decision:** "Seen it, never again" surfaces (spotlight cards first; any future one-time
+banner or tip) record dismissal in **`user_dismissals`** (migration 0020): PK `(user_id, key)`,
+RLS enabled **and forced**, owner-only select/insert/delete — unlike notifications, INSERT is a
+plain self-policy because a dismissal never crosses users. UPDATE has no policy AND no grant: a
+row is only ever created, `dismissed_at` records when the fact became true, and re-showing a
+reworked surface is a NEW key (`<surface>.<id>.v<N>` — bump the version), never a mutation.
+The API is `/api/v1/dismissals`: GET `{ keys }` (flat, unpaginated — tens of short keys per
+lifetime), POST `{ key }` idempotent via `onConflictDoNothing` (two devices and the offline
+replay queue re-send keys; the second arrival is a success and the timestamp does not move),
+and DELETE (clear all) gated to non-production — the debug reset is tooling, not a feature.
+Server-side because the promise is "dismiss once, never again on ANY device"; first-run intros
+a reinstall should revive stay device-local and do not belong here.
+**See:** `apps/web/drizzle/0020_user_dismissals.sql`;
+`apps/web/src/db/userDismissalsRls.test.ts` (the proof);
+`apps/mobile/src/features/spotlights/useDismissals.ts` (mirror + replay);
+`docs/decisions/mobile-client.md` (the spotlight surface).
+
 ### Coaching conversations are one feed; messages are immutable, referenced objects carry state
 
 **Decision:** Coach↔golfer communication is a **conversation substrate**: `conversations` +

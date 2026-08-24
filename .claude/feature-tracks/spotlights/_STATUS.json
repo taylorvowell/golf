@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "featureName": "spotlights",
+  "currentStep": "04",
+  "phase": "Spotlights",
+  "lastUpdated": "2026-08-24T15:05:00Z",
+  "steps": {
+    "01": { "status": "complete", "completedAt": "2026-08-24T13:55:00Z" },
+    "02": { "status": "complete", "completedAt": "2026-08-24T14:20:00Z" },
+    "03": { "status": "complete", "completedAt": "2026-08-24T15:05:00Z" },
+    "04": { "status": "not-started" }
+  },
+  "blockers": [],
+  "skipped": []
+}

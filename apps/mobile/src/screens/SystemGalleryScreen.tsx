@@ -20,6 +20,7 @@ import {
   Button,
   Chip,
   CoachCard,
+  CoachLoader,
   Delta,
   DisplayText,
   Eyebrow,
@@ -37,9 +38,12 @@ import {
   ScoreRing,
   Segmented,
   SessionPillNav,
+  Shimmer,
+  SwingLoader,
   Sheet,
   HERO_PARALLAX,
   SheetOverBackdrop,
+  SnapCarousel,
   StickThumb,
   SwingProfile,
   SwingTimelineList,
@@ -71,6 +75,56 @@ export function SystemGalleryScreen() {
       style={styles.root}
       contentContainerStyle={[styles.content, { paddingBottom: 32 + insets.bottom }]}
     >
+      {/* THE decisions, at the very top: this is what ships. Everything below is a component
+          drawn in these colours, not a candidate for anything. */}
+      <Section title="Lockup">
+        <View style={[styles.lockupRow, { backgroundColor: "#FFFFFF" }]}>
+          <BrandLogo height={30} />
+        </View>
+        <View style={[styles.lockupRow, { backgroundColor: "#172B4E" }]}>
+          <BrandLogo height={30} color="#FFFFFF" />
+        </View>
+      </Section>
+
+      <Section title="Loading spinner">
+        <Text style={styles.note}>
+          Shown on both grounds. The ring, the golfer and the lockup above all draw from one
+          `SwingGradient` — if they ever look different, that is a bug rather than a setting.
+        </Text>
+        <View style={{ flexDirection: "row", gap: 10 }}>
+          <View style={[styles.loaderBed, { backgroundColor: "#FFFFFF" }]}>
+            <SwingLoader size={96} ground="light" />
+          </View>
+          <View style={[styles.loaderBed, { backgroundColor: "#172B4E" }]}>
+            <SwingLoader size={96} ground="dark" />
+          </View>
+        </View>
+        <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
+          <View style={[styles.loaderBed, { backgroundColor: "#FFFFFF", width: 64, height: 64 }]}>
+            <SwingLoader size={44} ground="light" />
+          </View>
+          <View style={[styles.loaderBed, { backgroundColor: "#172B4E", width: 64, height: 64 }]}>
+            <SwingLoader size={44} ground="dark" />
+          </View>
+          <Text style={styles.note}>At the size a section spinner actually runs.</Text>
+        </View>
+      </Section>
+
+      <Section title="Loading — in use elsewhere">
+        <View style={styles.specimens}>
+          <Specimen name="CoachLoader" note="AI coach, fixed dark">
+            <View style={styles.darkBed}>
+              <CoachLoader size={72} />
+            </View>
+          </Specimen>
+          <Specimen name="Shimmer" note="a card being worked on">
+            <View style={styles.shimmerBed}>
+              <Shimmer radius={10} />
+            </View>
+          </Specimen>
+        </View>
+      </Section>
+
       <Section title="Brand">
         <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
           <BrandMark size={42} />
@@ -182,6 +236,15 @@ export function SystemGalleryScreen() {
         />
       </Section>
 
+      <Section title="Snap carousel — the house carousel">
+        <Text style={styles.note}>
+          Center snap, both neighbours peeking, infinite loop, the frame&apos;s one X. Every deck
+          size behaves differently on purpose: 0 collapses, 1 is static, 2+ loops. Dismissals
+          here are local — Reset brings them back.
+        </Text>
+        <SnapCarouselDemo />
+      </Section>
+
       <Section title="Portrait picker — choosing a person">
         <PortraitPickerDemo />
       </Section>
@@ -208,7 +271,7 @@ export function SystemGalleryScreen() {
           ]}
         />
         <CoachCard
-          icon={<Target size={24} color="#10204A" />}
+          icon={<Target size={24} color="#0F2E4C" />}
           eyebrow="Priority focus"
           title="Keep the trail elbow tucked"
           body="Your top priority from the last session — 3 of 4 swings flagged it."
@@ -393,6 +456,58 @@ export function SystemGalleryScreen() {
 }
 
 /** The picker with its own local choice — the spec's job is showing both states at once. */
+/**
+ * The SnapCarousel harness — every deck size the component special-cases (0, 1, 2, 5),
+ * with real dismissal so the reflow and the collapse-to-nothing can be eyeballed on glass.
+ */
+function SnapCarouselDemo() {
+  const t = useTheme();
+  const styles = useStyles();
+  const [size, setSize] = useState("5");
+  const [dismissed, setDismissed] = useState<ReadonlySet<string>>(new Set());
+
+  const deck = ["Multiview", "Go Pro", "240fps", "Milestone", "One year"]
+    .slice(0, Number(size))
+    .filter((label) => !dismissed.has(label));
+
+  const beds = [t.cobalt, t.aqua, t.heroMid, t.cobalt, t.aqua];
+
+  return (
+    <View style={{ gap: 12 }}>
+      <Segmented options={["0", "1", "2", "5"]} value={size} onChange={setSize} />
+      {/* Negative margin returns the carousel to true screen width — the gallery's content
+          padding would otherwise shrink the geometry the harness exists to judge. */}
+      <View style={{ marginHorizontal: -16 }}>
+        <SnapCarousel
+          items={deck.map((label, i) => ({
+            key: label,
+            render: (w) => (
+              <View
+                style={{
+                  width: w,
+                  height: 132,
+                  borderRadius: 14,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: beds[i % beds.length],
+                }}
+              >
+                <Text style={{ color: t.onDark, fontSize: 16, fontWeight: "700" }}>{label}</Text>
+              </View>
+            ),
+          }))}
+          cardHeight={132}
+          onDismiss={(key) => setDismissed((prev) => new Set(prev).add(key))}
+          dismissLabel={(key) => `Dismiss ${key}`}
+        />
+      </View>
+      {dismissed.size > 0 ? (
+        <Button label="Reset dismissed" variant="ghost" onPress={() => setDismissed(new Set())} />
+      ) : null}
+    </View>
+  );
+}
+
 function PortraitPickerDemo() {
   const [id, setId] = useState(COACHES[0].id as string);
   return (
@@ -407,6 +522,29 @@ function PortraitPickerDemo() {
       selectedId={id}
       onSelect={setId}
     />
+  );
+}
+
+/**
+ * A named sample. The NAME is the point — a gallery of unlabelled swatches cannot be talked
+ * about, and "the second one" stops meaning anything the moment the row is reordered.
+ */
+function Specimen({
+  name,
+  note,
+  children,
+}: {
+  name: string;
+  note: string;
+  children: React.ReactNode;
+}) {
+  const styles = useStyles();
+  return (
+    <View style={styles.specimen}>
+      {children}
+      <Text style={styles.specimenName}>{name}</Text>
+      <Text style={styles.specimenNote}>{note}</Text>
+    </View>
   );
 }
 
@@ -432,4 +570,42 @@ const useStyles = themedStyles((t) => ({
     textTransform: "uppercase",
   },
   row: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 9 },
+  note: { color: t.muted, fontSize: 12, lineHeight: 17 },
+  specimens: { flexDirection: "row", flexWrap: "wrap", gap: 14 },
+  specimen: { width: 118, alignItems: "center", gap: 5 },
+  /* The lockup on its own ground, at review size. */
+  lockupRow: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 18,
+    borderRadius: 12,
+  },
+  /* Both grounds side by side, on LITERAL beds: the app's current theme must not be allowed to
+     change which of the two is being judged. */
+  loaderBed: {
+    width: 112,
+    height: 112,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  /* CoachLoader is a fixed-dark surface component, so it keeps a dark bed. */
+  darkBed: {
+    width: 96,
+    height: 96,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#181818",
+  },
+  shimmerBed: {
+    width: 96,
+    height: 96,
+    borderRadius: 14,
+    overflow: "hidden",
+    backgroundColor: t.surface2,
+  },
+  specimenName: { color: t.text, fontSize: 11, fontWeight: "600" },
+  specimenNote: { color: t.muted2, fontSize: 9, textAlign: "center", lineHeight: 12 },
+
 }));

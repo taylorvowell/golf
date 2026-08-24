@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
 import {
-  ActivityIndicator,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -9,23 +8,10 @@ import {
   View,
 } from "react-native";
 import { Image } from "expo-image";
-import { Film, ScanLine, X } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { SwingSummary } from "@swingsage/schema/contract";
 
-import {
-  APP_HEADER_BAR,
-  AppHeader,
-  Button,
-  Chip,
-  Delta,
-  PerformanceCard,
-  SCROLL_PRESS_DELAY_MS,
-  StickThumb,
-  formFigureFor,
-  useChromeScroll,
-  WAVE_NAV_CLEARANCE,
-} from "../design/system";
+import { APP_HEADER_BAR, AppHeader, Button, Chip, Delta, formFigureFor, HERO_PARALLAX, HERO_SHEET_GAP, HeroBackdrop, PerformanceCard, ScoreRing, SCROLL_PRESS_DELAY_MS, SheetOverBackdrop, StickThumb, SwingLoader, useChromeScroll, WAVE_NAV_CLEARANCE } from "../design/system";
 import { displayLine, FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
 import { StatusMessage } from "../design/StatusMessage";
 import { useAuth } from "../features/auth/AuthProvider";
@@ -38,9 +24,8 @@ import {
   type SessionStats,
 } from "../features/home/homeModel";
 import { useSessionReports } from "../features/home/useSessionReports";
-import { dismissDeepIntro, useDeepIntro } from "../features/coach/useDeepIntro";
-import { dismissStanceIntro, useStanceIntro } from "../features/coach/useStanceIntro";
 import { NotificationBell } from "../features/notifications/NotificationBell";
+import { SpotlightRail } from "../features/spotlights/SpotlightRail";
 import { createdAtMs, sessionize } from "../features/swings/sessions";
 import { useSessions } from "../features/swings/useSessions";
 import { useSwings } from "../features/swings/useSwings";
@@ -50,6 +35,10 @@ import { COLORS, themedStyles, useTheme } from "../theme";
 
 /**
  * Home — a coach talking to the golfer, not a dashboard.
+ *
+ * Built on the same hero-screen scaffold as the Swing Log, Progress and Coach
+ * (`SheetOverBackdrop`): a gradient hero carrying the greeting and the last session's figures,
+ * with the sheet of cards scrolling up over it.
  *
  * The screen's single dominant card (§07) is the `PerformanceCard`: the recommendation that
  * recurred across the last session, with one promise of a button — **see it on your swing** —
@@ -72,6 +61,11 @@ export function HomeScreen() {
   const t = useTheme();
   const styles = useStyles();
   const { onScroll: onChromeScroll, chromePx } = useChromeScroll();
+  // Measured once the hero lays out; until then a hand-tuned height keeps the first frame in
+  // the right place, so nothing jumps.
+  const [heroHeight, setHeroHeight] = useState<number | null>(null);
+  const backdropHeight =
+    heroHeight === null ? 300 + insets.top : heroHeight + 74 + HERO_SHEET_GAP;
 
   const { sessions: sessionRows } = useSessions();
   const sessions = useMemo(
@@ -101,177 +95,133 @@ export function HomeScreen() {
     return refs.reduce((a, b) => (createdAtMs(a) >= createdAtMs(b) ? a : b));
   }, [state]);
 
+  const count = stats?.session.swings.length ?? 0;
+
+  /**
+   * The hero: who the golfer is, and how the session that just happened went. The figures live
+   * up here rather than under the session rail below — one place for the numbers, and the rail
+   * stays a row of pictures.
+   */
+  const hero = (
+    <HeroBackdrop overscan={HERO_PARALLAX.cap}>
+      <View
+        style={[styles.heroContent, { paddingTop: insets.top + APP_HEADER_BAR }]}
+        // The sheet's resting edge is derived from this, so the gap below the hero is the same
+        // on every hero screen instead of falling out of a hand-tuned backdrop height.
+        onLayout={(e) => {
+          const h = Math.round(e.nativeEvent.layout.height);
+          setHeroHeight((prev) => (prev === h ? prev : h));
+        }}
+      >
+        <Text style={styles.heroGreeting}>{firstName ? `Hey ${firstName}` : "Welcome back"}</Text>
+        {state.kind === "ok" && stats !== null ? (
+          <>
+            <Text style={styles.heroEyebrow}>{stats.live ? "Today, so far" : "Last session"}</Text>
+            <View style={styles.heroSummary}>
+              <View style={styles.statRow}>
+                <View style={styles.statBox}>
+                  <Text style={styles.statValue}>{count}</Text>
+                  <Text style={styles.statLabel}>{count === 1 ? "swing" : "swings"}</Text>
+                </View>
+                {stats.best !== null ? (
+                  <View style={styles.statBox}>
+                    <Text style={styles.statValue}>{Math.round(stats.best)}</Text>
+                    <Text style={styles.statLabel}>best</Text>
+                  </View>
+                ) : null}
+              </View>
+              {stats.average !== null ? (
+                <ScoreRing score={Math.round(stats.average)} label="Average" size={88} />
+              ) : null}
+            </View>
+          </>
+        ) : null}
+      </View>
+    </HeroBackdrop>
+  );
+
   return (
     <View style={styles.root}>
-      {state.kind === "loading" ? (
-        <View style={styles.centre} testID="home-loading">
-          <ActivityIndicator color={t.muted} />
-        </View>
-      ) : null}
-
-      {state.kind === "signed-out" ? (
-        <StatusMessage
-          title="Your session has expired"
-          detail="Sign out and sign back in to continue."
-          onRetry={refresh}
-          retryTestID="home-retry"
-        />
-      ) : null}
-
-      {state.kind === "unreachable" ? (
-        <StatusMessage
-          title="Cannot reach SwingSage"
-          detail="Your swings are safe — this device just could not connect. Check your network."
-          onRetry={refresh}
-          retryTestID="home-retry"
-        />
-      ) : null}
-
-      {state.kind === "ok" ? (
-        <ScrollView
-          contentContainerStyle={[
-            styles.scroll,
-            {
-              paddingTop: insets.top + APP_HEADER_BAR + 4,
-              paddingBottom: 28 + WAVE_NAV_CLEARANCE + insets.bottom,
-            },
+      <SheetOverBackdrop
+        testID="home"
+        backdrop={hero}
+        backdropHeight={backdropHeight}
+        parallax={HERO_PARALLAX}
+        initialOffset={0}
+        overlap={74}
+        onScrollY={onChromeScroll}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={refresh}
+            tintColor={t.muted}
+            colors={[t.cobalt]}
+          />
+        }
+      >
+        <View
+          style={[
+            styles.sheetContent,
+            { paddingBottom: 28 + WAVE_NAV_CLEARANCE + insets.bottom },
           ]}
-          onScroll={(e) => onChromeScroll(e.nativeEvent.contentOffset.y)}
-          scrollEventThrottle={16}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={refresh}
-              tintColor={t.muted}
-              colors={[t.cobalt]}
-              progressViewOffset={insets.top + APP_HEADER_BAR}
-            />
-          }
         >
-          {stats === null ? (
-            <View style={styles.hero} testID="home-empty">
-              <Text style={styles.heroTitle}>No swings yet</Text>
-              <Text style={styles.heroDetail}>
-                Recording and upload arrive with the capture release. Swings you add will appear
-                here.
+          {state.kind === "loading" ? (
+            <View style={styles.centre} testID="home-loading">
+              <SwingLoader size={40} />
+            </View>
+          ) : null}
+
+          {state.kind === "signed-out" ? (
+            <StatusMessage
+              title="Your session has expired"
+              detail="Sign out and sign back in to continue."
+              onRetry={refresh}
+              retryTestID="home-retry"
+            />
+          ) : null}
+
+          {state.kind === "unreachable" ? (
+            <StatusMessage
+              title="Cannot reach SwingSage"
+              detail="Your swings are safe — this device just could not connect. Check your network."
+              onRetry={refresh}
+              retryTestID="home-retry"
+            />
+          ) : null}
+
+          {state.kind === "ok" && stats === null ? (
+            <View style={styles.empty} testID="home-empty">
+              <Text style={styles.emptyTitle}>No swings yet</Text>
+              <Text style={styles.emptyDetail}>
+                Record a swing, or upload one you have already filmed — it will appear here once
+                it has been analysed.
               </Text>
             </View>
-          ) : (
+          ) : null}
+
+          {state.kind === "ok" && stats !== null ? (
             <>
-              <DeepIntroCard navigation={navigation} />
-              <StanceIntroCard navigation={navigation} />
-              {lead ? (
-                <FocusHero
-                  lead={lead}
-                  drill={drill}
-                  live={stats.live}
-                  firstName={firstName}
-                  navigation={navigation}
-                />
-              ) : null}
+              {/* The hero deck — dismissable feature/promo spotlights, first slot on purpose.
+                  Replaces the stacked deep/stance intro cards, which live in it now. */}
+              <SpotlightRail navigation={navigation} />
+              {lead ? <FocusHero lead={lead} drill={drill} live={stats.live} navigation={navigation} /> : null}
               {lead && lead.checkpoint && pro && pro.id !== lead.exemplarId ? (
                 <CompareStrip lead={lead} proId={pro.id} navigation={navigation} />
               ) : null}
               {rail.length > 0 ? <FocusRail items={rail} navigation={navigation} /> : null}
               <SessionBlock stats={stats} navigation={navigation} />
             </>
-          )}
-        </ScrollView>
-      ) : null}
+          ) : null}
+        </View>
+      </SheetOverBackdrop>
 
       <AppHeader
+        hero
         chromePx={chromePx}
-        bell={<NotificationBell onPress={() => navigation.navigate("Notifications")} />}
+        bell={<NotificationBell hero onPress={() => navigation.navigate("Notifications")} />}
         onProfile={() => navigation.navigate("Profile")}
+        profileTestID="home-profile"
       />
-    </View>
-  );
-}
-
-/**
- * The deep-swing-analysis highlight — the top card of the homepage's guided-session pair
- * (Taylor, 2026-08-19: deep on top of posture). Same dismissal contract as the stance card:
- * only the X hides it.
- */
-function DeepIntroCard({ navigation }: { navigation: Navigation }) {
-  const show = useDeepIntro();
-  const t = useTheme();
-  const styles = useStyles();
-  if (!show) return null;
-
-  return (
-    <View testID="home-deep-intro" style={styles.stanceCard}>
-      <View style={styles.stanceIcon}>
-        <Film size={22} color={t.onDark} strokeWidth={2.1} />
-      </View>
-      <View style={styles.stanceBody}>
-        <Text style={styles.stanceEyebrow}>Guided session</Text>
-        <Text style={styles.stanceTitle}>Deep swing analysis</Text>
-        <Text style={styles.stanceCopy}>
-          Your coach plays your swing, pausing at the moments that matter — drawn on your own
-          video.
-        </Text>
-        <Button
-          label="Start"
-          testID="home-deep-start"
-          onPress={() => navigation.navigate("DeepAnalysis")}
-          style={styles.stanceCta}
-        />
-      </View>
-      <Pressable
-        testID="home-deep-dismiss"
-        accessibilityRole="button"
-        accessibilityLabel="Dismiss deep swing analysis highlight"
-        hitSlop={10}
-        onPress={dismissDeepIntro}
-        style={({ pressed }) => [styles.stanceClose, pressed && styles.pressed]}
-      >
-        <X size={15} color={t.muted} strokeWidth={2.5} />
-      </Pressable>
-    </View>
-  );
-}
-
-/**
- * The stance-analysis highlight — on home until the golfer hits the card's X, and ONLY the X
- * (Taylor, 2026-08-19: "do NOT hide until the user hits a dismiss button on the card").
- * Walking the analysis leaves the card up on purpose — it is the standing door back in.
- */
-function StanceIntroCard({ navigation }: { navigation: Navigation }) {
-  const show = useStanceIntro();
-  const t = useTheme();
-  const styles = useStyles();
-  if (!show) return null;
-
-  return (
-    <View testID="home-stance-intro" style={styles.stanceCard}>
-      <View style={styles.stanceIcon}>
-        <ScanLine size={22} color={t.onDark} strokeWidth={2.1} />
-      </View>
-      <View style={styles.stanceBody}>
-        <Text style={styles.stanceEyebrow}>Your coach is ready</Text>
-        <Text style={styles.stanceTitle}>Guided stance analysis</Text>
-        <Text style={styles.stanceCopy}>
-          A two-minute walkthrough of your setup, drawn over your own address — your first
-          session with your coach.
-        </Text>
-        <Button
-          label="Start"
-          testID="home-stance-start"
-          onPress={() => navigation.navigate("StanceAnalysis")}
-          style={styles.stanceCta}
-        />
-      </View>
-      <Pressable
-        testID="home-stance-dismiss"
-        accessibilityRole="button"
-        accessibilityLabel="Dismiss stance analysis highlight"
-        hitSlop={10}
-        onPress={dismissStanceIntro}
-        style={({ pressed }) => [styles.stanceClose, pressed && styles.pressed]}
-      >
-        <X size={15} color={t.muted} strokeWidth={2.5} />
-      </Pressable>
     </View>
   );
 }
@@ -288,22 +238,16 @@ function FocusHero({
   lead,
   drill,
   live,
-  firstName,
   navigation,
 }: {
   lead: FocusItem;
   drill: DrillPick | null;
   live: boolean;
-  firstName: string | null;
   navigation: Navigation;
 }) {
-  const greeting = live
-    ? firstName
-      ? `${firstName} — focus right now`
-      : "Focus right now"
-    : firstName
-      ? `Hey ${firstName} — next time out`
-      : "Next time out";
+  // The golfer's name is the hero's greeting now — repeating it on the card was the same
+  // sentence twice on one screen.
+  const greeting = live ? "Focus right now" : "Next time out";
   const styles = useStyles();
 
   return (
@@ -468,24 +412,20 @@ function FocusRail({ items, navigation }: { items: FocusItem[]; navigation: Navi
 /** The last session: its facts in one line, its swings as a slider of pictures. */
 function SessionBlock({ stats, navigation }: { stats: SessionStats; navigation: Navigation }) {
   const styles = useStyles();
-  const { session, live, best, average, deltaVsPrevious, analysing } = stats;
-  const count = session.swings.length;
-  const meta = [
-    `${count} ${count === 1 ? "swing" : "swings"}`,
-    best !== null ? `Best ${Math.round(best)}` : null,
-    average !== null ? `Avg ${Math.round(average)}` : null,
-    analysing > 0 ? `${analysing} analysing` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const { session, best, deltaVsPrevious, analysing } = stats;
 
   return (
     <View testID="home-session">
       <View style={styles.sessionHead}>
         <View style={styles.sessionHeadBody}>
-          <Text style={styles.tag}>{live ? "Today, so far" : "Last session"}</Text>
+          {/* The date and what is still coming. Swings, best and average are the hero's —
+              repeating them here was the same three numbers a scroll apart. */}
           <Text style={styles.sessionDate}>{dateOf(session.start)}</Text>
-          <Text style={styles.sessionMeta}>{meta}</Text>
+          {analysing > 0 ? (
+            <Text style={styles.sessionMeta}>
+              {analysing} still analysing
+            </Text>
+          ) : null}
         </View>
         {deltaVsPrevious !== null && deltaVsPrevious !== 0 ? (
           <View style={styles.deltaCol}>
@@ -581,30 +521,76 @@ function dateOf(ms: number): string {
 }
 
 /** The photo scrim's ink — the dark theme's ground, so photos sit in the same world. */
-const PHOTO_SCRIM = "rgba(7,16,31,";
+const PHOTO_SCRIM = "rgba(6,19,31,";
 
 /** The screen's chrome — everything drawn on the theme's own ground. */
 const useStyles = themedStyles((t) => ({
   root: { flex: 1, backgroundColor: t.bg },
-  centre: { flex: 1, alignItems: "center", justifyContent: "center" },
-  scroll: { gap: 16 },
+  centre: { alignItems: "center", justifyContent: "center", padding: 24, minHeight: 220 },
+  /* The sheet keeps NO horizontal padding — the cards carry their own 16, and the two
+     horizontal rails have to reach the sheet's edges. */
+  sheetContent: { paddingTop: 12, gap: 16 },
   pressed: { opacity: 0.75 },
-  tag: {
-    color: t.muted,
+
+  /* The hero — the same gradient ground as the log, Progress and Coach. */
+  heroContent: { paddingHorizontal: 18 },
+  heroGreeting: {
+    color: t.onDark,
     fontFamily: FONT_DISPLAY.black,
-    fontSize: 10,
-    letterSpacing: 1,
+    fontSize: 30,
+    lineHeight: displayLine(30),
+    letterSpacing: -0.6,
+  },
+  heroEyebrow: {
+    marginTop: 18,
+    color: "rgba(255,255,255,0.74)",
+    fontFamily: FONT_DISPLAY.black,
+    fontSize: 9,
+    letterSpacing: 1.62,
+    textTransform: "uppercase",
+  },
+  heroSummary: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 14,
+    marginTop: 12,
+  },
+  statRow: { flex: 1, minWidth: 0, flexDirection: "row", gap: 10 },
+  /* Hero glass square — the log's white-10 tile, so the two heroes are one material. */
+  statBox: {
+    minWidth: 68,
+    height: 68,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 3,
+    backgroundColor: "rgba(255,255,255,0.10)",
+  },
+  statValue: {
+    color: t.onDark,
+    fontFamily: FONT_DISPLAY.black,
+    fontSize: 26,
+    lineHeight: 27,
+    letterSpacing: -0.52,
+  },
+  statLabel: {
+    color: "rgba(180,235,238,1)",
+    fontFamily: FONT_DISPLAY.black,
+    fontSize: 7,
+    letterSpacing: 0.84,
     textTransform: "uppercase",
   },
 
-  hero: { alignItems: "center", gap: 10, paddingVertical: 64, paddingHorizontal: 24 },
-  heroTitle: {
+  empty: { alignItems: "center", gap: 10, paddingVertical: 48, paddingHorizontal: 24 },
+  emptyTitle: {
     color: t.text,
     fontFamily: FONT_DISPLAY.extraBold,
     fontSize: 18,
     textAlign: "center",
   },
-  heroDetail: {
+  emptyDetail: {
     color: t.textSoft,
     fontFamily: FONT_BODY.regular,
     fontSize: 13,
@@ -631,54 +617,6 @@ const useStyles = themedStyles((t) => ({
     fontFamily: FONT_BODY.regular,
     fontSize: 12,
     lineHeight: 19,
-  },
-  /* The stance-analysis highlight — the coach accent bed (aqua tint), dismissible. */
-  stanceCard: {
-    flexDirection: "row",
-    gap: 12,
-    marginHorizontal: 16,
-    padding: 15,
-    borderRadius: 14,
-    backgroundColor: t.mode === "dark" ? "rgba(67,205,208,0.10)" : "rgba(67,205,208,0.09)",
-  },
-  stanceIcon: {
-    width: 46,
-    height: 46,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: t.aqua,
-  },
-  stanceBody: { flex: 1, minWidth: 0 },
-  stanceEyebrow: {
-    color: t.mode === "dark" ? t.aqua : "#1D7E86",
-    fontFamily: FONT_DISPLAY.black,
-    fontSize: 8,
-    letterSpacing: 1.12,
-    textTransform: "uppercase",
-  },
-  stanceTitle: {
-    marginTop: 4,
-    color: t.text,
-    fontFamily: FONT_DISPLAY.extraBold,
-    fontSize: 15,
-    lineHeight: displayLine(15),
-  },
-  stanceCopy: {
-    marginTop: 4,
-    color: t.textSoft,
-    fontFamily: FONT_BODY.regular,
-    fontSize: 10,
-    lineHeight: 15,
-  },
-  stanceCta: { marginTop: 10, alignSelf: "flex-start" },
-  stanceClose: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: t.surface2,
   },
   heroSeen: {
     marginTop: 10,
@@ -738,7 +676,7 @@ const useStyles = themedStyles((t) => ({
     alignItems: "flex-start",
     gap: 12,
     paddingHorizontal: 16,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   sessionHeadBody: { flex: 1, gap: 3 },
   sessionDate: {
@@ -788,7 +726,7 @@ const overPhoto = StyleSheet.create({
     backgroundColor: `${PHOTO_SCRIM}0.72)`,
   },
   compareChipPro: {
-    backgroundColor: "rgba(67,205,208,0.16)",
+    backgroundColor: "rgba(45,240,251,0.16)",
   },
   compareChipText: {
     color: COLORS.text,

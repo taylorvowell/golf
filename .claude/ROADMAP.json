@@ -708,6 +708,33 @@
       "sequencingNote": "Step 01 (the client celebration surface + debug trigger) landed 2026-08-19 with no dependencies \u2014 it is pure UI fed by a queue. The award engine (02+) needs platform-foundation's schema/API seam and swing-ingest's server-side swing lifecycle to hang the evaluator on. goal-progression is a soft seam: its \u00a716.3.5 full-screen moment outranks and queues ahead of badge toasts when both fire, but neither track blocks the other. notifications later delivers earned-while-away pushes (\u00a729)."
     },
     {
+      "id": "spotlights",
+      "spine": false,
+      "lifecycle": "active",
+      "phase": "golfer-core",
+      "goal": "A reusable dismissable-card system whose first home is the Home hero: SnapCarousel (a generic center-snap, both-neighbours-peeking, infinitely-looping design-system primitive — the house carousel, core ScrollView only per D47), a generic server-persisted per-user dismissal backbone (user_dismissals + /api/v1/dismissals + useDismissals with an AsyncStorage mirror and offline replay — dismiss once, never again on any device), and the spotlight layer: a code-defined card registry with client-side eligibility over an entitlement/counts context, FeatureSpotlight + MilestoneSpotlight templates plus fully-custom cards, and a v1 deck headlined by the multiview showcase card (CTA → Record) with a Pro upsell, milestone/anniversary cards, and the two legacy home intro cards migrated in with their device-local dismissals honored. The context carries a triggers seam (empty in v1) so server-granted event-driven personalized cards later are additive, not a redesign. Binding design: .claude/feature-tracks/spotlights/DESIGN-spotlights.md.",
+      "statusFile": ".claude/feature-tracks/spotlights/_STATUS.json",
+      "specRefs": [
+        ".claude/feature-tracks/spotlights/DESIGN-spotlights.md",
+        ".claude/ai-instructions/PROJECT_MAIN.md#2-core-product-principles",
+        ".claude/ai-instructions/PROJECT_MAIN.md#301-entitlement-system"
+      ],
+      "owns": [
+        "apps/mobile/src/features/spotlights",
+        "apps/mobile/src/design/system/SnapCarousel.tsx"
+      ],
+      "dependsOn": [
+        {
+          "track": "design-system"
+        },
+        {
+          "track": "platform-foundation",
+          "blocking": false
+        }
+      ],
+      "sequencingNote": "Created 2026-08-24 at Taylor's direction — planned and ready to run via /feature spotlights. Not launch-critical path, but small (four steps, one a sign-off gate) and independent: the dismissal backbone rides the live versioned API and needs nothing from platform-foundation's open steps (non-blocking dependency — steps 09–10 don't gate a Postgres table + route). The Pro card renders through the existing client entitlement mock and simply starts telling the truth when the server seam lands. Step 04 is Taylor's explicit sign-off gate on the S25+, per the session-mode/coach-surface pattern."
+    },
+    {
       "id": "practice-loop",
       "spine": false,
       "lifecycle": "planned",

@@ -1,4 +1,4 @@
-# SwingSage Roadmap — generated 2026-08-18
+# SwingSage Roadmap — generated 2026-08-24
 
 > Macro source of truth. Declarations live in `.claude/ROADMAP.json`; this rollup is DERIVED by `/roadmap`
 > (`node scripts/roadmap/derive.mjs`). Do not hand-edit the table — re-run the script. Single-track detail:
@@ -12,21 +12,23 @@ Platform Foundation → Core Golfer Experience → Capture & Multi-Device → Co
 
 | Track | Phase | Goal | Progress | Current | Lifecycle | Blocked on |
 |-------|-------|------|----------|---------|-----------|------------|
-| platform-foundation | Platform Foundation | Close PROJECT_MAIN §44's open architecture questions, then build identity, t… | 6/10 (60%, 1 in-prog) | 05 | active | — |
-| **analyzer-service** (spine) | Platform Foundation | Promote the analyzer from a hand-invoked CLI to a hosted, queue-driven worke… | 6/7 (86%) | 07 | active | — |
+| **platform-foundation** (spine) | Platform Foundation | Close PROJECT_MAIN §44's open architecture questions, then build identity, t… | 7/10 (70%, 1 in-prog) | 10 | active | — |
+| analyzer-service | Platform Foundation | Promote the analyzer from a hand-invoked CLI to a hosted, queue-driven worke… | 7/7 (100%) | null | complete | — |
 | media-pipeline | Platform Foundation | Get 270-330MB phone video off a device on cellular, reliably: on-device trim… | 0/0 (—) | — | planned | — |
 | observability-and-slos | Platform Foundation | Define and instrument the targets that make 'production ready' falsifiable: … | 0/0 (—) | — | planned | — |
-| notifications | Platform Foundation | Push and email notification infrastructure with user-manageable preferences.… | 0/0 (—) | — | planned | — |
+| notifications | Platform Foundation | Push and email notification infrastructure with user-manageable preferences.… | 2/5 (40%) | 03 | planned | — |
 | design-system | Core Golfer Experience | The Ideal Swing design system: rebuild the app's theme and pages to match .c… | 9/9 (100%) | 09 | complete | — |
-| mobile-app-shell | Core Golfer Experience | Mobile client scaffold for iPhone and Android: navigation, auth flows, onboa… | 1/3 (33%) | 02 | active | — |
+| mobile-app-shell | Core Golfer Experience | Mobile client scaffold for iPhone and Android: navigation, auth flows, onboa… | 2/3 (67%) | 03 | active | — |
 | mobile-player | Core Golfer Experience | Re-express the frame-accurate player and overlay system on mobile, plus the … | 4/4 (100%) | null | complete | — |
 | swing-ingest | Core Golfer Experience | The product flow on top of the media pipeline: turn one or two uploaded vide… | 0/0 (—) | — | planned | — |
 | analysis-ground-truth | Core Golfer Experience | Make the analysis falsifiable before anyone pays for it: hand-labelled event… | 0/0 (—) | — | planned | — |
-| session-mode | Capture & Multi-Device | The core recording experience, specified by Taylor 2026-08-18 (D61) and buil… | 0/7 (0%) | 01 | active | — |
+| spotlights | Core Golfer Experience | A reusable dismissable-card system whose first home is the Home hero: SnapCa… | 3/4 (75%) | 04 | active | — |
+| session-mode | Capture & Multi-Device | The core recording experience, specified by Taylor 2026-08-18 (D61) and buil… | 5/7 (71%, 1 in-prog) | 07 | active | — |
 | in-app-capture | Capture & Multi-Device | Record a swing inside the app at a minimum of 60fps: capability detection wi… | 0/0 (—) | — | planned | — |
-| dual-device-spike | Capture & Multi-Device | Retire the §12 feasibility risk early: prove two phones can be paired, trigg… | 0/0 (—) | — | planned | — |
+| dual-device-spike | Capture & Multi-Device | Retire the §12 feasibility risk early: prove two phones can be paired, trigg… | 0/4 (0%) | 01 | planned | — |
 | dual-device-capture | Capture & Multi-Device | DIFFERENTIATOR (§12). Two logged-in phones capturing one swing: device pairi… | 0/0 (—) | — | planned | — |
 | swing-style-engine | Coaching Intelligence | Style-aware analysis (§15.4): classify each golfer into one of four swing st… | 0/0 (—) | — | planned | — |
+| coach-surface | Coaching Intelligence | The golfer-facing coaching surface, built UI-FIRST at Taylor's direction (20… | 5/6 (83%, 1 in-prog) | 05 | active | — |
 | priority-engine | Coaching Intelligence | Replace weakest-check-first ordering with a real priority model: dependencie… | 0/0 (—) | — | planned | — |
 | admin-surface | Coaching Intelligence | The administrative area §31 describes, as one surface rather than scattered … | 0/0 (—) | — | planned | — |
 | drill-library | Coaching Intelligence | A managed, preconfigured drill library with finding-to-drill mappings — expl… | 0/0 (—) | — | planned | — |
@@ -35,6 +37,7 @@ Platform Foundation → Core Golfer Experience → Capture & Multi-Device → Co
 | comparison-and-reference | Improvement Tracking | Comparison that surfaces the differences rather than showing two videos, sel… | 0/0 (—) | — | planned | — |
 | launch-data | Improvement Tracking | Manually entered launch-monitor and simulator metrics attached to a swing (§… | 0/0 (—) | — | planned | — |
 | goal-progression | Improvement Tracking | The assigned, measured correction loop (§16.3, D55): the AI or human coach a… | 0/5 (0%) | 01 | planned | — |
+| achievements | Improvement Tracking | The gamification layer (D62, §16.3.5 amendment): XP and a config-defined ran… | 1/5 (20%) | 02 | active | — |
 | practice-loop | Improvement Tracking | The simulator/range session experience (§8.1–8.5, §9.5) — the product's prim… | 0/0 (—) | — | planned | — |
 | coach-relationships | Coach Platform | The coach directory, the golfer-initiated request/approve relationship with … | 0/0 (—) | — | planned | — |
 | coach-collaboration | Coach Platform | Frame-anchored annotations and comments clearly distinguishable from AI find… | 0/0 (—) | — | planned | — |
@@ -47,12 +50,12 @@ Platform Foundation → Core Golfer Experience → Capture & Multi-Device → Co
 
 ## Consistency
 
-- ✅ spine: exactly one active (analyzer-service)
-- ⚠ dependency: analyzer-service has started work but its HARD dep platform-foundation is not complete
+- ✅ spine: exactly one active (platform-foundation)
+- ⚠ dependency: analyzer-service has started work but its HARD dep platform-foundation is not complete; notifications has started work but its HARD dep platform-foundation is not complete; achievements has started work but its HARD dep platform-foundation is not complete; achievements has started work but its HARD dep swing-ingest is not complete
 - ✅ ownership overlap: none
 - ✅ lifecycle/derived: none
 
 ## Recommended next
 
-Spine: **analyzer-service 07** (`/build`). Then the other unblocked active/planned tracks per phase order. Externally-blocked
+Spine: **platform-foundation 10** (`/build`). Then the other unblocked active/planned tracks per phase order. Externally-blocked
 tracks wait on their `unblockTrigger`.

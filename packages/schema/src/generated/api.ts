@@ -514,6 +514,40 @@ export interface NotificationDismissResponse {
   unreadCount: number;
 }
 /**
+ * Every dismissal key the caller has ever recorded — the generic 'seen it, never again' store behind dismissable surfaces (spotlight cards first). Flat and unpaginated on purpose: keys are short, a user accrues tens of them over a lifetime, and the client wants the whole set in one read to filter its registry.
+ *
+ * This interface was referenced by `Api`'s JSON-Schema
+ * via the `definition` "dismissalListResponse".
+ */
+export interface DismissalListResponse {
+  /**
+   * Namespaced, versioned by convention: `<surface>.<id>.v<N>`, e.g. `spotlight.multiview.v1`.
+   */
+  keys: string[];
+}
+/**
+ * Record one dismissal. Idempotent — a key travels from two devices or a replay queue, and the second arrival is a no-op, never an error.
+ *
+ * This interface was referenced by `Api`'s JSON-Schema
+ * via the `definition` "dismissalSaveRequest".
+ */
+export interface DismissalSaveRequest {
+  /**
+   * The dismissal key, `<surface>.<id>.v<N>`. 1–200 chars.
+   */
+  key: string;
+}
+/**
+ * This interface was referenced by `Api`'s JSON-Schema
+ * via the `definition` "dismissalSaveResponse".
+ */
+export interface DismissalSaveResponse {
+  /**
+   * Always true — the row exists whether this call created it or found it.
+   */
+  ok: boolean;
+}
+/**
  * The half of the profile a directory or a shared swing may show (§5.1). The split is WHICH OBJECT a field is in, not a per-field flag.
  *
  * This interface was referenced by `Api`'s JSON-Schema

@@ -31,7 +31,7 @@ export { FORM_FIGURES, formFigureFor, type FormFigureName } from "./formArt";
 export { CoachLoader } from "./CoachLoader";
 export { GlowBackdrop } from "./GlowBackdrop";
 export { WeekStrip, type WeekDay } from "./WeekStrip";
-export { BrandLogo, BrandMark } from "./BrandLogo";
+export { BrandLogo, BrandMark, SwingGradient } from "./BrandLogo";
 export { BrandIcon, BrandIconThumb } from "./BrandIcon";
 export { BRAND_ICONS, type BrandIconName } from "./brandIconPaths";
 export { WaveNav, WAVE_NAV_CLEARANCE, navBarBottomInset, type WaveNavItem } from "./WaveNav";
@@ -40,6 +40,10 @@ export { NavVisibilityProvider, useNavVisibility, useChromeScroll } from "./navV
 export { FloatingBack } from "./FloatingBack";
 export { Skeleton } from "./Skeleton";
 export { PendingDots } from "./PendingDots";
+export { Shimmer } from "./Shimmer";
+/* Loader CANDIDATES — style-guide only, nothing in the product imports one yet. See the file. */
+export { SwingLoader } from "./SwingLoader";
+export { GolfBall } from "./GolfBalls";
 export { SheetOverBackdrop, HERO_PARALLAX, HERO_SHEET_GAP } from "./SheetOverBackdrop";
 export { SideDrawer, type DrawerClose } from "./SideDrawer";
 export { SheetHandle } from "./SheetHandle";
@@ -56,3 +60,4 @@ export {
 } from "./StanceStage";
 export { HeroBackdrop } from "./HeroBackdrop";
 export { Collapse } from "./Collapse";
+export { SnapCarousel, type SnapCarouselItem, type SnapCarouselProps } from "./SnapCarousel";

@@ -39,8 +39,18 @@ jest.mock("../features/auth/AuthProvider", () => ({
 }));
 
 import { HomeScreen } from "./HomeScreen";
+import { EntitlementProvider } from "../features/billing/entitlement";
 import { clearReportsCache } from "../features/home/useSessionReports";
 import { clearSwingsCache } from "../features/swings/useSwings";
+
+/** Home mounts the SpotlightRail, whose entitlement gate needs the provider around it. */
+function renderHome() {
+  return render(
+    <EntitlementProvider>
+      <HomeScreen />
+    </EntitlementProvider>,
+  );
+}
 
 /** Yesterday, so the fixture session reads as completed rather than live. */
 const BASE = Date.now() - 24 * 60 * 60 * 1000;
@@ -124,12 +134,14 @@ describe("HomeScreen", () => {
       return Promise.reject(new Error(`unexpected ${path}`));
     });
 
-    const { findAllByText, findByText, findByTestId } = await render(<HomeScreen />);
+    const { findAllByText, findByText, findByTestId } = await renderHome();
 
     // The recurring fault leads with the greeting and the newest cue; the one-off big leverage
     // number rides the rail, not the hero. The cue appears twice by design — hero and strip.
     expect(await findByTestId("home-focus")).toBeTruthy();
-    expect(await findByText(/Taylor — next time out/i)).toBeTruthy();
+    // The greeting is the hero's; the card names the moment.
+    expect(await findByText("Hey Taylor")).toBeTruthy();
+    expect(await findByText(/next time out/i)).toBeTruthy();
     expect(await findByText("Hip turn")).toBeTruthy();
     expect((await findAllByText("clear the lead hip")).length).toBeGreaterThanOrEqual(1);
     expect(await findByText("Seen in 3 of 3 scored swings")).toBeTruthy();
@@ -148,14 +160,15 @@ describe("HomeScreen", () => {
     await act(async () => void fireEvent.press(await findByTestId("home-compare")));
     expect(mockNavigate).toHaveBeenCalledWith("SwingDetail", { id: "s-3" });
 
-    // The session slider carries the measured numbers.
-    expect(await findByText("74")).toBeTruthy();
+    // The session slider carries the measured numbers ("74" twice by design — the hero's
+    // best tile and the slide it came from).
+    expect((await findAllByText("74")).length).toBeGreaterThanOrEqual(1);
     expect(await findByText("62")).toBeTruthy();
   });
 
   it("never renders a network failure as an empty home", async () => {
     mockRequest.mockRejectedValue(new TypeError("Network request failed"));
-    const { findByText, queryByText } = await render(<HomeScreen />);
+    const { findByText, queryByText } = await renderHome();
 
     expect(await findByText("Cannot reach SwingSage")).toBeTruthy();
     expect(queryByText("No swings yet")).toBeNull();
@@ -163,7 +176,7 @@ describe("HomeScreen", () => {
 
   it("shows the empty state only when the server actually said zero", async () => {
     mockRequest.mockResolvedValue({ swings: [] });
-    const { findByTestId } = await render(<HomeScreen />);
+    const { findByTestId } = await renderHome();
     expect(await findByTestId("home-empty")).toBeTruthy();
   });
 
@@ -173,7 +186,7 @@ describe("HomeScreen", () => {
         ? Promise.resolve({ swings: [swing("s-1", 0, { overallScore: null, band: null })] })
         : Promise.reject(new Error(`unexpected ${path}`)),
     );
-    const { findByTestId, findByText, queryByTestId, queryByText } = await render(<HomeScreen />);
+    const { findByTestId, findByText, queryByTestId, queryByText } = await renderHome();
 
     expect(await findByTestId("home-session")).toBeTruthy();
     expect(await findByTestId("home-swing-s-1")).toBeTruthy();
@@ -190,7 +203,7 @@ describe("HomeScreen", () => {
     mockRequest.mockImplementation((path: string) =>
       path === "swings" ? Promise.resolve({ swings }) : Promise.resolve(report([])),
     );
-    const { findByTestId, queryByTestId } = await render(<HomeScreen />);
+    const { findByTestId, queryByTestId } = await renderHome();
 
     await act(async () => void fireEvent.press(await findByTestId("home-swing-s-2")));
     expect(mockNavigate).toHaveBeenCalledWith("SwingDetail", { id: "s-2" });

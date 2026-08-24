@@ -912,6 +912,50 @@
         }
       }
     },
+    "dismissalListResponse": {
+      "title": "DismissalListResponse",
+      "type": "object",
+      "description": "Every dismissal key the caller has ever recorded — the generic 'seen it, never again' store behind dismissable surfaces (spotlight cards first). Flat and unpaginated on purpose: keys are short, a user accrues tens of them over a lifetime, and the client wants the whole set in one read to filter its registry.",
+      "required": [
+        "keys"
+      ],
+      "properties": {
+        "keys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Namespaced, versioned by convention: `<surface>.<id>.v<N>`, e.g. `spotlight.multiview.v1`."
+        }
+      }
+    },
+    "dismissalSaveRequest": {
+      "title": "DismissalSaveRequest",
+      "type": "object",
+      "description": "Record one dismissal. Idempotent — a key travels from two devices or a replay queue, and the second arrival is a no-op, never an error.",
+      "required": [
+        "key"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "description": "The dismissal key, `<surface>.<id>.v<N>`. 1–200 chars."
+        }
+      }
+    },
+    "dismissalSaveResponse": {
+      "title": "DismissalSaveResponse",
+      "type": "object",
+      "required": [
+        "ok"
+      ],
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "description": "Always true — the row exists whether this call created it or found it."
+        }
+      }
+    },
     "handedness": {
       "title": "Handedness",
       "type": "string",
