@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
-import { Plus, Trash2, Upload, X } from "lucide-react-native";
+import { Plus, Trash2, Upload, X, type LucideIcon } from "lucide-react-native";
 import type { SwingSummary } from "@swingsage/schema/contract";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -291,13 +291,13 @@ export function SwingLogScreen() {
             <HeroAction
               testID="swing-log-record"
               label="Record"
-              icon={(c) => <Plus size={15} color={c} strokeWidth={2.6} />}
+              icon={Plus}
               onPress={() => navigation.navigate("Record")}
             />
             <HeroAction
               testID="swing-log-upload"
               label="Upload"
-              icon={(c) => <Upload size={14} color={c} strokeWidth={2.4} />}
+              icon={Upload}
               onPress={importer.begin}
             />
           </View>
@@ -383,6 +383,18 @@ export function SwingLogScreen() {
           <StatusMessage
             title="Cannot reach SwingSage"
             detail="Your swings are safe — this device just could not connect. Check your network."
+            onRetry={refresh}
+            retryTestID="swing-log-retry"
+          />
+        ) : null}
+
+        {/* The server ANSWERED, and the answer was a failure. Telling a golfer to check a
+            network that is demonstrably working sends them to fix the one part that is not
+            broken — and nothing they do can help, so the words say so plainly. */}
+        {state.kind === "server-error" ? (
+          <StatusMessage
+            title="SwingSage is having a problem"
+            detail="Your swings are safe. Something went wrong on our side — try again in a moment."
             onRetry={refresh}
             retryTestID="swing-log-retry"
           />
@@ -521,13 +533,21 @@ export function SwingLogScreen() {
  * row reads as one material. Icon AND word: two adjacent doors that both add a swing are only
  * distinguishable if each says which one it is, and a bare "+" beside a bare arrow does not.
  */
+/**
+ * The glyph metrics every hero action shares (Taylor, 2026-08-23): the icon is sized HERE, not
+ * at the call site, because Record's plus and Upload's arrow were drawn at different sizes and
+ * weights and the pair read as two different buttons sitting next to each other.
+ */
+const HERO_ICON = 14;
+const HERO_ICON_STROKE = 2.4;
+
 function HeroAction({
-  icon,
+  icon: Icon,
   label,
   onPress,
   testID,
 }: {
-  icon: (color: string) => ReactNode;
+  icon: LucideIcon;
   label: string;
   onPress: () => void;
   testID: string;
@@ -543,7 +563,7 @@ function HeroAction({
       hitSlop={8}
       style={({ pressed }) => [styles.heroAction, pressed && styles.heroActionPressed]}
     >
-      {icon(t.onDark)}
+      <Icon size={HERO_ICON} color={t.onDark} strokeWidth={HERO_ICON_STROKE} />
       <Text style={styles.heroActionLabel}>{label}</Text>
     </Pressable>
   );

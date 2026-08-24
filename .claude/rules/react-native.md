@@ -174,6 +174,13 @@ along.
 - **Claude runs the install itself, when the work calls for it** (Taylor, 2026-08-20): after a
   native change with the phone/emulator connected, run `phone:native`/`emu:native` and report —
   never hand Taylor the command.
+- **This is absolute, and it holds hardest when something is broken** (Taylor, 2026-08-23:
+  *"NEVER tell me to restore dev or run it myself … I SHOULD NEVER HAVE TO"*). Every build,
+  install, relaunch, Metro restart, `adb reverse` repair, phone-finder run and retry is
+  Claude's to execute. A sentence containing a command for Taylor to type is the bug. When a
+  step fails, the correct output is a fixed system and a report of what was fixed — not
+  instructions. The only hand-off is a PHYSICAL act (a cable, a lock screen, a vendor
+  dashboard), described as an action, never as a command.
 - **`pnpm --filter mobile phone` is the ONLY way to install and launch.** Add `:restart` when it
   stops hot refreshing (Metro still answers `/status`; the HMR socket is what died). Add `:native` after a
   Kotlin or `app.json` change; `emu` / `emu:native` for the AVD. It is

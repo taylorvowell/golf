@@ -22,6 +22,18 @@ If genuinely ambiguous, ask once — but prefer the reading above; "dev" alone m
 
 ## Do it
 
+**CLAUDE RUNS EVERY COMMAND ON THIS PAGE. Taylor never runs any of them, ever.** Not the
+switch, not the install, not the relaunch, not the phone finder, not a "quick" re-run after a
+failure. Handing him a command line — even one — is the failure this skill exists to prevent,
+and he has said so explicitly more than once (2026-08-23: *"NEVER tell me to restore dev or
+run it myself. YOU SHOULD ALWAYS JUST DO THIS. I SHOULD NEVER HAVE TO."*).
+
+That holds when something goes wrong, which is exactly when the instinct to hand it over
+appears. A failed build, a dropped adb link, a stale bundle, a phone that reconnected on a new
+port: **diagnose it and run the fix**. The only thing that ever goes to Taylor is a PHYSICAL
+act nobody else can do — plugging in a cable, unlocking the phone, tapping something in a
+vendor dashboard — and even then, say precisely what to touch, never a command to type.
+
 Always confirm the phone first (never ask Taylor for an IP or port):
 
 ```bash

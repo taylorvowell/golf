@@ -117,6 +117,75 @@ def job_from_spec(spec: dict[str, Any]) -> QueueJob:
 HttpSend = Callable[..., tuple[int, bytes]]
 
 
+class TransferError(RuntimeError):
+    """An HTTP exchange this job could not complete, and whether trying again could help.
+
+    The distinction is the whole point. A 400 from a presigned URL, a 404 for a swing that was
+    deleted, a 401 on an expired token — none of those get better by running the analysis three
+    more times on a GPU. A 503, a reset connection or a timeout usually do.
+
+    Before this existed every infra failure was one shape: raise, let the delivery layer retry,
+    and if it never recovered the job simply went QUIET until the orphan sweep settled it with
+    "the worker went silent mid-analysis". That is what a golfer was told when the real answer
+    was a 400 on the very first byte, known one second in (2026-08-23).
+    """
+
+    def __init__(self, message: str, *, retryable: bool, user_message: Optional[str] = None):
+        super().__init__(message)
+        self.retryable = retryable
+        #: What the golfer reads. Never a status code — a sentence about their swing.
+        self.user_message = user_message or message
+
+
+#: Statuses worth trying again. Everything else in 4xx is a statement about the request itself.
+_RETRYABLE_STATUSES = {408, 425, 429, 500, 502, 503, 504, 507, 509}
+
+#: Transient attempts inside one worker run, before the delivery layer's own retries.
+TRANSFER_ATTEMPTS = 3
+TRANSFER_BACKOFF_S = 1.5
+
+
+def classify_status(status: int, what: str) -> TransferError:
+    """Turn an HTTP status into the typed failure, with a sentence a golfer can act on."""
+    if status in _RETRYABLE_STATUSES:
+        return TransferError(f"{what} returned {status}", retryable=True,
+                             user_message="SwingSage was busy while this swing was processing.")
+    if status in (401, 403):
+        return TransferError(f"{what} returned {status}", retryable=False,
+                             user_message="This swing's upload permission expired before it finished.")
+    if status == 404:
+        return TransferError(f"{what} returned {status}", retryable=False,
+                             user_message="The video for this swing is no longer there.")
+    return TransferError(f"{what} returned {status}", retryable=False,
+                         user_message="This swing's video could not be read for analysis.")
+
+
+def with_retries(
+    fn: Callable[[], Any],
+    *,
+    attempts: int = TRANSFER_ATTEMPTS,
+    backoff_s: float = TRANSFER_BACKOFF_S,
+    sleep: Callable[[float], None] = time.sleep,
+    on_retry: Optional[Callable[[int, TransferError], None]] = None,
+) -> Any:
+    """Run `fn`, retrying only what is worth retrying. Exponential, and short by design: the
+    delivery layer retries the whole job behind this, so the job is for riding out a blip, not
+    for outlasting an outage."""
+    last: Optional[TransferError] = None
+    for attempt in range(attempts):
+        try:
+            return fn()
+        except TransferError as e:
+            last = e
+            if not e.retryable or attempt == attempts - 1:
+                raise
+            if on_retry:
+                on_retry(attempt + 1, e)
+            sleep(backoff_s * (2 ** attempt))
+    assert last is not None
+    raise last
+
+
 def http_send(
     method: str,
     url: str,
@@ -162,17 +231,30 @@ class _DropAuthAcrossHosts(urllib.request.HTTPRedirectHandler):
 
 
 def download(url: str, token: str, dest: Path, timeout_s: float = 300.0) -> None:
-    """Stream the source clip to disk. Redirects (a signed-URL 307) are followed."""
+    """Stream the source clip to disk. Redirects (a signed-URL 307) are followed.
+
+    Every failure leaves as a `TransferError` carrying whether a retry could help, so the
+    caller can tell "storage hiccuped" from "this video cannot be read" without parsing a
+    stack trace.
+    """
     req = urllib.request.Request(url, method="GET")
     req.add_header("Authorization", f"Bearer {token}")
     opener = urllib.request.build_opener(_DropAuthAcrossHosts)
-    with opener.open(req, timeout=timeout_s) as resp:
-        if resp.status != 200:
-            raise RuntimeError(f"source download returned {resp.status}")
-        with dest.open("wb") as f:
-            shutil.copyfileobj(resp, f)
+    try:
+        with opener.open(req, timeout=timeout_s) as resp:
+            if resp.status != 200:
+                raise classify_status(resp.status, "source download")
+            with dest.open("wb") as f:
+                shutil.copyfileobj(resp, f)
+    except urllib.error.HTTPError as e:
+        raise classify_status(e.code, "source download") from e
+    except (urllib.error.URLError, OSError, TimeoutError) as e:
+        # Never reached the server, or the connection died mid-stream. Always worth another go.
+        raise TransferError(f"source download failed: {e}", retryable=True,
+                            user_message="SwingSage could not reach this swing's video.") from e
     if dest.stat().st_size == 0:
-        raise RuntimeError("source download produced an empty file")
+        raise TransferError("source download produced an empty file", retryable=False,
+                            user_message="This swing's video arrived empty.")
 
 
 # ---------------------------------------------------------------------------
@@ -191,10 +273,20 @@ class _EventForwarder:
         self._last_progress = float("-inf")
 
     def post(self, body: dict[str, Any]) -> None:
+        """A TERMINAL post — `done` or `failed`. This one is the answer's delivery, so it
+        retries: losing it to one blip leaves a finished job looking abandoned until the
+        orphan sweep settles it with a sentence about the worker going silent."""
         payload = json.dumps(body, separators=(",", ":")).encode("utf-8")
-        status, resp = self.send("POST", self.job.events_url, token=self.job.token, data=payload)
-        if status >= 300:
-            raise RuntimeError(f"events post returned {status}: {resp[:200]!r}")
+
+        def once() -> None:
+            status, resp = self.send("POST", self.job.events_url, token=self.job.token, data=payload)
+            if status in _RETRYABLE_STATUSES:
+                raise classify_status(status, "events post")
+            if status >= 300:
+                raise TransferError(f"events post returned {status}: {resp[:200]!r}",
+                                    retryable=False)
+
+        with_retries(once)
 
     def post_soft(self, body: dict[str, Any]) -> None:
         try:
@@ -234,14 +326,30 @@ def run_queue_job(
     pipeline_run: Callable[..., Any] = run,
     scratch_root: Optional[Path] = None,
 ) -> bool:
-    """Execute one queue job end to end. True = analysis succeeded; False = deterministic
-    refusal (reported, not retryable). Infra failures raise."""
+    """Execute one queue job end to end. True = analysis succeeded; False = a deterministic
+    answer that has ALREADY been reported terminally (a pipeline refusal, or an infra failure
+    no retry can fix). Only genuinely transient failures raise, because only those are worth
+    the delivery layer running the whole job again."""
     forward = _EventForwarder(job, send)
     scratch = Path(tempfile.mkdtemp(prefix=f"swingsage-job-{job.id[:8]}-", dir=scratch_root))
     keep_scratch = False
     try:
         source = scratch / "source.mp4"
-        fetch(job.source_url, job.token, source)
+        try:
+            with_retries(
+                lambda: fetch(job.source_url, job.token, source),
+                on_retry=lambda n, e: forward.post_soft(
+                    {"kind": "progress", "logLine": f"source download attempt {n} failed ({e}); retrying"}
+                ),
+            )
+        except TransferError as e:
+            if e.retryable:
+                raise
+            # Nothing about this improves by burning a GPU on it twice more. Answer NOW, in
+            # the golfer's words, instead of going quiet until the orphan sweep guesses.
+            print(f"job {job.id}: unretryable transfer failure — {e}", file=sys.stderr)
+            forward.post({"kind": "failed", "reason": e.user_message})
+            return False
 
         out_dir = scratch / "out"
         req = request_from_spec({
@@ -279,17 +387,27 @@ def _upload_artifacts(job: QueueJob, artifacts: tuple[Path, ...], send: HttpSend
     for path in artifacts:
         name = path.name
         data = path.read_bytes()
-        status, body = send(
-            "PUT", f"{job.artifact_base_url}/{name}", token=job.token,
-            data=data, content_type="application/octet-stream", timeout_s=600.0,
-        )
+
+        def put() -> tuple[int, bytes]:
+            status, body = send(
+                "PUT", f"{job.artifact_base_url}/{name}", token=job.token,
+                data=data, content_type="application/octet-stream", timeout_s=600.0,
+            )
+            # A blip here used to throw away a finished analysis — minutes of GPU already
+            # spent, and the golfer told nothing landed. Transient statuses get another go.
+            if status in _RETRYABLE_STATUSES:
+                raise classify_status(status, f"artifact upload {name}")
+            return status, body
+
+        status, body = with_retries(put)
         if status == 200:
             uploaded.append(name)
             continue
         if status == 400 and name != "analysis.json":
             print(f"server declined artifact {name}: {body[:200]!r}", file=sys.stderr)
             continue
-        raise RuntimeError(f"artifact upload {name} returned {status}: {body[:200]!r}")
+        raise classify_status(status, f"artifact upload {name}")
     if "analysis.json" not in uploaded:
-        raise RuntimeError("pipeline produced no analysis.json to upload")
+        raise TransferError("pipeline produced no analysis.json to upload", retryable=False,
+                            user_message="The analysis finished but produced no result to save.")
     return uploaded

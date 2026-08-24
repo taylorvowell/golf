@@ -28,7 +28,17 @@ export type SwingsState =
   | { kind: "loading" }
   | { kind: "ok"; swings: SwingSummary[] }
   | { kind: "signed-out" }
-  | { kind: "unreachable" };
+  /** The request never got an answer: no network, DNS, a timeout. Retrying may work. */
+  | { kind: "unreachable" }
+  /**
+   * The server answered, and the answer was a failure (5xx).
+   *
+   * Split from `unreachable` because they are different facts and want different words. A
+   * broken deployment told the golfer "Cannot reach SwingSage" while their phone's network was
+   * demonstrably fine — so the message accused the one part that was working, and the only
+   * suggested action (check your connection) could not possibly help (2026-08-23).
+   */
+  | { kind: "server-error" };
 
 export interface SwingsHook {
   state: SwingsState;
@@ -168,8 +178,10 @@ export function useSwings(): SwingsHook {
         setState({ kind: "signed-out" });
       } else if (!lastGood) {
         // With a confirmed list on hand, a failed revalidate keeps drawing it — stale beats a
-        // network-error screen about data the device demonstrably has. Without one, be honest.
-        setState({ kind: "unreachable" });
+        // network-error screen about data the device demonstrably has. Without one, be honest —
+        // and honest means naming WHICH side failed: a 5xx is the server's answer, not silence.
+        const answered = err instanceof ApiClientError && err.status >= 500;
+        setState({ kind: answered ? "server-error" : "unreachable" });
       }
     } finally {
       if (liveRef.current && isRefresh) setRefreshing(false);

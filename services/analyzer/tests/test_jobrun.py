@@ -282,3 +282,91 @@ class TestRedirectAuth:
             "https://app.example.com/api/internal/jobs/1/source-v2",
         )
         assert [k for k in new.headers if k.lower() == "authorization"] == ["Authorization"]
+
+
+class TestFailureClassification:
+    """Retry what a retry can fix; ANSWER everything else immediately.
+
+    Before this, every infra failure was one shape — raise, let the delivery layer run the
+    whole analysis again, and if it never recovered let the orphan sweep settle the job with
+    "the worker went silent mid-analysis". A golfer was told that when the real answer was a
+    400 on the first byte, known one second in (2026-08-23).
+    """
+
+    def test_server_errors_and_throttling_are_retryable(self):
+        from service.jobrun import classify_status
+        for status in (500, 502, 503, 504, 429, 408):
+            assert classify_status(status, "x").retryable, status
+
+    def test_client_errors_are_answers_not_retries(self):
+        from service.jobrun import classify_status
+        for status in (400, 401, 403, 404, 422):
+            assert not classify_status(status, "x").retryable, status
+
+    def test_every_classification_carries_a_sentence_for_the_golfer(self):
+        from service.jobrun import classify_status
+        for status in (400, 401, 404, 503):
+            msg = classify_status(status, "source download").user_message
+            assert msg and str(status) not in msg, status
+
+    def test_with_retries_gives_up_immediately_on_an_unretryable_failure(self):
+        from service.jobrun import TransferError, with_retries
+        calls = []
+
+        def fn():
+            calls.append(1)
+            raise TransferError("nope", retryable=False)
+
+        with pytest.raises(TransferError):
+            with_retries(fn, sleep=lambda _: None)
+        assert len(calls) == 1
+
+    def test_with_retries_rides_out_a_blip(self):
+        from service.jobrun import TransferError, with_retries
+        calls = []
+
+        def fn():
+            calls.append(1)
+            if len(calls) < 3:
+                raise TransferError("busy", retryable=True)
+            return "ok"
+
+        assert with_retries(fn, sleep=lambda _: None) == "ok"
+        assert len(calls) == 3
+
+    def test_an_unretryable_download_failure_reports_terminally_and_does_not_raise(self):
+        """The whole point: the job ANSWERS instead of going quiet."""
+        from service.jobrun import QueueJob, TransferError, run_queue_job
+
+        posted = []
+
+        def send(method, url, *, token, data=None, content_type=None, timeout_s=None):
+            posted.append(json.loads(data) if data else None)
+            return 200, b"{}"
+
+        def fetch(url, token, dest):
+            raise TransferError("source download returned 400", retryable=False,
+                                user_message="This swing's video could not be read for analysis.")
+
+        job = QueueJob(id="j1", token="t", source_url="u", artifact_base_url="a",
+                       events_url="e", analysis={"view": "dtl", "handedness": "right",
+                                                 "club_detector": None})
+        assert run_queue_job(job, send=send, fetch=fetch) is False
+        terminal = [p for p in posted if p and p.get("kind") == "failed"]
+        assert len(terminal) == 1
+        assert terminal[0]["reason"] == "This swing's video could not be read for analysis."
+
+    def test_a_retryable_download_failure_still_raises_for_the_delivery_layer(self):
+        from service.jobrun import QueueJob, TransferError, run_queue_job
+
+        def send(method, url, *, token, data=None, content_type=None, timeout_s=None):
+            return 200, b"{}"
+
+        def fetch(url, token, dest):
+            raise TransferError("503", retryable=True)
+
+        job = QueueJob(id="j2", token="t", source_url="u", artifact_base_url="a",
+                       events_url="e", analysis={"view": "dtl", "handedness": "right",
+                                                 "club_detector": None})
+        with pytest.raises(TransferError):
+            run_queue_job(job, send=send, fetch=fetch)
