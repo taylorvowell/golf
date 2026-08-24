@@ -47,7 +47,16 @@ export interface ImportHook {
   savingReview: boolean;
 }
 
-export function useImportSwing(sessions: readonly SessionSummary[]): ImportHook {
+/**
+ * `onSaved` fires once the golfer has saved an upload's window and the run is on its way — the
+ * hook's caller decides where that leaves them. The swing log needs nothing (they are already
+ * looking at the list the swing will land in); session mode uses it to take them there, because
+ * an uploaded clip is not part of the session they are standing in the middle of.
+ */
+export function useImportSwing(
+  sessions: readonly SessionSummary[],
+  onSaved?: () => void,
+): ImportHook {
   const toast = useToast();
   const handedness = useHandedness();
   const [pending, setPending] = useState<PickedClip | null>(null);
@@ -228,14 +237,24 @@ export function useImportSwing(sessions: readonly SessionSummary[]): ImportHook 
             { ...clip, uri: path, durationMs: Math.round((endSec - startSec) * 1000) },
             view,
           );
-        } catch {
+          // Only once the run is actually away — a trim that threw lands in the catch below,
+          // where nothing was uploaded and moving the golfer somewhere else would be a lie.
+          onSaved?.();
+        } catch (err) {
           // Trim failed: the picked clip is still in the golfer's library, so nothing is lost —
           // but silently uploading minutes of footage they just cut down to five seconds is not
           // the fallback they asked for. Say it and let them retry.
+          //
+          // The native reason is CARRIED, not swallowed: "Couldn't trim that clip" alone named
+          // no cause and left the only copy of the truth in a logcat nobody was reading
+          // (2026-08-23). MediaMuxer's complaints are specific — an unsupported track, a
+          // missing file, an empty window — and each wants a different response.
+          const reason = err instanceof Error ? err.message : String(err);
+          console.error(`trimClip failed for ${current.take.path}:`, err);
           toast({
             id: "import-trim-failed",
             title: "Couldn't trim that clip",
-            detail: "Nothing was uploaded. Pick it again to retry.",
+            detail: `${reason} — nothing was uploaded.`,
             icon: VideoOff,
           });
         } finally {
@@ -244,7 +263,7 @@ export function useImportSwing(sessions: readonly SessionSummary[]): ImportHook 
         }
       })();
     },
-    [reviewing, run, savingReview, toast],
+    [onSaved, reviewing, run, savingReview, toast],
   );
 
   const discardReview = useCallback(() => setReviewing(null), []);

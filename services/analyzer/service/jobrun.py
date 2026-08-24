@@ -31,6 +31,7 @@ import sys
 import tempfile
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -138,11 +139,34 @@ def http_send(
         return e.code, e.read()
 
 
+class _DropAuthAcrossHosts(urllib.request.HTTPRedirectHandler):
+    """Follow the source route's 307, but never carry our bearer to another host.
+
+    The app answers `/source` with a redirect to a PRESIGNED storage URL, which authenticates
+    entirely in its query string. urllib re-sends every original header on a redirect, so the
+    job token arrived at R2 as a second, contradictory credential and S3 rejected the request
+    outright — `HTTP Error 400` at the first byte of the first hosted swing (2026-08-23).
+    Supabase Storage happened to ignore the stray header, which is why this surfaced only
+    after production media moved to R2.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is None:
+            return None
+        if urllib.parse.urlsplit(newurl).netloc != urllib.parse.urlsplit(req.full_url).netloc:
+            for store in (new.headers, new.unredirected_hdrs):
+                for key in [k for k in store if k.lower() == "authorization"]:
+                    store.pop(key)
+        return new
+
+
 def download(url: str, token: str, dest: Path, timeout_s: float = 300.0) -> None:
     """Stream the source clip to disk. Redirects (a signed-URL 307) are followed."""
     req = urllib.request.Request(url, method="GET")
     req.add_header("Authorization", f"Bearer {token}")
-    with urllib.request.urlopen(req, timeout=timeout_s) as resp:
+    opener = urllib.request.build_opener(_DropAuthAcrossHosts)
+    with opener.open(req, timeout=timeout_s) as resp:
         if resp.status != 200:
             raise RuntimeError(f"source download returned {resp.status}")
         with dest.open("wb") as f:

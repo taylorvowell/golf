@@ -247,3 +247,38 @@ class TestRunQueueJob:
             clock["t"] += 0.5
         # 5 seconds of half-second ticks at a 2s throttle -> 3 posts, not 10
         assert len(rec.events()) == 3
+
+
+class TestRedirectAuth:
+    """The bearer must not follow the source redirect to storage.
+
+    A presigned URL authenticates in its query string; an extra `Authorization` header makes
+    S3/R2 reject the request with 400 — which is exactly how the first hosted swing died
+    (2026-08-23), after the source download had otherwise worked all year against Supabase
+    Storage, which ignored the stray header.
+    """
+
+    def _handler(self):
+        from service.jobrun import _DropAuthAcrossHosts
+        return _DropAuthAcrossHosts()
+
+    def _req(self):
+        import urllib.request
+        req = urllib.request.Request("https://app.example.com/api/internal/jobs/1/source")
+        req.add_header("Authorization", "Bearer job-token")
+        return req
+
+    def test_bearer_is_dropped_when_the_redirect_leaves_our_host(self):
+        new = self._handler().redirect_request(
+            self._req(), None, 307, "Temporary Redirect", {},
+            "https://acct.r2.cloudflarestorage.com/swing-source/x?X-Amz-Signature=abc",
+        )
+        assert [k for k in new.headers if k.lower() == "authorization"] == []
+        assert [k for k in new.unredirected_hdrs if k.lower() == "authorization"] == []
+
+    def test_bearer_survives_a_redirect_within_our_own_host(self):
+        new = self._handler().redirect_request(
+            self._req(), None, 307, "Temporary Redirect", {},
+            "https://app.example.com/api/internal/jobs/1/source-v2",
+        )
+        assert [k for k in new.headers if k.lower() == "authorization"] == ["Authorization"]
