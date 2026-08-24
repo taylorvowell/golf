@@ -90,12 +90,79 @@ def probe(path: str | Path) -> VideoInfo:
     )
 
 
-def normalize(src: str | Path, dst: str | Path, short_side: int, fps: int = 60) -> VideoInfo:
+def probe_capture_fps(path: str | Path) -> float:
+    """The `com.android.capture.fps` stamp, or 0.0 — the slow-motion truth of a phone clip.
+
+    A phone slow-mo is CAPTURED at 240 and WRITTEN at 30: every container fact (fps, duration,
+    timestamps) describes the slowed playback, and only this tag records what the sensor did.
+    Deliberately NOT a `VideoInfo` field: that dict flows into the artifact, and the retime
+    decision (below, in the pipeline) already re-expresses the truth as the normalized clip's
+    honest fps — a second copy of the number would be a second thing to keep agreeing.
+    """
+    try:
+        out = subprocess.run(
+            [FFPROBE, "-v", "error", "-select_streams", "v:0", "-print_format", "json",
+             "-show_entries", "stream_tags:format_tags", str(path)],
+            capture_output=True, text=True, check=True,
+        ).stdout
+        data = json.loads(out)
+        tags = (data.get("streams") or [{}])[0].get("tags") or {}
+        tags = {**(data.get("format", {}).get("tags") or {}), **tags}
+        return float(tags.get("com.android.capture.fps") or 0.0)
+    except Exception:  # noqa: BLE001 — metadata is advisory, never fatal
+        return 0.0
+
+
+def retime_factor(info: VideoInfo, capture_fps: float) -> float | None:
+    """The `-itsscale` multiplier that puts a slow-motion clip back on the world's clock,
+    or None for a real-time clip.
+
+    None (not 1.0) is the common answer on purpose: retiming is an exceptional transform and
+    every consumer branches on whether it happened. The 1.5× threshold keeps rounding noise
+    (a 29.97 container with a 30 stamp) from ever counting as slow motion.
+    """
+    if capture_fps <= 0 or info.fps <= 0:
+        return None
+    if capture_fps < info.fps * 1.5:
+        return None
+    return info.fps / capture_fps
+
+
+def cfr_target_fps(info: VideoInfo) -> int:
+    """The CFR rate a source normalizes to: its own capture rate, snapped to a clean step.
+
+    60 was the only answer until the in-app recorder arrived. Its takes carry 120/240 real
+    sensor frames on a REAL-TIME timeline, and resampling those to 60 silently discards
+    3 of every 4 observations — the exact footage the ≥60fps capture constraint exists to
+    keep (a 2s take at 240 is ~480 frames, the same work as an 8s fixture at 60, so the old
+    cap was not protecting compute either). Slow-motion playback needs no retime: the player
+    presents the same CFR file slower, and at ≤¼x every sensor frame reaches the screen.
+
+    Snapped to {240, 120, 60}, never the raw probe: a healthy 240 take probes ~237.6 avg
+    (the HAL's real cadence), and frame = round(t * fps) needs the container's honest nominal
+    rate, not that measurement. The 5fps tolerance accepts those real-world rates without
+    ever promoting a 60fps source.
+    """
+    rate = max(info.nominal_fps or 0.0, info.fps or 0.0)
+    for step in (240, 120):
+        if rate >= step - 5:
+            return step
+    return 60
+
+
+def normalize(
+    src: str | Path, dst: str | Path, short_side: int, fps: int = 60,
+    itsscale: float | None = None,
+) -> VideoInfo:
     """Transcode to CFR H.264 8-bit with rotation baked in and the short side scaled.
 
     ffmpeg applies the display matrix during decode, so the scale filter sees the upright
     frame; we then strip the rotation metadata so nothing double-applies it downstream.
     `-fps_mode cfr` replaces the deprecated `-vsync cfr` (ffmpeg 8.x).
+
+    `itsscale` (see `retime_factor`) multiplies the SOURCE timestamps before the CFR resample
+    — the slow-motion retime. It must precede `-i`; the same recipe `scripts/trimswing.py` has
+    always applied by hand to phone slow-mo, now in the one place every clip passes through.
 
     The GOP is forced to 10 frames. libx264's default 250 put two keyframes in a whole
     6s clip, which made every browser seek decode up to 250 frames of 1080p and froze the
@@ -117,8 +184,9 @@ def normalize(src: str | Path, dst: str | Path, short_side: int, fps: int = 60) 
           f"h=if(lt(iw\\,ih)\\,-2\\,{short_side}):"
           f"force_original_aspect_ratio=decrease:force_divisible_by=2")
 
+    retime = ["-itsscale", f"{itsscale:.10f}"] if itsscale else []
     subprocess.run(
-        [FFMPEG, "-y", "-loglevel", "error", "-i", str(src),
+        [FFMPEG, "-y", "-loglevel", "error", *retime, "-i", str(src),
          "-vf", vf, "-fps_mode", "cfr", "-r", str(fps),
          "-c:v", "libx264", "-preset", "medium", "-crf", "18",
          "-g", "10", "-keyint_min", "10", "-sc_threshold", "0",

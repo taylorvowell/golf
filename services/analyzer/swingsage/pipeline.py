@@ -27,8 +27,8 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Callable, Optional
 
-from . import (checkpoints, club, club_detect, clubpath, contract, events, face, metrics,
-               pose, pose_rtm, postprocess, render, scoring, silhouette,
+from . import (audio_impact, checkpoints, club, club_detect, clubpath, contract, events,
+               face, metrics, pose, pose_rtm, postprocess, render, scoring, silhouette,
                source_timing, video)
 from .skeleton import KEYPOINT_NAMES, strip_derived
 
@@ -70,7 +70,7 @@ from .skeleton import KEYPOINT_NAMES, strip_derived
 #      are the same length. The window itself is now pinned to address-1s .. finish+1s, where
 #      it used to run on to a second past the golfer settling — faithful to one swing, and
 #      inconsistent across the several a comparison puts side by side.
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 # What each version added, so the player can say what re-analysing would actually get you
 # rather than just reporting a number mismatch.
@@ -203,6 +203,30 @@ class OutputLock:
         return False
 
 
+#: How far the video-side Impact may sit from the heard strike and still count as agreement.
+#:
+#: Generous on purpose, and asymmetric in spirit: the audio is expected to land LATE by the
+#: recording pipeline's latency, which was 121-148 ms on every clip it has been measured on. A
+#: quarter of a second covers that plus a frame or two of labelling slack, so `agrees: false`
+#: means the two witnesses are describing different events rather than the same one imprecisely.
+AUDIO_AGREE_TOLERANCE_S = 0.25
+
+
+def _audio_impact_doc(heard, impact_frame: int, fps: float) -> dict | None:
+    """The heard strike as it goes into the artifact, or None when nothing was heard."""
+    if heard is None or fps <= 0:
+        return None
+    frame = int(round(heard.time_sec * fps))
+    delta = impact_frame - frame
+    return {
+        "frame": max(0, frame),
+        "time_sec": round(heard.time_sec, 3),
+        "confidence": round(heard.confidence, 3),
+        "agrees": abs(delta) <= AUDIO_AGREE_TOLERANCE_S * fps,
+        "delta_frames": delta,
+    }
+
+
 def _alive(pid: int) -> bool:
     """Is this pid running? Windows has no signal-0 trick, so ask the OS directly."""
     if os.name == "nt":
@@ -280,9 +304,27 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
 
         emit("stage_started", "normalize")
         t = time.time()
-        norm = video.normalize(src, out / "normalized.mp4", short_side=1080, fps=60)
+        # A phone slow-mo (captured 240, WRITTEN 30) is put back on the world's clock here —
+        # the com.android.capture.fps stamp is the only record of what the sensor did, and
+        # analysing the slowed file measures a swing that appears to take twenty seconds
+        # (every tempo and velocity number 8x wrong, found on the first hosted import,
+        # 2026-08-23). The retimed clip then normalizes at its TRUE rate, so nothing
+        # downstream knows the file was ever slow.
+        capture_fps = video.probe_capture_fps(src)
+        retime = video.retime_factor(src_info, capture_fps)
+        if retime:
+            print(f"retime     slow-motion source: capture {capture_fps:.0f}fps written at "
+                  f"{src_info.fps:.3f} — timestamps x{retime:.6f}")
+            src_info.fps = capture_fps
+            src_info.nominal_fps = capture_fps
+        # The capture rate, not a hardcoded 60: a 240fps in-app take keeps all its frames and
+        # the player gets frame-true slow motion for free (see video.cfr_target_fps).
+        target_fps = video.cfr_target_fps(src_info)
+        norm = video.normalize(src, out / "normalized.mp4", short_side=1080, fps=target_fps,
+                               itsscale=retime)
         anal = video.normalize(src, out / "analysis.mp4",
-                               short_side=req.analysis_short_side, fps=60)
+                               short_side=req.analysis_short_side, fps=target_fps,
+                               itsscale=retime)
         print(f"normalized {norm.width}x{norm.height} @ {norm.fps:.3f} "
               f"frames={norm.frame_count} | analysis {anal.width}x{anal.height} "
               f"({time.time() - t:.1f}s)")
@@ -291,7 +333,12 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
 
         # Source timing sidecar: what the camera actually observed, before the CFR
         # resample rewrote it. Degrades to a warning — the pipeline never fails over metadata.
+        # A RETIMED clip skips it: the sidecar maps SOURCE timestamps onto output frames, and
+        # after itsscale those live on different clocks — a map built across them would be
+        # confidently wrong rather than absent.
         try:
+            if retime:
+                raise RuntimeError("slow-motion retime applied; source timestamps are on the slowed clock")
             timing = source_timing.build(src, out_fps=norm.fps,
                                          out_frame_count=norm.frame_count)
             source_timing.write_sidecar(timing, out)
@@ -305,6 +352,28 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
             print(f"           ! source timing failed ({e}); "
                   f"{source_timing.SIDECAR_NAME} skipped")
             warn("timing", f"source timing failed ({e}); {source_timing.SIDECAR_NAME} skipped")
+
+        # --- Stage 0c: the strike, HEARD -------------------------------------------------
+        # Read off the SOURCE, not the normalized copy: `video.normalize` passes `-an`, so the
+        # analysis clip has no audio at all. Normalization never trims, so a source timestamp and
+        # a normalized one mean the same instant and the frame index below is simply t x fps.
+        #
+        # Advisory in exactly the way the timing sidecar is — an unreadable or silent track is a
+        # normal answer, and nothing downstream is allowed to need this.
+        heard = None
+        try:
+            heard = audio_impact.heard_impact(src)
+            # The witness listened to the SOURCE, whose clock the retime just rescaled — its
+            # timestamp moves onto the normalized clock with the same factor, or the agreement
+            # check below would compare seconds from two different worlds.
+            if heard and retime:
+                heard = replace(heard, time_sec=heard.time_sec * retime)
+            print("audio      "
+                  + (f"strike heard at {heard.time_sec:.3f}s "
+                     f"(confidence {heard.confidence:.2f})" if heard else "no strike heard"))
+        except Exception as e:  # noqa: BLE001 - a second witness is never load-bearing
+            print(f"           ! audio impact detection failed ({e}); continuing without it")
+            warn("audio", f"audio impact detection failed ({e})")
 
         # --- Stage 2: pose --------------------------------------------------------------
         # One reporter for every per-frame loop (both pose passes, the detector, the club
@@ -932,6 +1001,16 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
             # The player holds a freeze frame for these so every swing's lead-in and follow-out are
             # the same length whatever the footage gives (schema 7).
             "playback_pad": ev.get("playback_pad") or [0, 0],
+            # The strike as HEARD - a second witness to Impact that shares none of the video
+            # side's failure modes, because it is not reading the pixels. It moves nothing: audio
+            # carries the recording pipeline's latency (121-148 ms measured on five stock-camera
+            # takes, never measured on SwingSage's own recorder) and video wins on precision.
+            #
+            # `agrees` is what this is FOR. A renderer that draws phase bands can dim them when
+            # the two witnesses disagree instead of drawing a confident wrong answer - and on the
+            # 7wood-1 fixture they disagree by about forty frames, which is the stored Impact
+            # being late, not the microphone.
+            "audio_impact": _audio_impact_doc(heard, ev["events"]["impact"]["frame"], norm.fps),
             # The quasi-static hold that ends at the address event. Setup measurements are
             # medians over this span rather than samples of its last frame.
             "address_span": ev.get("address_span"),

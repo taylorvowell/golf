@@ -314,11 +314,23 @@ async function warmBundle() {
  * `adb reverse` forwards the device's own `127.0.0.1:8082` back down the debug transport, so the
  * route is the USB/adb link rather than the network. It works over wireless debugging too.
  * Returns the host the device should use, LAN address as the fallback when reverse is refused.
+ *
+ * **A reverse is per-CONNECTION, and wireless debugging changes port on every reconnect** — so a
+ * phone that dropped and was re-found mid-session has a live adb link with NO tunnel on it. The
+ * app then foregrounds, finds nothing at 127.0.0.1:8082 and quietly sits on its cached bundle:
+ * "running, connected, and none of my changes are there" (2026-08-23). The mapping is therefore
+ * VERIFIED here rather than assumed, and re-created when it is missing.
  */
 function tunnelHost(target, lan) {
   const out = quiet("adb", ["-s", target, "reverse", `tcp:${METRO_PORT}`, `tcp:${METRO_PORT}`]);
   if (out === null) {
     ok(`adb reverse unavailable — falling back to ${lan} (a VPN on the phone will break this)`);
+    return lan;
+  }
+  // `reverse` answering is not proof the mapping is there — ask for the list back.
+  const list = quiet("adb", ["-s", target, "reverse", "--list"]) ?? "";
+  if (!list.includes(`tcp:${METRO_PORT}`)) {
+    ok(`adb reverse did not stick — falling back to ${lan}`);
     return lan;
   }
   ok("Metro tunnelled to the device's own localhost (survives VPN / Wi-Fi changes)");
