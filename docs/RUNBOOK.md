@@ -316,6 +316,43 @@ the door (Modal caps web requests at ~150s), so QStash retries cover only failur
 mid-run infra failures are retried by Modal itself, and a job that still dies is settled by
 the step-05 heartbeat sweep. `docs/decisions/platform-data.md` has the full taxonomy.
 
+### Two modes on the phone, and switching between them
+
+**Both modes use the PRODUCTION backends.** Dev mode does not mean local anything: the API
+base is `EXPO_PUBLIC_API_BASE_URL` in `apps/mobile/.env`, pointed at the Vercel deployment
+(Taylor, 2026-08-23 — *"I don't ever want to test against local shit"*), so the dev client
+hits the same Vercel → `swingsage-prod` → R2 → Modal path the release build does. The only
+difference between the modes is where the JAVASCRIPT comes from.
+
+| Situation | Command | What you get |
+|---|---|---|
+| At the desk, iterating on UI | `pnpm --filter mobile phone` | Metro + **fast refresh**; edit, save, see it |
+| Going to the simulator | `pnpm --filter mobile phone:release` | Standalone APK, PC can be off |
+
+Switching is just running the other command — same package, same debug-keystore signature, so
+**the session and app data survive the swap** and Google sign-in keeps working. Add `:native`
+to the dev command after a Kotlin/`app.json` change.
+
+They cannot both be installed at once today: a side-by-side debug variant needs its own
+applicationId, which needs its own Google OAuth Android client (a Console visit — the
+optional HANDOFF row). Until then it is one at a time, one command apart.
+
+### The release build on the phone — off-LAN, no Metro
+
+One command, phone connected (`node scripts/adb-phone.mjs` finds it first if not):
+
+```bash
+pnpm --filter mobile phone:release
+```
+
+It builds `assembleRelease` with a fresh build stamp baked into the JS, **verifies the stamp
+is inside the APK's bundle** (gradle has skipped re-bundling past real changes — the stale
+build reads exactly like "my change has no effect"), installs over the existing app (same
+debug-keystore signature: data and sign-in survive), and force-stop + relaunches. The
+relaunch is the reload — release builds have no dev menu. `.env`'s
+`EXPO_PUBLIC_API_BASE_URL` points at production (Taylor, 2026-08-23: no more local backends
+for phone use).
+
 ### The deployed web app — Vercel production (www.swingsage.io)
 
 One command, from the repo root:

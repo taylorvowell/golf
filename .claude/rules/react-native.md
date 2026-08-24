@@ -13,24 +13,59 @@ the register wins.
 
 ## Before you write against a platform API, LOOK IT UP
 
-Three of 2026-08-22's long detours were documented behaviour that was inferred instead of read.
+Several of 2026-08-22's long detours were documented behaviour that was inferred instead of read.
 Each cost multiple device round-trips and each was one query away.
 
 - **`docs-researcher` / context7 before coding an external API you have not used this week** —
   `expo-video`, `expo-camera`, media3, Reanimated, RN's `Animated`. The rule already exists for
   Next/Drizzle/MediaPipe; it applies just as hard to anything under `apps/mobile`.
-- **The three that were paid for in device round-trips, so nobody pays again:**
+- **The ones that were paid for in device round-trips, so nobody pays again:**
   - **A `SurfaceView` cannot be clipped, rounded, or reliably stacked.** It is composited by the
     platform OUTSIDE the view hierarchy, so a parent's `overflow: hidden` never reaches it and a
     `borderRadius` on it does nothing. Both video components in this app default to one. Pass
     `surfaceType="textureView"` on any video that must have rounded corners, sit under an overlay,
-    or share a screen with another video. Hit twice: `FrameClockView` (an invisible preview) and
-    `expo-video` (corners that would not round).
+    **or live on a screen that moves** — a surface view ignores its ancestors' transforms too, so a
+    page that slides sideways leaves its own video behind, painting in place. Hit three times:
+    `FrameClockView` (an invisible preview), `expo-video` (corners that would not round), and the
+    report player (2026-08-22 — a swipe between swings flickered the previous swing for two days
+    of wrong fixes, because the layer at fault was not in the view tree the fixes were editing).
+    **Every video in this app now passes it; there is no remaining case for the default.**
   - **Never mix `useNativeDriver: true` and `false` values in one style object.** Layout properties
     (`width`, `height`, `top`, `left`) cannot use the native driver, so pairing them with a
     native-driven `opacity` or `transform` makes React Native reject the layout props outright —
     *"style property 'top' is not supported by native animated module"* — and the animation simply
     never happens. Pick one driver per view.
+  - **A `ScrollView` takes taps away from the controls inside it by TWO routes, and
+    `scrollEnabled={false}` closes only one.** (1) *Native*: `onInterceptTouchEvent` sets
+    `mIsBeingDragged = !mScroller.isFinished()` on the touch DOWN, cancelling the press to stop a
+    scroll that was not moving — this one `scrollEnabled` does gate. (2) *JavaScript*:
+    `ScrollView._handleStartShouldSetResponderCapture` claims the gesture in the CAPTURE phase,
+    before any descendant is offered it, while the view counts as animating or to spend the tap
+    dismissing a keyboard — `scrollEnabled` does **not** gate this, and the prop that would
+    (`onStartShouldSetResponderCapture`) is overwritten by ScrollView's own handler, so it cannot
+    be switched off from outside. On glass both look the same: the row lights up under the finger,
+    nothing happens, and the next tap works ("I have to tap into the card first"). That was "some
+    buttons need two taps" on the slide-up sheets (2026-08-22). **A surface with nothing to scroll
+    must not contain a ScrollView at all** — `Sheet`/`DeckSheet` render a plain View unless the
+    panel measured at its `maxHeightFraction` cap, and where one is genuinely needed it carries
+    `keyboardShouldPersistTaps="handled"` + `disableScrollViewPanResponder`.
+  - **A `Modal`'s window does not receive input the instant React mounts it.** For a frame or two
+    after mount, touches are still delivered to the window UNDERNEATH — the host screen — so a tap
+    aimed at a sheet that has just opened fires whatever host control sits behind it (measured:
+    a tap on the delete sheet opened the swing log). `Sheet`/`DeckSheet` render the Modal in the
+    same commit `visible` turns true and mount a full-screen responder guard in the HOST tree to
+    absorb the gap; any new Modal-backed surface needs both.
+  - **A panel that is sliding out must not read live props.** By the time the exit animation runs
+    the caller's state has moved on — the row being confirmed is `null`, the branch has changed —
+    so live props rewrite the panel in front of the user (`Delete Swing 3?` became the fallback
+    `Delete this swing?` mid-dismissal). `Sheet`/`DeckSheet` latch title, subtitle, accessory and
+    children while `visible` and replay them through the exit.
+  - **`expo-image` recycles native views, and a recycled view shows its PREVIOUS bitmap until the
+    new source decodes.** An `Image` mounted right after another one unmounted (list rows, a
+    swapped page's poster) can flash the *last* image for a beat — on the swing page that read as
+    "the previous swing flickers during a swipe" and survived three unrelated fixes. Pass
+    `recyclingKey` (the swing/entity id) on any expo-image whose view can be reused across
+    different content.
   - **A parent that sizes itself from an animated child measures zero, and a zero-sized parent
     receives no touches on Android.** Give the press target explicit dimensions, or make it
     `StyleSheet.absoluteFill` inside a sized box, so the tappable area is by construction the
@@ -144,6 +179,14 @@ along.
   Kotlin or `app.json` change; `emu` / `emu:native` for the AVD. It is
   `apps/mobile/scripts/dev-device.mjs`, and it is the single code path — a second copy of this
   logic lived in the `/emulator` skill, hardcoded the old port, and drifted.
+- **`pnpm --filter mobile phone:release` is the ONLY way to put a RELEASE build on the phone**
+  (`apps/mobile/scripts/release-device.mjs`). Never hand-roll `gradlew assembleRelease` + `adb
+  install`: gradle's JS bundling task goes "up-to-date" past real code changes, and on
+  2026-08-23 a whole batch of UI fixes shipped inside LAST WEEK'S bundle — every symptom read
+  as "my change has no effect". The script deletes the cached bundle outputs, bakes a fresh
+  `EXPO_PUBLIC_BUILD_STAMP` (inlined via `src/platform/buildStamp.ts`), **refuses to install
+  any APK whose bundle lacks the stamp**, then installs `-r` and force-stop + relaunches — a
+  release build has no reload gesture, so the relaunch IS the reload.
 - **Never `adb install` an APK by hand, and never `npx expo run:android`.** A raw install leaves
   the dev client with no server URL, so it opens `DevLauncherActivity` — the white screen. This
   has cost time more than once.
@@ -263,6 +306,23 @@ along.
   `shadowColor`/`shadowOffset`/`shadowOpacity`/`elevation` or a non-`inset` `boxShadow` is the same
   violation by another route. Deck's `boxShadow` arrays are **inset only**; `DeckButton.test.tsx`
   pins that. A control whose only visual was its border or shadow gets a fill, never the edge back.
+- **Anything tappable shows a TAP STATE. No exceptions, and it is checked on every component you
+  touch** (Taylor, 2026-08-22). A phone has no hover and no cursor, so the pressed state is the
+  only signal that a finger landed on the thing it was aimed at — and a control that answers only
+  when its *result* arrives is indistinguishable from a dead one for as long as the work takes.
+  Every `Pressable` therefore uses the `({ pressed })` style callback, or `PRESS_SUNK`/the design
+  system's press idiom. Two shapes, and which one is not a preference:
+  - **On a themed surface, the press is a FILL step up the ramp** (`surface` → `surface2` →
+    `surface3`), optionally with a slight `scale` compression. Never opacity — the flat rule owns
+    this, and a translucent control over a themed background reads as disabled rather than held.
+  - **Over the CAMERA PICTURE or a video**, where there is no ramp behind the control, the press is
+    `opacity: 0.7` on the glass. That is the same carve-out `CONTROL_EDGE` gets, for the same
+    reason: the background is footage, not a surface.
+  - A **selected** state is not a tap state. A segmented control's inactive segment must still
+    answer the press, or half the control reads as dead until the selection moves.
+  - The only exemptions are surfaces with **nothing to show**: a full-screen dismiss scrim, and a
+    transparent hit area over content that reacts some other way (the player's picture, which
+    plays its own tap feedback). If you exempt one, say why at the site.
 - **Every interactive control is accessible**: role, label, state; drag-only surfaces get
   `adjustable` + `accessibilityValue` + increment/decrement actions (scrub), or explicit
   screen-reader buttons (DeckSheet's pattern). 48 pt touch targets via hitSlop where the drawn

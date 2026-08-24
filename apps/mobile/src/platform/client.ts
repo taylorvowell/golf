@@ -1,5 +1,10 @@
 import { currentAccessToken } from "../features/auth/AuthProvider";
 import { ApiClient } from "./api";
+// Referenced so the stamp is inlined into every bundle — the staleness tripwire
+// release-device.mjs checks for. Never remove as "unused".
+import { BUILD_STAMP } from "./buildStamp";
+
+void BUILD_STAMP;
 
 /**
  * The app's one API client, already carrying the signed-in session.

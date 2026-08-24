@@ -95,6 +95,29 @@ jest.mock("./modules/high-speed-camera/src/HighSpeedCameraView", () => {
 });
 
 /**
+ * The module INDEX throws the same way (`requireNativeModule` at import), and the swing log
+ * now reaches it through the import review pass. Benign fakes: detection hears nothing (the
+ * review screen's fallback mark is a designed state), the cutter answers with its input.
+ */
+jest.mock("./modules/high-speed-camera/src", () => {
+  // No requireActual: the real index calls `requireNativeModule` at import, which is the very
+  // throw this mock exists to avoid. The runtime constants SwingReview reads are restated.
+  const IMPACT_METHODS = ["swish", "hf", "flux", "wideband"];
+  return {
+    __esModule: true,
+    IMPACT_METHODS,
+    IMPACT_METHOD_LABELS: Object.fromEntries(IMPACT_METHODS.map((m) => [m, m])),
+    default: {
+      detectImpacts: jest.fn().mockResolvedValue([]),
+      clipThumbnails: jest.fn().mockResolvedValue([]),
+      trimClip: jest.fn().mockImplementation((path) => Promise.resolve({ path })),
+      deleteClip: jest.fn().mockResolvedValue(undefined),
+      probeClip: jest.fn().mockResolvedValue({ captureFps: 0, videoFps: 30, durationMs: 5000 }),
+    },
+  };
+});
+
+/**
  * `expo-video` is a native module: `useVideoPlayer` reaches for a real player at import time and
  * throws under jest. The stand-in is a plain object whose properties can be written and read, so a
  * test can assert what the preview asked the player to do (seek, rate, muted) without a device.
