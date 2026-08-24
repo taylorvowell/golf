@@ -16,7 +16,7 @@ what dev mode means here.
 | He says | Mode | Why |
 |---|---|---|
 | "local dev", "switch to dev", "fast refresh", "I'm back at the desk", "let's iterate" | **DEV** | Metro serves the JS; edits appear in seconds |
-| "remote dev", "going to the sim/range", "make it portable", "I want to take it with me", "install it properly" | **PORTABLE** | Standalone APK; the PC can be off |
+| "remote dev", "going to the sim/range", "make it portable", "I want to take it with me", "install it properly" | **PORTABLE** | Standalone APK; the phone needs nothing from this PC |
 
 If genuinely ambiguous, ask once — but prefer the reading above; "dev" alone means DEV.
 
@@ -42,7 +42,7 @@ pnpm --filter mobile phone:release
 
 That is the whole switch. Same package and the same debug-keystore signature, so **the
 session, the app data and Google sign-in survive** every swap. Report which mode is now live
-and what it means for him (fast refresh on / PC can be off).
+and what it means for him (fast refresh on / the phone is now self-sufficient).
 
 ## What each mode actually is
 
