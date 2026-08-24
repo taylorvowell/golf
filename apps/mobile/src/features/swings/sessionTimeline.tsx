@@ -112,13 +112,18 @@ function serverStage(status: string): { stage: string; stageIndex: number } {
  * wondering what they did wrong. `onPress` is therefore never set here; the row only becomes a
  * door once it is a real swing in `sessionSwingItems`.
  *
- * A run that FAILS leaves this list entirely rather than turning red in it (Taylor, 2026-08-22):
- * the session list is where a golfer looks at their practice, not where they debug an upload.
- * The toast and the inbox carry the failure instead.
+ * **A run that FAILS stays here, in red, carrying its reason** — reversing the 2026-08-22 note
+ * that said it should leave and let the toast and inbox carry it. A toast is gone in four
+ * seconds and a golfer who starts an upload puts the phone down; on 2026-08-23 a failed import
+ * left an unchanged log and no way to find out what happened. A failure is not a swing that
+ * vanished, it is a swing that stopped, and the row is where they will look. It leaves when
+ * they tap it to dismiss, which is also what cleans up the empty swing behind it.
  */
 export function pendingSwingItems(
   session: Pick<SwingSession, "swings">,
   pending: readonly PendingImport[],
+  /** Tap a FAILED row to clear it. Absent = the row simply cannot be dismissed here. */
+  onDismiss?: (localId: string) => void,
 ): SwingTimelineItem[] {
   return [...pending].reverse().map((run, i) => ({
     key: run.localId,
@@ -127,10 +132,20 @@ export function pendingSwingItems(
     // ghost for the few hundred ms before that. Same box either way, so nothing on the line jumps
     // sideways when the picture arrives.
     leading: run.thumbPath ? <SwingThumbLocal path={run.thumbPath} /> : <SwingThumbGhost />,
-    // The staged track says where it is up to; a subtitle repeating the stage name under it
-    // would be the same fact twice.
-    progress: { stage: run.stage, stageIndex: run.stageIndex },
-    pending: true,
+    // A stopped run has no progress to draw — the reason takes the subtitle instead, and the
+    // row's only remaining action is to be dismissed.
+    ...(run.failure
+      ? {
+          failed: true,
+          subtitle: run.failure,
+          onPress: onDismiss ? () => onDismiss(run.localId) : undefined,
+        }
+      : {
+          // The staged track says where it is up to; a subtitle repeating the stage name under
+          // it would be the same fact twice.
+          progress: { stage: run.stage, stageIndex: run.stageIndex },
+          pending: true,
+        }),
     testID: `swing-pending-${run.localId}`,
   }));
 }

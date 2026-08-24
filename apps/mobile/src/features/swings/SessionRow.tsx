@@ -36,6 +36,7 @@ export function SessionRow({
   onDeleteSwing,
   pending = [],
   removingId = null,
+  onDismissPending,
 }: {
   session: SwingSession;
   /** Controlled by the log — one accordion is open at a time, and any of them may be shut. */
@@ -46,6 +47,8 @@ export function SessionRow({
   onDeleteSwing: (swing: SwingSummary, number: number) => void;
   /** Imports still arriving into this session — drawn above the real swings, mid-pipeline. */
   pending?: readonly PendingImport[];
+  /** Tap a failed import row to clear it — see pendingSwingItems. */
+  onDismissPending?: (localId: string) => void;
   /** The swing being deleted — it animates out of the list before it unmounts. */
   removingId?: string | null;
 }) {
@@ -125,7 +128,7 @@ export function SessionRow({
           <SwingTimelineList
             compact
             items={[
-              ...pendingSwingItems(session, pending),
+              ...pendingSwingItems(session, pending, onDismissPending),
               ...sessionSwingItems(
                 session,
                 onOpenSwing,

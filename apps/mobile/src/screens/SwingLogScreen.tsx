@@ -26,7 +26,7 @@ import { NotificationBell } from "../features/notifications/NotificationBell";
 import { LatestSessionCard } from "../features/swings/LatestSessionCard";
 import { SessionRow } from "../features/swings/SessionRow";
 import { logStats, mergeByDay, sessionize, type SwingSession } from "../features/swings/sessions";
-import { cancelImportForSwing, usePendingImports, type PendingImport } from "../features/swings/pendingImports";
+import { cancelImportForSwing, dismissImport, usePendingImports, type PendingImport } from "../features/swings/pendingImports";
 import { useSessions } from "../features/swings/useSessions";
 import { ImportSheet } from "../features/swings/ImportSheet";
 import { useImportSwing } from "../features/swings/useImportSwing";
@@ -427,6 +427,7 @@ export function SwingLogScreen() {
               onOpenSwing={(id) => navigation.navigate("SwingDetail", { id })}
               onDeleteSwing={(swing, number) => setPendingSwing({ swing, number })}
               pending={pendingFor(latest)}
+              onDismissPending={dismissImport}
               removingId={removingId}
             />
             {/* .log-v2-session-list — every row expands to the swings inside it. */}
@@ -441,6 +442,7 @@ export function SwingLogScreen() {
                     onOpenSwing={(id) => navigation.navigate("SwingDetail", { id })}
                     onDeleteSwing={(swing, number) => setPendingSwing({ swing, number })}
                     pending={pendingFor(session)}
+                    onDismissPending={dismissImport}
                     removingId={removingId}
                   />
                 ))}

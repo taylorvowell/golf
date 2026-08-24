@@ -34,6 +34,7 @@ export function LatestSessionCard({
   onOpenSwing,
   onDeleteSwing,
   pending = [],
+  onDismissPending,
   removingId = null,
 }: {
   session: SwingSession;
@@ -46,6 +47,8 @@ export function LatestSessionCard({
   onDeleteSwing: (swing: SwingSummary, number: number) => void;
   /** Imports still arriving into this session — drawn above the real swings, mid-pipeline. */
   pending?: readonly PendingImport[];
+  /** Tap a failed import row to clear it — see pendingSwingItems. */
+  onDismissPending?: (localId: string) => void;
   /** The swing being deleted — it animates out of the list before it unmounts. */
   removingId?: string | null;
 }) {
@@ -70,7 +73,7 @@ export function LatestSessionCard({
   });
 
   const items = [
-    ...pendingSwingItems(session, pending),
+    ...pendingSwingItems(session, pending, onDismissPending),
     ...sessionSwingItems(session, onOpenSwing, onDeleteSwing, removingId),
   ];
 

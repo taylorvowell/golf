@@ -11,6 +11,7 @@ jest.mock("../session/processing", () => ({
 
 import {
   clearPendingImports,
+  dismissImport,
   setOrphanCleanup,
   trackImport,
   usePendingImports,
@@ -78,13 +79,32 @@ it("tracks the stage while the run is still going", async () => {
   expect(result.current[0]).toMatchObject({ stage: "Analyzing pose", stageIndex: 2 });
 });
 
-it("takes a failed row straight off the log", async () => {
+it("KEEPS a failed row, carrying the reason", async () => {
+  // Reversed 2026-08-23. The row used to be removed and the toast left to explain — but a
+  // toast is gone in four seconds and a golfer who starts an upload puts the phone down, so a
+  // failed import left an unchanged log and no way to find out what happened. A failure is not
+  // a swing that vanished; it is a swing that stopped, and the row is where they look.
   const { result } = await renderHook(() => usePendingImports());
   await act(async () => {
     trackImport("import-3", "session-1", 1000);
   });
 
   await emit("failed", { message: "the upload was refused (400)", swingId: "swing-9" });
+
+  expect(result.current).toHaveLength(1);
+  expect(result.current[0]).toMatchObject({ failure: "the upload was refused (400)" });
+});
+
+it("clears a failed row when the golfer dismisses it", async () => {
+  const { result } = await renderHook(() => usePendingImports());
+  await act(async () => {
+    trackImport("import-3b", "session-1", 1000);
+  });
+  await emit("failed", { message: "nope", swingId: "swing-9b" });
+
+  await act(async () => {
+    dismissImport("import-3b");
+  });
 
   expect(result.current).toHaveLength(0);
 });
@@ -99,6 +119,11 @@ it("cleans up the empty swing when the clip never reached the server", async () 
 
   // Ingest minted the row and then the bytes did not land — a swing with no video, and never any.
   await emit("failed", { swingId: "swing-9", analysisStarted: false });
+  // Cleanup rides on DISMISSAL now that the row survives the failure: the empty swing goes when
+  // the golfer clears the row that stands for it, not the instant the run dies.
+  await act(async () => {
+    dismissImport("import-4");
+  });
 
   expect(orphans).toEqual(["swing-9"]);
 });

@@ -176,24 +176,52 @@ async function uploadSwingVideo(
 ): Promise<void> {
   const { url, headers } = await api.uploadTarget(upload.url, upload.headers);
 
-  let result: FileSystem.FileSystemUploadResult;
-  try {
-    result = await FileSystem.uploadAsync(url, toFileUri(clipPath), {
-      httpMethod: upload.method === "POST" ? "POST" : "PUT",
-      uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
-      headers,
-    });
-  } catch (err) {
-    // The first presigned-storage upload failed with a silent vanish (2026-08-23): the exception
-    // never left the toast. console.error survives release builds into logcat, which is the only
-    // eye anyone has on a production phone.
-    console.error(`upload transport failed for ${url.split("?")[0]}:`, err);
-    throw err;
+  /**
+   * Statuses worth sending the bytes again for. Everything else in 4xx is a statement about
+   * the request — a wrong content type, an expired signature — and repeating it changes
+   * nothing except how long the golfer waits to hear that.
+   */
+  const RETRYABLE = new Set([408, 425, 429, 500, 502, 503, 504, 507, 509]);
+  const ATTEMPTS = 3;
+
+  let result: FileSystem.FileSystemUploadResult | null = null;
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+    if (attempt > 0) {
+      // Exponential, and deliberately short: a phone on a range's edge-of-signal wifi drops
+      // one request and recovers, which is the case this is for. A real outage is the
+      // pipeline's problem, not something to hold a golfer's screen open through.
+      await sleep(1500 * 2 ** (attempt - 1));
+    }
+    try {
+      result = await FileSystem.uploadAsync(url, toFileUri(clipPath), {
+        httpMethod: upload.method === "POST" ? "POST" : "PUT",
+        uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+        headers,
+      });
+    } catch (err) {
+      // Never reached the far end: DNS, a refused socket, a connection dropped mid-body.
+      // Always worth another go — losing a whole swing to one lost packet is the failure
+      // this loop exists to prevent.
+      lastError = err;
+      console.error(`upload attempt ${attempt + 1} failed for ${url.split("?")[0]}:`, err);
+      result = null;
+      continue;
+    }
+    if (result.status >= 200 && result.status < 300) return;
+    if (!RETRYABLE.has(result.status)) break;
+    console.error(`upload attempt ${attempt + 1} got ${result.status}; retrying`);
   }
-  if (result.status < 200 || result.status >= 300) {
-    console.error(`upload refused ${result.status} from ${url.split("?")[0]}: ${result.body?.slice(0, 300)}`);
-    throw new Error(`the upload was refused (${result.status})`);
+
+  if (!result) {
+    throw lastError instanceof Error
+      ? lastError
+      : new Error(`the upload could not be sent (${String(lastError)})`);
   }
+  console.error(
+    `upload refused ${result.status} from ${url.split("?")[0]}: ${result.body?.slice(0, 300)}`,
+  );
+  throw new Error(`the upload was refused (${result.status})`);
 }
 
 /** The recorder writes bare absolute paths; the file APIs want a scheme. */

@@ -55,6 +55,14 @@ export interface PendingImport {
    * somebody's foot.
    */
   thumbPath: string | null;
+  /**
+   * Why this import failed, in the pipeline's own words — or null while it is still running.
+   *
+   * A failed run KEEPS its row (Taylor, 2026-08-22). The toast that used to carry this is gone
+   * in four seconds and a golfer who starts an upload puts the phone down; the row is where
+   * they will actually look, so the row is what has to answer. It leaves when they dismiss it.
+   */
+  failure: string | null;
 }
 
 const pending = new Map<string, PendingImport>();
@@ -90,6 +98,7 @@ export function trackImport(
     stageIndex: 0,
     swingId: null,
     thumbPath: null,
+    failure: null,
   });
   publish();
 
@@ -118,13 +127,16 @@ export function trackImport(
 
     if (run.phase === "failed") {
       off();
-      pending.delete(localId);
+      watchers.delete(localId);
+      // The row STAYS, carrying the reason. Deleting it here is what made a failure vanish with
+      // its toast, leaving a golfer with an unchanged log and no idea their swing never landed
+      // (2026-08-23). Cleanup of the empty server row moves to dismissal, below.
+      pending.set(localId, {
+        ...current,
+        swingId: run.swingId,
+        failure: run.message ?? "The analysis didn't finish.",
+      });
       publish();
-      // An upload that never landed leaves an empty swing behind — ingest mints the row before
-      // the bytes move. A swing with no video is not something to leave in a golfer's log, so it
-      // goes with the placeholder. A run that DID reach the analyzer is left alone: that swing
-      // has a video, and a failed analysis is never a reason to destroy footage.
-      if (!run.analysisStarted && run.swingId) onOrphan?.(run.swingId);
       return;
     }
 
@@ -221,6 +233,25 @@ const watchers = new Map<string, () => void>();
  * keeps running to its end (its uploads simply 404 against a swing that is gone, which the
  * job settles on its own); what stops immediately is the app claiming to show it.
  */
+/**
+ * The golfer clearing a failed import off their log.
+ *
+ * This is also where the empty swing goes. Ingest mints the row before the bytes move, so a
+ * run that never reached the analyzer left a swing with no video behind it — not something to
+ * leave in a log. A run that DID reach the analyzer keeps its swing: that one has footage, and
+ * a failed ANALYSIS is never a reason to destroy a golfer's video.
+ */
+export function dismissImport(localId: string): void {
+  const run = pending.get(localId);
+  if (!run) return;
+  watchers.get(localId)?.();
+  watchers.delete(localId);
+  pending.delete(localId);
+  publish();
+  const state = getProcessing(localId);
+  if (state && !state.analysisStarted && run.swingId) onOrphan?.(run.swingId);
+}
+
 export function cancelImportForSwing(swingId: string): void {
   for (const [localId, run] of pending) {
     if (run.swingId !== swingId) continue;

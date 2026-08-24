@@ -262,6 +262,22 @@ of something to keep re-tuning. Cropping is **vertical**: the sides of a golf fr
 and the ball, the top and bottom are sky and mat. The filmstrip follows the same rule from each
 thumbnail's own reported pixel size, centred so half the overhang goes above and half below.
 
+### A failed import KEEPS its row in the log, carrying the reason
+
+**Decision:** When an import fails, its placeholder row stays exactly where it was — painted
+red, with the pipeline's own sentence as its subtitle and no progress track — and leaves only
+when the golfer taps it to dismiss. Dismissal is also what cleans up the empty swing row
+ingest minted before the bytes moved (a run that DID reach the analyzer keeps its swing: that
+one has footage, and a failed analysis is never a reason to destroy a golfer's video).
+**Gotchas:** This REVERSES the earlier rule that a failed run left the list and let the toast
+and the inbox carry it. A toast is gone in four seconds and a golfer who starts an upload puts
+the phone down; on 2026-08-23 a failed import left an unchanged log and no way to find out what
+had happened. A failure is not a swing that vanished, it is a swing that stopped — moving it or
+hiding it makes the golfer wonder whether their video is gone. `SwingTimelineItem.failed` was
+built for exactly this and had never been wired; the store deleted the row before anything could
+render it. The row is still never a door: there is no swing to open, so its only action is to be
+cleared.
+
 ### The review screen keeps a frozen frame, a linear scrubber, and a corner preview
 
 **Decision:** the big picture is the scrub read-out — parked on whatever frame the mark sits on —
@@ -1202,23 +1218,59 @@ stop-at-end when off.
 show a tenth of the swing while calling it slow motion. `ReportPlayerBar` is gone; the two pieces
 live in `ReportTransport.tsx`.
 
-### The capture screen shows its rate: a picker while idle, the configured truth while recording
+### The capture screen records at the lens's highest rate, and shows what it resolved to
 
-**Decision (Taylor, 2026-08-23):** The capture surface carries a **capture-rate pill**
-(`FpsControl.tsx`), top right. Two faces. **Idle:** `FpsPicker` — what the next take will record
-at, defaulting to the highest rate the lens offers, tappable as a dropdown when there is a choice.
-Its options are exactly the native probe's fixed high-speed rates (`onCaptureConfig.rates`,
-reducer-validated) — never a hardcoded list, so it shows only what the device will really do.
-**Recording:** `FpsBadge` inside `RecordingFrame` — the rate the running take actually
-**configured** (the ladder's resolved answer from `startRecording`), never the request; null until
-the recorder reports. This is §2.3's no-silent-degrade rule made visible: a fallback shows its
-face on the screen where it happens, instead of surfacing days later in a report. The golfer's
-pick lives in session state (`fpsChoice`, null = highest) and feeds `useTakeRecorder`'s ceiling;
-a lens change that can no longer honour the pick reverts it to highest.
-**Gotchas:** The picker lives in the idle chrome so arming fades it — the recording badge is
-RecordingFrame's own. `fpsChoice` may only ever be a member of the probed `captureRates` (the
-zoom-range pattern: probed, never assumed). The recording badge clears when the mode leaves
-`recording`, so a previous take's rate can never flash over a new take still configuring.
+**Decision (Taylor, 2026-08-23):** Capture is **always the highest rate the open lens offers** —
+there is no picker and no stored choice. `useTakeRecorder` is handed `MAX_FPS_REQUEST` and the
+native ladder resolves what the device can actually honour. What that resolved to is shown while
+recording: `FpsBadge` (`FpsControl.tsx`) inside `RecordingFrame` carries the rate the running take
+was **configured** at, never the request, and nothing until the recorder reports. That is §2.3's
+no-silent-degrade rule made visible — a fallback shows its face on the screen where it happens,
+instead of surfacing days later in a report.
+**Scope:** A slow-motion product exists to record as fast as the phone can; a control offering a
+golfer a slower option was a way to get worse footage, and the rate is not a decision they came to
+the range to make. The idle capture chrome carries no rate at all.
+**Gotchas:** The badge clears when the mode leaves `recording`, so a previous take's rate can never
+flash over a new take still configuring. The native probe's `onCaptureConfig.rates` had no other
+consumer and went with the picker — reinstating any rate UI means re-probing, never a hardcoded
+list (the zoom-range pattern: probed, never assumed).
+
+### The swing log's two hero actions are one object drawn twice
+
+**Decision (Taylor, 2026-08-23):** Record and Upload on the swing log's title row share every
+metric, and the shared ones live in `HeroAction` rather than at the call sites — the label style
+already did, the **glyph did not**, so the plus was drawn at 15/2.6 beside an arrow at 14/2.4 and
+the pair read as two different buttons. `HERO_ICON` (14) and `HERO_ICON_STROKE` (2.4) are the
+standard; a call site passes the lucide component and nothing else.
+**Scope:** The capture screen's `UploadPill` wears the same glyph metrics, so Upload is one object
+wherever it appears — its chip is different because it floats over footage, not its icon.
+
+### The capture screen carries an Upload door
+
+**Decision (Taylor, 2026-08-23):** The capture surface has an **Upload pill** (`UploadPill.tsx`),
+top right under the header, running the swing log's own `useImportSwing` — picker → angle sheet →
+mark-impact review → upload, identical past the picker to a recorded take. A golfer holding a clip
+filmed elsewhere is standing on the camera screen, so the door belongs there too.
+**Scope:** A second door, never a second kind of swing: there is one ingest path (`importSwing.ts`)
+and the review Modal is the same `SwingReview` the recorder's take gets. **Saving an upload leaves
+for the swing log** (`useImportSwing`'s `onSaved`, fired only once the run is actually away) — the
+clip lands in the DAY's session, not the one being recorded here, so leaving the golfer on the
+camera would put their swing somewhere they are not looking. A recorded take is unaffected: it
+stays in the session and goes to the after-swing screen.
+**Gotchas:** Outlined, not filled — `rgba(11,16,28,0.28)` plus `CONTROL_EDGE`, the zoom rail's
+barely-there glass — because it is the secondary action on a surface whose subject is the record
+button. It lives in the idle chrome, so arming fades it. Its review is its own `Modal` above the
+camera surface, so this screen's chrome cannot float over the Save button.
+
+### The capture screen names nothing: no session title, no swing number
+
+**Decision (Taylor, 2026-08-23):** The capture and after-swing screens carry **no session name, no
+"New Session" pill and no swing-number heading**. Sessions are not something a golfer manages, so
+naming and renaming are gone end to end: no `SessionTitle`/`SessionHeading` component, no `rename`
+action, no `renamed` flag, and no `PATCH /sessions/:id` from the app.
+**Scope:** `createSession` always sends `name: null`, which is what keeps the swing log printing a
+date title. The reducer's `title` survives only as the app's own "Session N" numbering, said out
+loud once by the log's arrival card when a session ends.
 
 ### One player: the legacy SwingPlayer surface is deleted
 
@@ -1339,9 +1391,9 @@ moving rather than the swing changing.
 **Scope:** The standalone page only — the score circle stays on the after-swing screen
 (`scoreDoor`), where the score ARRIVING is the analysis finishing. Inside a session the swing list
 sheet is still how you move between swings: there the session, not the log, is the set you are in.
-The fps pill is the one frame-rate number that is product rather than instrument — it is a fact
-about the FOOTAGE, not a live counter, and a golfer can act on it (a 30 fps clip cannot show what
-a 120 one can).
+The recording fps badge is the one frame-rate number that is product rather than instrument — it
+is a fact about the FOOTAGE, not a live counter, and a golfer can act on it (a 30 fps clip cannot
+show what a 120 one can).
 
 ### The log is an accordion of days, and a session dies when its last swing does
 
@@ -1399,7 +1451,12 @@ directly, for the same reason `processing.ts` is: the log is not mounted for mos
 a hook that owned this would forget every run it started. A finished run's placeholder outlives it
 by ~900ms so the real row replaces it rather than blinking out and back in; a failed run's
 disappears at once, because the toast is what explains it and a row still claiming to analyse would
-contradict that. The dim is on the WHOLE row: "not ready" and "ready but unremarkable" have to be
+contradict that. **The processing row is a soft-aqua bed under a sweeping `Shimmer`, with the
+list's ordinary ink** (Taylor, 2026-08-23): the solid cobalt slab with white ink it replaced
+shouted louder than any finished swing on the screen, and a fill can only say "different" while
+motion says "in progress" — which is the actual claim. Aqua is the app's activity accent, so the
+lit progress segments and the waiting dots go cobalt on that bed (aqua on aqua says nothing). The
+distinction is still on the WHOLE row: "not ready" and "ready but unremarkable" have to be
 distinguishable before the tap, not discovered by it. The log's own stat tiles still count the
 CONFIRMED list only — a swing that is still uploading has no score and no guarantee of arriving,
 and a count that moved early would have to move back.
@@ -1533,8 +1590,14 @@ Each tab is a **21px glyph in a 24px box over a drawn 7/900 label** (Taylor, 202
 had a deliberately larger bump and record control — "the one control that must dominate the
 screen" — and it read as a different navigation system. Its `RISE`, `BLEND`, `RECORD_SLOT` and
 record lift are now `WaveNav`'s numbers verbatim, and `SessionRecordButton` is `RecordButton`'s
-compact 58px geometry in red with a label. Changing one bar's constants without the other is what
+compact 58px geometry in red. Changing one bar's constants without the other is what
 makes them stop matching, so they are written to be compared side by side.
+**Neither raised control carries a drawn caption** (Taylor, 2026-08-23). `SessionRecordButton`'s
+"Record Swing" label sat the red circle ~15px below the shell's `+` — the row is bottom-aligned,
+so a caption pushes the button up out of the slot — and two bars that swap under the same thumb
+put the one control that must never move in two places. What the button does is said INSIDE the
+ring instead: `REC` on the red face, `+` on the after-swing dock's blue "another one". The `label`
+prop survives as the screen-reader name only.
 **Gotchas:** Tab glyphs are drawn `View`s in `design/deck/Glyphs.tsx` — no icon font, no SVG
 outside `design/gauges`. From a root-stack screen a tab is reached as
 `navigate("Tabs", { screen })`; a bare `navigate("Progress")` searches upward and fails at
