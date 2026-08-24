@@ -1,4 +1,4 @@
-Switch the phone between LOCAL DEV (Metro + fast refresh, desk work) and REMOTE/PORTABLE (standalone release APK, PC can be off).
+Switch the phone between LOCAL DEV (Metro + fast refresh, desk work) and REMOTE/PORTABLE (standalone release APK the phone runs with nothing from this PC — for the simulator or the range, where Taylor still drives VS Code and Claude over TeamViewer but the phone is off this LAN and cannot be reached by adb).
 
 Both modes always use the PRODUCTION backends — Vercel API, `swingsage-prod`, R2, Modal. The switch decides where the JAVASCRIPT comes from, never which servers are used.
 

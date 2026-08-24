@@ -327,11 +327,18 @@ difference between the modes is where the JAVASCRIPT comes from.
 | Situation | Command | What you get |
 |---|---|---|
 | At the desk, iterating on UI | `pnpm --filter mobile phone` | Metro + **fast refresh**; edit, save, see it |
-| Going to the simulator | `pnpm --filter mobile phone:release` | Standalone APK, PC can be off |
+| Going to the simulator | `pnpm --filter mobile phone:release` | Standalone APK; the phone needs nothing from this PC |
 
 Switching is just running the other command — same package, same debug-keystore signature, so
 **the session and app data survive the swap** and Google sign-in keeps working. Add `:native`
 to the dev command after a Kotlin/`app.json` change.
+
+**At the sim, Taylor is still working with Claude** — the PC stays on at home and he reaches
+VS Code through TeamViewer while the app runs on the phone beside him. Everything server-side
+stays fully available from there (logs, prod database, `deploy-web.mjs`, `modal deploy` — all
+of which reach the phone on its next request). What does NOT work is `adb`: the phone is off
+this LAN, so no install, relaunch, logcat or screenshot, and **a phone-side fix waits until he
+is home**. Build the release APK BEFORE he leaves — `/switch` does this.
 
 They cannot both be installed at once today: a side-by-side debug variant needs its own
 applicationId, which needs its own Google OAuth Android client (a Console visit — the
