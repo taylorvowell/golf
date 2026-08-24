@@ -91,7 +91,11 @@ export function SessionDock({
                   onDelayChange(d);
                   setDelayOpen(false);
                 }}
-                style={[styles.delayOption, active && styles.delayOptionActive]}
+                style={({ pressed }) => [
+                  styles.delayOption,
+                  active && styles.delayOptionActive,
+                  pressed && styles.optionPressed,
+                ]}
               >
                 <Text style={[styles.delayOptionText, active && styles.delayOptionTextActive]}>
                   {d === 0 ? "Off" : `${d}s`}
@@ -119,7 +123,11 @@ export function SessionDock({
                     onTypeChange(m.type);
                     setModeOpen(false);
                   }}
-                  style={[styles.modeOption, active && styles.delayOptionActive]}
+                  style={({ pressed }) => [
+                    styles.modeOption,
+                    active && styles.delayOptionActive,
+                    pressed && styles.optionPressed,
+                  ]}
                   testID={`session-mode-${m.type}`}
                 >
                   <Text style={[styles.delayOptionText, active && styles.delayOptionTextActive]}>
@@ -263,6 +271,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
   delayOptionActive: { backgroundColor: COLORS.aqua },
+  // These float over the camera picture, so the press is a lift in the same glass.
+  optionPressed: { opacity: 0.7 },
   delayOptionText: {
     color: "rgba(255,255,255,0.8)",
     fontFamily: FONT_DISPLAY.black,

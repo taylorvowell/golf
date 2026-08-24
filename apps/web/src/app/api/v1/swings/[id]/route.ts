@@ -22,6 +22,13 @@ import { getMediaStore } from "@/lib/media/store";
  * second, one cascading delete. Failing the other way round orphans bytes nothing references and
  * nobody can enumerate.
  *
+ * **Emptying a session deletes it** (Taylor, 2026-08-22). A session is an organizing layer over
+ * swings (D29) and means nothing without any, so once this swing is gone the session it belonged
+ * to is removed if nothing else points at it. That is the ONLY way a session is deleted — there
+ * is no `DELETE /sessions/:id`, deliberately, because a delete of its own would be a second and
+ * blunter way to destroy swings. The id is reported back so a client's cached log drops the row
+ * instead of drawing a session with nothing in it.
+ *
  * 404 covers "no such swing" and "not yours" alike — confirming a stranger's id is real is
  * itself a disclosure, the same stance `requireViewAccess` takes.
  */
@@ -38,11 +45,12 @@ export async function DELETE(
   // for a swing the caller does not own — the prefix embeds the caller's own user id anyway,
   // but a sweep that 404s afterwards would still have deleted the caller's objects for nothing.
   const owned = await withUser(userId, (tx) =>
-    tx.execute<{ id: string }>(
-      sql`select id from public.swings where id = ${id} and user_id = ${userId}`,
+    tx.execute<{ id: string; session_id: string | null }>(
+      sql`select id, session_id from public.swings where id = ${id} and user_id = ${userId}`,
     ),
   );
   if (!owned[0]) return new Response("not found", { status: 404 });
+  const sessionId = owned[0].session_id;
 
   try {
     const store = await getMediaStore();
@@ -54,11 +62,23 @@ export async function DELETE(
       mediaObjects += await store.removePrefix(bucket, prefix);
     }
 
-    await withUser(userId, (tx) =>
-      tx.execute(sql`delete from public.swings where id = ${id} and user_id = ${userId}`),
-    );
+    // The emptiness check runs INSIDE the same transaction as the swing's own delete, so two
+    // concurrent deletes of a session's last two swings cannot both read "one swing left" and
+    // both leave the session standing.
+    const sessionDeleted = await withUser(userId, async (tx) => {
+      await tx.execute(sql`delete from public.swings where id = ${id} and user_id = ${userId}`);
+      if (!sessionId) return null;
+      const left = await tx.execute<{ id: string }>(
+        sql`select id from public.swings where session_id = ${sessionId} and user_id = ${userId} limit 1`,
+      );
+      if (left[0]) return null;
+      await tx.execute(
+        sql`delete from public.sessions where id = ${sessionId} and user_id = ${userId}`,
+      );
+      return sessionId;
+    });
 
-    const body: SwingDeletion = { swingId: id, mediaObjects };
+    const body: SwingDeletion = { swingId: id, mediaObjects, sessionDeleted };
     return Response.json(body, { headers: { "Cache-Control": "no-store" } });
   } catch (err) {
     // Reported, never swallowed — and every step above is ordered to be retryable, so the honest

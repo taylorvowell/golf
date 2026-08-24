@@ -45,9 +45,22 @@ export const SAVE_PAD_S = 0.1;
  */
 export const STOP_TIMEOUT_MS = 8_000;
 
-/** A candidate this far below the strongest is noise, not a second swing. Detector tuning
- * (spec §11.7 names this class of value as remote-config material). */
-export const CANDIDATE_FLOOR = 0.45;
+/**
+ * How close to the strongest candidate a LATER one must score to win the seed.
+ *
+ * The rule it feeds — "the last plausible candidate, not the loudest" — exists because a golfer
+ * takes a practice swing before the real one. At 0.45 it was doing far more than that: measured
+ * against `services/analyzer/scripts/audio_truth.json`, it is what turned a correct top candidate
+ * into a mark four seconds into the walk back on 6iron-1, and it walks straight past 6iron3's
+ * strike, which is the FIRST of that take's three bursts.
+ *
+ * The premise was wrong anyway. A practice swing is a whoosh with no click on the end of it, so
+ * a detector that requires the click never ranks one highly — the floor was compensating for a
+ * scorer that could not tell them apart, and `swish` can. 0.60 keeps the case this is actually
+ * for (two balls genuinely struck in one take, where the second should win) and drops the case it
+ * was never for. Detector tuning — spec §11.7 names this class of value as remote-config material.
+ */
+export const CANDIDATE_FLOOR = 0.6;
 
 /** Filmstrip density and decode width — spec §04.3 asks for 10–24 frames across the source. */
 export const STRIP_FRAMES = 12;

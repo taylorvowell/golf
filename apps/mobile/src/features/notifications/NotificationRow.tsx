@@ -1,4 +1,5 @@
 import { Pressable, Text, View } from "react-native";
+import { X } from "lucide-react-native";
 import type { Notification } from "@swingsage/schema/contract";
 
 import { FONT_BODY, FONT_DISPLAY } from "../../design/system/typography";
@@ -17,14 +18,22 @@ import { foldLabel, NOTIFICATION_LOOK, relativeAge } from "./notificationCopy";
  * timestamp — is diagnostics. It is in the response because the client needs it to *work*, not
  * because a golfer would act on it.
  *
+ * **Nothing here truncates.** A notification is one or two sentences the server wrote to be
+ * read; an ellipsis on it hides the half that says what happened and forces a tap to learn
+ * whether the row was worth tapping. The text is sized down instead — a whole short message
+ * beats a cropped larger one.
+ *
  * Unread is carried by the dot and a heavier title, never by a different background: an inbox
- * where half the rows sit on their own colour reads as two lists.
+ * where half the rows sit on their own colour reads as two lists. The dot rides the title line
+ * because the far right is the dismiss target, and two glyphs stacked in one corner is a
+ * coin-flip about which one a thumb lands on.
  */
 export function NotificationRow({
   notification,
   now,
   unread: unreadOverride,
   onPress,
+  onDismiss,
 }: {
   notification: Notification;
   /** Passed in so the whole list ages against ONE clock — rows rendered a frame apart must not
@@ -37,6 +46,8 @@ export function NotificationRow({
    */
   unread?: boolean;
   onPress?: () => void;
+  /** Remove this row from the inbox. Omitted where the row is not the golfer's to clear. */
+  onDismiss?: () => void;
 }) {
   const t = useTheme();
   const styles = useStyles();
@@ -55,35 +66,43 @@ export function NotificationRow({
           : t.cobalt;
 
   return (
-    <Pressable
-      testID={`notification-${notification.id}`}
-      accessibilityRole="button"
-      accessibilityLabel={`${notification.title}${unread ? ", unread" : ""}`}
-      onPress={onPress}
-      disabled={!onPress}
-      style={({ pressed }) => [styles.row, pressed && onPress ? styles.rowPressed : null]}
-    >
-      <View style={[styles.disc, { backgroundColor: withAlpha(tint) }]}>
-        <Icon size={17} color={tint} strokeWidth={2.4} />
-      </View>
-
-      <View style={styles.body}>
-        <View style={styles.titleLine}>
-          <Text style={[styles.title, unread && styles.titleUnread]} numberOfLines={1}>
-            {notification.title}
-          </Text>
-          <Text style={styles.age}>{relativeAge(notification.createdAt, now)}</Text>
+    <View style={styles.row}>
+      <Pressable
+        testID={`notification-${notification.id}`}
+        accessibilityRole="button"
+        accessibilityLabel={`${notification.title}${unread ? ", unread" : ""}`}
+        onPress={onPress}
+        disabled={!onPress}
+        style={({ pressed }) => [styles.main, pressed && onPress ? styles.mainPressed : null]}
+      >
+        <View style={[styles.disc, { backgroundColor: withAlpha(tint) }]}>
+          <Icon size={14} color={tint} strokeWidth={2.4} />
         </View>
-        {notification.body ? (
-          <Text style={styles.copy} numberOfLines={2}>
-            {notification.body}
-          </Text>
-        ) : null}
-        {fold ? <Text style={styles.fold}>{fold}</Text> : null}
-      </View>
 
-      {unread ? <View testID="notification-unread-dot" style={styles.dot} /> : null}
-    </Pressable>
+        <View style={styles.body}>
+          <View style={styles.titleLine}>
+            {unread ? <View testID="notification-unread-dot" style={styles.dot} /> : null}
+            <Text style={[styles.title, unread && styles.titleUnread]}>{notification.title}</Text>
+            <Text style={styles.age}>{relativeAge(notification.createdAt, now)}</Text>
+          </View>
+          {notification.body ? <Text style={styles.copy}>{notification.body}</Text> : null}
+          {fold ? <Text style={styles.fold}>{fold}</Text> : null}
+        </View>
+      </Pressable>
+
+      {onDismiss ? (
+        <Pressable
+          testID={`notification-dismiss-${notification.id}`}
+          accessibilityRole="button"
+          accessibilityLabel={`Dismiss ${notification.title}`}
+          hitSlop={10}
+          onPress={onDismiss}
+          style={({ pressed }) => [styles.close, pressed && styles.closePressed]}
+        >
+          <X size={13} color={t.muted} strokeWidth={2.6} />
+        </Pressable>
+      ) : null}
+    </View>
   );
 }
 
@@ -102,56 +121,77 @@ function withAlpha(color: string): string {
 }
 
 const useStyles = themedStyles((t) => ({
+  // The fill and the radius live on the wrapper, the press bed on the tappable half — so the X
+  // does not light up the whole row on its way to being tapped.
   row: {
     flexDirection: "row",
     alignItems: "flex-start",
-    gap: 12,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 16,
+    borderRadius: 14,
     backgroundColor: t.surface,
+    paddingRight: 2,
   },
-  rowPressed: { backgroundColor: t.pressBed },
+  main: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    paddingVertical: 9,
+    paddingLeft: 11,
+    paddingRight: 2,
+    borderRadius: 14,
+  },
+  mainPressed: { backgroundColor: t.pressBed },
   disc: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 27,
+    height: 27,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
   },
-  body: { flex: 1, gap: 3 },
-  titleLine: { flexDirection: "row", alignItems: "baseline", gap: 8 },
+  body: { flex: 1, gap: 1 },
+  // flex-start, not baseline: the title now wraps, and the age belongs beside its FIRST line.
+  // The age's line height is the title's so it still reads as sitting on the same line.
+  titleLine: { flexDirection: "row", alignItems: "flex-start", gap: 6 },
   title: {
     flex: 1,
     fontFamily: FONT_DISPLAY.bold,
-    fontSize: 14,
-    lineHeight: 18,
+    fontSize: 12.5,
+    lineHeight: 16,
     color: t.text,
   },
   titleUnread: { fontFamily: FONT_DISPLAY.extraBold },
   age: {
     fontFamily: FONT_BODY.regular,
-    fontSize: 11,
-    lineHeight: 15,
+    fontSize: 10,
+    lineHeight: 16,
     color: t.muted,
   },
   copy: {
     fontFamily: FONT_BODY.regular,
-    fontSize: 13,
-    lineHeight: 18,
+    fontSize: 11.5,
+    lineHeight: 15,
     color: t.textSoft,
   },
   fold: {
     fontFamily: FONT_BODY.semiBold,
-    fontSize: 11,
-    lineHeight: 15,
+    fontSize: 10,
+    lineHeight: 14,
     color: t.muted,
   },
   dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginTop: 13,
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginTop: 5,
     backgroundColor: t.cobalt,
   },
+  close: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    marginTop: 7,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  closePressed: { backgroundColor: t.pressBed },
 }));

@@ -74,7 +74,11 @@ export function ImportSheet({ visible, clip, onClose, onConfirm }: ImportSheetPr
               accessibilityLabel={option.label}
               onPress={() => setView(option.view)}
               testID={`import-view-${option.view}`}
-              style={[styles.option, active && styles.optionActive]}
+              style={({ pressed }) => [
+                styles.option,
+                active && styles.optionActive,
+                pressed && styles.optionPressed,
+              ]}
             >
               <PoseOutline
                 pose={option.view}
@@ -95,7 +99,15 @@ export function ImportSheet({ visible, clip, onClose, onConfirm }: ImportSheetPr
         })}
       </View>
 
-      <Button label="Add to today's session" variant="primary" onPress={() => onConfirm(view)} />
+      {/* The verb is the action the golfer is mid-way through, not where the file ends up —
+          "add to session" described bookkeeping; the session is a given. Sized like the review
+          screen's Save: the one action on the sheet earns the big target (Taylor, 2026-08-23). */}
+      <Button
+        label="Import video"
+        variant="primary"
+        onPress={() => onConfirm(view)}
+        style={{ paddingVertical: 16, borderRadius: 14 }}
+      />
     </Sheet>
   );
 }
@@ -113,6 +125,8 @@ const useStyles = appStyles((t) => ({
   },
   // §12 selection: a blue-tinted surface and cobalt title, never a border.
   optionActive: { backgroundColor: t.surfaceBlue },
+  // A fill step up the ramp — the flat rule's press idiom, never opacity on a themed surface.
+  optionPressed: { backgroundColor: t.surface3 },
   optionText: { flex: 1, minWidth: 0, gap: 2 },
   optionLabel: { color: t.text, fontFamily: FONT_DISPLAY.extraBold, fontSize: 14 },
   optionLabelActive: { color: t.cobalt },

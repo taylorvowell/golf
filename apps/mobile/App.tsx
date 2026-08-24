@@ -55,7 +55,6 @@ import { CelebrationProvider } from "./src/features/achievements/CelebrationProv
 import { ToastProvider } from "./src/features/toast/ToastProvider";
 import { InstructorDebug } from "./src/features/instructor/InstructorDebug";
 import { CoachDebug } from "./src/features/coach/CoachDebug";
-import { VariantGridHost } from "./src/features/report/VariantGrid";
 import { SubjectDebug } from "./src/features/coach/subjectSwing";
 
 /**
@@ -362,9 +361,6 @@ export default function App() {
               <Root />
             </CelebrationProvider>
           </ToastProvider>
-          {/* After Root so its full-screen page paints ABOVE the navigator. The host renders
-              nothing in release (__DEV__ gate inside) and nothing until its DEBUG action fires. */}
-          <VariantGridHost />
         </DebugProvider>
       </ThemeProvider>
     </SafeAreaProvider>

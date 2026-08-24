@@ -13,9 +13,11 @@ const noStore = { "Cache-Control": "no-store" };
  * a field existed cannot erase it. `name: null` is a real value — the golfer clearing the name
  * back to the log's date title — which is why absent and null mean different things here.
  *
- * No PUT and no DELETE. Deleting a session would be a decision about the swings inside it, and
- * D29 makes a session an organizing layer over swings rather than their owner; that surface
- * belongs to the swing log, where the golfer can see what they are about to reorganize.
+ * No PUT and no DELETE. **A session is deleted by emptying it** (Taylor, 2026-08-22): it is an
+ * organizing layer over swings (D29) and has no meaning without any, so `DELETE /swings/:id`
+ * removes the session when it takes the last swing out of it. A delete of its own would be a
+ * second, blunter way to destroy swings — one whose blast radius is invisible from the thing
+ * being tapped.
  */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const userId = await requireUserIdOrNull();
@@ -60,3 +62,4 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     return Response.json({ error: "update_failed" }, { status: 500, headers: noStore });
   }
 }
+

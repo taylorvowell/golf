@@ -123,3 +123,36 @@ export async function markNotificationsRead(
 
   return { acked: acked.length, unreadCount: unread[0].n };
 }
+
+/**
+ * Dismiss: delete the caller's own rows, own rows only (RLS enforces the "own" even if the ids
+ * are somebody else's — those rows simply don't match, so a cross-user id is a 0, never a leak
+ * and never an error). Deleting an already-deleted row is 0 too: two devices share one inbox
+ * and a sweep on one races the other.
+ *
+ * Returns the unread count AFTER the delete, because dismissing an unread row moves the bell —
+ * without it the badge would keep counting a row that is no longer anywhere to be found.
+ */
+export async function dismissNotifications(
+  tx: DbTx,
+  userId: string,
+  ids: string[],
+): Promise<{ dismissed: number; unreadCount: number }> {
+  const { notifications } = await import("../db/schema");
+  const { eq, and, isNull, inArray, count } = await import("drizzle-orm");
+
+  const dismissed =
+    ids.length > 0
+      ? await tx
+          .delete(notifications)
+          .where(and(eq(notifications.userId, userId), inArray(notifications.id, ids)))
+          .returning({ id: notifications.id })
+      : [];
+
+  const unread = await tx
+    .select({ n: count() })
+    .from(notifications)
+    .where(and(eq(notifications.userId, userId), isNull(notifications.readAt)));
+
+  return { dismissed: dismissed.length, unreadCount: unread[0].n };
+}

@@ -59,7 +59,9 @@ export function ChoiceSheet({
             key={choice.key}
             accessibilityRole="button"
             accessibilityLabel={choice.title}
-            onPress={choice.onPress}
+            onPressIn={() => console.log('[TAP] pressIn', choice.key)}
+            onPress={() => { console.log('[TAP] PRESS', choice.key); choice.onPress(); }}
+            onPressOut={() => console.log('[TAP] pressOut', choice.key)}
             style={({ pressed }) => [
               styles.option,
               choice.tone === "primary" && styles.optionPrimary,

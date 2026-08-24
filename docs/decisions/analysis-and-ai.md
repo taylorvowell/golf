@@ -131,6 +131,25 @@ first check, not after.
 **See:** ARCHIVE D59; `PROJECT_MAIN.md` §18;
 `.claude/architecture/guided-drills-architecture-2026-08-17.md`.
 
+### Impact has a second witness, and it is audio
+
+**Decision:** Every analysed swing carries `audio_impact` (schema 10) — the strike as **heard**,
+detected from the clip's own audio by `swingsage/audio_impact.py`. It records the heard frame, a
+confidence, and `agrees`: whether the video-side Impact event lands within 0.25 s of it. Read off
+the **source** clip, since `video.normalize` passes `-an` and the analysis copy has no audio at all.
+**It moves no event and never will.** Video wins on precision — a frame is 17 ms and the club-head
+low point is a geometric fact — while audio carries the recording pipeline's latency (121–148 ms
+measured, never measured on SwingSage's own recorder). What it buys is independence: every other
+estimate of Impact is derived from the same pixels and therefore fails on the same clips, and a
+microphone is not reading the pixels.
+**Gotchas:** `agrees: false` is the valuable output, not an error — it is the first thing in this
+contract able to say the video-side Impact is wrong, and on the `7wood-1` fixture it fires because
+the stored Impact sits ~40 frames after the ball leaves the mat. Null is a normal answer (no audio
+track, nothing heard) and consumers must treat absence as *no evidence*, never as disagreement. The
+detector is the same `swish` algorithm the phone runs, with the biquad coefficients derived in the
+open on both sides so the two cannot drift into being two detectors under one name.
+**Scope:** Rendering and diagnostics. Never a metric, never a scoring input, never an event value.
+
 ### Never fabricate a face-angle number from video
 
 **Decision:** Video yields checkpoint **classifications** (square/open/closed) only. Degrees
@@ -167,6 +186,22 @@ from 41 of 58 checks` and `65 from 6 of 58` are different claims about the same 
 reasons a check did not score stay apart — *skipped for this swing* is about the clip, *deferred*
 is the config refusing to score a metric it does not trust yet, and merging them reports our gap
 as the golfer's.
+
+### Stage 0 normalizes to CFR at the capture rate, never a hardcoded 60
+
+**Decision:** `video.cfr_target_fps` picks the normalization rate per source — the capture rate
+snapped to {240, 120, 60} (5fps tolerance for real-world cadences like a healthy take's ~237.6
+avg), 60 for everything slower. Both derivatives (`normalized.mp4`, `analysis.mp4`) use it, and
+`analysis.json`'s `fps` carries whatever was chosen, so the player's `frame = round(t × fps)`
+contract is unchanged. The in-app recorder writes real sensor frames on a REAL-TIME timeline
+(240fps timeline, no retime — unlike a phone camera app's slow-mo export, which retimes to a slow
+timeline); slow motion is a playback concern: the player presents the same CFR file slower, and at
+¼x or less every sensor frame reaches the screen.
+**Gotchas:** Resampling a real-time 240fps take to CFR 60 silently discards 3 of every 4 sensor
+frames — exactly the footage the ≥60fps capture constraint exists to keep, and how a 240fps
+recording surfaced in a report saying 60 (2026-08-23). Compute is not an argument for a cap:
+takes are short, so 2s at 240 is the same frame count as an 8s fixture at 60. Every stored
+artifact analysed before this change still says 60 until re-analysed.
 
 ### The pipeline has one programmatic entry point
 

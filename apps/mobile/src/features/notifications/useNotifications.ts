@@ -3,6 +3,7 @@ import { AppState } from "react-native";
 import type {
   Notification,
   NotificationAckResponse,
+  NotificationDismissResponse,
   NotificationListResponse,
 } from "@swingsage/schema/contract";
 
@@ -50,6 +51,8 @@ export interface NotificationsHook {
   ack: (ids: string[]) => void;
   /** Ack everything unread — the drawer's "Mark all read". */
   ackAll: () => void;
+  /** Remove a row from the inbox for good — the X on the row. */
+  dismiss: (id: string) => void;
 }
 
 export interface InboxCache {
@@ -203,6 +206,49 @@ async function ackTargets(target: { ids: string[] } | { all: true }): Promise<vo
 }
 
 /**
+ * Dismiss a row: gone from the list immediately, deleted on the server behind it.
+ *
+ * Optimistic, unlike the ack, and for the opposite reason. The ack's effect is a badge the
+ * golfer is not looking at, so waiting for the server costs nothing; a dismissal's effect is the
+ * row under their thumb, and a row that sits there for a round trip after being dismissed reads
+ * as a dead button and gets tapped again.
+ *
+ * The unread count is still the server's word — the local drop is provisional and only ever
+ * downward, replaced by what the response says rather than trusted. On failure the row comes
+ * back, because the alternative is an inbox that quietly disagrees with the server until the
+ * next foreground.
+ */
+async function dismissNotification(id: string): Promise<void> {
+  if (!lastGood) return;
+  const before = lastGood;
+  const mine = generation;
+  const wasUnread = before.notifications.find((n) => n.id === id)?.readAt === null;
+
+  lastGood = {
+    notifications: before.notifications.filter((n) => n.id !== id),
+    unreadCount: Math.max(0, before.unreadCount - (wasUnread ? 1 : 0)),
+  };
+  publish({ kind: "ok", ...lastGood });
+
+  try {
+    const body = await api.request<NotificationDismissResponse>("notifications", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: [id] }),
+    });
+    if (mine !== generation || !lastGood) return;
+    lastGood = { notifications: lastGood.notifications, unreadCount: body.unreadCount };
+    publish({ kind: "ok", ...lastGood });
+  } catch {
+    // Put it back. Anything else leaves the golfer believing a row is deleted that the next
+    // refresh will hand straight back to them.
+    if (mine !== generation) return;
+    lastGood = before;
+    publish({ kind: "ok", ...lastGood });
+  }
+}
+
+/**
  * Subscribe to the store, and keep it fresh. EVERY consumer of the inbox goes through this —
  * which is the point: the freshness rules belong to the store, not to whichever hook happens to
  * be mounted.
@@ -266,6 +312,7 @@ export function useNotifications(): NotificationsHook {
       if (ids.length > 0) void ackTargets({ ids });
     }, []),
     ackAll: useCallback(() => void ackTargets({ all: true }), []),
+    dismiss: useCallback((id: string) => void dismissNotification(id), []),
   };
 }
 

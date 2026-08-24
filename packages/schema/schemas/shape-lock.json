@@ -1120,6 +1120,33 @@
   "analysis#/properties/address_span/anyOf/1": {
     "type": "null"
   },
+  "analysis#/properties/audio_impact/anyOf/0": {
+    "type": "object",
+    "required": [
+      "agrees",
+      "confidence",
+      "frame",
+      "time_sec"
+    ]
+  },
+  "analysis#/properties/audio_impact/anyOf/0/properties/agrees": {
+    "type": "boolean"
+  },
+  "analysis#/properties/audio_impact/anyOf/0/properties/confidence": {
+    "type": "number"
+  },
+  "analysis#/properties/audio_impact/anyOf/0/properties/delta_frames": {
+    "type": "integer"
+  },
+  "analysis#/properties/audio_impact/anyOf/0/properties/frame": {
+    "type": "integer"
+  },
+  "analysis#/properties/audio_impact/anyOf/0/properties/time_sec": {
+    "type": "number"
+  },
+  "analysis#/properties/audio_impact/anyOf/1": {
+    "type": "null"
+  },
   "analysis#/properties/checkpoints": {
     "type": "array|null"
   },
@@ -1612,6 +1639,31 @@
     "type": "integer"
   },
   "api#/definitions/notificationAckResponse/properties/unreadCount": {
+    "type": "integer"
+  },
+  "api#/definitions/notificationDismissRequest": {
+    "type": "object",
+    "required": [
+      "ids"
+    ]
+  },
+  "api#/definitions/notificationDismissRequest/properties/ids": {
+    "type": "array"
+  },
+  "api#/definitions/notificationDismissRequest/properties/ids/items": {
+    "type": "string"
+  },
+  "api#/definitions/notificationDismissResponse": {
+    "type": "object",
+    "required": [
+      "dismissed",
+      "unreadCount"
+    ]
+  },
+  "api#/definitions/notificationDismissResponse/properties/dismissed": {
+    "type": "integer"
+  },
+  "api#/definitions/notificationDismissResponse/properties/unreadCount": {
     "type": "integer"
   },
   "api#/definitions/notificationListResponse": {

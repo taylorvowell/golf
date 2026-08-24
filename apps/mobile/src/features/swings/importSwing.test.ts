@@ -12,6 +12,12 @@ jest.mock("../../platform/client", () => ({
 }));
 jest.mock("../session/processing", () => ({
   startProcessing: (...args: unknown[]) => mockStartProcessing(...args),
+  // `pendingImports` reads these to draw the arriving row on the log. Mocked as inert rather
+  // than omitted: a partial module mock leaves them undefined, and the import then fails inside
+  // a store this test is not about.
+  ANALYSIS_STAGES: ["Uploading", "Queued", "Analyzing pose", "Tracking club", "Scoring"],
+  getProcessing: () => null,
+  subscribeProcessing: () => () => undefined,
 }));
 
 import { importSwing, sessionForToday } from "./importSwing";

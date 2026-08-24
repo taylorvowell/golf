@@ -14,11 +14,14 @@ Run from anywhere (the script resolves the repo root itself):
 ```bash
 bash .claude/skills/emulator/scripts/launch.sh            # JS-only
 bash .claude/skills/emulator/scripts/launch.sh --native   # Kotlin / app.json changed
+bash .claude/skills/emulator/scripts/launch.sh --restart  # bounce Metro on the FIRST attempt
 ```
 
 Cold boot takes ~30–60 s; already-running takes ~10 s. The script prints a summary line per device — `EMULATOR: …` and `PHONE: …`.
 
-**This script only boots the AVD.** Everything else is `apps/mobile/scripts/dev-device.mjs`, the single code path for putting the app on a device, which the script calls once per target. That is deliberate: a second copy of the Metro/install/launch logic lived here, hardcoded :8081, and drifted the moment Metro moved to :8082 — which is how "it lost connection again" kept coming back. Never reintroduce it.
+**It retries once, by itself.** `dev-device.mjs`'s commonest failure is *"on MainActivity, but no JS runtime reached Metro — the device is on a STALE CACHED BUNDLE"*, whose own advice is to re-run with `--restart`. The script now does that automatically and reports `UP (needed a Metro restart)`, so a stale bundle is not something to read an error about and retype. A `FAIL` line therefore means it failed **twice** — go to RUNBOOK §13 rather than running it again.
+
+**This script only boots the AVD and retries.** Everything else is `apps/mobile/scripts/dev-device.mjs`, the single code path for putting the app on a device, which the script calls once per target. That is deliberate: a second copy of the Metro/install/launch logic lived here, hardcoded :8081, and drifted the moment Metro moved to :8082 — which is how "it lost connection again" kept coming back. Never reintroduce it.
 
 ## Putting the app on a device — ALWAYS this one command
 
@@ -40,6 +43,7 @@ Relay the three summary lines in plain words and stop. No extra diagnostics, no 
 ## Rules that bind here
 
 - **Never retry the phone connection or scan for it.** The wireless-debugging port is random (30000–49999), mDNS does not find this device, and port scans have already been tried and failed (docs/ENVIRONMENT.md). If `adb devices` doesn't show it, only Taylor can fix that, on the phone.
+- **"PHONE: not connected" means `adb devices` is empty of it — nothing else.** The script picks the phone as *any ready device that is not `emulator-*`*, because matching on the USB serial or on `10.0.1.123:` reported "not connected" while the phone was attached and working: wireless debugging attaches over mDNS as `adb-R3CY10EZ19E-…_adb-tls-connect._tcp`, which contains neither. Do not narrow that test again.
 - **The S25+ is Taylor's daily driver.** Invoking /emulator is his say-so for exactly this script's actions on it — reverse ports, install the APK, launch the app. It is not a licence to tap, screenshot, or otherwise drive the phone afterwards.
 - **The emulator is fair game** — drive it freely after launch (root CLAUDE.md).
 - If the script reports a failure, debug with the step-by-step commands in docs/RUNBOOK.md §13 rather than editing this skill's script mid-incident.

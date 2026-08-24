@@ -1,7 +1,7 @@
 import { View } from "react-native";
 
 import { Tag } from "../../design/system";
-import { ANGLE_LABEL, MODE_LABEL, sessionAngles, type SwingSession } from "./sessions";
+import { MODE_LABEL, type SwingSession } from "./sessions";
 
 /**
  * What a session WAS, as pills: the mode it was recorded in, then the camera setup it was
@@ -12,19 +12,19 @@ import { ANGLE_LABEL, MODE_LABEL, sessionAngles, type SwingSession } from "./ses
  * would push the score orb around.
  *
  * The mode is the solid pill because it decides what the session's numbers MEAN — a Drills
- * session's swings never reach the golfer's trends. The camera setup is the quieter fact
- * beside it, with Dual tinted since it is the only one that changes what the analysis can
- * claim; DTL and Front are simply which way the phone was pointing.
+ * session's swings never reach the golfer's trends.
  *
- * A session with no known mode renders its views alone rather than guessing one — see
- * `SwingSession.sessionType`.
+ * **The camera angle is NOT here** (Taylor, 2026-08-22). A day's card can hold swings filmed
+ * both ways, so an angle on the header is either a list of every angle used — which says nothing
+ * about any one swing — or a claim about the day that is not true. It lives on the swing ROW
+ * instead, where it describes exactly one clip and is the fact that decides what that clip's
+ * numbers can mean.
  *
  * The swing count LEADS the row, solid navy (Taylor 2026-08-19): how big the visit was is
  * part of the same one-line fact, and it saves the golfer expanding a session just to see
  * its size.
  */
 export function SessionTags({ session }: { session: SwingSession }) {
-  const angles = sessionAngles(session);
   const count = session.swings.length;
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }} testID="session-tags">
@@ -32,14 +32,6 @@ export function SessionTags({ session }: { session: SwingSession }) {
       {session.sessionType ? (
         <Tag label={MODE_LABEL[session.sessionType]} variant="latest" compact />
       ) : null}
-      {angles.map((angle) => (
-        <Tag
-          key={angle}
-          label={ANGLE_LABEL[angle]}
-          variant={angle === "dual" ? "best" : "neutral"}
-          compact
-        />
-      ))}
     </View>
   );
 }

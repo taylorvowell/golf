@@ -113,3 +113,42 @@ service-role scoping.
 
 **Still open against the DoD:** buckets exist in one environment rather than per environment (D10
 wants three; a preview project is free, the third needs Pro). Recorded as a deviation from D10.
+
+---
+
+## APPENDED 2026-08-22 — the production storage target is R2, and it exists
+
+*This note does not change the Steps above; the seam they built is exactly what makes the change a
+driver swap. Recorded here because the step's own prose names Supabase Storage as the cloud driver
+and that is no longer where production media lives.*
+
+**Decision D64 moved production media to Cloudflare R2.** The argument that put it on Supabase
+Storage — that signed-URL issuance would sit inside the same system that decides who may view a
+swing — was wrong on the facts: `supabaseStore.ts` holds `SUPABASE_SECRET_KEY`, which is **not**
+subject to `storage.objects` policies, so authorization rests on `requireViewAccess` in the route
+either way. With no correctness difference, egress decides — R2 charges $0/GB against Supabase's
+$0.09/GB past 250 GB, which is over half the infrastructure bill at 10k MAU.
+
+**Provisioned and verified 2026-08-22** in Cloudflare account `29a846d28a4d7875137080db6e9a4680`,
+location hint `enam` (matching `swingsage-prod` in us-east-1):
+
+| Bucket | Constant in `keys.ts` |
+|---|---|
+| `swing-source` | `SOURCE_BUCKET` |
+| `swing-artifacts` | `ARTIFACT_BUCKET` |
+| `swing-models` | `MODEL_BUCKET` |
+
+**The outstanding work is `r2Store.ts`** — an S3-API driver behind the existing `MediaStore`
+interface, alongside `localStore.ts` and `supabaseStore.ts`. Nothing else in this step changes:
+keys stay derived from identity (D33), the two-phase ingest is unchanged, and the client still
+never branches on the driver.
+
+**Two traps when writing it:**
+1. **Two R2 token tiers, and the wrong one fails late.** `R2_ACCESS_KEY_ID`/`R2_SECRET_ACCESS_KEY`
+   are *object-scoped* — correct for the runtime driver, but they return `403 AccessDenied` on
+   `ListBuckets`/`CreateBucket`. Bucket management needs the separate `R2_ADMIN_*` keys. Do not
+   reach for the admin keys in application code.
+2. **R2 signed-URL TTL is ours to choose**, unlike Supabase's fixed 2 hours. The seam reports
+   `expiresIn` rather than assuming it — keep that.
+
+The Supabase Storage driver stays as a local convenience. It is not the production path.

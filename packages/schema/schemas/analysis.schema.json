@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://swingsage.dev/schemas/analysis.schema.json",
   "title": "Analysis",
-  "description": "The single contract between the analyzer and every client — one artifact per analysed video.\n\nTwo rules govern everything below.\n\nSTRICT ON SHAPE, PERMISSIVE ON PRESENCE. Every field a client renders is described here so the generated TypeScript is complete, but `required` stays confined to what the pipeline has always emitted. A block absent because the run skipped it (`--no-club`) is not a contract break; a block whose `head` stopped being a normalised pair is.\n\nADDITIVE ONLY. Unknown properties validate — a client built for schema 9 must keep working against an artifact written at 11, because a native app cannot be force-updated and old builds read these artifacts for months. `shape-lock.json` enforces the other direction: nothing here may be removed, retyped, or newly required.\n\nCoordinates are normalized 0–1 (x right, y down) so a client only ever scales. Confidence is truncated, never rounded — a value rounding up onto MIN_CONF makes a client draw a point the analyzer dropped.",
+  "description": "The single contract between the analyzer and every client \u2014 one artifact per analysed video.\n\nTwo rules govern everything below.\n\nSTRICT ON SHAPE, PERMISSIVE ON PRESENCE. Every field a client renders is described here so the generated TypeScript is complete, but `required` stays confined to what the pipeline has always emitted. A block absent because the run skipped it (`--no-club`) is not a contract break; a block whose `head` stopped being a normalised pair is.\n\nADDITIVE ONLY. Unknown properties validate \u2014 a client built for schema 9 must keep working against an artifact written at 11, because a native app cannot be force-updated and old builds read these artifacts for months. `shape-lock.json` enforces the other direction: nothing here may be removed, retyped, or newly required.\n\nCoordinates are normalized 0\u20131 (x right, y down) so a client only ever scales. Confidence is truncated, never rounded \u2014 a value rounding up onto MIN_CONF makes a client draw a point the analyzer dropped.",
   "type": "object",
   "required": [
     "schema_version",
@@ -36,7 +36,7 @@
     "events": {
       "title": "Events",
       "type": "object",
-      "description": "The eight GolfDB events, strictly ordered by frame. Ordering itself is not expressible in JSON Schema — `eventsAreOrdered()` checks it.",
+      "description": "The eight GolfDB events, strictly ordered by frame. Ordering itself is not expressible in JSON Schema \u2014 `eventsAreOrdered()` checks it.",
       "required": [
         "address",
         "toe_up",
@@ -56,7 +56,7 @@
         "array",
         "null"
       ],
-      "description": "P1–P10. Null on analyses produced before Stage 5b existed.",
+      "description": "P1\u2013P10. Null on analyses produced before Stage 5b existed.",
       "items": {
         "$ref": "#/definitions/checkpoint"
       }
@@ -82,7 +82,7 @@
       ]
     },
     "playback_window": {
-      "description": "The span worth playing, pinned to address − 1s … finish + 1s so every clip's lead-in and run-out match. Absent before schema 5; the player derives an equivalent from the events, so it degrades rather than breaking. The comparison view depends on it.",
+      "description": "The span worth playing, pinned to address \u2212 1s \u2026 finish + 1s so every clip's lead-in and run-out match. Absent before schema 5; the player derives an equivalent from the events, so it degrades rather than breaking. The comparison view depends on it.",
       "anyOf": [
         {
           "$ref": "#/definitions/frameRange"
@@ -136,7 +136,7 @@
       ]
     },
     "face": {
-      "description": "Club head ORIENTATION only. Never a fabricated impact face angle — degrees require a launch monitor, and the impact entry always defers to one.",
+      "description": "Club head ORIENTATION only. Never a fabricated impact face angle \u2014 degrees require a launch monitor, and the impact entry always defers to one.",
       "anyOf": [
         {
           "$ref": "#/definitions/face"
@@ -192,10 +192,53 @@
       ]
     },
     "stage3": {
-      "description": "Postprocessing counters — how many joints were swapped, rejected, promoted or interpolated.",
+      "description": "Postprocessing counters \u2014 how many joints were swapped, rejected, promoted or interpolated.",
       "anyOf": [
         {
           "$ref": "#/definitions/openMap"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "audio_impact": {
+      "description": "The ball strike as HEARD, from the clip's own audio track \u2014 an independent second witness to Impact, never a replacement for it. The video-side events are measured from the club head and the hands and are far more precise; this shares none of their failure modes, which is the entire point. Null when the clip has no audio, or nothing that sounds like a strike was heard \u2014 both normal answers. Absent before schema 10.",
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "frame",
+            "time_sec",
+            "confidence",
+            "agrees"
+          ],
+          "properties": {
+            "frame": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "The heard strike, as a frame index in THIS artifact's normalized clip. Carries the recording pipeline's audio latency, measured at 121\u2013148 ms on five stock-camera takes and never measured on SwingSage's own recorder \u2014 so it is good to a couple of hundred milliseconds and no better. Never snap a rendered event to it."
+            },
+            "time_sec": {
+              "type": "number",
+              "minimum": 0
+            },
+            "confidence": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1,
+              "description": "How far clear of the next-best candidate this one stood. SEPARATION, not strength: a loud clip is not a confident one, and two similar candidates are exactly the case a consumer has to be told about."
+            },
+            "agrees": {
+              "type": "boolean",
+              "description": "Whether the video-side Impact event lands within tolerance of the heard strike. FALSE IS THE VALUABLE CASE: it means the two witnesses disagree, and a renderer should say so rather than draw confident phase bands. On the 7wood-1 fixture the stored Impact is ~40 frames after the ball leaves the mat and this is the flag that catches it."
+            },
+            "delta_frames": {
+              "type": "integer",
+              "description": "Video Impact minus heard strike, in frames. Signed."
+            }
+          }
         },
         {
           "type": "null"
@@ -229,7 +272,7 @@
     "point": {
       "title": "Point",
       "type": "array",
-      "description": "A normalized [x, y] position — x by frame width, y by frame height.",
+      "description": "A normalized [x, y] position \u2014 x by frame width, y by frame height.",
       "items": [
         {
           "type": "number"
@@ -244,7 +287,7 @@
     "keypoint": {
       "title": "Keypoint",
       "type": "array",
-      "description": "[x, y, confidence] — position normalized 0–1, confidence TRUNCATED to the artifact's precision so re-applying MIN_CONF on the client keeps the analyzer's own answer.",
+      "description": "[x, y, confidence] \u2014 position normalized 0\u20131, confidence TRUNCATED to the artifact's precision so re-applying MIN_CONF on the client keeps the analyzer's own answer.",
       "items": [
         {
           "type": "number"
@@ -321,7 +364,7 @@
             "right",
             "left"
           ],
-          "description": "Sets which anatomical side is lead. Never inferred from which side faces the camera — that inverts for a left-handed golfer."
+          "description": "Sets which anatomical side is lead. Never inferred from which side faces the camera \u2014 that inverts for a left-handed golfer."
         },
         "source": {
           "$ref": "#/definitions/videoSource"
@@ -334,7 +377,7 @@
     "videoSource": {
       "title": "VideoSource",
       "type": "object",
-      "description": "The clip this artifact was produced from, as it arrived — before CFR normalization.",
+      "description": "The clip this artifact was produced from, as it arrived \u2014 before CFR normalization.",
       "properties": {
         "path": {
           "type": "string",
@@ -342,7 +385,7 @@
         },
         "is_vfr": {
           "type": "boolean",
-          "description": "True when the phone wrote variable frame rate, which breaks frame ↔ time arithmetic until normalized."
+          "description": "True when the phone wrote variable frame rate, which breaks frame \u2194 time arithmetic until normalized."
         },
         "codec": {
           "type": "string"
@@ -405,7 +448,7 @@
         },
         "keypoint_names": {
           "type": "array",
-          "description": "Fixed, APPEND-ONLY order: 33 native, 7 derived, 8 measured, 1 derived-tail. The measured block sits after the derived one precisely so published indices 0–39 keep their meaning. Undo the derived joints with skeleton.strip_derived() — the two derived blocks are not contiguous.",
+          "description": "Fixed, APPEND-ONLY order: 33 native, 7 derived, 8 measured, 1 derived-tail. The measured block sits after the derived one precisely so published indices 0\u201339 keep their meaning. Undo the derived joints with skeleton.strip_derived() \u2014 the two derived blocks are not contiguous.",
           "items": {
             "type": "string"
           },
@@ -459,7 +502,7 @@
     "checkpoint": {
       "title": "Checkpoint",
       "type": "object",
-      "description": "One of the ten coaching positions (P1–P10). Eight are the GolfDB events under the names a golfer uses; P6 (shaft parallel coming down) and P9 (trail arm parallel through) are the two the eight do not cover, and `event` is null for exactly those.",
+      "description": "One of the ten coaching positions (P1\u2013P10). Eight are the GolfDB events under the names a golfer uses; P6 (shaft parallel coming down) and P9 (trail arm parallel through) are the two the eight do not cover, and `event` is null for exactly those.",
       "required": [
         "p",
         "id",
@@ -507,7 +550,7 @@
         },
         "basis": {
           "type": "string",
-          "description": "How this frame was decided, in words — so a low confidence is diagnosable rather than merely low."
+          "description": "How this frame was decided, in words \u2014 so a low confidence is diagnosable rather than merely low."
         },
         "definition": {
           "type": "string"
@@ -581,7 +624,7 @@
     "traceSegments": {
       "title": "TraceSegments",
       "type": "object",
-      "description": "The drawn club-head path, split by swing segment. NOT one point per frame — only the frames the detector answered — so growing it with the playhead by point count puts the head of the line tens of frames from the club.",
+      "description": "The drawn club-head path, split by swing segment. NOT one point per frame \u2014 only the frames the detector answered \u2014 so growing it with the playhead by point count puts the head of the line tens of frames from the club.",
       "properties": {
         "backswing": {
           "type": "array",
@@ -611,7 +654,7 @@
     "traceFrames": {
       "title": "TraceFrames",
       "type": "object",
-      "description": "The frame each trace point was measured on, parallel to `trace`. Absent before schema 6. It is also what tells the renderer which spans were bridged (a frame step > 2) and must be drawn as unmeasured — the trace never interpolates across a gap.",
+      "description": "The frame each trace point was measured on, parallel to `trace`. Absent before schema 6. It is also what tells the renderer which spans were bridged (a frame step > 2) and must be drawn as unmeasured \u2014 the trace never interpolates across a gap.",
       "properties": {
         "backswing": {
           "type": "array",
@@ -708,14 +751,14 @@
         },
         "from_ball": {
           "type": "boolean",
-          "description": "Placed on the ball at Impact from the Address landmark (club.anchor_ball), NOT found in this frame. A third provenance on purpose — never the same thing as a detection."
+          "description": "Placed on the ball at Impact from the Address landmark (club.anchor_ball), NOT found in this frame. A third provenance on purpose \u2014 never the same thing as a detection."
         }
       }
     },
     "clubCoverage": {
       "title": "ClubCoverage",
       "type": "object",
-      "description": "Fraction of frames with a club position, per segment. Coverage has overstated club quality three separate times — look at checkclub.py before believing it.",
+      "description": "Fraction of frames with a club position, per segment. Coverage has overstated club quality three separate times \u2014 look at checkclub.py before believing it.",
       "additionalProperties": {
         "type": "number"
       }
@@ -723,7 +766,7 @@
     "rawBox": {
       "title": "RawBox",
       "type": "object",
-      "description": "One detection exactly as the model emitted it: `c` the class id (0 clubhead, 1 stick), `xy` the box centre, `wh` its size — both normalized — and `p` the model's own confidence.",
+      "description": "One detection exactly as the model emitted it: `c` the class id (0 clubhead, 1 stick), `xy` the box centre, `wh` its size \u2014 both normalized \u2014 and `p` the model's own confidence.",
       "required": [
         "c",
         "xy",
@@ -748,7 +791,7 @@
     "clubDetector": {
       "title": "ClubDetector",
       "type": "object",
-      "description": "The learned detector's provenance and its RAW output. `boxes` is deliberately unprocessed — no confidence gate, no geometric rejection, no dependence on the solver — so the model can be judged separately from the pipeline's interpretation of it.",
+      "description": "The learned detector's provenance and its RAW output. `boxes` is deliberately unprocessed \u2014 no confidence gate, no geometric rejection, no dependence on the solver \u2014 so the model can be judged separately from the pipeline's interpretation of it.",
       "properties": {
         "weights": {
           "type": "string"
@@ -881,7 +924,7 @@
     "ball": {
       "title": "Ball",
       "type": "object",
-      "description": "The ball, when it was located — normalized, with `r` the radius as a fraction of frame height. Null when it could not be found, never a guess: anchor_ball writes a club position from it.",
+      "description": "The ball, when it was located \u2014 normalized, with `r` the radius as a fraction of frame height. Null when it could not be found, never a guess: anchor_ball writes a club position from it.",
       "properties": {
         "x": {
           "type": "number"
@@ -1089,7 +1132,7 @@
     },
     "pointExpr": {
       "title": "PointExpr",
-      "description": "Where a piece of an angle's geometry lives: a keypoint name, a first-tracked-wins chain (optionally told by `src` which per-frame series field recorded the anchor that answered), a fraction along heel→toe averaged over both feet, or the tracked club head.",
+      "description": "Where a piece of an angle's geometry lives: a keypoint name, a first-tracked-wins chain (optionally told by `src` which per-frame series field recorded the anchor that answered), a fraction along heel\u2192toe averaged over both feet, or the tracked club head.",
       "anyOf": [
         {
           "type": "string"
@@ -1158,7 +1201,7 @@
     "angleGeom": {
       "title": "AngleGeom",
       "type": "object",
-      "description": "Where an angle lives on the body, so a client can draw it over the video. Every kind is a vertex plus two rays; they differ only in what the second ray is — another bone (`interior`), straight up (`vertical`), straight down (`plumb`), or along +x (`horizontal`, which is what the stack and tilt angles are measured from).\n\n`supplement` marks a `_flex` field, whose arc opens from the bone's continuation through the joint because the number is departure from straight. `vectors` is for wrist hinge alone: forearm and shaft share no endpoint, so no single vertex would be honest.",
+      "description": "Where an angle lives on the body, so a client can draw it over the video. Every kind is a vertex plus two rays; they differ only in what the second ray is \u2014 another bone (`interior`), straight up (`vertical`), straight down (`plumb`), or along +x (`horizontal`, which is what the stack and tilt angles are measured from).\n\n`supplement` marks a `_flex` field, whose arc opens from the bone's continuation through the joint because the number is departure from straight. `vectors` is for wrist hinge alone: forearm and shaft share no endpoint, so no single vertex would be honest.",
       "required": [
         "kind"
       ],
@@ -1234,7 +1277,7 @@
             "dtl",
             "face_on"
           ],
-          "description": "The view this number means what its name says in. Computed but misleading elsewhere — every 2D joint angle is projection-sensitive."
+          "description": "The view this number means what its name says in. Computed but misleading elsewhere \u2014 every 2D joint angle is projection-sensitive."
         },
         "delta": {
           "type": "boolean",
@@ -1247,10 +1290,10 @@
             "swing",
             "both"
           ],
-          "description": "`setup` fields are only interpretable at P1 — arm hang at the top is meaningless."
+          "description": "`setup` fields are only interpretable at P1 \u2014 arm hang at the top is meaningless."
         },
         "geom": {
-          "description": "Null where the angle has no drawable geometry — the width-derived rotation estimates.",
+          "description": "Null where the angle has no drawable geometry \u2014 the width-derived rotation estimates.",
           "anyOf": [
             {
               "$ref": "#/definitions/angleGeom"
@@ -1333,7 +1376,7 @@
     "sides": {
       "title": "Sides",
       "type": "object",
-      "description": "Resolved handedness → lead/trail mapping, so no consumer re-derives it. Lead is the side nearest the TARGET, never the side facing the camera.",
+      "description": "Resolved handedness \u2192 lead/trail mapping, so no consumer re-derives it. Lead is the side nearest the TARGET, never the side facing the camera.",
       "properties": {
         "handedness": {
           "type": "string"
@@ -1370,7 +1413,7 @@
           "type": "boolean"
         },
         "glossary": {
-          "description": "Standard coaching terms mapped onto the fields above — see docs/GLOSSARY.md.",
+          "description": "Standard coaching terms mapped onto the fields above \u2014 see docs/GLOSSARY.md.",
           "anyOf": [
             {
               "$ref": "#/definitions/openMap"
@@ -1471,7 +1514,7 @@
       "properties": {
         "x": {
           "type": "number",
-          "description": "Normalized x, fixed for every frame — that is the entire point of the drill."
+          "description": "Normalized x, fixed for every frame \u2014 that is the entire point of the drill."
         },
         "y0": {
           "type": "number"
@@ -1498,7 +1541,7 @@
             -1,
             1
           ],
-          "description": "Image direction the seat faces: −1 left of the golfer, +1 right."
+          "description": "Image direction the seat faces: \u22121 left of the golfer, +1 right."
         },
         "spread_bh": {
           "type": "number",
@@ -1529,7 +1572,7 @@
     "posture": {
       "title": "Posture",
       "type": "object",
-      "description": "Setup reference geometry measured off the golfer's SILHOUETTE, not off keypoints — a coaching line is tangent to the body's outline, which no keypoint knows about. Null before schema 8, and on face-on clips where the rear of the pelvis points at neither edge of frame.",
+      "description": "Setup reference geometry measured off the golfer's SILHOUETTE, not off keypoints \u2014 a coaching line is tangent to the body's outline, which no keypoint knows about. Null before schema 8, and on face-on clips where the rear of the pelvis points at neither edge of frame.",
       "properties": {
         "butt_line": {
           "anyOf": [
@@ -1543,7 +1586,7 @@
         },
         "notes": {
           "type": "array",
-          "description": "Why there is no line, when there isn't one — shown rather than silently hiding the control.",
+          "description": "Why there is no line, when there isn't one \u2014 shown rather than silently hiding the control.",
           "items": {
             "type": "string"
           }

@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   Animated,
   Easing,
@@ -10,10 +18,11 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ArrowLeftRight, FlaskConical, Layers2, Pause, Play } from "lucide-react-native";
+import { ArrowLeftRight, Layers2, Pause, Play } from "lucide-react-native";
 import type { SwingSummary } from "@swingsage/schema/contract";
 
 import { FrameClockView } from "../../../modules/frame-clock/src";
+import type { ReadyEvent } from "../../../modules/frame-clock/src";
 import { ErrorBoundary } from "../../platform/ErrorBoundary";
 import { useAuthenticatedImage } from "../../platform/useAuthenticatedImage";
 import { DeckSheet } from "../../design/deck";
@@ -22,8 +31,8 @@ import { FONT_DISPLAY } from "../../design/system/typography";
 import { COLORS, FixedDarkTheme } from "../../theme";
 import { ComparePanel } from "../player/ComparePanel";
 import { ReferencePane } from "../player/ReferencePane";
-import { fitBox, isSeekable, windowBounds, type Bounds } from "../player/frames";
-import { phaseBands, scrubMap } from "../player/phaseBands";
+import { fitBox, isSeekable, msToFrame, windowBounds, type Bounds } from "../player/frames";
+import { bandsConfirmed, phaseBands, scrubMap } from "../player/phaseBands";
 import { OverlayControls } from "../player/overlay/OverlayControls";
 import { SwingOverlay } from "../player/overlay/SwingOverlay";
 import {
@@ -34,11 +43,11 @@ import {
 } from "../player/overlay/overlays";
 import { playbackWindow } from "../player/overlay/playbackWindow";
 import { type SmoothingKey } from "../player/overlay/traceSmoothing";
-import { VariantLab } from "./VariantLab";
 import { useAnalysis } from "../player/useAnalysis";
 import { useCorrections } from "../player/useCorrections";
 import { useFramePlayer } from "../player/useFramePlayer";
-import { ReportPlayerBar } from "./ReportPlayerBar";
+import { PlayCap, SpeedToggle } from "./ReportTransport";
+import { SwipeChromeContext } from "./SwingSwipe";
 import { SwingScrub } from "./SwingScrub";
 
 /**
@@ -69,6 +78,13 @@ export interface ReportVideoLayerProps {
   swingId: string;
   frameCount: number;
   fps: number;
+  /**
+   * False while the analyzer hasn't published this swing's artifacts. The server then serves the
+   * uploaded ORIGINAL instead of `normalized.mp4`, so the swing plays the moment the upload
+   * lands — and this flag is baked into the source URI, so the flip to `true` re-prepares the
+   * player onto the normalized copy the overlay's frame math is exact against.
+   */
+  videoReady?: boolean;
   /** The analysed frame's shape from the swing LIST — the stage is right-sized at first paint. */
   aspectRatio?: number | null;
   /** Overall score for the `.report-full-score` pill. Null hides the pill, never a dash. */
@@ -118,11 +134,26 @@ export interface ReportVideoLayerProps {
   /** Extra top clearance for the corner chrome (orbs, back) — a host whose header overlays the
    * picture (the standalone swing page's `AppHeader`) pushes them below it. */
   topChromeInset?: number;
+  /**
+   * Host chrome that belongs to the PICTURE rather than to the page (the standalone swing
+   * page's "Swing 3 · Tuesday · DTL" heading). It rides INSIDE the video-open shell, so it
+   * fades away with the transport the moment the scorecard starts coming up — a label naming
+   * the swing is context for the footage, and it has no business floating over the analysis
+   * (Taylor, 2026-08-22).
+   *
+   * The host positions it absolutely against the SCREEN — this slot deliberately sits outside
+   * the shell's own horizontal padding so `left: 16` means 16 from the edge, matching what
+   * `SwingPeek` draws during a sideways drag.
+   */
+  pictureChrome?: ReactNode;
   /** Raw scroll offset, for chrome that follows scroll DIRECTION rather than position. */
   onScrollY?: (y: number) => void;
   /** Fires when the layer crosses into or out of video-open — the host's cue for chrome that
    * only belongs over the picture (the sheet's own "scroll up" hint). */
   onVideoOpenChange?: (open: boolean) => void;
+  /** The decoder's FIRST real frame reached the glass. The swipe's cover holds until this — a
+   * timer cannot know when prepare + token resolve actually finished. */
+  onFirstFrame?: () => void;
   /** The host's imperative seam (the sheet's "show video" tap scrolls to open). */
   scrollRef?: React.RefObject<{ scrollTo: (opts: { y: number; animated?: boolean }) => void } | null>;
   sheetStyle?: object;
@@ -184,16 +215,21 @@ function TapFeedback({ playing, nonce }: { playing: boolean; nonce: number }) {
  * existence beside a video the golfer is already watching reads as a glitch. On mount only:
  * there is nothing to animate back out, because the artifact never un-loads.
  */
-function OrbIn({ children }: { children: ReactNode }) {
-  const enter = useRef(new Animated.Value(0)).current;
+function OrbIn({ instant = false, children }: { instant?: boolean; children: ReactNode }) {
+  // `instant` mounts settled. The entrance is for an orb that APPEARS — detection finishing,
+  // capability arriving — not for one that was already earned before the page mounted: with the
+  // artifact cache a swipe mounts the orbs on the first frame, and replaying the pop-in there
+  // made every swipe flash its chrome (Taylor, 2026-08-22).
+  const enter = useRef(new Animated.Value(instant ? 1 : 0)).current;
   useEffect(() => {
+    if (instant) return;
     Animated.timing(enter, {
       toValue: 1,
       duration: 320,
       easing: Easing.out(Easing.back(1.6)),
       useNativeDriver: true,
     }).start();
-  }, [enter]);
+  }, [enter, instant]);
   return (
     <Animated.View
       style={{
@@ -252,6 +288,7 @@ export function ReportVideoLayer({
   swingId,
   frameCount,
   fps,
+  videoReady = true,
   aspectRatio,
   score,
   tempoRatio,
@@ -263,7 +300,9 @@ export function ReportVideoLayer({
   cornerOverlay,
   topRightExtras,
   topChromeInset = 0,
+  pictureChrome,
   onVideoOpenChange,
+  onFirstFrame,
   onScrollY,
   children,
   stickyFooter,
@@ -282,21 +321,112 @@ export function ReportVideoLayer({
   const scroll = scrollRef ?? localScrollRef;
 
 
-  const source = useAuthenticatedImage(`swings/${swingId}/video`);
+  /**
+   * `src=upload` is a cache key, not an instruction — the route ignores it. While the swing is
+   * unanalysed the route serves the uploaded original; baking the state into the URI is what
+   * makes the player RE-PREPARE onto `normalized.mp4` when the swing turns ready, instead of
+   * looping the raw clip under an overlay whose frame math assumes the normalized one.
+   */
+  const source = useAuthenticatedImage(
+    videoReady ? `swings/${swingId}/video` : `swings/${swingId}/video?src=upload`,
+  );
   /** The exact first frame, full resolution — the placeholder and the video are one picture. */
   const poster = useAuthenticatedImage(`swings/${swingId}/frame?f=0`);
   const { state: analysisState } = useAnalysis(swingId, null);
   const analysis = analysisState.kind === "ok" ? analysisState.analysis : null;
   const corrections = useCorrections(swingId, null);
 
+  /**
+   * The container's own facts, for a swing the analyzer hasn't measured yet. Pre-analysis the
+   * list row carries no fps and no frame count, and an extent of zero frames means no loop, no
+   * scrub and no window-stop — a swing that plays once and dies. The file itself is the honest
+   * extent until the artifact narrows it.
+   */
+  const [container, setContainer] = useState<ReadyEvent | null>(null);
+  const effFps =
+    fps > 0 ? fps : container && container.containerFps > 0 ? Math.round(container.containerFps) : 60;
+  const effFrameCount =
+    frameCount > 0 ? frameCount : container ? msToFrame(container.durationMs, effFps) : 0;
+
   const bounds = useMemo<Bounds>(
-    () => windowBounds(frameCount, analysis ? playbackWindow(analysis) : null),
-    [frameCount, analysis],
+    () => windowBounds(effFrameCount, analysis ? playbackWindow(analysis) : null),
+    [effFrameCount, analysis],
   );
   const player = useFramePlayer(bounds);
-  const seekable = isSeekable(bounds, fps);
+  const seekable = isSeekable(bounds, effFps);
+  /** Wraps the transport's own handler — identity as stable as `player.handlers`, so the native
+   *  callback registration survives (hot-path rule). */
+  const onReadyWithContainer = useCallback(
+    (e: { nativeEvent: ReadyEvent }) => {
+      setContainer(e.nativeEvent);
+      player.handlers.onReady(e);
+    },
+    [player.handlers],
+  );
   const { ready, error, painted } = player.state;
   const { seekTo, play, pause, toggle } = player.actions;
+
+  /** What was already earned when this layer mounted — those orbs render settled, no entrance
+   *  (see `OrbIn`). `useState` initializers, not render-body ref writes, which the hot-path
+   *  rules forbid: the initial value is captured exactly once, on the first committed render. */
+  const [analysisAtMount] = useState(analysis != null);
+
+  /**
+   * The controls' own arrival (Taylor, 2026-08-22 — "fade in controls when coming in, doesn't
+   * have to be instant, just smooth"): a page that opens playing keeps its chrome at 0 until the
+   * video has actually painted, then eases it in — so after a swipe the picture lands first and
+   * the controls follow, instead of everything being simply THERE. An error releases it too: a
+   * clip that will not play must still show its (disabled) transport rather than a bare stage.
+   * A page that opens at the scorecard starts settled — the scaffold's own open fade already
+   * gates its chrome, and stacking a second wait on top of it reads as broken controls.
+   */
+  const chromeIn = useRef(new Animated.Value(startOpen ? 0 : 1)).current;
+  useEffect(() => {
+    if (!painted && !error) return;
+    Animated.timing(chromeIn, {
+      toValue: 1,
+      duration: 420,
+      delay: 60,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [chromeIn, error, painted]);
+  /**
+   * The overlays arrive WITH the picture, never before it (Taylor, 2026-08-22 — "are they not
+   * hidden by default then faded in?"). Without this gate the skeleton pops fully drawn over the
+   * POSTER, a beat before the video has painted — the one moment the whole page is trying to make
+   * smooth. Hidden until `painted`, then the same ease the chrome uses; and re-armed whenever
+   * `painted` drops (a source swap mid-instance), so a swiped-to swing fades its overlay in too.
+   */
+  const overlayIn = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!painted) {
+      overlayIn.setValue(0);
+      return;
+    }
+    Animated.timing(overlayIn, {
+      toValue: 1,
+      duration: 420,
+      delay: 60,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [overlayIn, painted]);
+
+  /** The swipe's drag signal — 1 at rest, falling as the page travels. Null off the swipe host. */
+  const swipeChrome = useContext(SwipeChromeContext);
+  const chromeOpacity = useMemo(
+    () => (swipeChrome ? Animated.multiply(chromeIn, swipeChrome) : chromeIn),
+    [chromeIn, swipeChrome],
+  );
+
+  /** Announced once, on the frame `painted` flips — the swipe cover's release signal. */
+  const announcedFirstFrame = useRef(false);
+  useEffect(() => {
+    if (!painted || announcedFirstFrame.current) return;
+    announcedFirstFrame.current = true;
+    onFirstFrame?.();
+  }, [painted, onFirstFrame]);
 
   /**
    * Tap on the picture.
@@ -322,10 +452,16 @@ export function ReportVideoLayer({
   const [panel, setPanel] = useState<Panel>(null);
   const [toggles, setToggles] = useState<Toggles>(DEFAULT_TOGGLES);
   const [angles, setAngles] = useState<string[]>([]);
-  /** Debug-menu club-solution override; null = the artifact's own default pick (production). */
-  const [clubVar, setClubVar] = useState<string | null>(null);
-  /** Debug-menu render-smoothing override; null = DEFAULT_SMOOTHING (production). */
-  const [smoothing, setSmoothing] = useState<SmoothingKey | null>(null);
+  /**
+   * The club solution and the render smoothing the overlay draws.
+   *
+   * Both are fixed at the production pick — null means "the artifact's own default" and
+   * `DEFAULT_SMOOTHING`. They stay as values rather than becoming literals because the overlay's
+   * props are the seam an override would come back through; the LAB that used to drive them is
+   * gone (Taylor, 2026-08-22 — the club-solution question is settled).
+   */
+  const clubVar: string | null = null;
+  const smoothing: SmoothingKey | null = null;
   const [reference, setReference] = useState<SwingSummary | null>(null);
   const traceCost = useRef(0);
 
@@ -356,6 +492,12 @@ export function ReportVideoLayer({
   useEffect(() => {
     if (!startOpen || autoplayed.current || !ready || error) return;
     autoplayed.current = true;
+    // Playing IS the wheel being taken. Without this, the park effect above fires whenever the
+    // artifact settles AFTER the video got ready — the normal order on a first open, and the
+    // only order while the analysis is still running — and its `seekTo` pauses playback: the
+    // page autoplays for a beat and then freezes the moment the analysis lands. Measured on the
+    // S25+ (2026-08-23): a fresh swing page sat frozen while the codec idled.
+    started.current = true;
     play();
   }, [error, play, ready, startOpen]);
 
@@ -399,12 +541,6 @@ export function ReportVideoLayer({
     setTapNonce((n) => n + 1);
   }, [error, ready, toggle]);
 
-  /** Back to the top of the swing window and run — the "watch it again" half of the transport. */
-  const onRestart = useCallback(() => {
-    seekTo(bounds.first);
-    play();
-  }, [bounds.first, play, seekTo]);
-
   /** The scaffold's crossing → the playback policy. See the component comment. */
   const onOpenChange = useCallback(
     (next: boolean) => {
@@ -422,7 +558,10 @@ export function ReportVideoLayer({
   );
 
   /** `.report-v2-center-play` fades out as the controls shell fades in — one scroll state. */
-  const centerFade = useRef(new Animated.Value(1)).current;
+  // Born matching the page's opening state, not visible-then-faded: a page that starts in
+  // video-open used to mount the disc at full opacity and spend 280ms fading it — a flash of a
+  // play button on every sideways swipe (Taylor, 2026-08-22).
+  const centerFade = useRef(new Animated.Value(startOpen ? 0 : 1)).current;
   useEffect(() => {
     Animated.timing(centerFade, {
       toValue: open ? 0 : 1,
@@ -450,6 +589,8 @@ export function ReportVideoLayer({
     () => phaseBands(analysis, corrections.phases, bounds),
     [analysis, bounds, corrections.phases],
   );
+  /** Same latch for the compare orb — captured once, after `bands` first derives. */
+  const [bandsAtMount] = useState(bands.length > 0);
   const map = useMemo(() => scrubMap(bands, bounds), [bands, bounds]);
 
   const disabled = !seekable || !!error;
@@ -503,36 +644,6 @@ export function ReportVideoLayer({
       .filter((f): f is NonNullable<typeof f> => !!f);
   }, [analysis, angles]);
 
-  /**
-   * The VariantLab's pick handlers — selection CLEARS the drawn trace and replays the swing
-   * (Taylor, 2026-08-19): the club + trace overlays are forced on with grow, and the playhead
-   * returns to the window start, so every option is watched drawing itself from address rather
-   * than appearing fully-formed on a paused frame. Render-only, like the web Debug Menu — no
-   * number on the report can change. The panel itself replaced the debug-sheet chip rows,
-   * which closed on every tap — wrong shape for running through twenty solutions.
-   */
-  const restartForPick = useCallback(() => {
-    setToggles((t) => ({ ...t, club: true, trace: true, grow: true }));
-    seekTo(bounds.first);
-    play();
-  }, [bounds.first, play, seekTo]);
-  const pickClub = useCallback(
-    (key: string) => {
-      setClubVar(key);
-      restartForPick();
-    },
-    [restartForPick],
-  );
-  const pickSmoothing = useCallback(
-    (key: SmoothingKey) => {
-      setSmoothing(key);
-      restartForPick();
-    },
-    [restartForPick],
-  );
-  const [labOpen, setLabOpen] = useState(false);
-  const toggleLab = useCallback(() => setLabOpen((v) => !v), []);
-
   /** Sheet contents as stable elements — this component renders per presented frame. */
   const overlaysContent = useMemo(
     () =>
@@ -583,41 +694,65 @@ export function ReportVideoLayer({
               style={StyleSheet.absoluteFill}
               source={source.uri}
               headers={source.headers}
-              fps={fps > 0 ? fps : 60}
+              fps={effFps}
               emitFrames
+              /**
+               * A TEXTURE view, not the module's default surface view (Taylor, 2026-08-22).
+               *
+               * A `SurfaceView` is composited by the platform OUTSIDE the view hierarchy: it
+               * ignores its ancestors' transforms, clipping and z-order. On this screen that is
+               * not a subtlety — during a sideways swipe the whole page translates and the video
+               * DOES NOT GO WITH IT, so the previous swing keeps painting in place while
+               * everything else slides, and no view drawn "over" it can cover it. That is the
+               * flicker that survived both a re-ordered recentre and a covering still.
+               *
+               * It also makes the page's own layering true rather than lucky: the overlay, the
+               * transport and the report card all sit above the picture.
+               *
+               * The cost is real — a texture view composites conventionally and is slower and
+               * higher-power than a surface view — and it is the cost the other two players in
+               * this app already pay for the same reason (`SwingReview`, `SwingPreviewPip`).
+               */
+              surfaceType="textureView"
               {...player.handlers}
+              onReady={onReadyWithContainer}
             />
           ) : null}
 
           {/* The first frame as a still until the decoder has one — faded, never cut. */}
-          <Poster visible={!painted && !error} poster={poster} />
+          <Poster visible={!painted && !error} poster={poster} recyclingKey={swingId} />
 
           {analysis ? (
-            <ErrorBoundary
-              resetKey={swingId}
-              fallback={() => (
-                <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.overlayFailed]}>
-                  <Text style={styles.overlayFailedText}>
-                    The overlays could not be drawn for this swing. The video plays as normal.
-                  </Text>
-                </View>
-              )}
+            <Animated.View
+              pointerEvents="none"
+              style={[StyleSheet.absoluteFill, { opacity: overlayIn }]}
             >
-              <SwingOverlay
-                analysis={analysis}
-                /* Mid-drag the overlay draws what the PICTURE shows (D36); else the target. */
-                frame={player.state.scrubbing ? player.state.presented : player.state.frame}
-                toggles={toggles}
-                angles={selectedAngles}
-                w={stage.w}
-                h={stage.h}
-                corrections={corrections}
-                playerRef={player.ref}
-                traceCostRef={traceCost}
-                clubVar={clubVar}
-                smoothing={smoothing}
-              />
-            </ErrorBoundary>
+              <ErrorBoundary
+                resetKey={swingId}
+                fallback={() => (
+                  <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.overlayFailed]}>
+                    <Text style={styles.overlayFailedText}>
+                      The overlays could not be drawn for this swing. The video plays as normal.
+                    </Text>
+                  </View>
+                )}
+              >
+                <SwingOverlay
+                  analysis={analysis}
+                  /* Mid-drag the overlay draws what the PICTURE shows (D36); else the target. */
+                  frame={player.state.scrubbing ? player.state.presented : player.state.frame}
+                  toggles={toggles}
+                  angles={selectedAngles}
+                  w={stage.w}
+                  h={stage.h}
+                  corrections={corrections}
+                  playerRef={player.ref}
+                  traceCostRef={traceCost}
+                  clubVar={clubVar}
+                  smoothing={smoothing}
+                />
+              </ErrorBoundary>
+            </Animated.View>
           ) : null}
 
           {error ? (
@@ -671,6 +806,12 @@ export function ReportVideoLayer({
    * the phase scrub, then the player bar, bottom-anchored above the gesture inset.
    */
   const controls = (
+    <View style={styles.controlsRoot} pointerEvents="box-none">
+    {/* The fade gets its OWN view: `controlsPad` below is a non-native animated layout value,
+        and a native-driven opacity in the same style object makes RN reject the layout half
+        outright (one driver per view). The heading in `pictureChrome` stays OUTSIDE the fade —
+        it must match the peek pixel-for-pixel through a slide, so it never dims. */}
+    <Animated.View style={[styles.fillShell, { opacity: chromeOpacity }]} pointerEvents="box-none">
     <Animated.View
       style={[styles.controlsShell, { paddingBottom: controlsPad }]}
       pointerEvents="box-none"
@@ -703,7 +844,7 @@ export function ReportVideoLayer({
             over the middle of the picture. */}
         {cornerOverlay}
         {analysis ? (
-          <OrbIn>
+          <OrbIn instant={analysisAtMount}>
           <Pressable
             testID="report-overlays-open"
             accessibilityRole="button"
@@ -717,7 +858,7 @@ export function ReportVideoLayer({
           </OrbIn>
         ) : null}
         {bands.length ? (
-          <OrbIn>
+          <OrbIn instant={bandsAtMount}>
           <Pressable
             testID="report-compare-open"
             accessibilityRole="button"
@@ -736,65 +877,58 @@ export function ReportVideoLayer({
           </OrbIn>
         ) : null}
         {topRightExtras}
-        {/* The evaluation lab — __DEV__ ONLY, and it STAYS OPEN across picks. The orb is the
-            flask so it can never be mistaken for product chrome; the panel replaces the
-            debug-sheet chip rows, which closed on every tap. Retired by the club-solution
-            verdict (the HANDOFF row). */}
-        {__DEV__ && analysis ? (
-          <OrbIn>
-            <Pressable
-              testID="report-variant-lab-open"
-              accessibilityRole="button"
-              accessibilityLabel="Club solution lab"
-              accessibilityState={{ selected: labOpen }}
-              hitSlop={8}
-              onPress={toggleLab}
-              style={({ pressed }) => [
-                styles.layersOrb,
-                labOpen && styles.layersOrbOn,
-                pressed && styles.layersOrbPressed,
-              ]}
-            >
-              <FlaskConical size={19} color="#FFFFFF" strokeWidth={2.1} />
-            </Pressable>
-          </OrbIn>
-        ) : null}
-        {__DEV__ && labOpen && analysis ? (
-          <VariantLab
-            analysis={analysis}
-            clubVar={clubVar}
-            smoothing={smoothing}
-            onPickClub={pickClub}
-            onPickSmoothing={pickSmoothing}
-          />
-        ) : null}
+      </View>
+
+      {/* Speed stands on the LEFT above the transport, in the capture screen's zoom-rail
+          language (Taylor, 2026-08-22) — same column, same aqua, same small-caps label. */}
+      <View style={styles.speedSlot} pointerEvents="box-none">
+        <SpeedToggle
+          speed={player.state.speed}
+          disabled={disabled}
+          onSpeed={player.actions.setSpeed}
+        />
       </View>
 
       {/* .report-v2-stage-scrub — no heading: the phase labels say what it is, and a title plus
           a "drag through the motion" hint over a control the golfer is already dragging is the
-          clutter rule's own example. */}
+          clutter rule's own example. Play/pause rides the far right of this SAME row (Taylor,
+          2026-08-22): the playhead and the thing that moves it are one control surface. */}
       <View style={styles.transportPill}>
-        <SwingScrub
-          bands={bands}
-          map={map}
-          bounds={bounds}
-          frame={player.state.frame}
-          fps={fps}
-          onSeek={onSeek}
-          onScrubbingChange={onScrubbingChange}
-          disabled={disabled}
-        />
-        <ReportPlayerBar
-          bare
-          onRestart={onRestart}
-          playing={player.state.playing}
-          speed={player.state.speed}
-          disabled={disabled}
-          onToggle={player.actions.toggle}
-          onSpeed={player.actions.setSpeed}
-        />
+        <View style={styles.transportRow}>
+          <View style={styles.scrubSlot}>
+            <SwingScrub
+              bands={bands}
+              map={map}
+              bounds={bounds}
+              frame={player.state.frame}
+              fps={effFps}
+              onSeek={onSeek}
+              onScrubbingChange={onScrubbingChange}
+              disabled={disabled}
+              confirmed={bandsConfirmed(analysis)}
+            />
+          </View>
+          <PlayCap
+            playing={player.state.playing}
+            disabled={disabled}
+            onToggle={player.actions.toggle}
+          />
+        </View>
       </View>
     </Animated.View>
+    </Animated.View>
+
+    {/* The host's picture-level chrome, OUTSIDE the shell's 16px gutter so the host's own
+        absolute offsets are screen offsets (Yoga positions an absolute child inside its
+        parent's padding, unlike the web) — the heading has to land on the same pixel
+        `SwingPeek` draws it on, or it jumps when a sideways slide commits. Last, so it paints
+        over the picture-tap surface. */}
+    {pictureChrome ? (
+      <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
+        {pictureChrome}
+      </View>
+    ) : null}
+    </View>
   );
 
   return (
@@ -872,9 +1006,11 @@ export function ReportVideoLayer({
 function Poster({
   visible,
   poster,
+  recyclingKey,
 }: {
   visible: boolean;
   poster: { uri: string; headers: Record<string, string> } | null;
+  recyclingKey: string;
 }) {
   const fade = useRef(new Animated.Value(1)).current;
   useEffect(() => {
@@ -896,8 +1032,15 @@ function Poster({
           source={poster}
           style={StyleSheet.absoluteFill}
           contentFit="cover"
-          cachePolicy="disk"
+          // memory-disk for the same reason as SwingPeek: the poster must paint the frame it
+          // mounts on, not one disk re-decode later — its gap is the black flash.
+          cachePolicy="memory-disk"
           transition={0}
+          // expo-image RECYCLES native views. Without this key, a poster mounted right after
+          // another swing's page unmounted can be handed that page's view — still holding the
+          // PREVIOUS swing's bitmap — and shows it until this source decodes. That is the
+          // one-beat flash of the old swing during a swipe (Taylor, 2026-08-22).
+          recyclingKey={recyclingKey}
         />
       ) : null}
     </Animated.View>
@@ -951,6 +1094,10 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.12)", // .report-v2-center-play
   },
 
+  /** The video-open layer as a whole: the padded control shell, plus the host's unpadded
+   *  picture chrome over it. */
+  controlsRoot: { flex: 1 },
+  fillShell: { flex: 1 },
   controlsShell: { flex: 1, justifyContent: "flex-end", paddingHorizontal: 16, gap: 10 },
   /* The FloatingBack orb's glass, mirrored top-right — the two corner controls must match.
      Dev clients keep clear of the dev bubble's corner (the gated layout accommodation). */
@@ -980,6 +1127,10 @@ const styles = StyleSheet.create({
 
   /** ONE transport: the scrub and the player row share a single pill (Taylor, step-03
    * iteration). Two stacked cards read as two controls when they are two halves of one. */
+  /** Left-aligned above the transport; the shell's own `gap` sets the air between them. */
+  speedSlot: { alignSelf: "flex-start" },
+  transportRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  scrubSlot: { flex: 1 },
   transportPill: {
     gap: 2,
     paddingHorizontal: 10,

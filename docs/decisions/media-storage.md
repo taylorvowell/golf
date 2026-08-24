@@ -100,6 +100,16 @@ swings all work with **no network**. Analysis requires connectivity and queues u
 `media-pipeline` deliverable, not an optimisation.
 **See:** ARCHIVE D11.
 
+### The video route serves the uploaded original until the normalized clip exists
+
+**Decision:** `/api/v1/swings/[id]/video` serves `normalized.mp4`; while that artifact has not
+been published yet, it falls back to the view's uploaded original in the source bucket. A swing
+is watchable from the moment its upload lands — the analyzer is not a gate on playback.
+**Scope:** Nothing frame-accurate is promised over the original (it may be VFR and has no
+artifact), and nothing is drawn on it. The client bakes the swing's status into the source URI
+(`?src=upload` while unanalysed), so the player re-prepares onto the normalized copy when the
+swing turns ready rather than looping the raw clip under an overlay.
+
 ### Raw recordings are kept for 30 days after successful analysis
 
 **Decision:** The normalized CFR clip is the record of truth. The raw phone original is retained

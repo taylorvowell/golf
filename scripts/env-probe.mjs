@@ -144,10 +144,18 @@ if (online.length) {
 } else if (attached.length) {
   say(`- phone: listed but NOT authorised — ${attached.join(" | ")}`);
 } else {
-  say("- phone: not connected. Turn on Wireless debugging on the S25+, read the IP:PORT off the");
-  say("  main Wireless debugging screen (NOT the pairing dialog's port), then `adb connect IP:PORT`.");
-  say("  Pairing survives reboots; the PORT changes, so it has to be read off the phone each time.");
-  say("  mDNS discovery does not find this device — do not spend time on `adb mdns services`.");
+  // Not an ask. The port is discoverable from this machine (`scripts/adb-phone.mjs`), and
+  // sending Taylor to read two numbers off a screen was the wrong instinct — he said so on
+  // 2026-08-22. The probe tries the CHEAP rungs only (already-connected, then the last port
+  // that worked) so session start stays instant; the sweep is one command away.
+  const reconnected = await run("node", ["scripts/adb-phone.mjs", "--quiet", "--fast"]);
+  if (reconnected) {
+    say(`- phone: CONNECTED — ${reconnected} (reconnected on its last known port)`);
+  } else {
+    say("- phone: not connected. DO NOT ask Taylor for the IP:PORT — find it:");
+    say("    node scripts/adb-phone.mjs      # mDNS, then a port sweep of the LAN. ~20s.");
+    say("  Only if that finds nothing is wireless debugging actually off.");
+  }
 }
 
 // --- machine + services ------------------------------------------------------------------

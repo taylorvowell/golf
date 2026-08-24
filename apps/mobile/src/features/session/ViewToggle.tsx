@@ -40,7 +40,11 @@ export function ViewToggle({ value, onChange }: ViewToggleProps) {
             accessibilityLabel={view === "dtl" ? "Down the line" : "Front view"}
             accessibilityState={{ selected: active }}
             onPress={() => onChange(view)}
-            style={[styles.segment, active && styles.segmentActive]}
+            style={({ pressed }) => [
+              styles.segment,
+              active && styles.segmentActive,
+              pressed && styles.segmentPressed,
+            ]}
             testID={`capture-view-${view}`}
           >
             <PoseOutline pose={view} width={18} height={20} color={ink} fill mirrored={mirrored} />
@@ -72,6 +76,8 @@ const styles = StyleSheet.create({
     gap: 1,
   },
   segmentActive: { backgroundColor: COLORS.aqua },
+  // Over the camera picture, so the press is a lift in the same glass rather than a new colour.
+  segmentPressed: { opacity: 0.7 },
   label: {
     fontFamily: FONT_DISPLAY.black,
     fontSize: 9,

@@ -122,7 +122,9 @@ it("costs views only for the layers that are switched on", async () => {
     <SwingOverlay
       analysis={makeAnalysis()}
       frame={13}
-      toggles={DEFAULT_TOGGLES}
+      // Explicitly on: the trace is OFF by default now (it is off until it is reliable), and
+      // this test is about a switched-on layer costing views, not about what the default is.
+      toggles={{ ...DEFAULT_TOGGLES, trace: true }}
       angles={[]}
       w={STAGE.w}
       h={STAGE.h}

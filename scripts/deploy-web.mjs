@@ -105,10 +105,20 @@ const collect = (base, filter = () => true) => {
 const inject = [
   ...collect("apps/web/.next/server/chunks"),
   ...collect("apps/web/.next/server/pages", (r) => r.endsWith(".html")),
+  // Next's routing manifests. Without them every DYNAMIC route ([id] segments) dies at
+  // runtime with "Invariant: The manifests singleton was not initialized" while static paths
+  // work — which reads as an intermittent connection, not a packaging bug (2026-08-23).
+  ...collect("apps/web/.next", (r) => !r.slice("apps/web/.next/".length).includes("/")),
+  ...collect("apps/web/.next/server", (r) => !r.slice("apps/web/.next/server/".length).includes("/")),
+  ...collect("apps/web/.next/server/app", (r) => r.endsWith(".json") || r.includes("manifest")),
   ...collect("node_modules/next/dist/compiled/next-server"),
   ...collect("node_modules/next/dist", (r) => r.endsWith(".external.js") || r.includes("/build/adapter/")),
   ...["server", "lib", "shared", "build", "api", "client", "pages"].flatMap((s) => collect(`node_modules/next/dist/${s}`)),
   ...["@swc/helpers", "styled-jsx", "postcss", "caniuse-lite", "busboy", "nanoid", "source-map-js", "picocolors", "streamsearch", "react", "react-dom", "scheduler"].flatMap((p) => collect(`node_modules/${p}`)),
+  // The R2 driver's SDK: turbopack externalizes @aws-sdk/client-s3 behind a hashed alias in
+  // apps/web/.next/node_modules, which the fileset omits — without these the upload endpoint
+  // 500s with "Cannot find module '@aws-sdk/client-s3-<hash>'" (2026-08-23, mid-import).
+  ...["@aws-sdk", "@smithy", "@aws-crypto", "@aws", "fast-xml-parser", "strnum", "tslib", "bowser", "uuid", "mnemonist", "obliterator"].flatMap((p) => collect(`node_modules/${p}`)),
 ];
 let stripped = 0, patched = 0;
 const patchConfigs = (dir) => {
@@ -138,7 +148,45 @@ const patchConfigs = (dir) => {
   }
 };
 patchConfigs(join(OUT, "functions"));
-console.log(`fixups: ${linksFixed} symlinks, ${stripped} stripped entries, ${patched} manifests patched, ${inject.length} runtime files injected`);
+
+// Turbopack's externals aliases live in apps/web/.next/node_modules as ABSOLUTE symlinks into
+// the repo's node_modules — meaningless on Linux, and walking through them re-uploads the
+// whole target with a name conflict (server-side ENOTDIR). Rewrite each alias to a RELATIVE
+// link (its target ships via the inject list) and register only the link itself.
+const aliasRoot = join(ROOT, "apps", "web", ".next", "node_modules");
+const aliasEntries = [];
+if (existsSync(aliasRoot)) {
+  const scopes = readdirSync(aliasRoot);
+  for (const scope of scopes) {
+    for (const name of readdirSync(join(aliasRoot, scope))) {
+      const p = join(aliasRoot, scope, name);
+      if (!lstatSync(p).isSymbolicLink()) continue;
+      const target = readlinkSync(p).replaceAll("\\", "/");
+      const real = target.slice(target.lastIndexOf("node_modules/"));
+      try { unlinkSync(p); } catch { rmdirSync(p); }
+      symlinkSync(`../../../../../${real}`, p, "dir");
+      aliasEntries.push(`apps/web/.next/node_modules/${scope}/${name}`);
+    }
+  }
+}
+if (aliasEntries.length) {
+  const reg = (dir) => {
+    for (const name of readdirSync(dir)) {
+      const p = join(dir, name);
+      const st = lstatSync(p);
+      if (st.isDirectory() && !st.isSymbolicLink()) reg(p);
+      else if (name === ".vc-config.json") {
+        const d = JSON.parse(readFileSync(p, "utf-8"));
+        if (d.filePathMap && Object.keys(d.filePathMap).some((k) => k.includes("next-server"))) {
+          for (const rel of aliasEntries) d.filePathMap[rel] = rel;
+          writeFileSync(p, JSON.stringify(d));
+        }
+      }
+    }
+  };
+  reg(join(OUT, "functions"));
+}
+console.log(`fixups: ${linksFixed} symlinks, ${stripped} stripped entries, ${patched} manifests patched, ${inject.length} runtime files injected, ${aliasEntries.length} externals aliases relinked`);
 
 // 5. Ship it.
 console.log("deploying (vercel deploy --prebuilt --prod)…");

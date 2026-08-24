@@ -4,6 +4,7 @@ import { LinearGradient } from "expo-linear-gradient";
 
 import { FONT_DISPLAY } from "../../design/system/typography";
 import { COLORS } from "../../theme";
+import { FpsBadge } from "./FpsControl";
 
 /**
  * The "you are recording" treatment (D61: "stylized… unmistakable at a glance"): a red
@@ -15,7 +16,14 @@ import { COLORS } from "../../theme";
  * thumb's ring) — it is the recording indicator itself, not surface decoration.
  */
 
-export function RecordingFrame({ paused = false }: { paused?: boolean }) {
+export function RecordingFrame({
+  paused = false,
+  fps = null,
+}: {
+  paused?: boolean;
+  /** The rate the running take CONFIGURED (the ladder's answer) — null until it resolves. */
+  fps?: number | null;
+}) {
   const breathe = useRef(new Animated.Value(0)).current;
   const [elapsed, setElapsed] = useState(0);
 
@@ -64,6 +72,12 @@ export function RecordingFrame({ paused = false }: { paused?: boolean }) {
         />
         <Text style={styles.chipText}>{`REC ${mm}:${ss}`}</Text>
       </View>
+      {/* The configured rate, top right and quiet (Taylor, 2026-08-23) — the probed truth from
+          the ladder, so a fallback finally shows its face instead of surfacing days later in a
+          report that says 60. */}
+      <View style={styles.fpsSlot}>
+        <FpsBadge fps={fps} />
+      </View>
       {/* A frozen picture with no explanation reads as a crash — say what it is. The swing
           is recording at full rate behind the still frame. */}
       {paused ? (
@@ -91,6 +105,8 @@ const styles = StyleSheet.create({
   },
   washTop: { position: "absolute", top: 0, left: 0, right: 0, height: 110 },
   washBottom: { position: "absolute", bottom: 0, left: 0, right: 0, height: 90 },
+  /** Inside the breathing outline (margin 8 + border 3), clear of the centred REC chip. */
+  fpsSlot: { position: "absolute", top: 22, right: 20 },
   chip: {
     position: "absolute",
     top: 22,

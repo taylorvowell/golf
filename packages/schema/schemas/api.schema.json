@@ -877,6 +877,41 @@
         }
       }
     },
+    "notificationDismissRequest": {
+      "title": "NotificationDismissRequest",
+      "type": "object",
+      "description": "Remove rows from the inbox for good. Ids in the BODY for the same reason the ack takes them there — the inbox is swept in batches and route-auth's [id] rule is swing-shaped. Dismissal clears the golfer's own history; it never reaches back to whatever emitted the event.",
+      "required": [
+        "ids"
+      ],
+      "properties": {
+        "ids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The rows to delete. Rows the caller does not own simply do not match."
+        }
+      }
+    },
+    "notificationDismissResponse": {
+      "title": "NotificationDismissResponse",
+      "type": "object",
+      "required": [
+        "dismissed",
+        "unreadCount"
+      ],
+      "properties": {
+        "dismissed": {
+          "type": "integer",
+          "description": "Rows actually removed. Deleting an already-deleted row is 0, not an error — two devices share one inbox."
+        },
+        "unreadCount": {
+          "type": "integer",
+          "description": "The count AFTER the delete, so dismissing an unread row settles the bell without a second round trip."
+        }
+      }
+    },
     "handedness": {
       "title": "Handedness",
       "type": "string",

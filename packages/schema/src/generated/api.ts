@@ -488,6 +488,32 @@ export interface NotificationAckResponse {
   unreadCount: number;
 }
 /**
+ * Remove rows from the inbox for good. Ids in the BODY for the same reason the ack takes them there — the inbox is swept in batches and route-auth's [id] rule is swing-shaped. Dismissal clears the golfer's own history; it never reaches back to whatever emitted the event.
+ *
+ * This interface was referenced by `Api`'s JSON-Schema
+ * via the `definition` "notificationDismissRequest".
+ */
+export interface NotificationDismissRequest {
+  /**
+   * The rows to delete. Rows the caller does not own simply do not match.
+   */
+  ids: string[];
+}
+/**
+ * This interface was referenced by `Api`'s JSON-Schema
+ * via the `definition` "notificationDismissResponse".
+ */
+export interface NotificationDismissResponse {
+  /**
+   * Rows actually removed. Deleting an already-deleted row is 0, not an error — two devices share one inbox.
+   */
+  dismissed: number;
+  /**
+   * The count AFTER the delete, so dismissing an unread row settles the bell without a second round trip.
+   */
+  unreadCount: number;
+}
+/**
  * The half of the profile a directory or a shared swing may show (§5.1). The split is WHICH OBJECT a field is in, not a per-field flag.
  *
  * This interface was referenced by `Api`'s JSON-Schema

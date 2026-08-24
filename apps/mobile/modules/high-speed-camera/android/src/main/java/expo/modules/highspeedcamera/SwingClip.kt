@@ -12,8 +12,11 @@ import java.io.File
 import java.io.FileOutputStream
 import java.nio.ByteBuffer
 import kotlin.math.abs
+import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.pow
+import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
@@ -93,9 +96,108 @@ object SwingClip {
    * 60-second clip once per method — eight times, to compare eight — is the difference between
    * a drawer worth switching in and one nobody waits for.
    */
-  private class Envelopes(val peak: DoubleArray, val hf: DoubleArray, val rms: DoubleArray) {
+  private class Envelopes(
+    val peak: DoubleArray,
+    val hf: DoubleArray,
+    val rms: DoubleArray,
+    /**
+     * RMS per window of the signal above [HIGH_BAND_HZ] - the real high-frequency view.
+     *
+     * [Method.HF] approximates this with `|x[n] - x[n-1]|`, whose gain rises linearly with
+     * frequency and therefore never stops responding to loudness: a dull thump twenty times
+     * louder than a click still wins. A filter with an actual corner does not leak that way, and
+     * this is the envelope every measurement in `checkaudio.py` was made on.
+     */
+    val band: DoubleArray,
+  ) {
     companion object {
-      val EMPTY = Envelopes(DoubleArray(0), DoubleArray(0), DoubleArray(0))
+      val EMPTY = Envelopes(DoubleArray(0), DoubleArray(0), DoubleArray(0), DoubleArray(0))
+    }
+  }
+
+  /**
+   * Where a strike lives and a voice, a gust and a footstep do not.
+   *
+   * A club-ball contact is a broadband click with real energy well past 4 kHz. Speech has rolled
+   * off by there, wind is near-DC and a footstep is a low thud. Chosen from the physics of the
+   * sources, not tuned against a clip.
+   */
+  private const val HIGH_BAND_HZ = 4000.0
+
+  /**
+   * How finely the background floor is sampled, in seconds, and how wide a neighbourhood of
+   * blocks it is taken over.
+   *
+   * Half a second is a hundred 5 ms windows - far more than any transient occupies, so a strike
+   * cannot drag its own block's median upwards. That is the whole point of using a median.
+   */
+  private const val BACKGROUND_BLOCK_S = 0.5
+  private const val BACKGROUND_SPAN_S = 2.0
+
+  /**
+   * How long before contact a club is audibly moving, and the gap left before contact itself.
+   *
+   * A club head accelerating towards 100 mph is a broadband hiss that climbs for roughly this
+   * long and stops dead at the ball. Measured on the five long takes in `fixtures/raw`, the ramp
+   * is readable from about 200 ms out and is over about 30 ms before the click.
+   */
+  private const val SWISH_LOOKBACK_S = 0.20
+  private const val SWISH_GUARD_S = 0.03
+
+  /**
+   * The most credit a swing-up can earn, and how steeply it is counted.
+   *
+   * Uncapped the term does the opposite of its job: a WEAK click inside continuous noise - a
+   * golfer walking back with the club swinging at their side - measures an enormous ramp against
+   * its own local median and beats a strike thirty times louder. On 6iron-1 the walk back scored
+   * 9.9 where the strike scored 1.8. A ramp is evidence a club swung; a bigger ramp is not more
+   * evidence, it is a noisier background.
+   *
+   * Cubed because the raw separation is only about 1.7x while the impostors it has to beat are
+   * up to 2.2x LOUDER - a linear weight does not turn the ranking over.
+   */
+  private const val SWISH_CAP = 2.5
+  private const val SWISH_POWER = 3.0
+
+  /**
+   * A direct-form-1 biquad, carried across the whole track.
+   *
+   * Five multiplies a sample and no buffering, which is what lets the high band be measured
+   * inside the decode loop that already exists rather than in a second pass over a spectrum.
+   */
+  private class Biquad(
+    private val b0: Double,
+    private val b1: Double,
+    private val b2: Double,
+    private val a1: Double,
+    private val a2: Double,
+  ) {
+    private var x1 = 0.0
+    private var x2 = 0.0
+    private var y1 = 0.0
+    private var y2 = 0.0
+
+    fun step(x: Double): Double {
+      val y = b0 * x + b1 * x1 + b2 * x2 - a1 * y1 - a2 * y2
+      x2 = x1; x1 = x; y2 = y1; y1 = y
+      return y
+    }
+
+    companion object {
+      /** 2nd-order Butterworth (Q = 1/sqrt2). The RBJ cookbook high-pass, coefficients inline. */
+      fun highPass(sampleRate: Double, cutoff: Double): Biquad {
+        val w0 = 2.0 * Math.PI * cutoff / sampleRate
+        val cos0 = cos(w0)
+        val alpha = sin(w0) / (2.0 * sqrt(0.5))
+        val a0 = 1.0 + alpha
+        return Biquad(
+          (1.0 + cos0) / 2.0 / a0,
+          -(1.0 + cos0) / a0,
+          (1.0 + cos0) / 2.0 / a0,
+          (-2.0 * cos0) / a0,
+          (1.0 - alpha) / a0,
+        )
+      }
     }
   }
 
@@ -163,7 +265,27 @@ object SwingClip {
     DECAY,
 
     /**
-     * Agreement across every other method — the candidate the most detectors independently like.
+     * A high-frequency click with a club audibly swinging in front of it. **The shipped method.**
+     *
+     * Every other method here describes the TRANSIENT, which is why they all lose to a louder
+     * transient - and on a real take the louder transient routinely is not the swing. A ball
+     * dropped on the mat, a club tapped on the floor, the knock of a thumb on the phone as Record
+     * is pressed and a shot from the next bay are all clicks with SILENCE in front of them. A
+     * golf strike is the only one with two hundred milliseconds of club noise leading into it.
+     *
+     * Measured over the five long takes in `fixtures/raw` against hand-labelled strike frames
+     * (`services/analyzer/scripts/audio_truth.json`, via `checkaudio.py --truth`): 5/5 inside
+     * 250 ms, median error 0 ms, worst 10 ms, and unchanged with the edge prior switched off.
+     * Every other method scored 3/5 or worse on the same clips.
+     *
+     * **Those five clips are one golfer, indoors, in one simulator bay.** They are the first
+     * ground truth this project has and they are not a generalisation: nothing here has been run
+     * against an outdoor take, a left-hander, or a second device.
+     */
+    SWISH,
+
+    /**
+     * Agreement across every other method - the candidate the most detectors independently like.
      *
      * Each method's candidates are normalised against its own best (their scores are on wildly
      * different scales) and votes are summed over candidates that land within one separation
@@ -251,9 +373,13 @@ object SwingClip {
     /** Root-mean-square per window. Only CREST reads it, and only as the denominator that
      *  turns a peak into "how spiky", which is the one scale-free thing here. */
     val rmsOut = ArrayList<Double>(4096)
+    /** RMS per window of the high-passed signal - the envelope SWISH is built on. */
+    val bandOut = ArrayList<Double>(4096)
+    val highBand = Biquad.highPass(sampleRate.toDouble(), HIGH_BAND_HZ)
     var windowPeak = 0.0
     var windowHf = 0.0
     var windowSquares = 0.0
+    var windowBandSquares = 0.0
     var previousSample = 0.0
     var windowCount = 0
 
@@ -306,14 +432,21 @@ object SwingClip {
               windowPeak = max(windowPeak, sample)
               windowHf = max(windowHf, abs(sample - previousSample))
               windowSquares += sample * sample
+              // The filter runs ACROSS window boundaries, never within them - its state is the
+              // signal's recent history, and resetting it per window would plant a step response
+              // at the start of every one.
+              val high = highBand.step(sample)
+              windowBandSquares += high * high
               previousSample = sample
               if (++windowCount >= samplesPerWindow) {
                 out.add(windowPeak)
                 hfOut.add(windowHf)
                 rmsOut.add(sqrt(windowSquares / windowCount))
+                bandOut.add(sqrt(windowBandSquares / windowCount))
                 windowPeak = 0.0
                 windowHf = 0.0
                 windowSquares = 0.0
+                windowBandSquares = 0.0
                 windowCount = 0
               }
             }
@@ -331,8 +464,14 @@ object SwingClip {
       out.add(windowPeak)
       hfOut.add(windowHf)
       rmsOut.add(sqrt(windowSquares / windowCount))
+      bandOut.add(sqrt(windowBandSquares / windowCount))
     }
-    return Envelopes(out.toDoubleArray(), hfOut.toDoubleArray(), rmsOut.toDoubleArray())
+    return Envelopes(
+      out.toDoubleArray(),
+      hfOut.toDoubleArray(),
+      rmsOut.toDoubleArray(),
+      bandOut.toDoubleArray(),
+    )
   }
 
   /**
@@ -371,6 +510,7 @@ object SwingClip {
       Method.ATTACK -> byAttack(env.peak, windowSec)
       Method.HF -> byAttack(env.hf, windowSec)
       Method.SHARP -> bySharp(env, windowSec)
+      Method.SWISH -> bySwish(env, windowSec)
       Method.PEAK -> byLevel(env.peak, windowSec)
       Method.FLUX -> byFlux(env.peak, windowSec)
       Method.CREST -> byCrest(env, windowSec)
@@ -446,6 +586,70 @@ object SwingClip {
       val i = (cand.timeSec / windowSec).toInt().coerceIn(0, n - 1)
       Impact(cand.timeSec, cand.score * env.peak[i])
     }
+  }
+
+  /**
+   * A robust noise floor: the median of half-second blocks, smoothed over their neighbours.
+   *
+   * [byAttack] instead seeds an EMA from the file's first two hundred milliseconds - which is the
+   * instant a thumb came off the Record button. A handling knock there raises the bar for the
+   * whole clip and the real strike never clears [PEAK_RATIO] afterwards. A median is indifferent
+   * to the very spikes it is being used to measure against, which is the property the EMA has to
+   * be hand-guarded into faking (`if (ratio < PEAK_RATIO)`).
+   *
+   * Two cheap passes rather than a sort per window: block medians first, then a median over the
+   * blocks within [BACKGROUND_SPAN_S].
+   */
+  private fun rollingBackground(env: DoubleArray, windowSec: Double): DoubleArray {
+    if (env.isEmpty()) return env
+    val block = max(1, (BACKGROUND_BLOCK_S / windowSec).toInt())
+    val blocks = (env.size + block - 1) / block
+    val perBlock = DoubleArray(blocks) { b ->
+      val from = b * block
+      val to = min(from + block, env.size)
+      env.copyOfRange(from, to).sortedArray().let { it[it.size / 2] }
+    }
+    val reach = max(1, ((BACKGROUND_SPAN_S / BACKGROUND_BLOCK_S) / 2).toInt())
+    val smoothed = DoubleArray(blocks) { b ->
+      val from = max(0, b - reach)
+      val to = min(blocks, b + reach + 1)
+      perBlock.copyOfRange(from, to).sortedArray().let { it[it.size / 2] }
+    }
+    return DoubleArray(env.size) { i -> max(smoothed[min(i / block, blocks - 1)], 1e-6) }
+  }
+
+  /**
+   * How much air the club was moving in the two hundred milliseconds before this instant.
+   *
+   * **The one term that asks whether a GOLFER SWUNG, rather than whether something made a
+   * noise.** Everything else in this file describes the transient, so everything else loses to a
+   * louder transient. Capped - see [SWISH_CAP].
+   */
+  private fun swishGain(band: DoubleArray, floor: DoubleArray, i: Int, windowSec: Double): Double {
+    val lo = max(0, i - (SWISH_LOOKBACK_S / windowSec).toInt())
+    val hi = max(lo + 1, i - (SWISH_GUARD_S / windowSec).toInt())
+    if (hi > band.size) return 0.0
+    var sum = 0.0
+    for (k in lo until hi) sum += band[k]
+    return min((sum / (hi - lo)) / floor[i], SWISH_CAP)
+  }
+
+  /**
+   * A high-band click with a club swing audibly leading into it. See [Method.SWISH].
+   */
+  private fun bySwish(env: Envelopes, windowSec: Double): List<Impact> {
+    val band = env.band
+    if (band.size < 8) return emptyList()
+    val floor = rollingBackground(band, windowSec)
+    val found = ArrayList<Impact>()
+    for (i in 1 until band.size) {
+      val ratio = band[i] / floor[i]
+      val attack = band[i] / max(band[i - 1], 1e-6)
+      if (ratio <= PEAK_RATIO || attack <= 2.0) continue
+      val gain = swishGain(band, floor, i, windowSec).pow(SWISH_POWER)
+      found.add(Impact(i * windowSec, ratio * attack * gain))
+    }
+    return found
   }
 
   /**

@@ -34,10 +34,12 @@ import { CountdownOverlay } from "./CountdownOverlay";
 import {
   AUTOSTOP_COUNTDOWN_SEC,
   CACHE_KEEP_MS,
+  MAX_FPS_REQUEST,
   MAX_TAKE_SEC,
   SAVE_PAD_S,
   STOP_TIMEOUT_MS,
 } from "./captureConstants";
+import { FpsPicker } from "./FpsControl";
 import { ViewToggle } from "./ViewToggle";
 import { RecordingFrame } from "./RecordingFrame";
 import { SessionDock } from "./SessionDock";
@@ -154,6 +156,14 @@ export function SessionScreen() {
   /** The recorder's own start — the countdown must agree with the cap it is counting to. */
   const [takeStartedAt, setTakeStartedAt] = useState<number | null>(null);
 
+  /** The rate the RUNNING take configured — the ladder's resolved answer, for the recording
+   * pill. Null until the recorder reports, and cleared between takes so the previous take's
+   * rate can never flash over a new one still configuring. */
+  const [takeFps, setTakeFps] = useState<number | null>(null);
+  useEffect(() => {
+    if (state.mode !== "recording") setTakeFps(null);
+  }, [state.mode]);
+
   /**
    * Seconds until the take stops itself, inside the last few (null the rest of the time).
    * A one-second tick, alive only while recording — nothing here runs on an idle screen.
@@ -216,13 +226,20 @@ export function SessionScreen() {
    * can be compared against real clips rather than argued about. */
   const impactMethod = useImpactMethod();
 
+  const onTakeStarted = useCallback((startedAtMs: number, fps: number) => {
+    setTakeStartedAt(startedAtMs);
+    setTakeFps(fps);
+  }, []);
+
   const { stop: stopTake, onRecordingEnded } = useTakeRecorder(
     state.mode,
     cameraRef,
     dispatch,
     onRecordError,
     setPreviewLive,
-    setTakeStartedAt,
+    onTakeStarted,
+    // The golfer's pick, or the app's ceiling — the ladder still resolves the real rate.
+    state.fpsChoice ?? MAX_FPS_REQUEST,
   );
 
   /** Save on the review screen: trim to the chosen window, then mint the swing. */
@@ -550,10 +567,15 @@ export function SessionScreen() {
             view={state.view}
             zoom={state.zoom}
             onZoomRange={(range) => dispatch({ type: "set-zoom-range", range })}
+            onCaptureConfig={(e) =>
+              dispatch({ type: "set-capture-rates", rates: e.nativeEvent.rates ?? [] })
+            }
             cameraRef={cameraRef}
             onRecordingEnded={onRecordingEnded}
           >
-            {state.mode === "recording" ? <RecordingFrame paused={!previewLive} /> : null}
+            {state.mode === "recording" ? (
+              <RecordingFrame paused={!previewLive} fps={takeFps} />
+            ) : null}
 
 
             {/* Top scrim + header chrome — all of it gone while armed. */}
@@ -589,6 +611,25 @@ export function SessionScreen() {
                   </View>
                 )}
               </LinearGradient>
+
+              {/* The capture-rate pill, top right under the header (Taylor, 2026-08-23): what
+                  the next take will record at, tappable when the lens offers a choice. Lives in
+                  the idle chrome, so arming fades it — the RECORDING pill is RecordingFrame's. */}
+              <View
+                // Below the heading row, not beside it — the title is centred and can run
+                // long, and the two must never collide over footage.
+                style={[styles.fpsSlot, { top: insets.top + APP_HEADER_BAR + 62 }]}
+                pointerEvents="box-none"
+              >
+                <FpsPicker
+                  rates={state.captureRates}
+                  value={state.fpsChoice}
+                  onSelect={(fps) => {
+                    touched.current = true;
+                    dispatch({ type: "set-fps", fps });
+                  }}
+                />
+              </View>
 
               {/* Controls rail — everything you touch while FRAMING THIS phone, in one column:
                   the camera's own controls up top, the compact DTL / Front switcher sat directly
@@ -792,6 +833,9 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     textTransform: "uppercase",
   },
+  /** Right edge, vertically placed by the screen (the header's height is an inset away). The
+   *  dropdown grows DOWN from here over the footage, which box-none keeps tappable around it. */
+  fpsSlot: { position: "absolute", right: 14 },
   titleRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   titleSlot: { flex: 1, minWidth: 0 },
   newPill: {

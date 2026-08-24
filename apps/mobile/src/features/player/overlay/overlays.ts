@@ -20,17 +20,19 @@ export type ToggleKey = "skeleton" | "orient" | "club" | "trace" | "grow";
 export type Toggles = Record<ToggleKey, boolean>;
 
 /**
- * Defaults: the stick figure, the club-head trace, and the trace following the frame as it grows.
+ * Defaults: the stick figure, and nothing else.
  *
- * That trio is the single most compelling image the pipeline can produce and what a first-time
- * golfer should see with no menu digging. Everything else starts off so the first render is
- * uncluttered.
+ * The club-head trace is OFF until it is reliable (Taylor, 2026-08-22). It is the most
+ * compelling image the pipeline can produce and it is also the one most likely to be wrong, and
+ * a drawn line that misses the ball reads as the whole analysis being wrong — the opposite of
+ * what a default is for. The Overlays sheet still offers it; `grow` stays on so that whenever
+ * trace is turned back on it behaves as before.
  */
 export const DEFAULT_TOGGLES: Toggles = {
   skeleton: true,
   orient: false,
   club: false,
-  trace: true,
+  trace: false,
   grow: true,
 };
 

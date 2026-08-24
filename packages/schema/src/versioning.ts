@@ -47,8 +47,12 @@ export const CURRENT_API_VERSION: ApiVersion = "v1";
  *   8  + posture.butt_line, the DTL setup reference the seat should stay against.
  *   9  + playback_pad — frames of the fixed 1s approach / 1s finish the clip is too short to
  *      supply, held as a freeze frame so every swing's lead-in and run-out are the same length.
+ *  10  + audio_impact — the strike as HEARD, an independent second witness to Impact. It does
+ *      not move any event: audio carries the recording pipeline's latency and video wins on
+ *      precision. What it buys is `agrees`, which is the first thing in this contract able to
+ *      say that the video-side Impact is wrong, and it caught one that was 40 frames late.
  */
-export const CURRENT_ARTIFACT_SCHEMA = 9;
+export const CURRENT_ARTIFACT_SCHEMA = 10;
 
 /**
  * The oldest artifact a client must still render.

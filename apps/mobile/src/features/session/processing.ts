@@ -176,12 +176,22 @@ async function uploadSwingVideo(
 ): Promise<void> {
   const { url, headers } = await api.uploadTarget(upload.url, upload.headers);
 
-  const result = await FileSystem.uploadAsync(url, toFileUri(clipPath), {
-    httpMethod: upload.method === "POST" ? "POST" : "PUT",
-    uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
-    headers,
-  });
+  let result: FileSystem.FileSystemUploadResult;
+  try {
+    result = await FileSystem.uploadAsync(url, toFileUri(clipPath), {
+      httpMethod: upload.method === "POST" ? "POST" : "PUT",
+      uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+      headers,
+    });
+  } catch (err) {
+    // The first presigned-storage upload failed with a silent vanish (2026-08-23): the exception
+    // never left the toast. console.error survives release builds into logcat, which is the only
+    // eye anyone has on a production phone.
+    console.error(`upload transport failed for ${url.split("?")[0]}:`, err);
+    throw err;
+  }
   if (result.status < 200 || result.status >= 300) {
+    console.error(`upload refused ${result.status} from ${url.split("?")[0]}: ${result.body?.slice(0, 300)}`);
     throw new Error(`the upload was refused (${result.status})`);
   }
 }

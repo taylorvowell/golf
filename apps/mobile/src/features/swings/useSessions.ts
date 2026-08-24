@@ -47,6 +47,13 @@ supabase.auth.onAuthStateChange((event) => {
   if (event === "SIGNED_OUT") clearSessionsCache();
 });
 
+/** Drop one session row from the cache — the confirmed half of `deleteSession`. */
+export function dropSessionFromCache(sessionId: string): void {
+  if (!lastGood) return;
+  lastGood = lastGood.filter((s) => s.id !== sessionId);
+  for (const listener of listeners) listener();
+}
+
 export function useSessions(): SessionsHook {
   const [sessions, setSessions] = useState<SessionSummary[]>(() => lastGood ?? []);
   const [loading, setLoading] = useState(lastGood === null);

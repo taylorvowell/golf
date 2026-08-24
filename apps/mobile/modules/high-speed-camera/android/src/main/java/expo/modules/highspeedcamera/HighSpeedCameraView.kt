@@ -257,6 +257,15 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
       "width" to size.width,
       "height" to size.height,
       "highSpeed" to (config != null),
+      // Every rate the golfer could actually pick: the FIXED ranges only, because those are
+      // the only ones a take will run at (see TakeAttempt — a variable range is invalid with
+      // a preview and dishonest without one). Highest first, ready for a picker.
+      "rates" to (config?.second
+        ?.filter { it.lower == it.upper }
+        ?.map { it.upper }
+        ?.distinct()
+        ?.sortedDescending()
+        ?: emptyList<Int>()),
     ))
   }
 

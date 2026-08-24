@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type Ref } from "react";
 import {
   Text,
   TextInput,
@@ -20,8 +20,15 @@ import { FONT_BODY, FONT_DISPLAY } from "./typography";
 export function Input({
   label,
   containerStyle,
+  ref,
   ...inputProps
-}: TextInputProps & { label: string; containerStyle?: StyleProp<ViewStyle> }) {
+}: TextInputProps & {
+  label: string;
+  containerStyle?: StyleProp<ViewStyle>;
+  /** Forwarded to the inner `TextInput` — for focusing a field the flow moves to (React 19
+   *  passes `ref` as an ordinary prop, so there is no `forwardRef` wrapper here). */
+  ref?: Ref<TextInput>;
+}) {
   const t = useTheme();
   const [focused, setFocused] = useState(false);
   return (
@@ -39,6 +46,7 @@ export function Input({
         {label}
       </Text>
       <TextInput
+        ref={ref}
         accessibilityLabel={label}
         placeholderTextColor={t.muted2}
         {...inputProps}

@@ -27,8 +27,8 @@ Every vendor starts on a free tier; the paid plans are launch-prep line items, n
 | App builds + push | Expo EAS | free |
 | LLM (narrative, chat, vision) | Anthropic, via Vercel AI Gateway | usage, BYOK |
 | Media models (TTS, image, video) | Replicate | usage |
-| Crash + error tracking | Sentry | free → Team $26/mo |
-| Product analytics | PostHog | free tier |
+| Crash + error tracking | Sentry | **deferred 2026-08-22** — free tier when adopted |
+| Product analytics | PostHog | **deferred 2026-08-22** — free tier when adopted |
 
 ---
 
@@ -144,7 +144,7 @@ is solved here rather than left as homework:
   point of failure in exchange for convenience we do not need. Three environments
   (dev / preview / production) remain — that half of the original decision stands.
 
-**Transactional email is deliberately deferred.** Sign-in is Google + Apple; phone OTP is held.
+**Transactional email is deliberately deferred.** Sign-in is Google, Apple and phone OTP over Twilio Verify (no email in the OTP path).
 Supabase's built-in mailer covers the residual (deletion confirmation) at launch volume. When it
 stops being enough the answer is Resend — but do not open the account before there is a message
 to send.
@@ -212,6 +212,21 @@ discover on launch day. Treat that as one launch-readiness checklist item, not t
 Today's fixed cost is therefore **$0/mo**: every vendor on the roster has a free tier that covers
 solo development. The only real spend before launch is ~$12/yr for the domain and whatever
 Anthropic credit gets loaded.
+
+## Observability: deferred, not struck
+
+Taylor declined Sentry and PostHog in the setup pass (2026-08-22). Recorded as **deferred**
+rather than removed, because the reasoning that put them on the roster is unchanged:
+`observability-and-slos` names crash-free sessions as an SLO, and there is no other instrument
+that measures it.
+
+The deferral is cheap and the decision is right for now. Adoption is one SDK plus one DSN per
+surface, with no schema, contract or architecture consequence — nothing about waiting is
+irreversible, which is exactly what separates it from the EAS signing identity that *is* taken
+from the first build. Nothing shipping today produces telemetry worth collecting.
+
+**Re-opens at `observability-and-slos`, and it is launch-blocking there** — an SLO with no
+instrument is a number nobody can check.
 
 ## Path forward
 

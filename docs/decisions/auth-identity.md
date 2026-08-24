@@ -2,25 +2,70 @@
 
 Present tense, current state. Rationale lives in [ARCHIVE-numbered.md](ARCHIVE-numbered.md).
 
-### Sign-in is phone OTP, Google and Apple — and only those three
+### Sign-in is Google, phone OTP and email OTP; Apple joins when iOS ships
 
-**Decision:** The target sign-in surface is **phone OTP + Google + Sign in with Apple**. There is
-no password, and no magic link. Email OTP was the earlier choice and is now a **temporary
-transition path**, deleted — not disabled — once Google *and* phone are both live on Android.
-**Sequence:** Google (free, native) → phone (built against a local Supabase stack's test OTP) →
-Apple (needs $99 + Apple hardware) → real SMS delivery (needs A2P 10DLC).
-**Gotchas:** A hosted Supabase project has no test-number setting, so the free phone path requires
-a local `supabase start` stack. There is no `supabase/` directory in the repo yet.
-**Status:** Google is live on Android. **Phone OTP is HELD** (D46) — no SMS provider is set up, and
-the build is on core functionality instead. Three things stay in place because of that hold and
-must not be deleted until phone lands: **email OTP**, the **`DEV_USER_EMAIL`** identity, and the
-absence of **identity linking** (which needs a second provider to link to).
+**Decision:** The sign-in roster is **Google + phone OTP + email OTP** on both surfaces — mobile
+offers all three (Apple added once there is Apple hardware; the App Store mandates it alongside
+Google anyway), the web offers all three with Google as a PKCE redirect through `/auth/callback`.
+There is no password and **no magic link**: every email flow delivers a six-digit `{{ .Token }}`
+code, never a link, because a link forces an app-switch and lands the session in whichever browser
+the mail client picks. **Email OTP is permanent, not a transition path** — it is the only free
+channel (every SMS is a Twilio charge), the natural identifier at a desk, and one of the two
+identifiers that keep one golfer one account across surfaces. An account may hold both an email
+and a phone; either signs into the same account.
+**SMS goes through Twilio Verify, never Programmable SMS.** Verify is Twilio's managed OTP service:
+verification-only traffic is exempt from US A2P 10DLC brand/campaign registration, and Fraud Guard
+covers SMS pumping, which is the standard way an open OTP endpoint becomes a large bill. The costs
+are ~$0.058 per verification against ~$0.008 for a raw SMS — noise until roughly 100k
+verifications/yr — and Twilio owns the message copy and code length, so Supabase has no template to
+configure. Do not "save money" by moving to Programmable SMS; that re-opens the registration gate.
+**Testing costs nothing.** A hosted project's Auth → Providers → Phone → **Test OTP** maps a fixed
+number to a fixed code and short-circuits both the send and the verify, so the whole flow is
+exercisable without an SMS or a charge. This supersedes D31's belief that a free phone path needed
+a local `supabase start` stack — it does not, and there is still no `supabase/` directory.
+**Status:** Google (native) and phone are live on Android; email OTP ships on both surfaces —
+mobile `features/auth/email.ts` + `EmailSignInScreen`, web `/signin` (email or phone tab, Google
+button). The **production** auth project is not yet configured, and the `golf-swing` email
+templates still send the default link until the auth-config HANDOFF row is done. The
+**`DEV_USER_EMAIL`** identity stays until step 04 completes.
 **Cost of keeping the fallback, measured:** an unauthenticated request is *answered as the
 development identity* rather than refused, so a missing credential surfaces as **404** ("no such
 swing for this owner") instead of **401**. That turned a one-line client bug into a full diagnosis
 cycle once already (D48). Whenever a media or swing route 404s inexplicably, check whether the
 request carried a bearer token at all before checking anything else.
 **See:** ARCHIVE D31, which supersedes D25's provider choice but not its reasoning; D46 for the hold.
+
+### The app boundary allowlist has two lists, and the phone one fails closed
+
+**Decision:** `AUTH_ALLOWED_EMAILS` gates entry to the application at identity resolution
+(`lib/auth.ts`), not at signup — sign-up is open by construction, because the Supabase project is
+on the public internet and the publishable key ships in the client bundle. Phone OTP introduced an
+identity carrying **no address at all**, which the email list can neither admit nor describe, so
+phone numbers get their own list: `AUTH_ALLOWED_PHONES`, compared on digits alone because GoTrue
+stores the number without its `+` and a hand-written list will have one.
+**It fails closed.** While `AUTH_ALLOWED_EMAILS` is set, an unlisted phone identity resolves to
+"nobody". The tempting reading — no phone list means no phone restriction — would have meant that
+turning phone sign-in on silently opened a LAN-reachable app to anyone able to receive an SMS.
+**Consequence:** phone sign-in does nothing until a number is in `apps/web/.env`. That is the
+intended shape, and `isAllowed` is exported and directly tested because a list that admits the
+wrong person is not observable through a route.
+
+### Phone sign-in has a session but not yet an account
+
+**Decision:** A phone-only identity is signed in as far as Supabase is concerned and still has no
+row in `public.users`, because `users.email` is `NOT NULL` — an address is a recovery and delivery
+attribute rather than a property of the email provider, and a phone-only account is lost the day
+its owner changes carrier (migration 0009). `app.ensure_profile()` raises `SS_EMAIL_REQUIRED` for
+such an identity, which is a **prompt for onboarding, not a failure**.
+**Status: the prompt exists — onboarding's first question.** A phone-only account's onboarding
+opens with a required add-your-email step (`AttachEmailStep`): `supabase.auth.updateUser({ email })`
+then `verifyOtp(type: "email_change")` — pure auth calls, **no API route involved**, which is what
+sidesteps the `requireUserId`-raises problem entirely. The step is first and not skippable because
+every later onboarding save goes through the API and would 500 until the address lands. Attachment
+must go through `updateUser`, never a fresh `signInWithOtp` — that would mint a second, empty
+account. `email_exists` is surfaced to the golfer plainly: the address belongs to another account,
+sign in with it instead. Nothing catches `SS_EMAIL_REQUIRED` outside that flow, so a golfer who
+kills the app mid-onboarding still cannot store anything until they return.
 
 ### Google sign-in is native, and the server takes the session as a bearer token
 
@@ -103,12 +148,17 @@ shared column would destroy the evidence at the moment it became interesting. Ti
 specs live in `clubs` (§6) and are linked, never duplicated onto the profile.
 **See:** ARCHIVE D54; `PROJECT_MAIN.md` §5, §34.1, §43.
 
-### Identity linking is explicit, never inferred from the email address
+### Identity linking: same verified email links automatically; everything else attaches explicitly
 
-**Decision:** One person signing in with Google and later with Apple must land on **one** account,
-and that link is made explicitly.
-**Gotchas:** Apple's Hide My Email relay defeats match-by-email, so linking can never be inferred
-from the address. Not yet built — it needs a second provider to link to.
+**Decision:** One person must land on **one** account whatever they sign in with. Two mechanisms,
+by case: GoTrue's default **automatic linking on a matching verified email** connects a Google
+sign-in to an existing email-OTP account (both sides verified — this is the safe case and it stays
+on); an identifier that carries no matching address — a phone number, or Apple behind its Hide My
+Email relay — is attached **explicitly** from inside the signed-in account via
+`supabase.auth.updateUser`, confirmed by a code (the onboarding email step is this mechanism).
+**Gotchas:** Apple's relay defeats match-by-email, so an Apple-first user starts fresh and the
+onboarding attach step is what stitches them in. Explicit attachment must never be a fresh
+`signInWithOtp` — that creates a second account instead of linking the first.
 **See:** ARCHIVE D31.
 
 ### The same account stays signed in on several devices at once

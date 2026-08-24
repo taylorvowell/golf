@@ -10,37 +10,44 @@ import { useDebugGroups } from "../debug/DebugOverlay";
 import type { DebugGroup } from "./sheets/DebugSheet";
 
 /**
- * Which audio detector seeds the review mark — switchable, so the four can be compared against
+ * Which audio detector seeds the review mark — switchable, so the nine can be compared against
  * real footage instead of argued about.
  *
- * **There is no ground truth for impact time in this project.** No clip is hand-labelled, so
- * nothing here can produce an accuracy number, and whichever method ends up preferred is
- * preferred because a person watched the seed land on 29 clips. That is a judgement and must be
- * written down as one — this codebase has already shipped a "verified ±2 frames" claim that was
- * 48 frames wrong, and a switchable detector makes that mistake easier to make, not harder.
+ * **There IS now ground truth, and it is five clips.** `services/analyzer/scripts/audio_truth.json`
+ * holds hand-labelled strike frames for the five long takes in `fixtures/raw`, read off
+ * frame-accurate strips (ball on the mat / ball gone), and `checkaudio.py --truth` scores every
+ * method against them. That is what picked `swish`, and it is the first falsifiable claim this
+ * subsystem has had.
+ *
+ * It is also one golfer, indoors, in one simulator bay, right-handed, down-the-line. It is enough
+ * to REJECT a method and nowhere near enough to call one accurate — this codebase has already
+ * shipped a "verified ±2 frames" claim that was 48 frames wrong, and five clips is exactly the
+ * sample size that makes that mistake easy to repeat.
  *
  * `__DEV__` only — the picker is. The DEFAULT it starts from ships to everyone.
  */
 
 /**
- * Bumped to v2 when the default became `hf`.
+ * Bumped to v3 when the default became `swish`.
  *
  * A stored preference wins over the default, so without a new key every device that had ever
- * opened this menu would keep seeding with `attack` and the change would look like it had not
- * landed.
+ * opened this menu would keep seeding with the old method and the change would look like it had
+ * not landed. (v1 -> `attack`, v2 -> `hf`, v3 -> `swish`.)
  */
-const STORAGE_KEY = "swingsage.impactMethod.v2";
+const STORAGE_KEY = "swingsage.impactMethod.v3";
 const EDGE_KEY = "swingsage.impactEdgeWeighting.v1";
 
 /**
- * The shipped seeder (Taylor, 2026-08-22).
+ * The shipped seeder.
  *
- * `hf` keys on the high-frequency CLICK of a strike rather than its loudness, which is the
- * property that actually separates a golf shot from the other loud events at a range. Chosen on
- * judgement watching real clips — there are still no labelled strike frames in this project, so
- * this is a preference and must never be recorded as an accuracy figure.
+ * `swish` keys on a high-frequency click WITH a club audibly swinging in front of it. The second
+ * half is what the other eight methods were all missing: they describe the transient, so they
+ * lose to a louder transient, and on a real take the louder transient is routinely a ball dropped
+ * on the mat, a club tapped on the floor or a shot from the next bay.
+ *
+ * It replaced `hf`, which on the same clips seeded four seconds into the walk back.
  */
-export const DEFAULT_IMPACT_METHOD: ImpactMethod = "hf";
+export const DEFAULT_IMPACT_METHOD: ImpactMethod = "swish";
 
 function isMethod(v: unknown): v is ImpactMethod {
   return typeof v === "string" && (IMPACT_METHODS as string[]).includes(v);

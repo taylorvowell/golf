@@ -210,7 +210,10 @@ from CSS, not a JS config), and the shared card/panel shapes as named components
 
 **API routes — all under `/api/v1/`, nothing unversioned (D41).** `GET /api/v1/swings`, and per
 swing: `analysis`, `silhouette`, `isolation`, `club-only`, `markers`, `stages`, `reanalyze` (POST
-start / GET poll), `thumb`, `video`. Plus `GET /api/v1/client`, the one unauthenticated route:
+start / GET poll), `thumb`, `video`, and `DELETE /api/v1/swings/:id` — which also deletes the
+swing's SESSION when it was the last one in it, and reports which. Sessions:
+`GET`/`POST /api/v1/sessions`, `PATCH /api/v1/sessions/:id`; there is deliberately no session
+delete. Plus `GET /api/v1/client`, the one unauthenticated route:
 version negotiation, so a build too old to sign in can still learn that it is too old. The one
 deliberately unversioned prefix is `/api/internal/jobs/*` — the worker-facing surface (source
 download, artifact upload, job events), machine-to-machine and authenticated by a signed

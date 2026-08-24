@@ -63,7 +63,7 @@ export async function getCurrentUser() {
     ? await supabase.auth.getUser(bearer)
     : await supabase.auth.getUser();
   if (error || !data.user) return null;
-  if (!isAllowed(data.user.email)) return null;
+  if (!isAllowed(data.user)) return null;
   return data.user;
 }
 
@@ -106,16 +106,39 @@ export function parseBearer(header: string | null | undefined): string | null {
  *
  * Deliberately not a client-side check: those are a suggestion. This runs on every identity
  * resolution, so a stranger with a valid Supabase session still resolves to "nobody" here.
+ *
+ * Exported for its own tests: the failure that matters is a list that admits somebody it should
+ * not, and that is not observable through a route without standing up a session first.
  */
-function isAllowed(email: string | undefined): boolean {
-  const raw = process.env.AUTH_ALLOWED_EMAILS?.trim();
-  if (!raw) return true;
-  if (!email) return false;
-  return raw
-    .split(",")
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean)
-    .includes(email.toLowerCase());
+export function isAllowed(identity: { email?: string; phone?: string }): boolean {
+  const emails = process.env.AUTH_ALLOWED_EMAILS?.trim();
+  // No list at all means no restriction — the right default for a deployed product.
+  if (!emails) return true;
+
+  if (identity.email) {
+    return emails
+      .split(",")
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean)
+      .includes(identity.email.toLowerCase());
+  }
+
+  // A phone identity carries no address, so the email list can neither admit nor describe it.
+  // It gets its own list and **fails closed**: while `AUTH_ALLOWED_EMAILS` is set this app is
+  // reachable over the LAN with open sign-up, and treating "no phone list" as "all phones welcome"
+  // would mean turning on phone OTP silently unlocked the boundary for anyone who can receive an
+  // SMS. Compared on digits alone — GoTrue stores the number without its `+`, and a list written
+  // by hand will have one.
+  if (identity.phone) {
+    const digits = identity.phone.replace(/\D/g, "");
+    return (process.env.AUTH_ALLOWED_PHONES ?? "")
+      .split(",")
+      .map((p) => p.replace(/\D/g, ""))
+      .filter(Boolean)
+      .includes(digits);
+  }
+
+  return false;
 }
 
 /**

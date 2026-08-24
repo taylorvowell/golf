@@ -31,8 +31,38 @@ export interface AuthenticatedImage {
   headers: Record<string, string>;
 }
 
+/**
+ * The last source resolved per path, so a REMOUNT starts with a picture instead of a null frame.
+ *
+ * Resolution is async (the token is), which means every fresh mount used to render at least one
+ * frame with no source — and on the swing page that frame is visible: the swipe's cover and the
+ * player's poster both remount per swing, and each opened dark for a beat before its own image
+ * arrived (Taylor, 2026-08-22, the swipe flicker). The cache seeds the FIRST render synchronously;
+ * the effect still re-resolves in the background, so the cache decides what draws first, never
+ * what is true — `useSwings`' own rule.
+ *
+ * Entries are replaced on every token refresh (the resolve below re-runs and overwrites), and the
+ * map is bounded: at ~100 paths the oldest half is dropped, which at two URLs per swing is far
+ * beyond a session's working set.
+ */
+const lastResolved = new Map<string, AuthenticatedImage>();
+
+function remember(path: string, source: AuthenticatedImage): void {
+  if (lastResolved.size > 100) {
+    let drop = lastResolved.size / 2;
+    for (const key of lastResolved.keys()) {
+      if (drop <= 0) break;
+      lastResolved.delete(key);
+      drop -= 1;
+    }
+  }
+  lastResolved.set(path, source);
+}
+
 export function useAuthenticatedImage(path: string | null): AuthenticatedImage | null {
-  const [source, setSource] = useState<AuthenticatedImage | null>(null);
+  const [source, setSource] = useState<AuthenticatedImage | null>(() =>
+    path ? (lastResolved.get(path) ?? null) : null,
+  );
 
   useEffect(() => {
     if (!path) {
@@ -40,12 +70,16 @@ export function useAuthenticatedImage(path: string | null): AuthenticatedImage |
       return;
     }
     let live = true;
-    setSource(null);
+    // Seeded from the cache rather than blanked: clearing to null here is exactly the one-frame
+    // dark flash the cache exists to remove. An uncached path still starts null via the effect's
+    // own state read below.
+    setSource(lastResolved.get(path) ?? null);
 
     const resolve = () =>
       void api
         .mediaSource(path)
         .then((s) => {
+          remember(path, s);
           if (live) setSource(s);
         })
         .catch(() => {

@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, Check, Trash2, Undo2 } from "lucide-react-native";
+import { ArrowLeft, Check, Trash2, Undo2, X } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import FrameClockView from "../../../modules/frame-clock/src/FrameClockView";
@@ -39,6 +39,7 @@ import {
   stripTimes,
   timeAtFraction,
 } from "./scrubWarp";
+import { swingStages } from "./swingStages";
 
 /**
  * Confirm the take before it becomes a swing.
@@ -62,8 +63,18 @@ import {
  * overrides it. Candidates are not drawn on the track: a row of ticks asks the golfer to
  * choose between the app's guesses, which is a harder question than the one being asked.
  *
- * **The last candidate wins, not the loudest.** A golfer takes a practice swing before the
- * real one, so the strike that matters is the later of two similar transients.
+ * **The strongest candidate wins, unless a later one is nearly as strong.** A golfer may hit two
+ * balls in one take, and then the second is the one being marked. The old rule — always take the
+ * later of two plausible transients, to duck a practice swing — was compensating for a detector
+ * that could not tell a practice swing from a strike; `swish` can, because a practice swing is a
+ * whoosh with no click on the end of it.
+ *
+ * **The track draws the swing, not just the strike.** A strike is enough to place the rest: the
+ * parts of a golf swing sit at known distances either side of contact, so the bar carries a
+ * three-colour shape — backswing, downswing, through — hung off the mark and moving with it. It
+ * turns "remember when you swung" into lining a shape up with the pictures under it. It is a
+ * TEMPLATE and `swingStages.ts` says so at length; the analyzer measures the real events later
+ * and a hand-dragged mark never overrides them.
  */
 
 /** The handle's width. Small — it marks an instant now, not a span of time. */
@@ -74,6 +85,9 @@ const RISE_FROM = 160;
 
 /** The strip's height. Named because both the style and the centring maths need the number. */
 const TRACK_H = 64;
+
+/** How tall the swing-shape row is. A stripe, not a band — it must not compete with the film. */
+const STAGE_H = 5;
 
 /** One screen-reader step. A tenth of a second is well inside the tolerance the hint
  * promises ("just get close"), so a few taps always land the mark. */
@@ -118,6 +132,13 @@ export interface SwingReviewProps {
   method?: ImpactMethod;
   /** Whether the detector down-weights the first/last five seconds. */
   edgeWeighting?: boolean;
+  /**
+   * An IMPORTED clip's review (Taylor, 2026-08-23): the file lives in the golfer's own
+   * library and survives whatever happens here, so a bin would promise a deletion this
+   * screen cannot make. The discard becomes an X labelled "Cancel", with no confirmation —
+   * backing out of an import costs nothing.
+   */
+  importMode?: boolean;
 }
 
 export function SwingReview({
@@ -128,6 +149,7 @@ export function SwingReview({
   dev = false,
   method,
   edgeWeighting = true,
+  importMode = false,
 }: SwingReviewProps) {
   const insets = useSafeAreaInsets();
   const player = useRef<FrameClockHandle>(null);
@@ -386,6 +408,26 @@ export function SwingReview({
       ? fractionAtTime(scrubMap, impactSec ?? 0) * trackWidth - HANDLE_W / 2
       : 0;
 
+  /**
+   * The swing shape under the handle, in track pixels.
+   *
+   * Measured through `scrubMap` like everything else on this track — the axis is warped, so a
+   * band laid out from raw seconds would drift away from the pictures it is meant to sit over as
+   * the finger moves. One mapping, every consumer (the same rule the report transport keeps).
+   */
+  const stages = useMemo(() => {
+    if (impactSec === null || trackWidth <= 0) return [];
+    return swingStages(impactSec, durationS, slowMo).map((band) => {
+      const left = fractionAtTime(scrubMap, band.fromSec) * trackWidth;
+      return {
+        key: band.key,
+        color: band.color,
+        left,
+        width: Math.max(0, fractionAtTime(scrubMap, band.toSec) * trackWidth - left),
+      };
+    });
+  }, [impactSec, durationS, slowMo, scrubMap, trackWidth]);
+
   return (
     <View style={styles.root} testID="swing-review">
       <View
@@ -514,6 +556,23 @@ export function SwingReview({
             })}
           </View>
 
+          {/* The swing, along the bottom of the strip. A thin bar rather than a wash over the
+              pictures: the pictures are what the shape is being aligned WITH, and tinting them
+              is the one thing that would make that harder. */}
+          {ready ? (
+            <View style={styles.stages} pointerEvents="none">
+              {stages.map((band) => (
+                <View
+                  key={band.key}
+                  style={[
+                    styles.stageBand,
+                    { left: band.left, width: band.width, backgroundColor: band.color },
+                  ]}
+                />
+              ))}
+            </View>
+          ) : null}
+
           {/* The mark. The frame on screen is whatever sits under its centre line. */}
           {trackWidth > 0 && ready ? (
             <View
@@ -529,14 +588,21 @@ export function SwingReview({
           <Pressable
             testID="swing-review-delete"
             accessibilityRole="button"
-            // A dev clip is a library file that survives whatever happens here, so the
-            // destructive framing is a lie — this button just backs out of it.
-            accessibilityLabel={dev ? "Back to the clip library" : "Delete this take"}
+            // A dev clip and an import are both files that survive whatever happens here, so
+            // the destructive framing would be a lie — these buttons just back out.
+            accessibilityLabel={
+              importMode ? "Cancel this import" : dev ? "Back to the clip library" : "Delete this take"
+            }
             disabled={saving}
-            onPress={() => (dev ? onDelete() : setConfirmingDelete(true))}
+            onPress={() => (dev || importMode ? onDelete() : setConfirmingDelete(true))}
             style={({ pressed }) => [styles.delete, pressed && styles.pressedHard]}
           >
-            {dev ? (
+            {importMode ? (
+              <View style={styles.cancelStack}>
+                <X size={26} color={COLORS.text} strokeWidth={2.4} />
+                <Text style={styles.cancelLabel}>Cancel</Text>
+              </View>
+            ) : dev ? (
               <ArrowLeft size={26} color={COLORS.text} strokeWidth={2.2} />
             ) : (
               <Trash2 size={26} color={COLORS.text} strokeWidth={2.2} />
@@ -668,6 +734,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   strip: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, flexDirection: "row" },
+  /** The swing-shape row, along the bottom edge of the strip. Thin on purpose: it says where
+   * the swing is, and the pictures say what is in it. */
+  stages: { position: "absolute", left: 0, right: 0, bottom: 0, height: STAGE_H },
+  stageBand: { position: "absolute", top: 0, bottom: 0 },
   /** Equal cells across the whole track — the strip IS the timeline, so the nth picture has
    * to sit at the nth slice of time. */
   /** Clips the overhang. The picture inside is sized from the frame's real ratio, never fitted. */
@@ -706,6 +776,9 @@ const styles = StyleSheet.create({
   },
 
   actions: { flexDirection: "row", alignItems: "center", gap: 14 },
+  // The import cancel stacks a label under the glyph inside the same 64pt round target.
+  cancelStack: { alignItems: "center", justifyContent: "center", gap: 1 },
+  cancelLabel: { color: COLORS.text, fontSize: 10, fontFamily: undefined, fontWeight: "700" },
   delete: {
     width: 64,
     height: 64,

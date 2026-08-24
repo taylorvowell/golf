@@ -206,6 +206,43 @@ class HighSpeedCameraModule : Module() {
     }
 
     /**
+     * What an ARBITRARY clip is, read from its own container — for imports, which arrive
+     * without the recorder's knowledge. `captureFps` is the slow-motion truth (the
+     * `com.android.capture.fps` the camera stamped, surfaced by the platform as
+     * CAPTURE_FRAMERATE): a phone slow-mo is captured at 240 and WRITTEN at 30, so its
+     * timeline runs slower than the world by captureFps/videoFps. Zero means "not stamped" —
+     * an ordinary real-time clip — and the caller must treat it that way, never as a rate.
+     */
+    AsyncFunction("probeClip") { path: String, promise: Promise ->
+      try {
+        val mmr = android.media.MediaMetadataRetriever()
+        try {
+          mmr.setDataSource(path)
+          val capture = mmr.extractMetadata(
+            android.media.MediaMetadataRetriever.METADATA_KEY_CAPTURE_FRAMERATE,
+          )?.toDoubleOrNull() ?: 0.0
+          val durationMs = mmr.extractMetadata(
+            android.media.MediaMetadataRetriever.METADATA_KEY_DURATION,
+          )?.toLongOrNull() ?: 0L
+          // There is no frame-rate retriever key; the playback rate is frames over duration.
+          val frames = mmr.extractMetadata(
+            android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_FRAME_COUNT,
+          )?.toDoubleOrNull() ?: 0.0
+          val video = if (frames > 0 && durationMs > 0) frames * 1000.0 / durationMs else 0.0
+          promise.resolve(mapOf(
+            "captureFps" to capture,
+            "videoFps" to video,
+            "durationMs" to durationMs,
+          ))
+        } finally {
+          mmr.release()
+        }
+      } catch (e: Throwable) {
+        promise.reject("PROBE_CLIP", e.message ?: "could not read clip metadata", e)
+      }
+    }
+
+    /**
      * Remove a recording the flow is finished with — a source the trim replaced, or a take
      * the golfer binned. `false` (already gone) is a normal answer, never an error: the
      * caller's goal is "not on disk", and it isn't.

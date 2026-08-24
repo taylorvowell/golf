@@ -6,6 +6,7 @@ import { api } from "../../platform/client";
 import { reportUpgradeRequired, upgradeDetailOf } from "../../platform/VersionGate";
 import { supabase } from "../auth/supabase";
 import { setOrphanCleanup } from "./pendingImports";
+import { clearAnalysisCache } from "../player/useAnalysis";
 import { clearPendingImports } from "./pendingImports";
 import { dropSessionFromCache } from "./useSessions";
 
@@ -112,6 +113,8 @@ supabase.auth.onAuthStateChange((event) => {
     // An import in flight belongs to the account that started it — a placeholder row surviving
     // a sign-out would draw one golfer's incoming swing on another's log.
     clearPendingImports();
+    // And their artifacts — whole-clip keypoints are the most personal payload the app holds.
+    clearAnalysisCache();
   }
 });
 

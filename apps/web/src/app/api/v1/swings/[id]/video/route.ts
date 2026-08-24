@@ -1,7 +1,9 @@
 import {
   ARTIFACT_BUCKET,
   PLAYBACK_URL_TTL_SECONDS,
+  SOURCE_BUCKET,
   artifactKey,
+  sourceKey,
   type ArtifactName,
 } from "@/lib/media/keys";
 import { getMediaStore } from "@/lib/media/store";
@@ -44,10 +46,31 @@ export async function GET(
     if (await store.exists(ARTIFACT_BUCKET, stamped)) name = "framestamp.mp4";
   }
 
-  const key = artifactKey(access.address, name);
+  let bucket: string = ARTIFACT_BUCKET;
+  let key = artifactKey(access.address, name);
+
+  /**
+   * `normalized.mp4` is published at the END of analysis, but a swing must play from the moment
+   * its upload lands — the post-recording screen shows this swing while the analyzer is still
+   * minutes from done, and a player that 404s until then reads as "saving broke the video".
+   * Until the artifact exists, serve the uploaded original instead. The original is not CFR and
+   * carries no artifact, so nothing frame-accurate is promised over it — and nothing is drawn on
+   * it either, because there is no analysis to draw. The client re-prepares onto the normalized
+   * copy when the swing turns ready (its source URI is keyed on the status).
+   */
+  if (name === "normalized.mp4" && !(await store.exists(ARTIFACT_BUCKET, key))) {
+    for (const filename of ["original.mp4", "original.mov"]) {
+      const raw = sourceKey(access.address, filename);
+      if (await store.exists(SOURCE_BUCKET, raw)) {
+        bucket = SOURCE_BUCKET;
+        key = raw;
+        break;
+      }
+    }
+  }
 
   if (store.canRedirect) {
-    const url = await store.signedUrl(ARTIFACT_BUCKET, key, PLAYBACK_URL_TTL_SECONDS);
+    const url = await store.signedUrl(bucket, key, PLAYBACK_URL_TTL_SECONDS);
     if (!url) return new Response("not found", { status: 404 });
     // 307 rather than 302: the method must be preserved, and a cached permanent redirect to a URL
     // that expires in six hours would be exactly the wrong thing to leave in a browser cache.
@@ -59,13 +82,13 @@ export async function GET(
 
   const range = req.headers.get("range");
   const common = {
-    "Content-Type": "video/mp4",
+    "Content-Type": key.endsWith(".mov") ? "video/quicktime" : "video/mp4",
     "Accept-Ranges": "bytes",
     "Cache-Control": "no-store",
   };
 
   if (!range) {
-    const object = await store.open(ARTIFACT_BUCKET, key, null);
+    const object = await store.open(bucket, key, null);
     if (!object) return new Response("not found", { status: 404 });
     return new Response(object.body, {
       status: 200,
@@ -79,14 +102,14 @@ export async function GET(
   const start = m[1] ? parseInt(m[1], 10) : 0;
   if (Number.isNaN(start)) return new Response("bad range", { status: 416 });
 
-  const object = await store.open(ARTIFACT_BUCKET, key, {
+  const object = await store.open(bucket, key, {
     start,
     end: m[2] ? parseInt(m[2], 10) : undefined,
   });
   if (!object) {
     // The store distinguishes "no such object" from "unsatisfiable range" only by whether it can
     // stat it, so ask again for the whole object to tell a 404 from a 416.
-    const whole = await store.open(ARTIFACT_BUCKET, key, null);
+    const whole = await store.open(bucket, key, null);
     if (!whole) return new Response("not found", { status: 404 });
     await whole.body.cancel();
     return new Response("unsatisfiable", {

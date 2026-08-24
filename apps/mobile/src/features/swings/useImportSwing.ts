@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2, FileVideo, VideoOff } from "lucide-react-native";
 import type { SessionSummary } from "@swingsage/schema/contract";
 
+import { SAVE_PAD_S } from "../session/captureConstants";
 import { getProcessing, subscribeProcessing } from "../session/processing";
 import type { CaptureView } from "../session/sessionState";
+import type { SwingTake } from "../session/SwingReview";
 import { useHandedness } from "../profile/useProfile";
 import { useToast } from "../toast/ToastProvider";
 import { importSwing, pickSwingVideo, type PickedClip } from "./importSwing";
@@ -27,15 +29,30 @@ export interface ImportHook {
   begin: () => void;
   /** The clip awaiting its angle, or null. */
   pending: PickedClip | null;
-  /** Confirm the angle and start the run. */
+  /** Confirm the angle and move to the review pass. */
   confirm: (view: CaptureView) => void;
   cancel: () => void;
+  /**
+   * The clip on the mark-impact review screen, or null. An import is a recording that happened
+   * somewhere else (importSwing.ts), so it earns the SAME verification pass a recorded take
+   * gets: nothing becomes a swing until the golfer has seen the window and said save
+   * (capture spec §01.5). Skipping it was the one place the two paths diverged — and it
+   * uploaded whole multi-minute camera-roll clips (Taylor, 2026-08-23).
+   */
+  reviewing: { take: SwingTake; view: CaptureView } | null;
+  /** Save on the review screen: trim to the window, then upload the cut. */
+  saveReview: (window: { startSec: number; endSec: number }) => void;
+  /** Bin it. Nothing exists server-side yet, so this costs nothing. */
+  discardReview: () => void;
+  savingReview: boolean;
 }
 
 export function useImportSwing(sessions: readonly SessionSummary[]): ImportHook {
   const toast = useToast();
   const handedness = useHandedness();
   const [pending, setPending] = useState<PickedClip | null>(null);
+  const [reviewing, setReviewing] = useState<{ take: SwingTake; view: CaptureView; clip: PickedClip } | null>(null);
+  const [savingReview, setSavingReview] = useState(false);
 
   /** The sessions list changes as imports mint into it; the run reads the latest, not a capture. */
   const sessionsRef = useRef(sessions);
@@ -151,12 +168,97 @@ export function useImportSwing(sessions: readonly SessionSummary[]): ImportHook 
     (view: CaptureView) => {
       const clip = pending;
       setPending(null);
-      if (clip) run(clip, view);
+      if (!clip) return;
+      void (async () => {
+        // The native detector and cutter open the file themselves — they want a bare path,
+        // not a file:// URI (the recorder has always handed them one).
+        const path = clip.uri.replace(/^file:\/\//, "");
+        // What the clip actually is, from its own container: a phone slow-mo is captured at
+        // 240 and WRITTEN at 30, and every second of its timeline is 1/8th of a real second.
+        // Without this the review's before/after window is 8× too generous and the analyzer
+        // is handed a swing that appears to take twenty seconds (Taylor, 2026-08-23).
+        let fps = 30;
+        let slowMoFactor: number | undefined;
+        let durationMs = clip.durationMs ?? 0;
+        try {
+          const { default: HighSpeedCamera } = await import("../../../modules/high-speed-camera/src");
+          const probe = await HighSpeedCamera.probeClip(path);
+          if (probe.durationMs > 0) durationMs = probe.durationMs;
+          if (probe.videoFps > 0) fps = probe.videoFps;
+          if (probe.captureFps > probe.videoFps && probe.videoFps > 0) {
+            fps = probe.captureFps;
+            slowMoFactor = probe.captureFps / probe.videoFps;
+          }
+        } catch {
+          // A clip the probe cannot read still reviews on the picker's numbers.
+        }
+        if (!durationMs || durationMs <= 0) {
+          // A clip whose length nothing could read cannot drive a scrubber. Rare; the
+          // whole-clip upload is the honest fallback, and the analyzer still finds the swing.
+          run(clip, view);
+          return;
+        }
+        setReviewing({
+          take: { path, fps, durationMs, slowMoFactor },
+          view,
+          clip,
+        });
+      })();
     },
     [pending, run],
   );
 
+  const saveReview = useCallback(
+    (window: { startSec: number; endSec: number }) => {
+      const current = reviewing;
+      if (!current || savingReview) return;
+      setSavingReview(true);
+      void (async () => {
+        const { take, view, clip } = current;
+        try {
+          // Lazy: the native module throws where it does not exist (jest), and this screen only
+          // needs the cutter at the moment of save.
+          const { default: HighSpeedCamera } = await import("../../../modules/high-speed-camera/src");
+          // Same slack the recorded path gives (SessionScreen.saveTake): the box on screen is
+          // the promise, the pad protects the takeaway from a finger that stopped a hair early.
+          const startSec = Math.max(0, window.startSec - SAVE_PAD_S);
+          const endSec = Math.min(take.durationMs / 1000, window.endSec + SAVE_PAD_S);
+          const { path } = await HighSpeedCamera.trimClip(take.path, startSec, endSec);
+          run(
+            { ...clip, uri: path, durationMs: Math.round((endSec - startSec) * 1000) },
+            view,
+          );
+        } catch {
+          // Trim failed: the picked clip is still in the golfer's library, so nothing is lost —
+          // but silently uploading minutes of footage they just cut down to five seconds is not
+          // the fallback they asked for. Say it and let them retry.
+          toast({
+            id: "import-trim-failed",
+            title: "Couldn't trim that clip",
+            detail: "Nothing was uploaded. Pick it again to retry.",
+            icon: VideoOff,
+          });
+        } finally {
+          setSavingReview(false);
+          setReviewing(null);
+        }
+      })();
+    },
+    [reviewing, run, savingReview, toast],
+  );
+
+  const discardReview = useCallback(() => setReviewing(null), []);
+
   const cancel = useCallback(() => setPending(null), []);
 
-  return { begin, pending, confirm, cancel };
+  return {
+    begin,
+    pending,
+    confirm,
+    cancel,
+    reviewing: reviewing ? { take: reviewing.take, view: reviewing.view } : null,
+    saveReview,
+    discardReview,
+    savingReview,
+  };
 }

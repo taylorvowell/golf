@@ -61,8 +61,34 @@ export interface SwingPageProps {
    * entrance, where the card arriving IS the analysis finishing).
    */
   staticSheet?: boolean;
+  /**
+   * The score circle over the picture's top-right corner.
+   *
+   * OFF on the standalone swing page (Taylor, 2026-08-22): the scorecard is already sitting on
+   * the screen there, so a second copy of the number floating in the corner is chrome nobody
+   * asked for. It stays on the after-swing screen, where the score ARRIVING is the analysis
+   * finishing.
+   */
+  scoreDoor?: boolean;
   /** Host chrome over everything — sheets, the analyzing bar, the completion overlay. */
   extras?: ReactNode;
+  /**
+   * Host chrome belonging to the PICTURE — it rides inside the video-open shell and fades out
+   * with the transport as the scorecard comes up (the standalone page's swing heading).
+   */
+  pictureChrome?: ReactNode;
+  /**
+   * The raw scroll offset, out to a host that drives its OWN chrome from it — the standalone
+   * page's app header and main menu, which live outside this component and must follow scroll
+   * exactly as every other screen's do.
+   */
+  onScrollY?: (y: number) => void;
+  /** Crossings into and out of video-open, for host chrome that only belongs over the picture
+   * (the standalone page gates its sideways swipe on it — a page that slides away under an open
+   * scorecard is not what a sideways drag over a report means). */
+  onVideoOpenChange?: (open: boolean) => void;
+  /** The player's first real frame reached the glass — the swipe cover's release signal. */
+  onFirstFrame?: () => void;
   testID?: string;
 }
 
@@ -83,7 +109,12 @@ export function SwingPage({
   topRight,
   chromeTopInset,
   staticSheet = false,
+  scoreDoor = true,
   extras,
+  pictureChrome,
+  onScrollY: onHostScrollY,
+  onVideoOpenChange,
+  onFirstFrame,
   testID,
 }: SwingPageProps) {
   const t = useTheme();
@@ -148,6 +179,7 @@ export function SwingPage({
   const scrollRun = useRef({ last: 0, run: 0 });
   const onScrollY = useCallback(
     (y: number) => {
+      onHostScrollY?.(y);
       const state = scrollRun.current;
       const delta = y - state.last;
       state.last = y;
@@ -158,7 +190,7 @@ export function SwingPage({
       if (state.run > threshold) setBarHidden(true);
       else if (state.run < -threshold || y <= 0) setBarHidden(false);
     },
-    [windowHeight],
+    [windowHeight, onHostScrollY],
   );
 
   const vm = useMemo(
@@ -231,6 +263,9 @@ export function SwingPage({
         swingId={swing.id}
         frameCount={swing.frameCount}
         fps={swing.fps}
+        // An unanalysed swing plays its uploaded original the moment it lands — the analyzer is
+        // not a gate on watching the swing that was just hit (Taylor, 2026-08-23).
+        videoReady={swing.status === "ready"}
         aspectRatio={aspectRatio}
         score={analyzed && typeof swing.overallScore === "number" ? swing.overallScore : null}
         tempoRatio={analyzed ? swing.tempoRatio : null}
@@ -257,6 +292,7 @@ export function SwingPage({
         }
         // The score circle IS the door to the sheet, so it only exists once there is a score.
         cornerOverlay={
+          scoreDoor &&
           analyzed &&
           typeof swing.overallScore === "number" &&
           !celebrating &&
@@ -297,9 +333,12 @@ export function SwingPage({
         onScrollY={onScrollY}
         onVideoOpenChange={(open) => {
           if (!open) setSeenAnalysis(true);
+          onVideoOpenChange?.(open);
         }}
+        onFirstFrame={onFirstFrame}
         topRightExtras={topRight}
         topChromeInset={chromeTopInset}
+        pictureChrome={pictureChrome}
         // With an entrance, it waits for the CONTENT, not just the analysis flag (Taylor,
         // 2026-08-19): the report request can take seconds, and a card that slides up to show
         // skeletons promises something it does not have. Content arriving IS the entrance —
@@ -328,9 +367,10 @@ export function SwingPage({
  * How much of the sheet shows above the bar in video-open — the drag handle's block (12+6+14)
  * plus the first sliver of the scorecard, so the tab overlays the video enough to read as a
  * card and not a stripe (Taylor, 2026-08-19). This is also the sheet's FLOOR: the card never
- * sits below it.
+ * sits below it. Lowered from 96 (Taylor, 2026-08-22) — the card starts further down, so more
+ * of the swing is uncovered before the golfer asks for the stats.
  */
-const TIP_ABOVE_BAR = 96;
+const TIP_ABOVE_BAR = 70;
 /**
  * `ReportVideoLayer` passes `overlap={92}` to the scaffold, so 92px of card is on screen at
  * scroll-0 BEFORE any drop. The tab's lift must count it, or the "tip" arrives 92px too tall.
@@ -338,11 +378,12 @@ const TIP_ABOVE_BAR = 96;
  */
 const SHEET_REST_OVERLAP = 92;
 /** How far the tab pushes the transport up while it shows — visibly, or it reads as nothing
- * moving at all (Taylor). */
-const TIP_PUSH = 30;
+ * moving at all (Taylor). Trimmed with `TIP_ABOVE_BAR` (Taylor, 2026-08-22: less space below
+ * the scrubber) — the card sits lower now, so the transport has less to clear. */
+const TIP_PUSH = 14;
 
 /** Clear of the bar, the record button's rise, and the analyzing pill beside it. */
-const ANALYZING_INSET = 128;
+const ANALYZING_INSET = 118;
 
 /** Where sheet content begins below the card's top: the handle block (32) minus the content
  * pull-up (-18) — both are this file's own numbers. */

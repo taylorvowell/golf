@@ -290,13 +290,22 @@ controls over the camera picture. Soft and close (`PANEL_SHADOW`) — it separat
 swing rather than decorating it, and the exception does not generalise to surfaces that sit on a
 theme colour.
 
-**The shipped seeder is `hf`** (Taylor, 2026-08-22): it keys on the high-frequency click of a
-strike rather than its loudness, which is what separates a golf shot from the other loud things at
-a range. Chosen on judgement against real clips — there are still no labelled strike frames in this
-project, so it is a preference and must never be written down as an accuracy figure. The storage
-key carrying the golfer's own choice was bumped to `v2` with the change, because a stored value
-outranks a default and every device that had opened the picker would otherwise keep seeding with
-the old one.
+**The shipped seeder is `swish`**: a high-frequency click with a club audibly swinging in front of
+it. The second half is the part that matters — every other method describes the transient, so every
+other method loses to a louder transient, and on a real take the louder transient is routinely a
+ball dropped on the mat, a club tapped on the floor or a shot from the next bay. A club head
+accelerating towards 100 mph is a broadband hiss that climbs for ~200 ms and stops dead at contact;
+nothing else in a range's soundscape arrives with a run-up. The storage key carrying the golfer's
+own choice is bumped with every default change (`v3` now), because a stored value outranks a
+default and a device that had opened the picker would otherwise keep seeding with the old method.
+
+**A later candidate must now score within 60 % of the best to win, not 45 %.** The rule it feeds —
+"the last plausible strike, not the loudest", to duck a practice swing — was doing far more than
+that: it is what turned a correct top candidate into a mark four seconds into the walk back, and it
+walks past a strike that is the FIRST of a take's three bursts. The premise was wrong anyway, since
+a practice swing is a whoosh with no click on the end of it and a detector that requires the click
+never ranked one highly. 0.6 keeps the case the rule is actually for — two balls genuinely struck
+in one take — and drops the case it was never for.
 
 ### A player reports CODED dimensions, so every layout must apply the rotation itself
 
@@ -368,37 +377,73 @@ The main one is parked on a frame rather than decoding, but on a 1080p240 clip t
 free — this is the surface the "two-decoder reading" HANDOFF row is about.
 **Dependency:** `expo-video` (~57.0.2) enters the app here, with a config plugin, for this preview.
 
-### The impact detector is switchable, and none of its methods has an accuracy number
+### The impact detector is switchable, and exactly one of its methods has a measured accuracy
 
-**Decision:** `detectImpacts` takes a method — **`attack`** (rise vs. a running background, the
-shipped default), **`peak`** (plain loudest window), **`hf`** (rise in a first-difference envelope,
-keying on the broadband *click* rather than loudness), **`flux`** (positive energy change — onset
-strength, which survives a background that is not quiet), **`sharp`** (HF attack weighted by level,
-the two working ideas composed), **`crest`** (peak over RMS — impulsiveness measured without
-loudness, the only scale-free test here), **`decay`** (fast rise AND fast fall, the only test that
-looks forward, which is what separates a strike from anything that sustains) and **`ensemble`**
-(each method normalised against its own best, votes pooled by proximity — agreement is evidence
-where magnitude is not). Eight different physical discriminators, not eight tunings of one; all
-three envelopes are built in a single decode, so switching costs nothing and the ensemble is one
-decode rather than eight.
-**Both ends of a clip are down-weighted** (`EDGE_SEC` = 5 s, ramping to a `EDGE_FLOOR` of 0.15 at
-the very edge, and shrinking on a short clip). A golfer filming alone walks out and walks back, so
-both ends carry footsteps and phone handling — the loud, sharp, non-golf material every method is
-vulnerable to. A **prior, not a filter**: an edge strike still wins when nothing in the interior
-comes close, because "highly unlikely" is the instruction and "impossible" is not. It is switchable
-off, since a prior nobody can disable is a prior nobody can check. The no-candidate fallback moved
-from 2.5 s to 6 s from the end for the same reason — the silent case must not land in the region
-the loud case is told to distrust. Selected from the debug menu,
-persisted, and the review screen names the active method on a dev clip — changing it re-seeds the
-mark in place, so one clip yields four answers without a reload.
+**Decision:** `detectImpacts` takes a method. **`swish`** ships — a high-band click with a club
+swing audibly leading into it. The other eight remain, switchable, because they are what makes the
+comparison checkable: **`attack`** (rise vs. a running background), **`peak`** (plain loudest
+window), **`hf`** (rise in a first-difference envelope), **`flux`** (positive energy change — onset
+strength, which survives a background that is not quiet), **`sharp`** (HF attack weighted by level),
+**`crest`** (peak over RMS — impulsiveness without loudness, the only scale-free test), **`decay`**
+(fast rise AND fast fall, the only backwards-and-forwards test) and **`ensemble`** (each method
+normalised against its own best, votes pooled by proximity). Nine physical discriminators, not nine
+tunings of one; every envelope is built in a single decode, so switching costs nothing.
 
-**No method here has a measured accuracy, and none may be given one.** There are no hand-labelled
-strike frames in this project, so a preferred method is preferred because a person watched the seed
-land on real clips — a judgement, and it must be written down as one. This is the exact shape of
-the "event accuracy verified ±2 frames" claim that was later found 48 frames wrong; a switchable
-detector makes that error easier to commit, not harder. The seed is also never a measurement in the
-product sense: the analyzer locates the true Impact frame from the club-head low point, and it
-overrides anything this picks or the golfer drags.
+**`swish` measures the run-up, not the bang, and that is the whole difference.** Its three other
+terms (band energy over a robust local floor, window-to-window attack, a cubed and capped swing-up
+gain) are ordinary; the swing-up is not, and it is the only term that asks whether a GOLFER swung
+rather than whether something made a noise. Two supporting changes came with it and matter
+independently: the high band is a real 2nd-order Butterworth high-pass at 4 kHz rather than a
+one-tap difference — whose gain rises linearly with frequency and therefore never stops responding
+to loudness — and the noise floor is a median of half-second blocks rather than an EMA seeded from
+the clip's first 200 ms, which is the instant a thumb came off the Record button.
+
+**Both ends of a clip are down-weighted** (`EDGE_SEC` = 5 s, ramping to an `EDGE_FLOOR` of 0.15 at
+the very edge, shrinking on a short clip). A golfer filming alone walks out and walks back, so both
+ends carry footsteps and phone handling. A **prior, not a filter**: an edge strike still wins when
+nothing in the interior comes close. It is switchable off, since a prior nobody can disable is a
+prior nobody can check — and `swish` scores identically with it off, which is the strongest evidence
+that the scorer rather than the prior is doing the work. The no-candidate fallback sits 6 s from the
+end, so the silent case does not land in the region the loud case is told to distrust.
+
+**There is now ground truth, and it is five clips.**
+`services/analyzer/scripts/audio_truth.json` holds hand-labelled strike times for the five long
+takes in `fixtures/raw/`, read off frame-accurate strips (`checkstrip.py`) as the last frame with
+the ball still on the mat. `checkaudio.py --truth` scores every method against them.
+**`swish` 5/5 inside 250 ms, median error 0 ms, worst 10 ms. Every other method 3/5 or worse; the
+previously shipped `hf` seeded 4.06 s into the walk back on one of them.**
+
+**That number is not a general accuracy claim and must never be quoted as one.** One golfer, one
+indoor simulator bay, right-handed, down-the-line, five clips, and all five shot with the stock
+camera app rather than SwingSage's own recorder. It is enough to have rejected eight methods and
+nowhere near enough to trust a figure from. This is the exact shape of the "event accuracy verified
+±2 frames" claim later found 48 frames wrong — the correct reading is "the others are worse", not
+"this one is right". The seed is also never a measurement in the product sense: the analyzer
+locates the true Impact frame from the club-head low point, and it overrides anything this picks or
+the golfer drags.
+
+**Audio lags video by 121–148 ms on every clip it has been measured on, and nothing compensates for
+it.** The gap does not scale with ball speed across three different club speeds, so it is recording
+pipeline latency rather than the ball's flight to the screen. It is a property of *those files*;
+SwingSage's own `MediaRecorder` path is a different pipeline and has never been measured. Correcting
+for an unmeasured constant is how a systematic error gets baked in, so the seed is left where it is
+heard — comfortably inside the "just get close" tolerance the review screen promises.
+
+### The review scrub bar draws the swing, not just the strike
+
+**Decision:** The mark-the-strike track carries a three-colour shape — backswing, downswing,
+through — hung off the mark and moving with it, in the same colours the report's phase bands and the
+overlay trace use. A strike is enough to place the rest: the parts of a golf swing sit at known
+distances either side of contact (`swingStages.ts`, 0.8 s / 0.25 s / 0.45 s in REAL seconds, scaled
+by the clip's slow-motion factor). It turns "remember when you swung" into sliding a shape over the
+pictures until it covers the swing in them.
+**Gotchas:** These are a **template, never a measurement**, and the distinction is load-bearing —
+`phaseBands.ts` is the opposite of this file and returns an EMPTY list rather than guess, because it
+describes a report. Nothing may build a metric, a score or a saved window edge on `swingStages`. The
+bands follow the live **mark**, while the scrub axis's magnification stays anchored on the
+**detector** — so the shape moves under the finger while the ground under it does not. A band is a
+5 px stripe along the bottom of the filmstrip rather than a wash over it: the pictures are what the
+shape is being aligned with, and tinting them is the one thing that would make that harder.
 
 ### Pre-recorded clips can stand in for a take, from a folder that needs no permission
 
@@ -920,8 +965,13 @@ imagery. The shapes, by control kind:
   surface ramp.
 - **Imagery** (video thumbs, the floating back orb's glass) takes a dark shade **over** the
   picture — a surface swap has nothing to show through a photograph.
-- **Selection controls** (`Segmented`, toggles, tab switches) need no extra pressed state — the
-  selection moving *is* the feedback.
+- **Selection controls** (`Segmented`, toggles, tab switches) DO need their own pressed state
+  (Taylor, 2026-08-22, reversing the earlier "the selection moving is the feedback"). A selected
+  state is not a tap state: an inactive segment that answers nothing reads as a dead area of the
+  control until the selection actually moves, and on a phone there is no hover to say otherwise.
+- **The only exemptions are surfaces with nothing to show**: a full-screen dismiss scrim, and a
+  transparent hit area over content that reacts some other way (the player's picture, which plays
+  its own tap feedback). Exempting one means saying why at the site.
 
 **Pressables inside anything that scrolls set `unstable_pressDelay` to `SCROLL_PRESS_DELAY_MS`**
 (`design/system/press.ts`, 90 ms): `pressIn` fires the instant a finger lands and only then does
@@ -1121,32 +1171,54 @@ stay a chip row rather than becoming tiles: there are dozens of fields and every
 tile to say what an angle looks like, and the chips choose which.
 **Scope:** A group the artifact cannot support is still hidden, never disabled.
 
-### Three speeds as a vertical toggle; play rides the scrub; no restart, no loop button, no frame stepper
+### A halving speed ladder as a vertical toggle; play rides the scrub; no restart, no loop button, no frame stepper
 
 **Decision:** The transport is **two controls, placed where they are used** (Taylor, 2026-08-22).
 `PlayCap` — the aqua gradient cap — sits at the far right of the **scrub's own row**, because the
 playhead and the thing that moves it are one control surface. `SpeedToggle` stands on the **left,
 above the transport**, as a vertical column in the capture screen's zoom-rail language: same 34px
-rail, same 148px height, same aqua, same small-caps label (`SPEED`) underneath. The rates are still
-three — `1x` · `0.5x` · `0.1x`, fastest at the top so "more is up" matches zoom — and looping is
-still permanently on with no control. There is no frame stepper and no speed sheet. **The restart
-button is deleted:** the swing loops, so "play it again from the start" was a control for something
-the player already does on its own.
-**Gotchas:** Speed is a **toggle, not a slider** — zoom is continuous and speed is three rates, so
+rail, same aqua, same small-caps label (`SPEED`) underneath. The rates **halve** — `1x` · `1/2` ·
+`1/4` · `1/8`, fastest at the top so "more is up" matches zoom (Taylor, 2026-08-23) — because each
+stop divides a high-speed capture's rate cleanly: a 240fps take presents 120/60/30 real frames a
+second, so slow motion stays smooth the whole way down and at `1/4` and below every sensor frame
+reaches the screen. The old `0.1x` divided nothing evenly and bought almost nothing over `1/8`;
+slower than `1/8` is a scrubbing task. Looping is still permanently on with no control; there is no
+frame stepper and no speed sheet. **The restart button is deleted:** the swing loops, so "play it
+again from the start" was a control for something the player already does on its own.
+**Gotchas:** Speed is a **toggle, not a slider** — zoom is continuous and speed is a few rates, so
 the aqua handle *switches* between stops rather than being dragged; it springs between them under
-the native driver, because snapping between two stops in one frame reads as three buttons rather
+the native driver, because snapping between two stops in one frame reads as a set of buttons rather
 than one control. The handle is a **circle** of the rail's width, centred in whichever stop is
 selected, and the rail carries **no `CONTROL_EDGE`** (Taylor, 2026-08-22) — over footage the
-outline read as a box drawn around the control rather than as the control's own shape. Three speeds, not four — a quarter sat between two rates that already do their
-jobs (half is "the whole shape, slower", a tenth is for the transition, which is over in about four
-frames). Labels are plain decimals: a `¼` glyph is a font risk on Android for no gain. The handle
-resolves to the **nearest** stop rather than an exact match, so a rate this column does not carry
-(the dev lab) never parks it off the rail. Removing the loop button removed the only place its
-behaviour was observable, so `useFramePlayer.test.ts` carries it — default on, restart-at-window-
-start without pausing, stop-at-end when off.
+outline read as a box drawn around the control rather than as the control's own shape. The rail
+grew with the fourth stop (each stop keeps the 37px rhythm) rather than squeezing four into three's
+148px. Labels are ASCII fractions (`1/2`), never decimals ("0.125x" does not fit the rail) and
+never `¼`-style glyphs (a font risk on Android). The handle resolves to the **nearest** stop rather
+than an exact match, so a rate this column does not carry (the dev lab) never parks it off the
+rail. Removing the loop button removed the only place its behaviour was observable, so
+`useFramePlayer.test.ts` carries it — default on, restart-at-window-start without pausing,
+stop-at-end when off.
 **Scope:** Speed is still applied natively (`setPlaybackSpeed`) — a JS timer would drop frames and
 show a tenth of the swing while calling it slow motion. `ReportPlayerBar` is gone; the two pieces
 live in `ReportTransport.tsx`.
+
+### The capture screen shows its rate: a picker while idle, the configured truth while recording
+
+**Decision (Taylor, 2026-08-23):** The capture surface carries a **capture-rate pill**
+(`FpsControl.tsx`), top right. Two faces. **Idle:** `FpsPicker` — what the next take will record
+at, defaulting to the highest rate the lens offers, tappable as a dropdown when there is a choice.
+Its options are exactly the native probe's fixed high-speed rates (`onCaptureConfig.rates`,
+reducer-validated) — never a hardcoded list, so it shows only what the device will really do.
+**Recording:** `FpsBadge` inside `RecordingFrame` — the rate the running take actually
+**configured** (the ladder's resolved answer from `startRecording`), never the request; null until
+the recorder reports. This is §2.3's no-silent-degrade rule made visible: a fallback shows its
+face on the screen where it happens, instead of surfacing days later in a report. The golfer's
+pick lives in session state (`fpsChoice`, null = highest) and feeds `useTakeRecorder`'s ceiling;
+a lens change that can no longer honour the pick reverts it to highest.
+**Gotchas:** The picker lives in the idle chrome so arming fades it — the recording badge is
+RecordingFrame's own. `fpsChoice` may only ever be a member of the probed `captureRates` (the
+zoom-range pattern: probed, never assumed). The recording badge clears when the mode leaves
+`recording`, so a previous take's rate can never flash over a new take still configuring.
 
 ### One player: the legacy SwingPlayer surface is deleted
 
@@ -1195,12 +1267,67 @@ A **sideways drag moves to the next swing**: the whole video area travels with
 the finger and the neighbour comes in behind it, so both swings are on screen for the whole
 gesture. The order is the log's own — newest session first, newest swing first inside it — so a
 swipe moves the way the list they tapped moves.
-**Gotchas:** The swipe changes **state, not route**. Pushing a route per swing would build a back
-stack ten deep out of what is, to the golfer, one screen; the route param seeds the current id and
-re-seeds when it changes, so every door still lands where it aimed. The neighbours are **stills,
-never players** — three live decoders on one screen is what wedges a phone, and the still is the
-same poster frame the real layer paints under its own video, so the hand-off at the end of the
-slide is not a swap. The heading's top is computed identically in both the page and the peek
+**Gotchas:** **The player is a `textureView`, and the swipe is why.** A `SurfaceView` — the
+frame-clock module's default, and what the report player used until 2026-08-22 — is composited by
+the platform OUTSIDE the view hierarchy: it ignores its ancestors' transforms, clipping and
+z-order. So while the page translated sideways the video DID NOT GO WITH IT; the previous swing
+kept painting in place while everything else slid, and no view drawn "over" it could cover it.
+That was the flicker, and it survived both a re-ordered recentre and a covering still because
+neither could reach a layer the platform composites separately. The two other players in this app
+already paid this cost (`SwingReview`, `SwingPreviewPip`); a texture view is slower and
+higher-power, and that is the price of a page whose layering is true rather than lucky.
+**The recentre happens AFTER the swap, never before it.** Recentring in the slide's
+completion callback puts the container back at 0 while React is still holding the OLD page, so the
+frame that paints is the swing you just swiped away from — the visible symptom was "it flashes the
+new video, then flashes the old swing it slid from, then comes back" (Taylor, 2026-08-22). The
+container now stays at ±width until the current swing id actually changes, and recentres in a
+LAYOUT effect. The gesture is locked for that window, because a second swipe starting from an
+uncommitted position compounds the offset. **That alone was not enough**, and the reason is worth
+keeping: `x` is native-driven, so `setValue` goes down the native-animated queue — a different
+queue from the one carrying React's mount, and the two are not ordered against each other. When
+the transform lands one frame early, the container is back at centre while the OLD page is still
+mounted: one frame of the previous swing, overlay and all, right before the new one plays. A frame
+that cannot be ordered has to be HIDDEN instead, so a still of the incoming swing is mounted by the
+same setState that swaps the page — in that commit by construction — and sits OUTSIDE the animated
+container where no transform can move it. **It is DERIVED, not fired**: the cover renders
+whenever the swing on screen has not painted a frame yet, which by construction includes the commit
+that swaps it in — an imperative `setCovering` beside `onGo` was two setStates in two components
+whose batching was an assumption. It releases on the incoming player's FIRST PAINTED FRAME, never
+on a timer (the gap being hidden is token-resolve + decoder-prepare, which takes however long it
+takes); `onFirstFrame` threads up from the video layer's `painted` flip, and a 4s bail releases a
+cover over a clip that will never paint. The recentre is deferred ONE ANIMATION FRAME past the
+swap's commit, so the native-queue `setValue` can only ever apply under the cover. And
+`useAuthenticatedImage` now seeds from a module cache of the last resolved source per path, so a
+remounting cover/poster/peek opens WITH its picture instead of a dark frame while the token
+re-resolves — the cache decides what draws first, never what is true. **The chrome must not replay
+its entrance on a swipe either**: the artifact is cached per session (`useAnalysis`, LRU of 6 — it
+only changes on re-analysis, so a cached serve is the same truth without the multi-MB refetch, and
+without it every swipe re-downloaded the artifact and the overlay/phases/orbs POPPED in seconds
+late over a playing video), the centre play disc is born hidden when the page starts in video-open
+instead of mounting visible and fading, and `OrbIn` takes `instant` — the pop-in is for an orb
+that APPEARS mid-session, never for one already earned before the page mounted. **The transition
+breathes rather than cuts**: the swipe's own x drives a chrome signal (1 at rest → 0 over the
+first 40% of a screen of travel, shared by context) that the controls shell multiplies onto its
+opacity, so the outgoing page's controls fade as it is dragged; and a page that opens playing
+holds its controls at 0 until the video has PAINTED, then eases them in over ~420ms — picture
+first, controls following. An error releases the fade too (a clip that will not play still shows
+its disabled transport), and the heading stays outside it, because it has to match the peek
+pixel-for-pixel through a slide. The fade wears its own view: `controlsPad` is a non-native
+animated layout value, and a native opacity in the same style object is the one-driver-per-view
+trap. **And every `expo-image` in the swipe path carries
+`recyclingKey`** — expo-image recycles native views, and a poster or peek mounted right after
+another swing's page unmounted can be handed that page's view still holding the PREVIOUS swing's
+bitmap, which it shows until the new source decodes. That recycled bitmap WAS the flash; keyed, the
+view clears instead. **The commit threshold is deliberately low** — 14% of the screen, or a 0.25 px/ms flick:
+moving between swings is the most repeated gesture here, and asking for a third of the screen turns
+it into a deliberate drag every time. The vertical scroll is protected by requiring the drag to be
+1.3x more sideways than vertical, never by making the sideways gesture expensive. The swipe changes
+**state, not route**. Pushing a route per swing would build a back stack ten deep out of what is,
+to the golfer, one screen; the route param seeds the current id and re-seeds when it changes, so
+every door still lands where it aimed. The neighbours are **stills, never players** — three live
+decoders on one screen is what wedges a phone, and the still is the same poster frame the real
+layer paints under its own video (same URL, same `contentFit`, same disk cache), so the hand-off at
+the end of the slide is not a swap. The heading's top is computed identically in both the page and the peek
 (`inset.top + APP_HEADER_BAR`) or it jumps by a status bar's height the moment a slide lands. The
 gesture is `PanResponder` and only claims a drag that is unambiguously sideways: a horizontal
 paging `ScrollView` would become an ancestor of the scrub, whose own responder grants on
@@ -1215,6 +1342,75 @@ sheet is still how you move between swings: there the session, not the log, is t
 The fps pill is the one frame-rate number that is product rather than instrument — it is a fact
 about the FOOTAGE, not a live counter, and a golfer can act on it (a 30 fps clip cannot show what
 a 120 one can).
+
+### The log is an accordion of days, and a session dies when its last swing does
+
+**Decision (Taylor, 2026-08-22):** The log draws **one card per DAY**, not per session row: a
+golfer went to the range once on Saturday, however many sessions the app minted while they were
+there. `sessionize` is unchanged — every screen that reasons about a session's mode or its trend
+point still sees the real rows — and `mergeByDay` is the visual layer over it, carrying every row
+it stands for in `parts`. Each card is collapsible, the featured newest one included, **exactly
+one is open at a time**, and it opens and shuts with a measured height animation.
+
+**There is no delete-session control, and no `DELETE /api/v1/sessions/:id`.** A session is an
+organizing layer over swings (D29) and means nothing without any, so **emptying one deletes it** —
+server-side, inside the last swing's own delete, which reports `sessionDeleted` so the client's
+cached log drops the row instead of drawing an empty session. A delete of its own would be a
+second and blunter way to destroy swings, one whose blast radius is invisible from the thing being
+tapped. Each swing row carries a **trash button**; it confirms through `ChoiceSheet`, and on
+confirm the row **fades, slides and collapses out of the list before the request is even sent**.
+
+Each row shows the swing's own **contact-frame thumbnail** at its left and its **camera angle** as
+a pill leading the date line. The angle is NOT on the session header: a day's card can hold swings
+filmed both ways, so an angle up there is either a list of every angle used — saying nothing about
+any one swing — or a claim about the day that is not true.
+**Gotchas:** The removal animation runs BEFORE the network call, not alongside it: on a fast
+connection the cache update lands first and unmounts the row mid-fade, which is the flicker the
+animation exists to prevent. A merged card's `parts` matter because a day that spans two session
+rows would otherwise keep whichever it missed. A merged card's name and mode survive only if the
+day AGREES on one; two differently-named sessions under one of the two names would be putting a
+title on swings it was never given to. Quarantine survives the merge per PART, so a drills hour
+inside a range visit neither feeds the day's best nor stops the rest of the day feeding it. The
+confirmation sheet is hosted on the SCREEN, not inside the card — a card that deletes its own last
+swing unmounts mid-request and takes the sheet with it. The emptiness check runs inside the same
+transaction as the swing delete, so two concurrent deletes of the last two swings cannot both read
+"one left". The featured card's open state is a three-state value — `undefined` (not chosen,
+resolves to the newest), an id, and `null` (the golfer shut it) — because collapsing the newest
+session must not spring back open on the next render. The collapse animates `height` with
+`useNativeDriver: false` and shares its style object with nothing native; content stays MOUNTED
+while closed so it can be measured, with `pointerEvents="none"` so a screen reader does not read a
+collapsed session's swings. **The measured child is `position: absolute`, and that is what makes
+it work at all**: with the children in normal flow the box starts at height 0, so they are laid out
+inside a zero-height parent, so `onLayout` reports 0, so the box never learns a height to open to
+and the content never appears. The animated value is in PIXELS rather than 0→1 — a 0→1 value needs
+an `interpolate` whose `outputRange` is rebuilt on every measurement change, which is a second
+place for the current height to be wrong.
+
+### An import shows up in the log while it is still running
+
+**Decision (Taylor, 2026-08-22):** From the moment an upload starts, the swing appears in the log
+as a dimmed row inside the session it is heading for — numbered as the ball it will be, with the
+pipeline's own stage as its subtitle and the waiting dots where its score will go. It **fades and
+rises into place** rather than appearing between two frames, it is **not tappable**, and it carries
+no delete. If the import minted a session that has no swings yet, that session is drawn too: an
+empty card whose only row is the one arriving.
+**Gotchas:** The store (`pendingImports.ts`) is MODULE-level and subscribes to the pipeline
+directly, for the same reason `processing.ts` is: the log is not mounted for most of an import, and
+a hook that owned this would forget every run it started. A finished run's placeholder outlives it
+by ~900ms so the real row replaces it rather than blinking out and back in; a failed run's
+disappears at once, because the toast is what explains it and a row still claiming to analyse would
+contradict that. The dim is on the WHOLE row: "not ready" and "ready but unremarkable" have to be
+distinguishable before the tap, not discovered by it. The log's own stat tiles still count the
+CONFIRMED list only — a swing that is still uploading has no score and no guarantee of arriving,
+and a count that moved early would have to move back.
+**A swing arriving OPENS the session it is arriving into**, and its row carries the same **staged
+progress track** the after-swing screen's analyzing bar draws — five segments, the stage in words
+above them, and never a percentage. Uploading a clip while a different day was expanded left the
+news three cards away and collapsed: the golfer did the thing and the log showed them nothing.
+**Scope:** Imports. A swing recorded in session mode has its own after-swing screen showing the
+same pipeline, and does not pass through here. The auto-expand is keyed on the run's own id
+through a seen-set, so it fires once per import and never on a stage tick — a card that re-opened
+itself every few seconds could not be closed.
 
 ### The swing log is a sheet of sessions, and the row is "Swing N" · date · score
 

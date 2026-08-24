@@ -171,6 +171,38 @@ describe("notifications — the inbox is personal", () => {
   });
 });
 
+describe("notifications — dismissing (0018)", () => {
+  it("lets the owner delete their own row, and nobody else delete it", async () => {
+    const id = await notifyAs(COACH_C, GOLFER_A, "coach_comment", "Dismiss me");
+
+    // Another golfer's DELETE matches no row — 0 rows, not an error, and nothing removed.
+    const byOther = await asUser(GOLFER_B, (tx) =>
+      tx.unsafe(`delete from public.notifications where id = $1 returning id`, [id]),
+    );
+    expect(byOther.length).toBe(0);
+    expect((await inboxOf(GOLFER_A)).some((n) => n.id === id)).toBe(true);
+
+    const byOwner = await asUser(GOLFER_A, (tx) =>
+      tx.unsafe(`delete from public.notifications where id = $1 returning id`, [id]),
+    );
+    expect(byOwner.length).toBe(1);
+    expect((await inboxOf(GOLFER_A)).some((n) => n.id === id)).toBe(false);
+  });
+
+  it("still refuses every write that is not the ack or the dismiss", async () => {
+    // 0018 opens DELETE and nothing else — the surface it widened must not have widened twice.
+    const id = await notifyAs(COACH_C, GOLFER_A, "coach_comment", "Untouchable");
+    await expect(
+      asUser(GOLFER_A, (tx) =>
+        tx.unsafe(`update public.notifications set title = 'rewritten' where id = $1`, [id]),
+      ),
+    ).rejects.toThrow();
+    await asUser(GOLFER_A, (tx) =>
+      tx.unsafe(`delete from public.notifications where id = $1`, [id]),
+    );
+  });
+});
+
 describe("notifications — grouped delivery (D60)", () => {
   const GROUP = "conversation:test-thread";
 

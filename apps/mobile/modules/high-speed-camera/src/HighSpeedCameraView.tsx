@@ -39,9 +39,19 @@ export interface HighSpeedCameraViewProps {
    * The rate and size this lens will actually record at, fired once the camera is probed
    * (and again on a lens change). `highSpeed: false` means the lens cannot record a take at
    * all — the front camera on essentially every Android.
+   *
+   * `rates` is every fixed high-speed rate the chosen size offers, highest first — the
+   * SELECTABLE truth, so a rate picker lists what the device will really do and nothing else.
+   * Optional because an installed native build may predate it; treat absent as "no choice".
    */
   onCaptureConfig?: (event: {
-    nativeEvent: { fps: number; width: number; height: number; highSpeed: boolean };
+    nativeEvent: {
+      fps: number;
+      width: number;
+      height: number;
+      highSpeed: boolean;
+      rates?: number[];
+    };
   }) => void;
   /** The take handle (`startRecording`/`stopRecording`) — methods live on the VIEW because
    * the take shares the preview's camera device; see `HighSpeedCameraViewRef`. */

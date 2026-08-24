@@ -28,12 +28,22 @@ export function useTakeRecorder(
   onError: (message: string) => void,
   /** Told whether the picture stays live during the take — some devices cannot do both. */
   onPreviewLive?: (live: boolean) => void,
-  /** The recorder's own start time (device clock), for timers that must match its cap. */
-  onStarted?: (startedAtMs: number) => void,
+  /** The recorder's own start time (device clock), for timers that must match its cap —
+   * and the rate the session actually configured, which is what the recording pill shows. */
+  onStarted?: (startedAtMs: number, fps: number) => void,
+  /** The rate ceiling for the NEXT take — the golfer's pick, or the app's default. */
+  maxFps: number = MAX_FPS_REQUEST,
 ) {
   /** True from the start call until ANY ending settled — the guard that keeps the tap/cap
    * race from double-finalizing one take. */
   const active = useRef(false);
+
+  /** Read at start time through a ref: the ceiling changing between takes must not re-run
+   * the start effect — entering the mode is the only trigger (see the effect's deps). */
+  const maxFpsRef = useRef(maxFps);
+  useEffect(() => {
+    maxFpsRef.current = maxFps;
+  }, [maxFps]);
 
   /** The recorder's own start, once it reports one. Drives both take timers. */
   const [startedAtMs, setStartedAtMs] = useState<number | null>(null);
@@ -49,7 +59,7 @@ export function useTakeRecorder(
         // Rate-first: the native side picks the highest offered rate at or below the
         // ceiling and resolves with the rate it actually configured (§02.4). The cap
         // always includes the post-roll allowance — see MAX_TAKE_SEC's comment.
-        const started = await camera.current?.startRecording(MAX_FPS_REQUEST, MAX_TAKE_SEC);
+        const started = await camera.current?.startRecording(maxFpsRef.current, MAX_TAKE_SEC);
         if (started) {
           onPreviewLive?.(started.previewLive);
           // The recorder's OWN start, not the tap: the ladder can spend seconds finding a
@@ -57,7 +67,7 @@ export function useTakeRecorder(
           // zero while the take is still running — on the screen whose whole purpose is
           // telling the golfer when the take will end.
           setStartedAtMs(started.startedAtMs);
-          onStarted?.(started.startedAtMs);
+          onStarted?.(started.startedAtMs, started.fps);
         }
       } catch (e) {
         active.current = false;

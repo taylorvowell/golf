@@ -11,13 +11,17 @@ export interface Camera2Capabilities {
 }
 
 /**
- * How a strike is picked out of the audio. Eight different discriminators, not eight tunings of
+ * How a strike is picked out of the audio. Nine different discriminators, not nine tunings of
  * one — see the native `SwingClip.Method` for what each measures and why.
  *
- * None of them has ground truth yet, so whichever is chosen is chosen on judgement watching real
- * clips, and that is a preference and must never be recorded as an accuracy figure.
+ * `swish` ships. It is the only one measured against hand-labelled strike times
+ * (`services/analyzer/scripts/audio_truth.json`) rather than judged by watching, and it scored
+ * 5/5 where every other method scored 3/5 or worse. That ground truth is FIVE CLIPS, one golfer,
+ * one indoor bay — enough to reject the others, nowhere near enough to call any of them accurate
+ * in general.
  */
 export type ImpactMethod =
+  | "swish"
   | "attack"
   | "peak"
   | "hf"
@@ -28,6 +32,7 @@ export type ImpactMethod =
   | "ensemble";
 
 export const IMPACT_METHODS: ImpactMethod[] = [
+  "swish",
   "attack",
   "peak",
   "hf",
@@ -40,6 +45,7 @@ export const IMPACT_METHODS: ImpactMethod[] = [
 
 /** What each one keys on, for the picker that offers them. */
 export const IMPACT_METHOD_LABELS: Record<ImpactMethod, string> = {
+  swish: "Swish — HF click with a swing in front of it",
   attack: "Attack — rise vs. background",
   peak: "Peak — plain loudest",
   hf: "HF — high-frequency click",
@@ -136,6 +142,12 @@ interface HighSpeedCameraModule {
   ): Promise<Array<{ path: string; timeSec: number; width: number; height: number }>>;
   /** Remux a window out of a take. No re-encode — milliseconds, and no quality lost. */
   trimClip(path: string, startSec: number, endSec: number): Promise<{ path: string }>;
+  /**
+   * What an arbitrary clip IS, from its own container — for imports. `captureFps` is the
+   * slow-motion truth (`com.android.capture.fps`): 0 means not stamped, an ordinary
+   * real-time clip. Never treat 0 as a rate.
+   */
+  probeClip(path: string): Promise<{ captureFps: number; videoFps: number; durationMs: number }>;
   /** Remove a recording the flow is finished with (a trimmed-away source, a binned take),
    * along with its filmstrip. Resolves false when the file was already gone — never an error. */
   deleteClip(path: string): Promise<boolean>;

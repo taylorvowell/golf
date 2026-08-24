@@ -1,13 +1,13 @@
 """Source timing — what the camera actually observed, preserved before CFR conversion.
 
-Stage 0 resamples every upload to CFR 60 fps for the player's frame-sync contract, which
-rewrites the source's real presentation timestamps: a 30 fps upload becomes 60 fps with every
-frame shown twice, and none of those duplicates is a new observation of the club. Club
-tracking needs the distinction back: a normalized output sample is not a genuine camera
-observation.
+Stage 0 resamples every upload to CFR at its capture rate (`video.cfr_target_fps` — 60 for
+ordinary uploads, 120/240 for high-speed takes), which rewrites the source's real
+presentation timestamps: a 30 fps upload becomes 60 fps with every frame shown twice, and
+none of those duplicates is a new observation of the club. Club tracking needs the
+distinction back: a normalized output sample is not a genuine camera observation.
 
 This module reads per-packet PTS from the ORIGINAL upload (demux only — no decode), maps each
-source frame to the normalized 60 fps frames that display it, and persists the result as a
+source frame to the normalized CFR frames that display it, and persists the result as a
 sidecar artifact `out/<stem>/source_timing.json`. `analysis.json` is untouched: the player is
 not required to consume source timing at all, so this stays out of the contract.
 

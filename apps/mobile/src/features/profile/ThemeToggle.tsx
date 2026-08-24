@@ -91,12 +91,15 @@ export function ThemeToggle() {
             accessibilityState={{ selected: active, checked: active }}
             hitSlop={8}
             onPress={() => set(choice.value)}
-            style={{
+            style={({ pressed }) => ({
               width: SLOT,
               height: SLOT,
               alignItems: "center",
               justifyContent: "center",
-            }}
+              // The sliding thumb only moves once the choice lands; without this the tap itself
+              // had no answer at all.
+              transform: [{ scale: pressed ? 0.9 : 1 }],
+            })}
           >
             <choice.Icon size={ICON} color={active ? t.onDark : t.muted} strokeWidth={2.2} />
           </Pressable>

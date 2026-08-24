@@ -89,6 +89,28 @@ export function phaseBands(
   return all.filter((b) => b.to > b.from);
 }
 
+/**
+ * Whether a second witness contradicts the bands these events describe.
+ *
+ * The analyzer now records the strike as HEARD as well as as seen (`audio_impact`, schema 10) —
+ * two measurements of the same instant that share no failure mode, because one of them is not
+ * reading the pixels. When they disagree by more than the recording pipeline's own latency, the
+ * honest thing to draw is not a different answer, it is the SAME answer, quieter.
+ *
+ * **False is a real result, not a missing one.** Absence of a witness is not disagreement: an
+ * artifact written before schema 10, a clip with no audio track and a take where nothing was
+ * heard all return true, because none of them is evidence against the events. Only an audio
+ * impact that exists and says `agrees: false` dims anything.
+ *
+ * Measured on the ten fixtures, this fires on `7wood-1`, where the stored Impact sits about
+ * forty frames after the frame the ball actually leaves the mat. Every band boundary downstream
+ * of Impact is wrong on that swing, and until this the report had no way to know.
+ */
+export function bandsConfirmed(analysis: Analysis | null): boolean {
+  const heard = analysis?.audio_impact;
+  return !heard || heard.agrees;
+}
+
 /** Which band the playhead is in, or `-1` when it is outside all of them. */
 export function activeBand(bands: readonly PhaseBand[], frame: number): number {
   return bands.findIndex((b) => frame >= b.from && frame < b.to);

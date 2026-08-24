@@ -1,4 +1,4 @@
-import { activeBand, phaseBands } from "./phaseBands";
+import { activeBand, bandsConfirmed, phaseBands } from "./phaseBands";
 import { makeAnalysis } from "./overlay/__fixtures__/analysis";
 
 /**
@@ -92,5 +92,32 @@ describe("activeBand", () => {
 
   it("reports no band at all outside the window", () => {
     expect(activeBand(bands, 999)).toBe(-1);
+  });
+});
+
+describe("bandsConfirmed", () => {
+  const withAudio = (audio: unknown) =>
+    ({ ...makeAnalysis(), audio_impact: audio } as never);
+
+  it("treats a missing witness as no evidence, not as disagreement", () => {
+    // A pre-schema-10 artifact, a clip with no audio track, and a take where nothing was heard
+    // are all silent — and silence is not a contradiction. Dimming on any of them would fade
+    // every swing recorded before this landed.
+    expect(bandsConfirmed(makeAnalysis())).toBe(true);
+    expect(bandsConfirmed(withAudio(undefined))).toBe(true);
+    expect(bandsConfirmed(withAudio(null))).toBe(true);
+    expect(bandsConfirmed(null)).toBe(true);
+  });
+
+  it("confirms when both witnesses describe the same moment", () => {
+    expect(bandsConfirmed(withAudio({ frame: 26, time_sec: 0.43, confidence: 1, agrees: true })))
+      .toBe(true);
+  });
+
+  it("withholds confirmation when they describe different ones", () => {
+    // The 7wood-1 shape: the stored Impact sits ~40 frames after the ball leaves the mat.
+    expect(bandsConfirmed(withAudio({
+      frame: 26, time_sec: 0.43, confidence: 1, agrees: false, delta_frames: 40,
+    }))).toBe(false);
   });
 });

@@ -66,6 +66,10 @@ export function LocalClipPlayer({ clip }: { clip: SwingClipRef }) {
       emitFrames
       onReady={onReady}
       onFrameRendered={onFrameRendered}
+      // The house rule (`.claude/rules/react-native.md`): every video passes this. This screen
+      // lives inside the session surface's own slide, and a SurfaceView ignores ancestor
+      // transforms and z-order — the last un-migrated player in the app.
+      surfaceType="textureView"
       style={StyleSheet.absoluteFill}
     />
   );

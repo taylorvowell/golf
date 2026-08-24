@@ -15,6 +15,27 @@ import { FONT_DISPLAY } from "../../design/system/typography";
 import { DebugSheet, type DebugGroup } from "../session/sheets/DebugSheet";
 
 /**
+ * TEMPORARY DIAGNOSTIC (double-tap hunt, 2026-08-22) — logs every Pressability state
+ * transition so a dead tap names its killer signal. Remove when the hunt closes.
+ */
+if (__DEV__) {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const Pressability = require("react-native/Libraries/Pressability/Pressability").default;
+  if (Pressability && !Pressability.__sigPatched) {
+    Pressability.__sigPatched = true;
+    const orig = Pressability.prototype._receiveSignal;
+    Pressability.prototype._receiveSignal = function (signal: string, event: unknown) {
+      const prev = this._touchState;
+      try {
+        orig.call(this, signal, event);
+      } finally {
+        console.log(`[SIG] ${prev} --${signal}--> ${this._touchState}`);
+      }
+    };
+  }
+}
+
+/**
  * The app-wide debug overlay: one amber pill in the bottom-right corner of every screen, and the
  * panel behind it.
  *

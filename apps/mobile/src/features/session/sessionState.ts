@@ -153,6 +153,19 @@ export interface SessionState {
   zoom: CameraZoom;
   /** Probed per lens — a flip re-reports it, so the slider never outlives its camera. */
   zoomRange: ZoomRange;
+  /**
+   * Every fixed high-speed rate the open lens really offers, highest first — the native
+   * probe's answer (`onCaptureConfig.rates`), never a hardcoded list. Empty until the camera
+   * reports, and empty on a lens with no high-speed mode, which renders no picker rather than
+   * a fake one (the zoom-range pattern).
+   */
+  captureRates: number[];
+  /**
+   * The rate the golfer picked, or null for "the highest the device offers" — the default,
+   * because a slow-motion product silently recording slower than it could is the failure the
+   * fps pill exists to expose. Only ever a member of `captureRates`.
+   */
+  fpsChoice: number | null;
   swings: SessionSwing[];
   /**
    * The finished recording awaiting the golfer's Save/Delete, or null. While set, the
@@ -183,6 +196,10 @@ export type SessionAction =
   | { type: "set-zoom"; zoom: CameraZoom }
   /** The native preview reporting CONTROL_ZOOM_RATIO_RANGE for the lens it just opened. */
   | { type: "set-zoom-range"; range: ZoomRange }
+  /** The native preview reporting the fixed high-speed rates the opened lens offers. */
+  | { type: "set-capture-rates"; rates: number[] }
+  /** The golfer picking a capture rate from the pill's dropdown. Between recordings only. */
+  | { type: "set-fps"; fps: number }
   /** Record pressed: idle → countdown, or straight to recording when the delay is 0. */
   | { type: "arm" }
   | { type: "countdown-done" }
@@ -258,6 +275,8 @@ export function initialSessionState(
     view: "dtl",
     zoom: 1,
     zoomRange: NO_ZOOM,
+    captureRates: [],
+    fpsChoice: null,
     swings: [],
     pendingTake: null,
     reviewing: null,
@@ -321,6 +340,27 @@ export function sessionReducer(state: SessionState, action: SessionAction): Sess
           ? defaultZoomFor(state.view, range)
           : Math.min(max, Math.max(min, state.zoom)),
       };
+    }
+    case "set-capture-rates": {
+      const rates = action.rates.filter((r) => Number.isFinite(r) && r > 0);
+      return {
+        ...state,
+        captureRates: rates,
+        // A pick the new lens cannot honour reverts to "highest" rather than silently
+        // recording at whatever the ladder lands on — the pill must never promise a rate
+        // the device no longer offers.
+        fpsChoice:
+          state.fpsChoice !== null && rates.includes(state.fpsChoice)
+            ? state.fpsChoice
+            : null,
+      };
+    }
+    case "set-fps": {
+      // Between recordings only (the zoom rule) — mid-take it would claim a rate the running
+      // file was not configured at. Only rates the probe offered: the picker lists real
+      // configurations, so anything else is a stale dispatch.
+      if (state.mode !== "idle" || !state.captureRates.includes(action.fps)) return state;
+      return { ...state, fpsChoice: action.fps };
     }
     case "arm": {
       // An unreviewed take is the only copy of that swing — nothing records over it.

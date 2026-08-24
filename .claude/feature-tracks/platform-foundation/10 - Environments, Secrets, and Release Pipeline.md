@@ -139,3 +139,37 @@ To hand the spine over, edit `.claude/ROADMAP.json`: set `platform-foundation` t
 `lifecycle: "complete"` and `spine: false`, then set `analyzer-service` to
 `lifecycle: "active"` and `spine: true`. Exactly one active track may carry the spine flag —
 `node scripts/roadmap/derive.mjs` exits non-zero otherwise.
+
+---
+
+## APPENDED 2026-08-22 — half of this step was stood up by hand; here is exactly what exists
+
+*The Steps above are unchanged. This records which of them are already satisfied in the real world,
+so the step is not re-derived from scratch and, more importantly, so nothing here is re-created as a
+duplicate.*
+
+**Three environments (dev / preview / production) is still the target and is still unmet.** What
+changed is that production now exists.
+
+| Thing | State | Notes |
+|---|---|---|
+| Supabase **production** | ✅ `swingsage-prod` (`nprxxjeavdlsqthnofof`, **us-east-1**) | Empty schema. Region chosen to match Vercel's default function region `iad1` — do **not** "fix" it to match dev's us-west-2. |
+| Supabase **dev** | ✅ `golf-swing` (`xjcjqwcmwoouxczrrvar`, us-west-2) | Hosted schema lags local at `0009a`. |
+| Supabase **preview** | ❌ **Not created — and it is the thing that forces Supabase Pro.** | Free allows 2 *active* projects; dev + prod fill both. Until it exists, preview deployments write to the **production** database. Named shortfall, not a design. |
+| Vercel project | ✅ `golf`, team `taylorvowells-projects`, repo linked | `.vercel/project.json` is committed-adjacent and gitignored. |
+| Vercel env vars | ⚠️ **16 Supabase vars only**, injected by the Vercel↔Supabase integration, Production + Preview, marked Sensitive | Includes `SUPABASE_SECRET_KEY` (already the name the code uses) and `POSTGRES_URL_NON_POOLING`. |
+| Secrets vendor | ✅ **None — struck.** | D10's Infisical choice is superseded (D64). Secrets live in Vercel / EAS / Modal env, each scoped to its runtime. Do not re-introduce a vault. |
+
+**Still to do in this step, all of it Claude's:**
+1. **Map the names.** Vercel has no `DATABASE_URL`, `APP_DATABASE_URL`, `SUPABASE_JWKS_URL`,
+   `QSTASH_*`, `WORKER_*`, `REPLICATE_API_TOKEN` or `AUTH_ALLOWED_EMAILS`. Add them.
+2. **`APP_DATABASE_URL` is not a copy of `POSTGRES_URL`.** It must connect as `swingsage_app` — the
+   NOINHERIT, no-BYPASSRLS role that makes RLS actually apply (D42). That role does not exist in
+   `swingsage-prod` yet; `db:migrate` creates it. Pointing `APP_DATABASE_URL` at the superuser
+   silently removes the authorization boundary — the exact failure D26 cost this project once.
+3. **Apply migrations to production.** Use the Supabase **MCP** (`apply_migration`) — it needs no DB
+   password. The `supabase` **CLI** on this machine is logged into a different account.
+4. **Preview environment**, when Supabase Pro lands.
+
+Credentials are in the gitignored `production-credentials.local.txt`; tool-to-vendor routing is the
+table in `CLAUDE.md`, and the account facts are in `docs/ENVIRONMENT.md`.

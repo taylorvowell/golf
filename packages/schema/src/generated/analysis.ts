@@ -114,6 +114,28 @@ export interface Analysis {
    * Postprocessing counters — how many joints were swapped, rejected, promoted or interpolated.
    */
   stage3: OpenMap | null;
+  /**
+   * The ball strike as HEARD, from the clip's own audio track — an independent second witness to Impact, never a replacement for it. The video-side events are measured from the club head and the hands and are far more precise; this shares none of their failure modes, which is the entire point. Null when the clip has no audio, or nothing that sounds like a strike was heard — both normal answers. Absent before schema 10.
+   */
+  audio_impact?: {
+    /**
+     * The heard strike, as a frame index in THIS artifact's normalized clip. Carries the recording pipeline's audio latency, measured at 121–148 ms on five stock-camera takes and never measured on SwingSage's own recorder — so it is good to a couple of hundred milliseconds and no better. Never snap a rendered event to it.
+     */
+    frame: number;
+    time_sec: number;
+    /**
+     * How far clear of the next-best candidate this one stood. SEPARATION, not strength: a loud clip is not a confident one, and two similar candidates are exactly the case a consumer has to be told about.
+     */
+    confidence: number;
+    /**
+     * Whether the video-side Impact event lands within tolerance of the heard strike. FALSE IS THE VALUABLE CASE: it means the two witnesses disagree, and a renderer should say so rather than draw confident phase bands. On the 7wood-1 fixture the stored Impact is ~40 frames after the ball leaves the mat and this is the flag that catches it.
+     */
+    agrees: boolean;
+    /**
+     * Video Impact minus heard strike, in frames. Signed.
+     */
+    delta_frames?: number;
+  } | null;
 }
 /**
  * This interface was referenced by `Analysis`'s JSON-Schema

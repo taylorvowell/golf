@@ -44,3 +44,11 @@ Thumbs.db
 # The local media store (lib/media/localStore.ts). Hard-linked from services/analyzer/out,
 # so it costs no real disk — but it is media, and it is rebuildable with `pnpm db:backfill`.
 .media/
+.vercel
+.env*
+
+# Where the phone's wireless-debugging port was last seen (scripts/adb-phone.mjs).
+.adb-phone.json
+
+# Upstash CLI credentials (Developer API key)
+.upstash.json

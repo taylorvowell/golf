@@ -114,9 +114,23 @@ export function DeckSheet({
   const [mounted, setMounted] = useState(visible);
   const [height, setHeight] = useState(0);
 
+
+  /** Frozen for the slide-out: a caller's state has usually moved on by the time the panel
+   *  leaves, and reading live props through the exit rewrites the panel as it dismisses. */
+  const latched = useRef({ title, subtitle, accessory, children });
+  if (visible) latched.current = { title, subtitle, accessory, children };
+  const shown = visible ? { title, subtitle, accessory, children } : latched.current;
+
   // `useWindowDimensions`, never a render-time `Dimensions.get`: this app is edge-to-edge, and a
   // measurement taken once at module scope survives neither a rotation nor a fold.
   const { height: screenHeight } = useWindowDimensions();
+
+  /** A panel that fits carries NO `ScrollView` — an Android ScrollView takes taps away from the
+   *  controls inside it by two routes, and only one of them can be switched off. Read off the
+   *  PANEL: capped at `maxHeightFraction`, so measuring at the cap means the content did not fit.
+   *  See `design/system/Sheet.tsx` for the full account. */
+  const heightCap = screenHeight * maxHeightFraction;
+  const overflows = height <= 0 || height >= heightCap - 1;
   const translate = useRef(new Animated.Value(screenHeight)).current;
   /** The panel has finished coming up at least once, so layout must not re-trigger the entrance. */
   const opened = useRef(false);
@@ -136,19 +150,38 @@ export function DeckSheet({
   /** The detent the panel is currently sitting at — a drag is measured from here, not from zero. */
   const resting = useRef(0);
 
+  /** The panel absorbs its own touches while a settle animation runs — a press granted against a
+   *  moving panel measures its press rect where the row is GOING, and dies as LEAVE_PRESS_RECT.
+   *  Caught in a signal trace 2026-08-22; full account in `design/system/Sheet.tsx`. */
+  const [inMotion, setInMotion] = useState(false);
+  const motionCount = useRef(0);
+  const beginMotion = useCallback(() => {
+    motionCount.current += 1;
+    setInMotion(true);
+  }, []);
+  const endMotion = useCallback(() => {
+    motionCount.current = Math.max(0, motionCount.current - 1);
+    if (motionCount.current === 0) setInMotion(false);
+  }, []);
+
   const settle = useCallback(
     (to: number, velocity = 0) => {
       resting.current = to;
+      beginMotion();
       Animated.spring(translate, {
         toValue: to,
         velocity,
         damping: 26,
         stiffness: 260,
         mass: 0.9,
+        // Rest when motion stops being visible — the 0.001px defaults keep the guard up for
+        // most of a second after the eye says the panel has stopped.
+        restDisplacementThreshold: 0.4,
+        restSpeedThreshold: 4,
         useNativeDriver: true,
-      }).start();
+      }).start(endMotion);
     },
-    [translate],
+    [beginMotion, endMotion, translate],
   );
 
   const slideAway = useCallback(() => {
@@ -241,101 +274,129 @@ export function DeckSheet({
     [onClose, settle, translate],
   );
 
-  if (!mounted) return null;
+  // Same rule as the system `Sheet`: render on `visible`, not one commit later. The Modal's
+  // window has to exist before a touch lands, or that touch goes to the screen behind it.
+  if (!visible && !mounted) return null;
 
   const expandable = detents.length > 1;
 
   return (
-    <Modal
-      testID={testID}
-      visible
-      transparent
-      // We own the motion — see the header comment. `slide` cannot be interrupted or coupled.
-      animationType="none"
-      statusBarTranslucent
-      onRequestClose={onClose}
-    >
-      <View style={styles.fill}>
-        <Animated.View style={[styles.backdropFill, { opacity: backdrop }]}>
-          <Pressable
-            testID={testID ? `${testID}-backdrop` : undefined}
-            accessibilityRole="button"
-            accessibilityLabel="Close"
-            style={styles.fill}
-            onPress={onClose}
-          />
-        </Animated.View>
+    <>
+      {/* The tap-through guard — see `design/system/Sheet.tsx` for the failure it prevents: the
+       * Modal's window is not receiving input yet for a frame or two after mount, so a tap aimed
+       * at the sheet fires a control on the HOST screen instead, and the golfer's second tap is
+       * the first one this panel ever sees. */}
+      {visible ? (
+        <View
+          style={StyleSheet.absoluteFill}
+          onStartShouldSetResponder={() => true}
+          testID={testID ? `${testID}-guard` : undefined}
+        />
+      ) : null}
+      <Modal
+        testID={testID}
+        visible
+        transparent
+        // We own the motion — see the header comment. `slide` cannot be interrupted or coupled.
+        animationType="none"
+        statusBarTranslucent
+        onRequestClose={onClose}
+      >
+        <View style={styles.fill}>
+          <Animated.View style={[styles.backdropFill, { opacity: backdrop }]}>
+            <Pressable
+              testID={testID ? `${testID}-backdrop` : undefined}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              style={styles.fill}
+              onPress={onClose}
+            />
+          </Animated.View>
 
-        <Animated.View
-          onLayout={onPanelLayout}
-          style={[
-            styles.panel,
-            {
-              // Padded for the detent, not for the visible height: when the panel is resting low,
-              // its bottom edge is off screen and the content above it must still clear the
-              // gesture bar once it is dragged up.
-              maxHeight: screenHeight * maxHeightFraction,
-              paddingBottom: 16 + insets.bottom,
-              transform: [{ translateY: translate }],
-            },
-          ]}
-        >
-          {/* The whole header is the grab area, and it is deliberately tall: this is the only
-              surface the drag can start from, so a thin grip line would make the gesture a
-              matter of aim. */}
-          <View {...pan.panHandlers} style={styles.header}>
-            <View style={styles.grip} />
-            {title ? (
-              <View style={styles.titleRow}>
-                <View style={styles.titleText}>
-                  <Text style={styles.title}>{title}</Text>
-                  {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
-                </View>
-                {accessory}
-                {/* Dragging is not available to a screen reader, and neither is tapping a
-                    backdrop it does not describe. This is the accessible way out — and, when the
-                    sheet has two heights, the accessible way between them. */}
-                {expandable ? (
+          <Animated.View
+            onLayout={onPanelLayout}
+            style={[
+              styles.panel,
+              {
+                // Padded for the detent, not for the visible height: when the panel is resting low,
+                // its bottom edge is off screen and the content above it must still clear the
+                // gesture bar once it is dragged up.
+                maxHeight: screenHeight * maxHeightFraction,
+                paddingBottom: 16 + insets.bottom,
+                transform: [{ translateY: translate }],
+              },
+            ]}
+          >
+            {/* The whole header is the grab area, and it is deliberately tall: this is the only
+                surface the drag can start from, so a thin grip line would make the gesture a
+                matter of aim. */}
+            <View {...pan.panHandlers} style={styles.header}>
+              <View style={styles.grip} />
+              {shown.title ? (
+                <View style={styles.titleRow}>
+                  <View style={styles.titleText}>
+                    <Text style={styles.title}>{shown.title}</Text>
+                    {shown.subtitle ? (
+                      <Text style={styles.subtitle}>{shown.subtitle}</Text>
+                    ) : null}
+                  </View>
+                  {shown.accessory}
+                  {/* Dragging is not available to a screen reader, and neither is tapping a
+                      backdrop it does not describe. This is the accessible way out — and, when the
+                      sheet has two heights, the accessible way between them. */}
+                  {expandable ? (
+                    <Pressable
+                      testID={testID ? `${testID}-expand` : undefined}
+                      accessibilityRole="button"
+                      accessibilityLabel={resting.current === 0 ? "Collapse" : "Expand"}
+                      hitSlop={12}
+                      onPress={() => settle(resting.current === 0 ? detents[1] : 0)}
+                      style={({ pressed }) => [styles.headerCap, pressed && styles.headerCapPressed]}
+                    >
+                      <View style={styles.expandChevron} />
+                    </Pressable>
+                  ) : null}
                   <Pressable
-                    testID={testID ? `${testID}-expand` : undefined}
+                    testID={testID ? `${testID}-close` : undefined}
                     accessibilityRole="button"
-                    accessibilityLabel={resting.current === 0 ? "Collapse" : "Expand"}
+                    accessibilityLabel="Close"
                     hitSlop={12}
-                    onPress={() => settle(resting.current === 0 ? detents[1] : 0)}
+                    onPress={onClose}
                     style={({ pressed }) => [styles.headerCap, pressed && styles.headerCapPressed]}
                   >
-                    <View style={styles.expandChevron} />
+                    <View style={styles.closeBarA} />
+                    <View style={styles.closeBarB} />
                   </Pressable>
-                ) : null}
-                <Pressable
-                  testID={testID ? `${testID}-close` : undefined}
-                  accessibilityRole="button"
-                  accessibilityLabel="Close"
-                  hitSlop={12}
-                  onPress={onClose}
-                  style={({ pressed }) => [styles.headerCap, pressed && styles.headerCapPressed]}
-                >
-                  <View style={styles.closeBarA} />
-                  <View style={styles.closeBarB} />
-                </Pressable>
-              </View>
-            ) : null}
-          </View>
+                </View>
+              ) : null}
+            </View>
 
-          {scrolls ? (
-            <ScrollView
-              style={styles.scroll}
-              contentContainerStyle={styles.scrollContent}
-              showsVerticalScrollIndicator={false}
-            >
-              {children}
-            </ScrollView>
-          ) : (
-            <View style={[styles.scroll, styles.scrollContent]}>{children}</View>
-          )}
-        </Animated.View>
-      </View>
-    </Modal>
+            {scrolls && overflows ? (
+              <ScrollView
+                style={styles.scroll}
+                contentContainerStyle={styles.scrollContent}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                disableScrollViewPanResponder
+              >
+                {shown.children}
+              </ScrollView>
+            ) : (
+              <View style={[styles.scroll, styles.scrollContent]}>{shown.children}</View>
+            )}
+
+            {/* In-flight guard — see the note at `inMotion`. */}
+            {inMotion ? (
+              <View
+                style={StyleSheet.absoluteFill}
+                onStartShouldSetResponder={() => true}
+                testID={testID ? `${testID}-inflight-guard` : undefined}
+              />
+            ) : null}
+          </Animated.View>
+        </View>
+      </Modal>
+    </>
   );
 }
 

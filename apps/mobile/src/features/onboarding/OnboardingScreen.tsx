@@ -9,9 +9,11 @@ import { displayLine, FONT_BODY, FONT_DISPLAY } from "../../design/system/typogr
 import { useAppNavigation } from "../../navigation";
 import { api } from "../../platform/client";
 import { themedStyles, useTheme } from "../../theme";
+import { useAuth } from "../auth/AuthProvider";
 import { HANDICAP_OPTIONS, STYLE_OPTIONS } from "../profile/profileFields";
 import { saveProfile, useProfile } from "../profile/useProfile";
 import { useToast } from "../toast/ToastProvider";
+import { AttachEmailStep } from "./AttachEmailStep";
 
 /**
  * Onboarding — §4.4's role selection and §5.4's handful of questions, one full-screen question
@@ -30,8 +32,8 @@ import { useToast } from "../toast/ToastProvider";
  *  - Finishing stamps `completeOnboarding` — after which the launcher never auto-opens again.
  */
 
-type StepId = "role" | "handedness" | "style" | "handicap";
-const STEPS: StepId[] = ["role", "handedness", "style", "handicap"];
+type StepId = "role" | "handedness" | "style" | "handicap" | "email";
+const BASE_STEPS: StepId[] = ["role", "handedness", "style", "handicap"];
 
 export function OnboardingScreen() {
   const navigation = useAppNavigation();
@@ -40,10 +42,22 @@ export function OnboardingScreen() {
   const t = useTheme();
   const toast = useToast();
   const { state } = useProfile();
+  const { email } = useAuth();
   const priv = state.kind === "ok" ? state.profile.private : null;
 
+  // The roster is FROZEN at open. The email question exists only for an account with no address
+  // (signed up by phone — the one-golfer-one-account seam), and verifying it mid-flow updates the
+  // session's email; a roster derived live would shrink under the golfer's feet and skip a step.
+  //
+  // It comes FIRST, and that ordering is load-bearing: `users.email` is NOT NULL and
+  // `app.ensure_profile()` raises SS_EMAIL_REQUIRED for an identity without an address
+  // (`decisions/auth-identity.md`), so every savePatch/claimRoles call below would 500 until the
+  // email lands. Attaching goes through Supabase auth directly — no API route is involved, which
+  // is exactly why this step works while the account cannot yet reach the API.
+  const [steps] = useState<StepId[]>(() => (email ? BASE_STEPS : ["email", ...BASE_STEPS]));
+
   const [index, setIndex] = useState(0);
-  const step = STEPS[index];
+  const step = steps[index];
 
   // A quiet slide-and-fade between questions — enough motion to say "next", nothing to wait on.
   const enter = useRef(new Animated.Value(1)).current;
@@ -65,7 +79,7 @@ export function OnboardingScreen() {
   };
 
   const advance = () => {
-    if (index < STEPS.length - 1) goTo(index + 1);
+    if (index < steps.length - 1) goTo(index + 1);
     else finish();
   };
 
@@ -97,18 +111,20 @@ export function OnboardingScreen() {
   const dots = useMemo(
     () => (
       <View style={styles.dots}>
-        {STEPS.map((s, i) => (
+        {steps.map((s, i) => (
           <View key={s} style={[styles.dot, i === index && styles.dotOn]} />
         ))}
       </View>
     ),
-    [index, styles],
+    [index, steps, styles],
   );
 
   return (
     <View style={[styles.root, { paddingTop: insets.top + 10 }]}>
       <View style={styles.topRow}>
-        {index > 0 ? (
+        {/* No back INTO the email step — once verified it has nothing left to do, and
+            re-submitting the same address is a dead end the golfer cannot advance out of. */}
+        {index > 0 && steps[index - 1] !== "email" ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Previous question"
@@ -124,7 +140,9 @@ export function OnboardingScreen() {
           </View>
         )}
         {dots}
-        {step !== "handedness" ? (
+        {/* Handedness is required by the product; email is required by the schema — a
+            phone-only account cannot store anything until an address exists. */}
+        {step !== "handedness" && step !== "email" ? (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Skip this question"
@@ -268,7 +286,9 @@ export function OnboardingScreen() {
                               opt.value as NonNullable<typeof priv>["handicapRange"],
                           },
                         });
-                        finish();
+                        // advance, not finish — the email question follows for an account
+                        // that has no address yet.
+                        advance();
                       }}
                       style={[styles.hcpChip, selected && styles.hcpChipOn]}
                     >
@@ -279,6 +299,17 @@ export function OnboardingScreen() {
                   );
                 })}
               </View>
+            </>
+          )}
+
+          {step === "email" && (
+            <>
+              <Text style={styles.question}>Add your email</Text>
+              <Text style={styles.stepLede}>
+                Your account needs one — and you&apos;ll be able to sign in with your phone or
+                your email, same account either way. We&apos;ll send a code to confirm it.
+              </Text>
+              <AttachEmailStep onDone={advance} />
             </>
           )}
         </ScrollView>
@@ -358,6 +389,14 @@ const useStyles = themedStyles((t) => ({
     fontSize: 26,
     lineHeight: displayLine(26),
     marginBottom: 14,
+  },
+  stepLede: {
+    color: t.textSoft,
+    fontFamily: FONT_BODY.regular,
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: -8,
+    marginBottom: 6,
   },
 
   card: {

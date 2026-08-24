@@ -55,3 +55,4 @@ export {
   type StanceTone,
 } from "./StanceStage";
 export { HeroBackdrop } from "./HeroBackdrop";
+export { Collapse } from "./Collapse";

@@ -2,6 +2,7 @@ import { render, waitFor } from "@testing-library/react-native";
 import type { Analysis, SwingSummary } from "@swingsage/schema/contract";
 
 import { ApiClientError } from "../../platform/api";
+import { clearAnalysisCache } from "./useAnalysis";
 import { ReferencePane } from "./ReferencePane";
 
 /**
@@ -46,6 +47,9 @@ const LEADER = {
 } as unknown as Analysis;
 
 beforeEach(() => {
+  // The artifact cache is module-level and every test here reuses the same swing id with a
+  // different fixture — without the reset, one test's artifact answers the next test's mount.
+  clearAnalysisCache();
   mockMediaSource.mockReset();
   mockRequest.mockReset();
   mockMediaSource.mockResolvedValue({

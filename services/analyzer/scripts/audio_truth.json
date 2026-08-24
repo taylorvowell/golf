@@ -1,0 +1,29 @@
+{
+  "_": [
+    "Hand-labelled strike times for the long raw takes in fixtures/raw/ — the first ground truth",
+    "this project has for anything. Read it with scripts/checkaudio.py --truth.",
+    "",
+    "video_impact_sec is the PICTURE: the last frame with the ball still on the mat, read off a",
+    "frame-accurate strip (scripts/checkstrip.py) where the frame before it has the ball and the",
+    "frame after it does not. At ~59 fps the label is therefore good to about +/-0.017 s, and no",
+    "better — do not quote it more precisely than that.",
+    "",
+    "audio_onset_sec is the SOUND: the first 5 ms window whose >4 kHz energy crosses four times",
+    "its local median floor. This is the earliest instant a detector working on audio alone could",
+    "possibly report, so it is what detector error is measured against.",
+    "",
+    "The gap between the two columns is 0.121-0.148 s across five takes shot at three different",
+    "ball speeds. It does not scale with ball speed, so it is recording-pipeline latency (audio",
+    "timestamps lagging video), not the flight time of the ball to the screen. IT IS A PROPERTY OF",
+    "THESE FILES, which the stock Samsung camera app recorded — SwingSage's own MediaRecorder path",
+    "is a different pipeline and has never been measured. Do not compensate for it in the product",
+    "on this evidence."
+  ],
+  "clips": {
+    "6iron-1": { "video_impact_sec": 20.055, "audio_onset_sec": 20.203 },
+    "6iron2":  { "video_impact_sec": 17.935, "audio_onset_sec": 18.065 },
+    "6iron3":  { "video_impact_sec": 13.615, "audio_onset_sec": 13.740 },
+    "7wood-1": { "video_impact_sec": 20.450, "audio_onset_sec": 20.580 },
+    "7wood-2": { "video_impact_sec": 18.644, "audio_onset_sec": 18.765 }
+  }
+}

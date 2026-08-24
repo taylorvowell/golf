@@ -31,7 +31,7 @@ import { themedStyles, useTheme } from "../theme";
  */
 export function NotificationsScreen() {
   const navigation = useAppNavigation();
-  const { state, ack, ackAll } = useNotifications();
+  const { state, ack, ackAll, dismiss } = useNotifications();
   const styles = useStyles();
   const t = useTheme();
 
@@ -93,6 +93,7 @@ export function NotificationsScreen() {
                     notification={n}
                     now={now}
                     unread={wasUnread ? wasUnread.has(n.id) : n.readAt === null}
+                    onDismiss={() => dismiss(n.id)}
                   />
                 ))}
                 <Pressable
@@ -273,7 +274,7 @@ const useStyles = themedStyles((t) => ({
     justifyContent: "space-between",
     paddingHorizontal: 18,
     paddingTop: 16,
-    paddingBottom: 8,
+    paddingBottom: 6,
   },
   headLabel: {
     fontFamily: FONT_DISPLAY.black,
@@ -290,7 +291,7 @@ const useStyles = themedStyles((t) => ({
     backgroundColor: "transparent",
   },
   closeCapPressed: { backgroundColor: t.pressBed },
-  content: { paddingHorizontal: 14, paddingBottom: 28, gap: 8 },
+  content: { paddingHorizontal: 14, paddingBottom: 28, gap: 5 },
   markAll: {
     marginTop: 6,
     alignSelf: "center",

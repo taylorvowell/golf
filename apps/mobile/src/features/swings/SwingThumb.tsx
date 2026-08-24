@@ -32,7 +32,16 @@ export function SwingThumb({
   const source = useAuthenticatedImage(`swings/${swing.id}/thumb?poster=1`);
   const box = { width: size, height: size, borderRadius: 8 };
   if (!source) return <View style={[box, { backgroundColor: t.surface3 }]} />;
-  return <Image source={source} style={box} contentFit="cover" cachePolicy="disk" />;
+  return (
+    <Image
+      source={source}
+      style={box}
+      contentFit="cover"
+      cachePolicy="disk"
+      // List rows recycle image views — without the key a row can flash another swing's frame.
+      recyclingKey={swing.id}
+    />
+  );
 }
 
 /**

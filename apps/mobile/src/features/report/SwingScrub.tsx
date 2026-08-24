@@ -40,6 +40,15 @@ export interface SwingScrubProps {
   /** Touch-down / release — drives the transport's fast-scrub path. */
   onScrubbingChange?: (scrubbing: boolean) => void;
   disabled?: boolean;
+  /**
+   * False when the heard strike and the measured Impact describe different moments.
+   *
+   * The phases still draw — they are the only description of this swing there is, and hiding
+   * them would leave the golfer with less, not with less that is wrong. They draw DIMMED, which
+   * is the same thing the overlay does to a low-confidence keypoint and for the same reason:
+   * uncertain findings are never presented as fact.
+   */
+  confirmed?: boolean;
 }
 
 /** The mockup's `.report-v2-phase.*` skins, keyed by the artifact band they dress. */
@@ -60,6 +69,7 @@ export const SwingScrub = memo(function SwingScrub({
   onSeek,
   onScrubbingChange,
   disabled = false,
+  confirmed = true,
 }: SwingScrubProps) {
   const surface = useSeekSurface(map.toFrame, onSeek, disabled, onScrubbingChange);
 
@@ -98,7 +108,11 @@ export const SwingScrub = memo(function SwingScrub({
       accessibilityRole="adjustable"
       accessibilityLabel="Swing position"
       accessibilityState={{ disabled }}
-      accessibilityValue={{ text: spoken }}
+      accessibilityValue={{
+        // Said out loud, because dimming is invisible to a screen reader and this is exactly the
+        // kind of thing a golfer would want to know before trusting a phase boundary.
+        text: confirmed ? spoken : `${spoken}. Swing phases are approximate`,
+      }}
       accessibilityActions={ADJUST_ACTIONS}
       onAccessibilityAction={(e) => {
         if (disabled) return;
@@ -138,7 +152,12 @@ export const SwingScrub = memo(function SwingScrub({
           overflow: "hidden",
         }}
       >
-        <View style={styles.mapRow}>
+        {/* Drawn QUIETER, never differently and never not at all, when the heard strike and the
+            measured Impact describe different moments. The phases are still the only account of
+            this swing there is — replacing them with nothing leaves the golfer with less, not
+            with less that is wrong — so this is the overlay's low-confidence treatment applied
+            to a band instead of a keypoint. */}
+        <View style={[styles.mapRow, !confirmed && styles.unconfirmed]}>
           {bands.map((band, i) => {
             const skin = PHASE_SKIN[band.key];
             const weight = map.weights[i] ?? band.to - band.from;
@@ -207,6 +226,8 @@ const HALO = 22;
 
 const styles = StyleSheet.create({
   touch: { paddingVertical: TOUCH_PAD, justifyContent: "center", overflow: "visible" },
+  /** The two witnesses disagree. Faded, not hidden, not recoloured. */
+  unconfirmed: { opacity: 0.45 },
   dim: { opacity: 0.5 },
   mapRow: { flexDirection: "row", height: MAP_HEIGHT },
   phase: {

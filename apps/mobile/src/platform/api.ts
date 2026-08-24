@@ -64,10 +64,14 @@ const isUpgradeBody = (b: unknown): b is UpgradeRequired =>
   typeof b === "object" && b !== null && (b as ApiError).error === "upgrade_required";
 
 /**
- * Long enough for a cold LAN fetch of the largest artifact, short enough that "unreachable"
- * arrives while the golfer is still looking. Overridable per call for anything genuinely slow.
+ * Long enough for a COLD serverless start plus the largest artifact, short enough that
+ * "unreachable" arrives while the golfer is still looking. Was 12s, sized for a LAN dev
+ * server — against production, an idle function's first hit (boot + database connect) can
+ * blow that alone, and the misfire reads as "not connecting consistently": warm requests
+ * fine, first-after-idle "unreachable" (2026-08-23, the first hosted session). Overridable
+ * per call for anything genuinely slow.
  */
-const DEFAULT_TIMEOUT_MS = 12_000;
+const DEFAULT_TIMEOUT_MS = 30_000;
 
 export class ApiClient {
   private readonly baseUrl: string;

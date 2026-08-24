@@ -41,6 +41,15 @@ export interface SwingSession {
    * recorded under one would be a made-up claim about the golfer's own data.
    */
   sessionType: SessionType | null;
+  /**
+   * The real `sessions` rows this card stands for.
+   *
+   * Usually one, and it is the same value as `id`. A DAY card (`mergeByDay`) stands for every
+   * session recorded that day, and deleting it has to remove all of them — a card that deleted
+   * only the first would come back holding the rest. Empty for a time-inferred group, which has
+   * no row on the server at all.
+   */
+  parts: string[];
 }
 
 /** What the log needs to know about a real session row — `useSessions`' rows, narrowed. */
@@ -185,6 +194,7 @@ export function sessionize(
       best: null,
       name: row?.name ?? null,
       sessionType: row?.sessionType ?? null,
+      parts: [id],
     };
     // Quarantined sessions carry no best: it is a durable number and these swings do not produce
     // one. Computing it here and hiding it downstream is how one screen forgets to.
@@ -211,6 +221,8 @@ export function sessionize(
         best: typeof swing.overallScore === "number" ? swing.overallScore : null,
         name: null,
         sessionType: null,
+        // Nothing on the server to delete — this group is an inference over loose swings.
+        parts: [],
       };
       sessions.push(current);
     }
@@ -250,13 +262,118 @@ export const ANGLE_LABEL: Record<CaptureAngle, string> = {
   dual: "Dual",
 };
 
+/**
+ * How ONE swing was filmed, in the same vocabulary. Null when the swing says nothing usable —
+ * an angle guessed from an empty `views` list is a claim about the golfer's own footage.
+ */
+export function swingAngle(swing: SwingSummary): CaptureAngle | null {
+  const views = new Set(swing.views.map((v) => v.view));
+  if (views.size >= 2) return "dual";
+  const only = views.size === 1 ? [...views][0] : swing.view;
+  return only === "dtl" || only === "face_on" ? only : null;
+}
+
 export function sessionAngles(session: SwingSession): CaptureAngle[] {
   const found = new Set<CaptureAngle>();
   for (const swing of session.swings) {
-    const views = new Set(swing.views.map((v) => v.view));
-    if (views.size >= 2) found.add("dual");
-    else if (views.size === 1) found.add([...views][0]);
-    else if (swing.view === "dtl" || swing.view === "face_on") found.add(swing.view);
+    const angle = swingAngle(swing);
+    if (angle) found.add(angle);
   }
   return ANGLE_ORDER.filter((a) => found.has(a));
+}
+
+/**
+ * One swing as the LOG presents it — which session it belongs to, and which ball of that session
+ * it was.
+ *
+ * The number is the swing's place in HIT order (`sessionSwingItems`' rule, and the same number
+ * the capture screen counted at the time), so a swing is called "Swing 3" wherever it appears.
+ */
+export interface SwingEntry {
+  swing: SwingSummary;
+  /** 1-based, oldest first within its session. */
+  number: number;
+  /** Epoch ms the session began — the date the swing page prints. */
+  sessionStart: number;
+}
+
+/**
+ * The whole log flattened into the order it is READ: newest session first, newest swing first
+ * inside it. That is what the swing page swipes through, so a left swipe always moves the way
+ * the log's own list moves and never invents a second ordering of the same data.
+ */
+export function swingOrder(swings: SwingSummary[], meta?: readonly SessionMeta[]): SwingEntry[] {
+  const out: SwingEntry[] = [];
+  // Merged by day, exactly as the log draws it — the number under a swing's picture has to be
+  // the number on the row the golfer tapped.
+  for (const session of mergeByDay(sessionize(swings, meta))) {
+    for (let i = session.swings.length - 1; i >= 0; i -= 1) {
+      out.push({ swing: session.swings[i], number: i + 1, sessionStart: session.start });
+    }
+  }
+  return out;
+}
+
+
+/** `YYYY-MM-DD` in the phone's own timezone — the same key the import path dates a session by. */
+function dayKey(ms: number): string {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
+/**
+ * One header per DAY (Taylor, 2026-08-22).
+ *
+ * A golfer went to the range on Saturday; they did not go three times because the app minted
+ * three rows while they were there. Session rows are still how swings are grouped underneath —
+ * `sessionize` is unchanged and every screen that reasons about a session's mode or its trend
+ * point still sees them — but the log draws a day as one card, because "sessions are by date" is
+ * what a session means to the person who hit the balls.
+ *
+ * A merged card carries `parts`, so deleting it removes every row it covers. Its name and its
+ * mode survive only if the day AGREES on one: two differently-named sessions merged under one
+ * of the two names would be putting a title on swings it was never given to.
+ */
+export function mergeByDay(sessions: SwingSession[]): SwingSession[] {
+  const byDay = new Map<string, SwingSession[]>();
+  for (const session of sessions) {
+    const key = dayKey(session.start);
+    const group = byDay.get(key);
+    if (group) group.push(session);
+    else byDay.set(key, [session]);
+  }
+
+  const days: SwingSession[] = [];
+  for (const group of byDay.values()) {
+    if (group.length === 1) {
+      days.push(group[0]);
+      continue;
+    }
+    const ordered = [...group].sort((a, b) => a.start - b.start);
+    const swings = ordered
+      .flatMap((s) => s.swings)
+      .sort((a, b) => createdAtMs(a) - createdAtMs(b));
+    const names = [...new Set(ordered.map((s) => s.name).filter((n): n is string => n != null))];
+    const types = [...new Set(ordered.map((s) => s.sessionType))];
+    const sessionType = types.length === 1 ? types[0] : null;
+    const merged: SwingSession = {
+      // The day's FIRST session id: stable across refreshes, which is what keys the accordion.
+      id: ordered[0].id,
+      start: ordered[0].start,
+      end: ordered[ordered.length - 1].end,
+      swings,
+      best: null,
+      name: names.length === 1 ? names[0] : null,
+      sessionType,
+      parts: ordered.flatMap((s) => s.parts),
+    };
+    // Quarantine survives the merge per PART, not per day: a drills hour inside a range visit
+    // must not start feeding the day's best, and must not stop the rest of the day feeding it.
+    merged.best = bestOf(
+      ordered.filter((s) => !isQuarantined(s)).flatMap((s) => s.swings),
+    );
+    days.push(merged);
+  }
+
+  return days.sort((a, b) => b.start - a.start || b.end - a.end);
 }

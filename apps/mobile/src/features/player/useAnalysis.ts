@@ -35,13 +35,60 @@ export interface AnalysisHook {
  *                with 400 rather than falling back, the same trap that made every swing refuse to
  *                play in step 01. Omitted takes the swing's primary view.
  */
+/**
+ * Artifacts already fetched this session, keyed by the request path.
+ *
+ * The artifact is immutable between re-analyses, and the player's own contract is that a stored
+ * `analysis.json` does not change until something re-runs the analyzer — so serving a cached one
+ * is not staleness, it is the same truth without the multi-MB refetch. What the cache buys is the
+ * swing page's sideways swipe: without it every swipe re-downloaded and re-parsed the whole
+ * artifact, and the overlay, the phase blocks and the corner orbs all arrived seconds late and
+ * POPPED in over a video already playing (Taylor, 2026-08-22 — the chrome half of the swipe
+ * flicker).
+ *
+ * Bounded hard: these are the largest objects the app holds (whole-clip keypoints), so at
+ * `ANALYSIS_CACHE_MAX` the oldest entry goes. `reload()` bypasses and rewrites the entry, which
+ * is what the re-analysis flow calls.
+ */
+const analysisCache = new Map<string, Analysis>();
+const ANALYSIS_CACHE_MAX = 6;
+
+function rememberAnalysis(path: string, analysis: Analysis): void {
+  if (analysisCache.size >= ANALYSIS_CACHE_MAX && !analysisCache.has(path)) {
+    const oldest = analysisCache.keys().next().value;
+    if (oldest !== undefined) analysisCache.delete(oldest);
+  }
+  analysisCache.set(path, analysis);
+}
+
+/** Sign-out and the tests' reset seam — one golfer's artifacts must not outlive their session. */
+export function clearAnalysisCache(): void {
+  analysisCache.clear();
+}
+
+function analysisPath(swingId: string, view?: string | null): string {
+  return view
+    ? `swings/${swingId}/analysis?view=${encodeURIComponent(view)}`
+    : `swings/${swingId}/analysis`;
+}
+
 export function useAnalysis(swingId: string | undefined, view?: string | null): AnalysisHook {
-  const [state, setState] = useState<AnalysisState>({ kind: "loading" });
+  const [state, setState] = useState<AnalysisState>(() => {
+    const cached = swingId ? analysisCache.get(analysisPath(swingId, view)) : undefined;
+    return cached ? { kind: "ok", analysis: cached } : { kind: "loading" };
+  });
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (!swingId) {
       setState({ kind: "not-analysed" });
+      return;
+    }
+    // Cached and not an explicit reload: serve it and fetch nothing. `attempt > 0` is the
+    // reload() path — re-analysis just rewrote the artifact, so the cache must be bypassed.
+    const cached = analysisCache.get(analysisPath(swingId, view));
+    if (cached && attempt === 0) {
+      setState({ kind: "ok", analysis: cached });
       return;
     }
     let live = true;
@@ -51,9 +98,7 @@ export function useAnalysis(swingId: string | undefined, view?: string | null): 
     const controller = new AbortController();
     setState({ kind: "loading" });
 
-    const path = view
-      ? `swings/${swingId}/analysis?view=${encodeURIComponent(view)}`
-      : `swings/${swingId}/analysis`;
+    const path = analysisPath(swingId, view);
 
     void api
       /**
@@ -65,6 +110,7 @@ export function useAnalysis(swingId: string | undefined, view?: string | null): 
        */
       .request<Analysis>(path, { signal: controller.signal }, 30_000)
       .then((analysis) => {
+        rememberAnalysis(path, analysis);
         if (live) setState({ kind: "ok", analysis });
       })
       .catch((err: unknown) => {

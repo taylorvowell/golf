@@ -2,6 +2,7 @@ import {
   SESSION_GAP_MS,
   isQuarantined,
   logStats,
+  mergeByDay,
   sessionStats,
   sessionize,
   type SessionMeta,
@@ -199,5 +200,67 @@ describe("drills and video-only are quarantined from durable numbers", () => {
       [meta("s1", "practice_drills"), meta("s2", "swing_analysis")],
     );
     expect(logStats(sessions)).toEqual({ sessions: 2, swings: 3, avg: 80, best: 80 });
+  });
+});
+
+/**
+ * The LOG's grouping is a day, not a session row (Taylor, 2026-08-22).
+ *
+ * `sessionize` is unchanged — every screen that reasons about a session's mode or its trend point
+ * still sees the real rows — and `mergeByDay` is the visual layer over it. What is pinned here is
+ * the part that would silently lose data: the merged card must carry EVERY row it stands for in
+ * `parts`, because that is what its delete iterates.
+ */
+describe("mergeByDay", () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const morning = new Date(2026, 7, 22, 9, 0, 0).getTime();
+  const evening = new Date(2026, 7, 22, 19, 0, 0).getTime();
+
+  it("draws one card for a day the app minted several sessions in", () => {
+    const days = mergeByDay(
+      sessionize(
+        [
+          inSession("a", morning, "s1", 70),
+          inSession("b", morning + 60_000, "s1", 80),
+          inSession("c", evening, "s2", 90),
+        ],
+        [meta("s1", "swing_analysis"), meta("s2", "swing_analysis")],
+      ),
+    );
+
+    expect(days).toHaveLength(1);
+    expect(days[0].swings.map((s) => s.id)).toEqual(["a", "b", "c"]);
+    // Every row the card stands for — the delete iterates this, and a missing id is a session
+    // that survives its own deletion.
+    expect(days[0].parts.sort()).toEqual(["s1", "s2"]);
+    expect(days[0].best).toBe(90);
+  });
+
+  it("keeps different days apart, newest first", () => {
+    const days = mergeByDay(
+      sessionize([swing("old", morning - DAY), swing("new", morning)]),
+    );
+    expect(days.map((d) => d.swings[0].id)).toEqual(["new", "old"]);
+  });
+
+  it("abstains on a name and a mode the day does not agree on", () => {
+    const days = mergeByDay(
+      sessionize(
+        [inSession("a", morning, "s1"), inSession("b", evening, "s2")],
+        [meta("s1", "swing_analysis", "Range"), meta("s2", "practice_drills", "Wedges")],
+      ),
+    );
+    expect(days[0].name).toBeNull();
+    expect(days[0].sessionType).toBeNull();
+  });
+
+  it("leaves a quarantined session out of the day's best", () => {
+    const days = mergeByDay(
+      sessionize(
+        [inSession("a", morning, "s1", 70), inSession("b", evening, "s2", 99)],
+        [meta("s1", "swing_analysis"), meta("s2", "practice_drills")],
+      ),
+    );
+    expect(days[0].best).toBe(70);
   });
 });

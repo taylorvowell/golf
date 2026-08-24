@@ -44,14 +44,22 @@ export function Segmented({
             accessibilityState={{ selected: active }}
             onPress={() => onChange(option)}
             hitSlop={6}
-            style={[
+            style={({ pressed }) => [
               {
                 flex: 1,
                 minHeight: 36,
                 borderRadius: 5,
                 alignItems: "center",
                 justifyContent: "center",
-                backgroundColor: active ? t.surface : "transparent",
+                // Pressed is a fill step, on both states: an inactive segment that gave no
+                // feedback read as a dead area of the control until the tab actually changed.
+                backgroundColor: pressed
+                  ? active
+                    ? t.surface2
+                    : t.surface
+                  : active
+                    ? t.surface
+                    : "transparent",
               },
             ]}
           >
