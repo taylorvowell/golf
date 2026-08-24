@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ActivityIndicator, Pressable, RefreshControl, Text, View } from "react-native";
-import { Plus, Upload } from "lucide-react-native";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { ActivityIndicator, Modal, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { Plus, Trash2, Upload, X } from "lucide-react-native";
+import type { SwingSummary } from "@swingsage/schema/contract";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { CountUp } from "../features/session/CountUp";
+import { ChoiceSheet } from "../features/session/sheets/ChoiceSheet";
 import { SessionArrivalCard } from "../features/session/SessionArrivalCard";
 import { takeSessionArrival } from "../features/session/sessionArrival";
 
@@ -23,13 +25,16 @@ import { StatusMessage } from "../design/StatusMessage";
 import { NotificationBell } from "../features/notifications/NotificationBell";
 import { LatestSessionCard } from "../features/swings/LatestSessionCard";
 import { SessionRow } from "../features/swings/SessionRow";
-import { logStats, sessionStats, sessionize } from "../features/swings/sessions";
+import { logStats, mergeByDay, sessionize, type SwingSession } from "../features/swings/sessions";
+import { cancelImportForSwing, usePendingImports, type PendingImport } from "../features/swings/pendingImports";
 import { useSessions } from "../features/swings/useSessions";
 import { ImportSheet } from "../features/swings/ImportSheet";
 import { useImportSwing } from "../features/swings/useImportSwing";
-import { useSwings } from "../features/swings/useSwings";
+import { deleteSwing, refreshSwings, useSwings } from "../features/swings/useSwings";
+import { SwingReview } from "../features/session/SwingReview";
+import { useToast } from "../features/toast/ToastProvider";
 import { useAppNavigation } from "../navigation";
-import { themedStyles, useTheme } from "../theme";
+import { FixedDarkTheme, themedStyles, useTheme } from "../theme";
 
 /**
  * §21's swing log, built on the Ideal Swing hero-screen scaffold (`log-v2-*`): the
@@ -55,17 +60,177 @@ export function SwingLogScreen() {
     heroHeight === null ? 330 + insets.top : heroHeight + 74 + HERO_SHEET_GAP;
 
   const { sessions: sessionRows } = useSessions();
-  const sessions = useMemo(
-    () => (state.kind === "ok" ? sessionize(state.swings, sessionRows) : []),
-    [state, sessionRows],
+  const pending = usePendingImports();
+
+  /**
+   * The ids a pending run already stands for. Ingest mints the swing row BEFORE the bytes
+   * move, so from the first second of an upload the server has a row for a swing the log is
+   * also drawing a placeholder for — and a refresh mid-upload showed the same swing twice
+   * (Taylor, 2026-08-23). The placeholder wins while it lives: it is the one with the
+   * progress. It retires shortly after `done`, and the real row takes over.
+   */
+  const pendingSwingIds = useMemo(
+    () => new Set(pending.map((run) => run.swingId).filter((id): id is string => !!id)),
+    [pending],
   );
+
+  // One card per DAY (Taylor, 2026-08-22): a golfer went to the range once on Saturday, however
+  // many session rows the app minted while they were there.
+  const real = useMemo(
+    () => (state.kind === "ok"
+      ? mergeByDay(sessionize(
+          state.swings.filter((s) => !pendingSwingIds.has(s.id)),
+          sessionRows,
+        ))
+      : []),
+    [state, sessionRows, pendingSwingIds],
+  );
+
+  /**
+   * Imports still on their way, folded into the log they are heading for (Taylor, 2026-08-22).
+   *
+   * The toast says an upload started; this is where it is GOING, and a golfer who taps Upload and
+   * then looks at their log should see the swing arriving in the right session rather than an
+   * unchanged screen. If the import minted a session that has no swings yet, that session is
+   * synthesized here — an empty card whose only row is the one being analysed. It is a real row
+   * on the server (`sessionForToday` created it and primed the cache), so this is showing
+   * something that exists, not predicting one.
+   */
+  const sessions = useMemo(() => {
+    if (pending.length === 0) return real;
+    // A run whose session already has a card just rides that card. Only a session with NOTHING
+    // in it yet needs one synthesized — and it is a real row on the server (`sessionForToday`
+    // created it and primed the cache), so this shows something that exists rather than
+    // predicting one.
+    const covered = new Set(real.flatMap((s) => s.parts));
+    const extra: SwingSession[] = [];
+    const seen = new Set<string>();
+    for (const run of pending) {
+      if (covered.has(run.sessionId) || seen.has(run.sessionId)) continue;
+      seen.add(run.sessionId);
+      const row = sessionRows.find((r) => r.id === run.sessionId);
+      extra.push({
+        id: run.sessionId,
+        start: run.startedAt,
+        end: run.startedAt,
+        swings: [],
+        best: null,
+        name: row?.name ?? null,
+        sessionType: row?.sessionType ?? null,
+        parts: [run.sessionId],
+      });
+    }
+    if (extra.length === 0) return real;
+    // Merged again so a brand-new session lands INSIDE today's card rather than beside it.
+    return mergeByDay([...extra, ...real]);
+  }, [pending, real, sessionRows]);
+
+  /** The runs each CARD is carrying — matched on the card's parts, because a day's card stands
+   *  for every session row recorded that day. */
+  const pendingFor = useCallback(
+    (session: SwingSession) => pending.filter((run) => session.parts.includes(run.sessionId)),
+    [pending],
+  );
+
   const older = sessions.slice(1);
+
+  /**
+   * The accordion. ONE session open at a time (Taylor, 2026-08-22), and any of them may be shut
+   * — including the featured card, which used to be permanently open and was the one row a
+   * golfer had to scroll past to reach their older sessions.
+   *
+   * `undefined` means "not chosen yet" and resolves to the newest session, so the log still
+   * lands showing the most recent visit; `null` is the golfer having closed it, which is a
+   * different state and must not spring back open on the next render.
+   */
+  const [openId, setOpenId] = useState<string | null | undefined>(undefined);
+  const first = sessions[0]?.id ?? null;
+  const openSession = openId === undefined ? first : openId;
+
+  /**
+   * Deleting a swing, hosted HERE rather than inside the card.
+   *
+   * The card raises a request and this screen owns the confirmation, the animation and the
+   * network call, for one reason: a card that deletes its own last swing unmounts mid-request,
+   * and the sheet asking about it goes with it. Holding the pending target on the screen means
+   * the sheet outlives the row.
+   *
+   * **There is no session delete.** A session is an organizing layer over swings and means
+   * nothing without any, so emptying one removes it — server-side, inside the last swing's own
+   * delete (Taylor, 2026-08-22).
+   */
+  const [pendingSwing, setPendingSwing] = useState<{ swing: SwingSummary; number: number } | null>(
+    null,
+  );
+  /**
+   * The swing on its way out. It stays in the list, dimmed and collapsing, for the length of the
+   * animation before the request is even sent — a row that vanished the instant the sheet closed
+   * gave the golfer nothing to connect the confirmation to the thing that disappeared.
+   */
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const toast = useToast();
+
+  const confirmSwingDelete = useCallback(async () => {
+    const target = pendingSwing;
+    setPendingSwing(null);
+    if (!target) return;
+    setRemovingId(target.swing.id);
+    // The request waits for the animation rather than racing it: on a fast connection the cache
+    // update lands first and unmounts the row mid-fade, which is the flicker this exists to
+    // avoid. The row is already gone from the screen by the time the server is asked.
+    await new Promise((resolve) => setTimeout(resolve, REMOVE_MS));
+    // A swing being deleted mid-import takes its placeholder with it. Otherwise the row keeps
+    // saying "analyzing" over a session that now counts zero swings (Taylor, 2026-08-23) —
+    // `done` and `failed` are the placeholder's only other exits, and a deletion is neither.
+    cancelImportForSwing(target.swing.id);
+    try {
+      await deleteSwing(target.swing.id);
+    } catch {
+      toast({
+        id: `swing-delete-failed-${target.swing.id}`,
+        title: "That swing was not deleted",
+        icon: Trash2,
+        detail: "This device could not reach SwingSage. Nothing was removed.",
+      });
+    } finally {
+      // Cleared either way: on success the row is already unmounted, and on failure it has to
+      // come back rather than sit invisible in a list that still contains it.
+      setRemovingId(null);
+    }
+  }, [pendingSwing, toast]);
+
+  /**
+   * A swing arriving OPENS the session it is arriving into (Taylor, 2026-08-22).
+   *
+   * Uploading a clip while a different day was expanded left the news three cards away and
+   * collapsed — the golfer did the thing and the log showed them nothing. Keyed on the run's
+   * own id through a seen-set, so this fires once per import and never on a stage tick; a card
+   * that re-opened itself every few seconds could not be closed.
+   */
+  const announced = useRef(new Set<string>());
+  useEffect(() => {
+    for (const run of pending) {
+      if (announced.current.has(run.localId)) continue;
+      announced.current.add(run.localId);
+      const card = sessions.find((s) => s.parts.includes(run.sessionId));
+      if (card) setOpenId(card.id);
+    }
+  }, [pending, sessions]);
+
+  const toggleSession = useCallback(
+    (id: string) => setOpenId((current) => ((current === undefined ? first : current) === id ? null : id)),
+    [first],
+  );
+
   /**
    * The import door. Past the picker an imported clip takes the exact path a recorded swing
    * takes — same ingest, same analyzer, same session — so there is no second kind of swing.
    */
   const importer = useImportSwing(sessionRows);
-  const log = useMemo(() => logStats(sessions), [sessions]);
+  // Counted from the CONFIRMED log, never the pending one: a swing that is still uploading has
+  // no score, no duration and no guarantee of arriving, and a count that moved before it landed
+  // would have to move back if it failed.
+  const log = useMemo(() => logStats(real), [real]);
 
   // A session just ended (D61): play the arrival — a saving beat, then the card springs in
   // and the counts roll up. Consumed once from the staging seam; an ordinary visit has none.
@@ -245,7 +410,12 @@ export function SwingLogScreen() {
           <>
             <LatestSessionCard
               session={latest}
+              open={openSession === latest.id}
+              onToggle={() => toggleSession(latest.id)}
               onOpenSwing={(id) => navigation.navigate("SwingDetail", { id })}
+              onDeleteSwing={(swing, number) => setPendingSwing({ swing, number })}
+              pending={pendingFor(latest)}
+              removingId={removingId}
             />
             {/* .log-v2-session-list — every row expands to the swings inside it. */}
             {older.length > 0 && (
@@ -254,7 +424,12 @@ export function SwingLogScreen() {
                   <SessionRow
                     key={session.id}
                     session={session}
+                    open={openSession === session.id}
+                    onToggle={() => toggleSession(session.id)}
                     onOpenSwing={(id) => navigation.navigate("SwingDetail", { id })}
+                    onDeleteSwing={(swing, number) => setPendingSwing({ swing, number })}
+                    pending={pendingFor(session)}
+                    removingId={removingId}
                   />
                 ))}
               </View>
@@ -279,6 +454,63 @@ export function SwingLogScreen() {
       clip={importer.pending}
       onClose={importer.cancel}
       onConfirm={importer.confirm}
+    />
+
+    {/* The mark-impact pass, identical to a recorded take's: an import is a recording that
+        happened somewhere else, and nothing uploads until the golfer has seen the window and
+        said save. A full-screen Modal, deliberately: it is its own window ABOVE the tab shell,
+        so the wave nav cannot float over the Save button — the in-tree overlay version lost
+        that fight to the scroll-driven chrome (Taylor, 2026-08-23). Pinned dark like every
+        video-facing surface. */}
+    <Modal
+      visible={importer.reviewing !== null}
+      // NOT "fade": Android animates the WINDOW's alpha, so every pixel of the review —
+      // filmstrip, picture, controls — goes semi-transparent together and the swing log
+      // shows straight through it (Taylor, 2026-08-23). An instant swap also matches how
+      // session mode enters its own review, which is in-tree and has no window to fade.
+      animationType="none"
+      statusBarTranslucent
+      navigationBarTranslucent
+      onRequestClose={importer.discardReview}
+    >
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }]}>
+        <FixedDarkTheme>
+          {importer.reviewing ? (
+            <SwingReview
+              take={importer.reviewing.take}
+              saving={importer.savingReview}
+              onSave={importer.saveReview}
+              onDelete={importer.discardReview}
+              importMode
+            />
+          ) : null}
+        </FixedDarkTheme>
+      </View>
+    </Modal>
+
+    <ChoiceSheet
+      visible={pendingSwing !== null}
+      onClose={() => setPendingSwing(null)}
+      testID="log-swing-delete-sheet"
+      title={pendingSwing ? `Delete Swing ${pendingSwing.number}?` : "Delete this swing?"}
+      subtitle="The video and its analysis go permanently."
+      choices={[
+        {
+          key: "delete",
+          icon: Trash2,
+          title: "Delete this swing",
+          detail: "The rest of the session stays.",
+          tone: "danger",
+          onPress: () => void confirmSwingDelete(),
+        },
+        {
+          key: "cancel",
+          icon: X,
+          title: "Keep this swing",
+          detail: "Nothing is deleted.",
+          onPress: () => setPendingSwing(null),
+        },
+      ]}
     />
     </View>
   );
@@ -420,3 +652,10 @@ const useStyles = themedStyles((t) => ({
     maxWidth: 300,
   },
 }));
+
+/**
+ * How long a deleted row takes to leave — the veil (130) plus the slide (190) plus a beat.
+ * Must not be SHORTER than `SwingTimelineList`'s own exit, or the cache update unmounts the row
+ * mid-slide and the animation this waits for never finishes on screen.
+ */
+const REMOVE_MS = 360;

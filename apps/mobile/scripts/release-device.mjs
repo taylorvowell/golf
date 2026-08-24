@@ -23,7 +23,7 @@
  * contains its own name and AGP dies on it).
  */
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 const MOBILE = join(import.meta.dirname, "..");
@@ -64,6 +64,10 @@ console.log(`device ${serial} | stamp ${stamp}`);
 // 2026-08-23, twice in one evening).
 const STAMP_FILE = join(MOBILE, "src", "platform", "buildStamp.ts");
 const stampDefault = readFileSync(STAMP_FILE, "utf-8");
+// Its mtime before we touch it — restored with the content below. Without that, the restore
+// leaves this file NEWER than the bundle that was just built from it, and the freshness check
+// fails every run against its own scratch write.
+const stampMtime = statSync(STAMP_FILE).mtime;
 const STAMP_LINE = 'export const BUILD_STAMP: string = "dev";';
 if (!stampDefault.includes(STAMP_LINE)) {
   die(`${STAMP_FILE} is not in its committed "dev" state — restore it before building`);
@@ -96,8 +100,10 @@ try {
     });
   }
 } finally {
-  // The working tree never keeps a per-build stamp — restore before anything can commit it.
+  // The working tree never keeps a per-build stamp — restore before anything can commit it,
+  // with its ORIGINAL mtime so the freshness check below does not trip over this write.
   writeFileSync(STAMP_FILE, stampDefault);
+  utimesSync(STAMP_FILE, stampMtime, stampMtime);
 }
 
 // 3. The tripwire: the shipped bundle must be NEWER than every source file that feeds it.

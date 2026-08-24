@@ -95,9 +95,16 @@ export function trackImport(
 
   if (clipPath) void extractThumb(localId, clipPath);
 
-  const off = subscribeProcessing(localId, () => {
+  // eslint-disable-next-line prefer-const -- `off` is referenced inside its own callback.
+  let off: () => void;
+  off = subscribeProcessing(localId, () => {
     const run = getProcessing(localId);
     if (!run) return;
+    // Cancelled out from under us (the swing was deleted) — this run no longer has a row.
+    if (!pending.has(localId)) {
+      off();
+      return;
+    }
     if (run.phase === "done") {
       off();
       setTimeout(() => {
@@ -130,6 +137,7 @@ export function trackImport(
     });
     publish();
   });
+  watchers.set(localId, off);
 }
 
 /**
@@ -201,8 +209,32 @@ export function setOrphanCleanup(fn: ((swingId: string) => void) | null): void {
   onOrphan = fn;
 }
 
+/** Unsubscribers per run, so a placeholder can be retired from outside its own callback. */
+const watchers = new Map<string, () => void>();
+
+/**
+ * Stop standing for a swing the golfer just deleted.
+ *
+ * Deleting the row underneath a running import used to leave the placeholder behind, still
+ * saying "analyzing" over a session that now reported zero swings (Taylor, 2026-08-23) — the
+ * placeholder's own exits are `done` and `failed`, and a deletion is neither. The pipeline
+ * keeps running to its end (its uploads simply 404 against a swing that is gone, which the
+ * job settles on its own); what stops immediately is the app claiming to show it.
+ */
+export function cancelImportForSwing(swingId: string): void {
+  for (const [localId, run] of pending) {
+    if (run.swingId !== swingId) continue;
+    watchers.get(localId)?.();
+    watchers.delete(localId);
+    pending.delete(localId);
+  }
+  publish();
+}
+
 /** Sign-out, and the tests' reset seam — the same rule `clearProcessing` follows. */
 export function clearPendingImports(): void {
+  for (const off of watchers.values()) off();
+  watchers.clear();
   pending.clear();
   publish();
 }
