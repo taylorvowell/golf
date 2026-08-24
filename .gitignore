@@ -52,3 +52,4 @@ Thumbs.db
 
 # Upstash CLI credentials (Developer API key)
 .upstash.json
+apps/mobile/assets/videos/
