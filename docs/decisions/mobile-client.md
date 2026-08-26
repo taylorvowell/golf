@@ -1857,6 +1857,39 @@ KEEPS the coach spelling: everything meaning the AI — `features/coach/`, the C
 BrandIcon, and the `coach-surface` track (its subject is the AI Coach tab). PROJECT_MAIN
 still says "coach" for the human role in its §23–§29 sections — read those as "instructor".
 
+### The app has two faces: personal mode and instructor mode, switched in the header
+
+**Decision:** An account holding the `instructor` role can flip the app between **personal
+mode** (the golfer product, unchanged) and **instructor mode** (its own tab shell — Home,
+Students, a raised **Broadcast** centre, Inbox, a Profile door — and its own menus) from a
+dropdown in the AppHeader beside the menu glyph. Mode is **presentation, never authorization**
+(RLS and the role row decide what an account may do; switching calls no API), **device-local**
+(`swingsage.app-mode.v1`, module store in `features/mode/appMode.ts` — two devices may wear
+different hats), and **defaults personal** — on first install, on sign-out, and when the role
+disappears (`ModeGuard`; roles read once per session from `/api/v1/roles` via `useRoles()`,
+the first client consumer of the roles API). Golfers never see the switcher. The one swap seam
+is the root `Tabs` route hosting `InstructorTabs` instead of `Tabs`; the root stack above is
+shared, so the player and every stacked surface exist identically in both modes. Notification
+deep links route through `features/mode/deepLinks.ts` (`modeForNotification`) — a named seam
+the notifications track wires. Dev: DEBUG → Mode carries "Force instructor role" and a direct
+mode flip.
+**See:** `.claude/architecture/instructor-platform-2026-08-24.md` §4.
+
+### Instructor mode wears the charcoal INSTRUCTOR theme, selected by mode alone
+
+**Decision:** A third theme binding, `INSTRUCTOR` (`themes.ts`, over `CHARCOAL_SURFACES` in
+`palette.ts`): near-black charcoal surfaces with the unchanged cobalt/aqua accents — Taylor's
+spec verbatim. `ThemeProvider` resolves `mode === "instructor" ? INSTRUCTOR : LIGHT`; the
+golfer pin to LIGHT stands, and the unused light/dark preference seam stays intact. The
+binding carries `mode: "dark"`, so navTheme, the StatusBar and every `t.mode === "dark"`
+branch follow with no per-screen work. `useAppTheme()`/`AppTheme` now read the resolved app
+surface from context (previously a module constant), so sticky bars and sheet interiors wear
+the right face inside `FixedDarkTheme` pins — which themselves are untouched: the
+player/capture/stance/deep surfaces render byte-identically in both modes.
+**Gotchas:** no screen imports a binding directly — everything reads `useTheme()`/
+`useAppTheme()`; the provider is the only importer of `INSTRUCTOR` (grep-checked).
+**See:** the architecture's §5; `ThemeProvider.test.tsx` pins the resolution rules.
+
 ### Instructor presence is one flag driving three surfaces
 
 **Decision:** whether the golfer has a connected instructor is a single store

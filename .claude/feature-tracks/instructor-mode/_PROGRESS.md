@@ -3,8 +3,34 @@
 Append-only. Binding design: `.claude/architecture/instructor-platform-2026-08-24.md`
 (ACCEPTED 2026-08-26).
 
-## 02 - Two-dimensional entitlement (code-complete; verification held by an external edit)
-**Status:** in-progress — see the blocker in `_STATUS.json`
+## 03 - Mode, theme, and shell chrome
+**Completed:** 2026-08-26 12:10 UTC
+**Phase:** Instructor Mode
+**Summary:** The switchable second face: `features/mode/` (device-local `appMode` store,
+`useRoles()` — the first client consumer of `/api/v1/roles` — `useInstructorEligible` with a
+DEV force-flag, `ModeGuard` resetting to personal on sign-out/role loss, `ModeDebug`, the
+`modeForNotification` deep-link seam), the `ModeSwitch` header dropdown (renders nothing for
+golfers; slotted into AppHeader beside the menu glyph on all four tabs), `CHARCOAL_SURFACES`
++ the `INSTRUCTOR` theme binding with `ThemeProvider` resolving from mode
+(`useAppTheme`/`AppTheme` converted to context), `WaveNav` gained a `centerSlot`, and the
+instructor shell — `InstructorTabs` (Home/Students/Inbox placeholders on one
+`PlaceholderScreen`), `InstructorTabBar` with the raised **Broadcast** door (placeholder
+sheet) and a Profile door — swapped at the root `Tabs` seam in App.tsx.
+**Notes:** Two real bugs caught by the new tests: the load-once idiom's race (a `setAppMode`
+during the AsyncStorage read was clobbered — guarded in both new stores; the same latent race
+exists in the older copies of the idiom, untouched) and this React root's async `act`
+requiring await. ModeSwitch/ThemeProvider tests pin eligibility-hides-control and
+which-binding-resolves; the on-glass walk (switch feel, charcoal on device, persistence
+across relaunch) is deliberately carried into step 05's sign-off gate rather than a solo
+emulator pass — named, not silent. Oracles: mobile typecheck + 540/540 (59 suites).
+Registers: two new entries in `mobile-client.md`.
+
+---
+
+## 02 - Two-dimensional entitlement
+**Completed:** 2026-08-26 10:40 UTC — the external hold cleared when the parallel compare
+session committed (79b4f4e); full oracle green afterwards (mobile typecheck + 536/536, 58
+suites). Blocker removed from `_STATUS.json`. Original entry below, written at code-complete:
 **Phase:** Instructor Mode
 **Summary:** `plans.ts`/`entitlement.tsx` rebuilt on the two-dimensional model: `PersonalTier` ×
 `InstructorMembership`, the Gold+/Platinum⇒Pro derivation (`source: "included"`, the included

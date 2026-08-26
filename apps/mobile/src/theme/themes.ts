@@ -1,5 +1,6 @@
 import {
   AQUA,
+  CHARCOAL_SURFACES,
   COBALT,
   DARK_SURFACES,
   LAVENDER,
@@ -114,6 +115,31 @@ const DARK_BASE: IdealTokens = {
   onDark: ON_DARK,
 };
 
+/**
+ * INSTRUCTOR MODE's binding (architecture §5) — charcoal ground, the same blue accents.
+ * `mode: "dark"` is deliberate and load-bearing: navTheme, the StatusBar, `WaveNav`'s fill and
+ * every `t.mode === "dark"` branch follow it for free, which is what makes the third theme a
+ * value change rather than a mechanism. Selected by the APP MODE (`features/mode`), never by a
+ * user theme preference; the pinned-dark video surfaces are unaffected in both modes.
+ */
+const INSTRUCTOR_BASE: IdealTokens = {
+  mode: "dark",
+  ...CHARCOAL_SURFACES,
+  pressBed: "rgba(255,255,255,0.12)",
+  // One step lighter than light-mode's cobalt so it reads on the charcoal ground — the same
+  // swap DARK makes, for the same reason.
+  cobalt: COBALT[500],
+  cobaltPressed: COBALT[600],
+  aqua: AQUA[500],
+  aquaSoft: "rgba(45,240,251,0.14)",
+  lavender: LAVENDER[500],
+  good: SEMANTIC.good,
+  bad: SEMANTIC.bad,
+  onDark: ON_DARK,
+};
+
 export const LIGHT: Theme = LIGHT_BASE;
 
 export const DARK: Theme = DARK_BASE;
+
+export const INSTRUCTOR: Theme = INSTRUCTOR_BASE;

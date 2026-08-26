@@ -33,6 +33,10 @@ import { HomeScreen } from "./src/screens/HomeScreen";
 import { InstructorBubble } from "./src/features/instructor/InstructorBubble";
 import { InstructorChatScreen } from "./src/screens/InstructorChatScreen";
 import { InstructorScreen } from "./src/screens/InstructorScreen";
+import { InstructorTabs } from "./src/features/instructor/shell/InstructorTabs";
+import { ModeDebug } from "./src/features/mode/ModeDebug";
+import { ModeGuard } from "./src/features/mode/ModeGuard";
+import { useAppMode } from "./src/features/mode/appMode";
 import { NotificationsScreen } from "./src/screens/NotificationsScreen";
 import { ProfileScreen } from "./src/screens/ProfileScreen";
 import { MyProfileScreen } from "./src/screens/MyProfileScreen";
@@ -145,6 +149,12 @@ function Tabs() {
 /** Everything below the theme: the navigator needs `useTheme`, so it lives one level down. */
 function Root() {
   const t = useTheme();
+  // The one shell swap (architecture §4): instructor mode changes which navigator the Tabs
+  // route hosts — the root stack above it is shared, so the player, profile pages and every
+  // stacked surface exist identically in both modes. Swapping `component` remounts the tab
+  // tree, which is the desired semantics of changing hats.
+  const mode = useAppMode();
+  const TabsComponent = mode === "instructor" ? InstructorTabs : Tabs;
 
   // The stock theme of the matching mode with this product's colours, so the split-second
   // before a screen paints is the app's ground rather than React Navigation's defaults.
@@ -177,6 +187,8 @@ function Root() {
             <AuthGate>
               {/* Debug-only registrar; needs the swing list, hence inside the gate. */}
               <SubjectDebug />
+              {/* Keeps the stored mode truthful: personal on sign-out or role loss. */}
+              <ModeGuard />
               <EntitlementProvider>
               <NavVisibilityProvider>
                 <NavigationContainer ref={navigationRef} theme={navTheme}>
@@ -189,7 +201,7 @@ function Root() {
                     contentStyle: { backgroundColor: t.bg },
                   }}
                 >
-                  <Stack.Screen name="Tabs" component={Tabs} options={{ headerShown: false }} />
+                  <Stack.Screen name="Tabs" component={TabsComponent} options={{ headerShown: false }} />
                   {/* No header: the player draws its own back control and title OVER the picture, so
                       a bar above it would spend the most valuable strip of a tall screen twice. */}
                   <Stack.Screen
@@ -356,6 +368,7 @@ export default function App() {
         <DebugProvider>
           <InstructorDebug />
           <CoachDebug />
+          <ModeDebug />
           {/* The toaster is the app-wide surface (celebrations, notification alerts — one
               queue); it renders above the navigator so a toast lands on whatever screen is
               up. CelebrationProvider is a client of it and sits below the debug registry

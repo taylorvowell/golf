@@ -1,23 +1,16 @@
 {
   "schemaVersion": 1,
   "featureName": "instructor-mode",
-  "currentStep": "02",
+  "currentStep": "04",
   "phase": "Instructor Mode",
-  "lastUpdated": "2026-08-26T09:25:00Z",
+  "lastUpdated": "2026-08-26T12:10:00Z",
   "steps": {
     "01": { "status": "complete", "completedAt": "2026-08-26T09:25:00Z" },
-    "02": { "status": "in-progress", "startedAt": "2026-08-26T09:25:00Z" },
-    "03": { "status": "not-started" },
+    "02": { "status": "complete", "completedAt": "2026-08-26T10:40:00Z" },
+    "03": { "status": "complete", "completedAt": "2026-08-26T12:10:00Z" },
     "04": { "status": "not-started" },
     "05": { "status": "not-started" }
   },
-  "blockers": [
-    {
-      "step": "02",
-      "kind": "EXTERNAL-DEPENDENCY",
-      "added": "2026-08-26",
-      "description": "Step 02's own work is code-complete and its touched suites pass (billing/screens/spotlights/notifications: 34/34; web 256/256; schema 153/153). The full mobile typecheck+test oracle fails ONLY in src/features/player/ReferencePane(.test).tsx against a concurrent, uncommitted rework of features/player/align.ts (+394 lines, not this track's work, present in the working tree mid-edit). Not fixed here deliberately — touching another session's in-flight module invites a collision. Re-run `pnpm --filter mobile typecheck && pnpm --filter mobile test`; when green, mark 02 complete and continue with step 03."
-    }
-  ],
+  "blockers": [],
   "skipped": []
 }

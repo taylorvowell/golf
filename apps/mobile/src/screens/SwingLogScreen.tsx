@@ -26,6 +26,7 @@ import { useImportSwing } from "../features/swings/useImportSwing";
 import { deleteSwing, useSwings } from "../features/swings/useSwings";
 import { SwingReview } from "../features/session/SwingReview";
 import { useToast } from "../features/toast/ToastProvider";
+import { ModeSwitch } from "../features/mode/ModeSwitch";
 import { useAppNavigation } from "../navigation";
 import { FixedDarkTheme, themedStyles, useTheme } from "../theme";
 
@@ -485,6 +486,7 @@ export function SwingLogScreen() {
       chromePx={chromePx}
       bell={<NotificationBell hero onPress={() => navigation.navigate("Notifications")} />}
       avatar={<Avatar size={26} />}
+      modeSwitch={<ModeSwitch hero />}
       onProfile={() => navigation.navigate("Profile")}
       profileTestID="swing-log-profile"
     />

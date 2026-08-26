@@ -35,6 +35,7 @@ import { createdAtMs, sessionize } from "../features/swings/sessions";
 import { useSessions } from "../features/swings/useSessions";
 import { useSwings } from "../features/swings/useSwings";
 import { useAuthenticatedImage } from "../platform/useAuthenticatedImage";
+import { ModeSwitch } from "../features/mode/ModeSwitch";
 import { useAppNavigation, type Navigation } from "../navigation";
 import { COLORS, themedStyles, useTheme } from "../theme";
 
@@ -257,6 +258,7 @@ export function HomeScreen() {
         chromePx={chromePx}
         bell={<NotificationBell hero onPress={() => navigation.navigate("Notifications")} />}
         avatar={<Avatar size={26} />}
+        modeSwitch={<ModeSwitch hero />}
         onProfile={() => navigation.navigate("Profile")}
         profileTestID="home-profile"
       />

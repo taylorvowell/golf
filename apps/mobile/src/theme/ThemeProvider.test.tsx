@@ -2,17 +2,23 @@ import { Text } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { fireEvent, render, screen } from "@testing-library/react-native";
 
+import { act } from "@testing-library/react-native";
+
+import { clearAppModeCache, setAppMode } from "../features/mode/appMode";
 import {
   ThemeProvider,
   clearThemePreferenceCache,
   useTheme,
   useThemePreference,
 } from "./ThemeProvider";
+import { INSTRUCTOR } from "./themes";
 
 /**
- * Pins the one resolution rule a golfer would notice: **the app is light, always**. Neither the
- * phone's dark mode nor a stored preference from an earlier build changes it. Colour values are
- * deliberately not asserted — they are design, not behaviour.
+ * Pins the resolution rules a person would notice: **personal mode is light, always** — neither
+ * the phone's dark mode nor a stored preference changes it — and **instructor mode wears the
+ * charcoal INSTRUCTOR binding**, selected by the app mode alone. Colour values are deliberately
+ * not asserted — they are design, not behaviour — except the one bg read that proves the third
+ * binding is the one resolved (mode "dark" alone would also be true of DARK).
  */
 
 // The provider reads the OS scheme through `useColorScheme`; the variable is the OS knob.
@@ -29,6 +35,7 @@ function Probe() {
   return (
     <>
       <Text testID="mode">{t.mode}</Text>
+      <Text testID="bg">{t.bg}</Text>
       <Text testID="choose-light" onPress={() => set("light")}>
         choose light
       </Text>
@@ -50,6 +57,7 @@ async function renderProbe() {
 beforeEach(async () => {
   mockOsScheme = null;
   clearThemePreferenceCache();
+  clearAppModeCache();
   await AsyncStorage.clear();
 });
 
@@ -85,4 +93,21 @@ test("a stored dark preference from an earlier build does not un-pin it", async 
   await AsyncStorage.setItem("swingsage.theme-preference.v1", "dark");
   await renderProbe();
   expect(await screen.findByTestId("mode")).toHaveTextContent("light");
+});
+
+test("instructor mode resolves the INSTRUCTOR binding, and leaving it restores light", async () => {
+  await renderProbe();
+  // This root's act is async — unawaited, its scope interleaves with the next render's.
+  await act(async () => setAppMode("instructor"));
+  expect(await screen.findByTestId("mode")).toHaveTextContent("dark");
+  // The charcoal ground, not DARK's navy — proves WHICH dark binding the mode selected.
+  expect(await screen.findByTestId("bg")).toHaveTextContent(INSTRUCTOR.bg);
+  await act(async () => setAppMode("personal"));
+  expect(await screen.findByTestId("mode")).toHaveTextContent("light");
+});
+
+test("a stored instructor mode survives a cold start", async () => {
+  await AsyncStorage.setItem("swingsage.app-mode.v1", "instructor");
+  await renderProbe();
+  expect(await screen.findByTestId("mode")).toHaveTextContent("dark");
 });

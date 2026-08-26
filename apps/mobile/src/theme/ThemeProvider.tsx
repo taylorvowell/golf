@@ -8,18 +8,26 @@ import {
 } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-import { DARK, LIGHT, type Theme } from "./themes";
+import { useAppMode } from "../features/mode/appMode";
+import { DARK, INSTRUCTOR, LIGHT, type Theme } from "./themes";
 
 /**
  * Which face the app wears, and who decides.
  *
- * **The app is pinned to LIGHT** (Taylor, 2026-08-18). There is no theme choice: the phone's
- * dark mode is not followed, no Settings control changes it, and a stored preference from an
- * earlier build is ignored. `FixedDarkTheme` still pins the video-facing surfaces dark, which
- * is a property of those screens rather than a theme choice.
+ * **In personal mode the app is pinned to LIGHT** (Taylor, 2026-08-18). There is no theme
+ * choice: the phone's dark mode is not followed, no Settings control changes it, and a stored
+ * preference from an earlier build is ignored. `FixedDarkTheme` still pins the video-facing
+ * surfaces dark, which is a property of those screens rather than a theme choice.
+ *
+ * **In INSTRUCTOR mode the app wears `INSTRUCTOR`** — the charcoal binding (the
+ * instructor-platform architecture §5, accepted 2026-08-26). This is the APP MODE selecting a
+ * face, not a theme preference: the golfer pin above is untouched, and switching back is
+ * switching the mode. The mode lives in a module store (`features/mode/appMode`), so this
+ * provider — near the root, above auth — can read it without a provider above itself.
  *
  * The DARK theme, every dark token and every `t.mode === "dark"` branch are deliberately kept —
- * un-pinning is this file's `resolved` line and re-mounting the Settings control, nothing more.
+ * un-pinning light/dark for golfers is still this file's `resolved` line and re-mounting the
+ * Settings control, nothing more.
  *
  * The preference store below is that seam, left intact and unread. It is device-local and
  * persisted exactly like the after-swing summary preference (same module-cache idiom, same
@@ -91,14 +99,27 @@ export function useThemePreference(): {
 const ThemeContext = createContext<Theme>(LIGHT);
 
 /**
- * The app's own surface, resolved once. Pinned. Neither the stored preference nor the phone's
- * scheme is consulted — see the note at the top of this file. Restoring the choice means
- * resolving DARK here, and both `ThemeProvider` and `useAppTheme` pick it up.
+ * The app's own resolved surface, as context — LIGHT in personal mode, INSTRUCTOR in
+ * instructor mode. A SECOND context beside `ThemeContext` because the two answer different
+ * questions: "what theme is here" (a `FixedDarkTheme` pin may answer DARK) versus "what is
+ * the app's ambient surface" (what `useAppTheme`/`AppTheme` restore inside a pin). Defaults
+ * LIGHT for the same reason `ThemeContext` does: dark-pinned surfaces mount providerless in
+ * tests, and light is the honest ambient answer.
  */
-const APP_THEME = LIGHT;
+const AppSurfaceContext = createContext<Theme>(LIGHT);
+
+/** Personal mode's face — still pinned LIGHT; see the note at the top of this file. */
+function resolveAppTheme(mode: "personal" | "instructor"): Theme {
+  return mode === "instructor" ? INSTRUCTOR : LIGHT;
+}
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  return <ThemeContext.Provider value={APP_THEME}>{children}</ThemeContext.Provider>;
+  const resolved = resolveAppTheme(useAppMode());
+  return (
+    <AppSurfaceContext.Provider value={resolved}>
+      <ThemeContext.Provider value={resolved}>{children}</ThemeContext.Provider>
+    </AppSurfaceContext.Provider>
+  );
 }
 
 /** The resolved theme every themed component reads. Semantic tokens only — see `themes.ts`. */
@@ -127,7 +148,7 @@ export function FixedDarkTheme({ children }: { children: ReactNode }) {
  * drawn over footage still uses the fixed dark palette, which is the whole point of the pin.
  */
 export function useAppTheme(): Theme {
-  return APP_THEME;
+  return useContext(AppSurfaceContext);
 }
 
 /**
@@ -138,5 +159,6 @@ export function useAppTheme(): Theme {
  * swing log's sheet. Applied by the primitive so a sheet author cannot forget it.
  */
 export function AppTheme({ children }: { children: ReactNode }) {
-  return <ThemeContext.Provider value={APP_THEME}>{children}</ThemeContext.Provider>;
+  const app = useAppTheme();
+  return <ThemeContext.Provider value={app}>{children}</ThemeContext.Provider>;
 }

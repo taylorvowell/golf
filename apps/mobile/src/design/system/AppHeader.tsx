@@ -73,6 +73,7 @@ export function AppHeader({
   onProfile,
   bell,
   avatar,
+  modeSwitch,
   profileTestID = "open-profile",
 }: {
   hero?: boolean;
@@ -104,6 +105,14 @@ export function AppHeader({
    * broken, and session mode seals doors on purpose.
    */
   avatar?: ReactNode;
+  /**
+   * The personal/instructor mode dropdown (the instructor-platform architecture §4) — a SLOT
+   * for the same leaf reason the bell and avatar are: whether it exists at all depends on the
+   * account's role, which a feature store knows and the design system must not. It sits
+   * immediately left of the menu glyph — Taylor's stated placement. Omit to seal it with the
+   * other doors (session mode).
+   */
+  modeSwitch?: ReactNode;
   profileTestID?: string;
 }) {
   const insets = useSafeAreaInsets();
@@ -200,6 +209,7 @@ export function AppHeader({
             {avatar}
           </Pressable>
         ) : null}
+        {modeSwitch}
         {onProfile ? (
         <Pressable
           testID={profileTestID}

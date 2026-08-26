@@ -106,12 +106,20 @@ export function WaveNav({
   onRecord,
   hidden = false,
   recordTestID,
+  centerSlot,
 }: {
   /** Exactly four items — two left of Record, two right (the mockup's five slots). */
   items: WaveNavItem[];
   onRecord: () => void;
   hidden?: boolean;
   recordTestID?: string;
+  /**
+   * Replaces the raised Record button — the INSTRUCTOR shell's Broadcast door is the first
+   * user (architecture §4a: Broadcast is the instructor's one-tap act the way Record is the
+   * golfer's). The geometry (slot width, lift) stays this bar's; only the control swaps, so
+   * the two shells' bars stay one system. When set, `onRecord`/`recordTestID` are unused.
+   */
+  centerSlot?: ReactNode;
 }) {
   const insets = useSafeAreaInsets();
   const t = useTheme();
@@ -267,7 +275,7 @@ export function WaveNav({
         {item(items[0])}
         {item(items[1])}
         <View style={{ width: RECORD_SLOT, alignItems: "center", marginBottom: RECORD_LIFT }}>
-          <RecordButton compact onPress={onRecord} testID={recordTestID} />
+          {centerSlot ?? <RecordButton compact onPress={onRecord} testID={recordTestID} />}
         </View>
         {item(items[2])}
         {item(items[3])}

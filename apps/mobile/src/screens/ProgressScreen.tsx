@@ -21,6 +21,7 @@ import {
 import { NotificationBell } from "../features/notifications/NotificationBell";
 import { useSessions } from "../features/swings/useSessions";
 import { useSwings } from "../features/swings/useSwings";
+import { ModeSwitch } from "../features/mode/ModeSwitch";
 import { useAppNavigation } from "../navigation";
 import { themedStyles, useTheme } from "../theme";
 
@@ -231,6 +232,7 @@ export function ProgressScreen() {
       chromePx={chromePx}
       bell={<NotificationBell hero onPress={() => navigation.navigate("Notifications")} />}
       avatar={<Avatar size={26} />}
+      modeSwitch={<ModeSwitch hero />}
       onProfile={() => navigation.navigate("Profile")}
       profileTestID="progress-profile"
     />

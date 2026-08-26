@@ -125,6 +125,31 @@ export const LIGHT_SURFACES = {
   glass: "rgba(255,255,255,0.88)",
 } as const;
 
+/**
+ * INSTRUCTOR MODE's surfaces (the instructor-platform architecture §5, accepted 2026-08-26):
+ * near-black charcoal instead of the navy family — Taylor's spec, verbatim: "dark
+ * black/charcoals instead of the blues, still using the blue accents." Neutral with a whisper
+ * of cool so the aqua/cobalt accents carry ALL the colour; the same 14-key shape as the two
+ * surface sets above, so the `Theme` type accepts it unchanged. The hero ramp climbs out of
+ * the charcoal ground into the middle blue anchor — the accent stays the brand's.
+ */
+export const CHARCOAL_SURFACES = {
+  bg: "#0E1114",
+  bgElevated: "#14181D",
+  surface: "#1A1F25",
+  surface2: "#21272E",
+  surface3: "#293037",
+  surfaceBlue: "#152430",
+  text: "#F4F7F9",
+  textSoft: "#C3CBD2",
+  muted: "#8D979F",
+  muted2: "#636D75",
+  heroStart: "#0E1114",
+  heroMid: "#16202B",
+  heroEnd: "#0D94DB",
+  glass: "rgba(20,24,29,0.9)",
+} as const;
+
 /** The dark theme's surfaces and text, verbatim from `html[data-theme="dark"]`. */
 export const DARK_SURFACES = {
   // The ground IS the darkest anchor, and the ramp climbs out of it — see the header note.

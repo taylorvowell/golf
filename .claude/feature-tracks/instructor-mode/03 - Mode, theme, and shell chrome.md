@@ -1,7 +1,7 @@
 # 03 - Mode, theme, and shell chrome
 
 **Phase:** Instructor Mode
-**Status:** not-started
+**Status:** complete
 **Estimated effort:** 1 day
 
 ## Overview

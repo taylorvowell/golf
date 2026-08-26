@@ -1,7 +1,7 @@
 # 02 - Two-dimensional entitlement
 
 **Phase:** Instructor Mode
-**Status:** in-progress
+**Status:** complete
 **Estimated effort:** 0.5–1 day
 
 ## Overview

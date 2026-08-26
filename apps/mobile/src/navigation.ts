@@ -25,8 +25,20 @@ export type TabParamList = {
   Coach: undefined;
 };
 
+/**
+ * INSTRUCTOR MODE's tab shell (the instructor-platform architecture §4/§4a). The `Tabs` route
+ * hosts one of two navigators — this one when the device is in instructor mode — so the root
+ * stack above is shared and only the shell swaps. Profile is a bar item, not a tab: it opens
+ * the root Profile drawer, like the header door does.
+ */
+export type InstructorTabParamList = {
+  InstructorHome: undefined;
+  Students: undefined;
+  InstructorInbox: undefined;
+};
+
 export type RootStackParamList = {
-  Tabs: NavigatorScreenParams<TabParamList> | undefined;
+  Tabs: NavigatorScreenParams<TabParamList> | NavigatorScreenParams<InstructorTabParamList> | undefined;
   /** Every swing opens as the same page — the swing report over the live player. ONE player
    *  shape by decision (2026-08-17); the legacy after-swing/checkpoint params died with the
    *  second player surface. */
