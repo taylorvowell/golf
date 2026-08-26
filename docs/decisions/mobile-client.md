@@ -154,12 +154,63 @@ handling — that gap closes as the track needs it.
 both, the top is the top in both, and differing lengths and frame rates fall out for free.
 **Gotchas:** Frames don't transfer between clips, and scaling by duration is worse because it
 cancels exactly the tempo difference being compared. The map **clamps** outside the detected swing
-rather than extrapolating, and uses **only positions both artifacts detected** — fewer than two
-shared means unalignable, which the UI must *state*, because a silently misaligned pair looks
-exactly like a working one. Build the anchor table sorted by **P-code ordinal**: sorting by frame
-makes the strictly-increasing check vacuous and lets a swing whose top was detected before its
-address run the follower backwards.
+rather than extrapolating, and uses **only positions both artifacts admitted** — which the UI must
+*state* when it refuses, because a silently misaligned pair looks exactly like a working one. Build
+the anchor table sorted by **P-code ordinal**: sorting by frame makes the strictly-increasing check
+vacuous and lets a swing whose top was detected before its address run the follower backwards.
 **See:** ARCHIVE D52.
+
+### A published checkpoint is not automatically an anchor
+
+**Decision:** Before a P-code may anchor an alignment it must clear three gates: `conf >= MIN_CONF`,
+not be the **ordering nudge** (`conf <= 0.35` *and* within one frame of a neighbour), and not be an
+Impact the audio witness contradicts. A pair then needs two shared anchors **and one at or after
+P7** — otherwise it is refused, with the reason. Five or more, reaching back to the takeaway, is
+`aligned`; less is `approximate` and says so.
+**Gotchas:** `checkpoints.py` publishes ten rows whether or not it found ten positions — its two
+proxies (`proxy: midpoint…`, `no span…`) publish at 0.30, and the nudge clamps to 0.35 and shoves
+the frame one past its predecessor. Ten strictly-increasing rows is therefore *not* evidence of ten
+positions: on `7wood-1` seven of them are the nudge, and the whole downswing mapped onto a single
+instant while the map reported ten healthy anchors. Both halves of the nudge test are required —
+`7wood-2` legitimately has Impact one frame before P8 at conf 0.98, and `pro_3` a finish one frame
+after P9 at 0.90. The audio witness **vetoes** Impact and never replaces it: it carries 121–148 ms
+of unmeasured latency. **`tempoIsFlagged` is not a usable second opinion** — measured across all
+nineteen stored artifacts it fires on the slow-motion references (`pro_3`, `perfect`) this feature
+exists to compare against, and on a confirmed rehearsal swing.
+
+### Lining two swings up costs two kilobytes, not the artifact
+
+**Decision:** `GET /api/v1/swings/:id/sync-profile` projects the checkpoint table, frame rate,
+picture shape, handedness and a subject box out of a stored `analysis.json`. The comparison reads
+it; it never fetches the reference's artifact. The table goes out **as published** — admission is
+the client's, so two app versions may disagree about what is trustworthy without seeing different
+numbers.
+**Gotchas:** The artifact is 5.9 MB on `6iron-1` and 22 MB on `pro_3`, it was being fetched for ten
+integers, and the pane and the stats panel each fetched their own copy. On a phone that download
+*is* the perceived quality of the feature.
+
+### A side-by-side crops to the golfer, and mirrors an opposite-handed reference
+
+**Decision:** Each pane crops to that swing's subject box, capped at 2.2× the natural size, with the
+overlay inside the crop so it scales with the picture. A reference of the opposite handedness is
+flipped `scaleX: -1`, and the crop offset is computed against the reflected box.
+**Gotchas:** Two portrait clips side by side on an S25+ give each column 203 dp, so a 9:16 picture
+fits at 203×361 in a ~890 dp space and the golfer is about 40 dp wide — technically correct and
+useless. Cropping roughly doubles them and, more importantly, makes both golfers the same apparent
+size, which is the precondition for comparing shapes at all. Uncapped it is a 3× upscale of 1080p
+and visibly soft. Mirroring about a view's own centre moves the golfer to the other side of it, so
+an offset computed for the unmirrored picture pushes them off the pane. Containment beats centring
+when they disagree — sliding to centre an edge-hugging subject shows background where footage
+should be. **A `SurfaceView` would ignore both the crop's clipping and the mirror**; every video
+here passes `surfaceType="textureView"`.
+
+### Picking a swing to compare ENTERS the comparison
+
+**Decision:** Choosing a reference collapses the picker sheet and shows the two pictures. The sheet
+reopens to a stats panel with "compare with something else" and an explicit "stop comparing".
+**Gotchas:** Leaving the sheet up meant the golfer chose a swing and then had to dismiss a panel to
+see what they had just asked for, with a table of durations covering the half of the screen the
+second swing was in.
 
 ### Seek to `frame / fps` on Android — never the web player's `(frame + 0.5) / fps`
 

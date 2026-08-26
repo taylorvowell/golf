@@ -30,7 +30,9 @@ import { FloatingBack, Sheet, SheetOverBackdrop, navBarBottomInset } from "../..
 import { FONT_DISPLAY } from "../../design/system/typography";
 import { COLORS, FixedDarkTheme } from "../../theme";
 import { ComparePanel } from "../player/ComparePanel";
-import { ReferencePane } from "../player/ReferencePane";
+import { ReferencePane, type CompareStatus } from "../player/ReferencePane";
+import { paneCrop } from "../player/paneCrop";
+import { useSyncProfile } from "../player/useSyncProfile";
 import { fitBox, isSeekable, msToFrame, windowBounds, type Bounds } from "../player/frames";
 import { bandsConfirmed, phaseBands, scrubMap } from "../player/phaseBands";
 import { OverlayControls } from "../player/overlay/OverlayControls";
@@ -463,6 +465,14 @@ export function ReportVideoLayer({
   const clubVar: string | null = null;
   const smoothing: SmoothingKey | null = null;
   const [reference, setReference] = useState<SwingSummary | null>(null);
+  /**
+   * What the two swings turned out to have in common — reported up by the pane that computes it.
+   *
+   * Held here rather than inside the pane because the sentence it produces belongs to the whole
+   * comparison, not to the right-hand column: an alignment that could not be made is a fact about
+   * BOTH pictures, and printing it on one of them reads as that swing being at fault.
+   */
+  const [alignment, setAlignment] = useState<CompareStatus | null>(null);
   const traceCost = useRef(0);
 
   /**
@@ -585,6 +595,28 @@ export function ReportVideoLayer({
   const stageWidth = reference ? Math.floor((width - COMPARE_GAP) / 2) : width;
   const stage = fitBox(aspect, stageWidth, height);
 
+  /**
+   * In a comparison the leader is cropped to its golfer, exactly as the reference is.
+   *
+   * Fetched rather than derived from the artifact this component already holds: the box is
+   * computed once, server-side, from the same projection both panes read, so the two golfers
+   * cannot end up sized by two subtly different implementations of "where is the golfer". Two
+   * kilobytes, and only while comparing — `undefined` fetches nothing.
+   *
+   * The overlay goes INSIDE the crop and is sized by it. Its coordinates are normalized against
+   * the frame, so it scales and slides with the picture for free; cropping the video alone would
+   * leave the skeleton behind, standing beside the golfer.
+   */
+  const leaderProfile = useSyncProfile(reference ? swingId : undefined);
+  const leaderSubject = leaderProfile.kind === "ok" ? leaderProfile.profile.subject : null;
+  const leaderHandedness = leaderProfile.kind === "ok" ? leaderProfile.profile.handedness : undefined;
+  const crop = useMemo(
+    () => (reference ? paneCrop(leaderSubject, aspect, stage.w, stage.h) : null),
+    [reference, leaderSubject, aspect, stage.w, stage.h],
+  );
+  const pictureW = crop ? crop.width : stage.w;
+  const pictureH = crop ? crop.height : stage.h;
+
   const bands = useMemo(
     () => phaseBands(analysis, corrections.phases, bounds),
     [analysis, bounds, corrections.phases],
@@ -630,6 +662,25 @@ export function ReportVideoLayer({
   );
 
   const closePanel = useCallback(() => setPanel(null), []);
+  /**
+   * Picking a swing ENTERS the comparison rather than filling the sheet with numbers.
+   *
+   * The sheet is the picker; the comparison is the two pictures. Leaving it up over them meant the
+   * golfer chose a swing and then had to dismiss a panel to see the thing they had just asked for,
+   * with a table of durations covering the half of the screen the second swing was in.
+   * `setAlignment(null)` so the previous pair's verdict cannot outlive it for a frame.
+   */
+  const onReference = useCallback((swing: SwingSummary | null) => {
+    setAlignment(null);
+    setReference(swing);
+    if (swing) setPanel(null);
+  }, []);
+  /** Leaving the comparison: the reference goes AND the sheet does, back to one swing. */
+  const onExitCompare = useCallback(() => {
+    setAlignment(null);
+    setReference(null);
+    setPanel(null);
+  }, []);
   const openOverlays = useCallback(() => setPanel("overlays"), []);
   const openCompare = useCallback(() => setPanel("compare"), []);
   const onToggle = useCallback(
@@ -672,10 +723,11 @@ export function ReportVideoLayer({
         score={typeof score === "number" ? score : null}
         tempoRatio={tempoRatio ?? null}
         reference={reference}
-        onReference={setReference}
+        onReference={onReference}
+        onExit={onExitCompare}
       />
     ),
-    [swingId, fps, frameCount, bands, score, tempoRatio, reference],
+    [swingId, fps, frameCount, bands, score, tempoRatio, reference, onReference, onExitCompare],
   );
 
   /**
@@ -687,6 +739,17 @@ export function ReportVideoLayer({
     <View style={styles.backdropRoot}>
       <View style={styles.stageRow}>
         <View style={[styles.stage, { width: stage.w, height: stage.h }]} testID="report-stage">
+          {/* The picture and everything registered to it. Without a comparison this is the stage
+              itself and the crop is a no-op; with one it is a larger box sliding under the stage's
+              clip, carrying the overlay with it. */}
+          <View
+            style={
+              crop
+                ? [styles.crop, { width: crop.width, height: crop.height, left: crop.left, top: crop.top }]
+                : StyleSheet.absoluteFill
+            }
+            pointerEvents="none"
+          >
           {source ? (
             <FrameClockView
               ref={player.ref}
@@ -743,8 +806,8 @@ export function ReportVideoLayer({
                   frame={player.state.scrubbing ? player.state.presented : player.state.frame}
                   toggles={toggles}
                   angles={selectedAngles}
-                  w={stage.w}
-                  h={stage.h}
+                  w={pictureW}
+                  h={pictureH}
                   corrections={corrections}
                   playerRef={player.ref}
                   traceCostRef={traceCost}
@@ -754,6 +817,8 @@ export function ReportVideoLayer({
               </ErrorBoundary>
             </Animated.View>
           ) : null}
+
+          </View>
 
           {error ? (
             <View style={[StyleSheet.absoluteFill, styles.errorScrim]}>
@@ -766,13 +831,32 @@ export function ReportVideoLayer({
         {reference ? (
           <ReferencePane
             reference={reference}
-            leaderAnalysis={analysis}
+            leader={analysis}
+            leaderHandedness={leaderHandedness}
             frame={player.state.scrubbing ? player.state.presented : player.state.frame}
             width={stage.w}
             height={stage.h}
+            scrubbing={player.state.scrubbing}
+            onAlignment={setAlignment}
           />
         ) : null}
       </View>
+
+      {/* How well the two swings line up — and ONLY when that is something to act on.
+          A pair that lined up properly says nothing: "synced on 6 positions" is an instrument
+          reading, and the golfer's evidence that it worked is the two pictures agreeing in front
+          of them. What earns the line is a caveat — a coarse alignment they should trust less, or
+          a pair that could not be lined up at all, which is otherwise indistinguishable from a
+          working one. */}
+      {reference && alignment && alignment.kind !== "aligned" ? (
+        <View style={[styles.alignNote, { top: stage.h + 8 }]} pointerEvents="none">
+          <Text style={styles.alignNoteText}>
+            {alignment.kind === "unaligned"
+              ? alignment.note
+              : "Lined up on only a few detected positions — the moments between them are approximate."}
+          </Text>
+        </View>
+      ) : null}
 
       {/* .report-full-pill — view · swing, top-left over the picture (right of the back orb).
           Context, not a control. */}
@@ -1062,6 +1146,16 @@ const styles = StyleSheet.create({
     gap: COMPARE_GAP,
   },
   stage: { backgroundColor: "#000", overflow: "hidden" },
+  crop: { position: "absolute" },
+  alignNote: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    padding: 8,
+    borderRadius: 10,
+    backgroundColor: "rgba(0,0,0,0.72)",
+  },
+  alignNoteText: { color: COLORS.muted, fontSize: 10.5, lineHeight: 15, textAlign: "center" },
   poster: { backgroundColor: "#000" },
 
   topRow: { position: "absolute", left: 16, right: 16, flexDirection: "row" },

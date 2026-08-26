@@ -7,6 +7,7 @@ import { reportUpgradeRequired, upgradeDetailOf } from "../../platform/VersionGa
 import { supabase } from "../auth/supabase";
 import { setOrphanCleanup } from "./pendingImports";
 import { clearAnalysisCache } from "../player/useAnalysis";
+import { clearSyncProfileCache } from "../player/useSyncProfile";
 import { clearPendingImports } from "./pendingImports";
 import { dropSessionFromCache } from "./useSessions";
 
@@ -125,6 +126,8 @@ supabase.auth.onAuthStateChange((event) => {
     clearPendingImports();
     // And their artifacts — whole-clip keypoints are the most personal payload the app holds.
     clearAnalysisCache();
+    // Sync profiles are small, and they are still one golfer's swing positions.
+    clearSyncProfileCache();
   }
 });
 

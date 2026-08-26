@@ -112,7 +112,14 @@ try {
 // literals usually survive into its string table, the stamp's did not — the check failed
 // against bundles that provably carried the new code (2026-08-23). Mtime is the property that
 // actually matters ("was this JS rebuilt after I edited") and no compiler can eat it.
+//
+// The mtime read is the ON-DISK generated bundle, never the APK's zip entry: AGP builds
+// reproducible APKs, so every zip entry is stamped a constant 1981-01-01 and a zip-entry check
+// fails forever against provably fresh bundles (2026-08-24, twice in one switch). The CRC
+// match below is what ties the APK to that on-disk file.
 if (!existsSync(APK)) die(`build finished but no APK at ${APK}`);
+const BUNDLE = join(ANDROID, "app", "build", "generated", "assets", "react", "release", "index.android.bundle");
+if (!existsSync(BUNDLE)) die(`no generated bundle at ${BUNDLE} — did the bundling task move?`);
 const newestSource = execFileSync("python", ["-c", [
   "import os, sys",
   "root = sys.argv[1]",
@@ -128,17 +135,24 @@ const newestSource = execFileSync("python", ["-c", [
   "print(f'{newest}|{name}')",
 ].join("\n"), join(MOBILE, "src")], { encoding: "utf-8" }).trim();
 const [newestMs, newestName] = newestSource.split("|");
-const bundleMs = execFileSync("python", ["-c", [
-  "import sys, zipfile, datetime",
-  `z = zipfile.ZipFile(r'${APK.replaceAll("\\", "/")}')`,
-  "i = z.getinfo('assets/index.android.bundle')",
-  "print(datetime.datetime(*i.date_time).timestamp())",
-].join("\n")], { encoding: "utf-8" }).trim();
-// Zip stores 2-second-granular local time; 120s of slack absorbs that and any clock skew,
-// while still catching a bundle from a previous build session.
-if (Number(bundleMs) + 120 < Number(newestMs)) {
-  die(`STALE BUNDLE: the APK's JS predates ${newestName}. The bundling task was skipped — ` +
+const bundleMs = statSync(BUNDLE).mtimeMs / 1000;
+// 120s of slack absorbs clock skew while still catching a bundle from a previous session.
+if (bundleMs + 120 < Number(newestMs)) {
+  die(`STALE BUNDLE: the generated JS predates ${newestName}. The bundling task was skipped — ` +
       "do not install this. (Delete android/app/build and rerun.)");
+}
+// The APK must carry EXACTLY that fresh on-disk bundle — CRC over the zip entry, because the
+// entry's own timestamp is a constant (reproducible builds) and proves nothing.
+const crcOk = execFileSync("python", ["-c", [
+  "import sys, zipfile, zlib",
+  `z = zipfile.ZipFile(r'${APK.replaceAll("\\", "/")}')`,
+  "entry = z.getinfo('assets/index.android.bundle').CRC",
+  `disk = zlib.crc32(open(r'${BUNDLE.replaceAll("\\", "/")}', 'rb').read()) & 0xFFFFFFFF`,
+  "print('ok' if entry == disk else f'mismatch entry={entry} disk={disk}')",
+].join("\n")], { encoding: "utf-8" }).trim();
+if (crcOk !== "ok") {
+  die(`STALE BUNDLE: the APK's packaged JS is not the freshly built bundle (${crcOk}). ` +
+      "Do not install this. (Delete android/app/build and rerun.)");
 }
 console.log("bundle verified fresh");
 

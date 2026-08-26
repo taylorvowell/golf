@@ -3,6 +3,7 @@ import type { SwingSummary } from "@swingsage/schema/contract";
 
 import { ComparePanel } from "./ComparePanel";
 import { phaseBands } from "./phaseBands";
+import { clearSyncProfileCache } from "./useSyncProfile";
 import { makeAnalysis } from "./overlay/__fixtures__/analysis";
 
 /**
@@ -17,6 +18,9 @@ import { makeAnalysis } from "./overlay/__fixtures__/analysis";
  * things, so drawing one golfer's trace over another's would be exactly the fabricated measurement
  * this project forbids. Durations are therefore in seconds, which survives the two clips having
  * different frame rates — the assertion below uses 120fps against 60 on purpose.
+ *
+ * The reference's numbers come from `/sync-profile`, not its `analysis.json`: this panel needs four
+ * frame numbers, and reading them out of the artifact cost 22 MB on `pro_3`.
  */
 
 const mockRequest = jest.fn();
@@ -52,7 +56,32 @@ function summary(over: Partial<SwingSummary>): SwingSummary {
 
 const THIS_SWING = "me";
 
+/**
+ * What `/sync-profile` answers for the reference — the same P1/P4/P7/P10 frames the fixture's
+ * events carry, at DOUBLE the frame rate of the swing being watched.
+ */
+function refProfile(fps = 120) {
+  return {
+    swingId: "pro",
+    view: "dtl",
+    fps,
+    frameCount: 40,
+    width: 1080,
+    height: 1920,
+    handedness: "right",
+    checkpoints: [
+      { p: "P1", frame: 4, conf: 0.9 },
+      { p: "P4", frame: 12, conf: 0.6 },
+      { p: "P7", frame: 20, conf: 0.98 },
+      { p: "P10", frame: 30, conf: 0.75 },
+    ],
+    audioDisagrees: false,
+    subject: null,
+  };
+}
+
 beforeEach(() => {
+  clearSyncProfileCache();
   mockRequest.mockReset();
   mockMediaSource.mockReset();
   mockMediaSource.mockResolvedValue({ uri: "http://x/thumb", headers: {} });
@@ -66,8 +95,7 @@ beforeEach(() => {
         ],
       });
     }
-    // The reference's artifact, at DOUBLE the frame rate of the swing being watched.
-    return Promise.resolve(makeAnalysis({ frameCount: 40, playbackWindow: [4, 30] }));
+    return Promise.resolve(refProfile());
   });
 });
 
@@ -83,6 +111,7 @@ function panel(over: Partial<React.ComponentProps<typeof ComparePanel>> = {}) {
       tempoRatio={2.4}
       reference={null}
       onReference={() => {}}
+      onExit={() => {}}
       {...over}
     />
   );
@@ -118,8 +147,61 @@ it("compares in seconds, so two different frame rates stay comparable", async ()
   expect(getAllByText("0.07s").length).toBeGreaterThan(0);
 });
 
+it("never fetches the reference's whole artifact to time its phases", async () => {
+  // Four frame numbers. Reading them from `analysis.json` cost 5.9 MB on `6iron-1` and 22 MB on
+  // `pro_3`, and this panel used to pay it a second time beside the pane's own copy.
+  const reference = summary({ id: "pro", referenceLabel: "Tour player" });
+  const { getByTestId } = await render(panel({ reference }));
+  await waitFor(() => expect(getByTestId("compare-result")).toBeTruthy());
+  expect(mockRequest).toHaveBeenCalledWith("swings/pro/sync-profile");
+  expect(mockRequest.mock.calls.every(([p]) => !String(p).includes("analysis"))).toBe(true);
+});
+
+it("leaves a phase blank rather than timing it off a position nobody measured", async () => {
+  // `7wood-1`'s shape: the top is the ordering nudge, one frame from its neighbours at conf 0.35.
+  // A backswing quoted from it would be a number with nothing behind it.
+  mockRequest.mockImplementation((path: string) =>
+    path === "swings"
+      ? Promise.resolve({ swings: [summary({ id: "pro", referenceLabel: "Tour player" })] })
+      : Promise.resolve({
+          ...refProfile(60),
+          checkpoints: [
+            { p: "P1", frame: 4, conf: 0.9 },
+            { p: "P4", frame: 19, conf: 0.35 },
+            { p: "P7", frame: 20, conf: 0.98 },
+            { p: "P10", frame: 30, conf: 0.75 },
+          ],
+        }),
+  );
+  const reference = summary({ id: "pro", referenceLabel: "Tour player" });
+  const { getByTestId, getAllByText } = await render(panel({ reference }));
+  await waitFor(() => expect(getByTestId("compare-result")).toBeTruthy());
+  // Backswing and downswing both bounded by the rejected top; Through (P7→P10) survives.
+  await waitFor(() => expect(getAllByText("—").length).toBeGreaterThanOrEqual(2));
+  expect(getAllByText("0.17s").length).toBeGreaterThan(0);
+});
+
 it("says what it cannot compare rather than leaving the row blank", async () => {
   const reference = summary({ id: "pro", referenceLabel: "Tour player", overallScore: null });
   const { getByText } = await render(panel({ reference }));
   await waitFor(() => expect(getByText("not scored")).toBeTruthy());
+});
+
+it("hands the chosen swing back so the player can enter the comparison", async () => {
+  // The picker's whole output. The player answers it by collapsing this sheet and putting the two
+  // pictures side by side — leaving the sheet up meant choosing a swing and then having to dismiss
+  // a panel to see the thing you had just asked for.
+  const onReference = jest.fn();
+  const { getByTestId, findByTestId } = await render(panel({ onReference }));
+  await act(async () => void fireEvent.press(await findByTestId("compare-pick-pro")));
+  expect(onReference).toHaveBeenCalledWith(expect.objectContaining({ id: "pro" }));
+  expect(getByTestId("compare-panel")).toBeTruthy();
+});
+
+it("offers a way out of a comparison that is not the orb that opened it", async () => {
+  const onExit = jest.fn();
+  const reference = summary({ id: "pro", referenceLabel: "Tour player" });
+  const { findByTestId } = await render(panel({ reference, onExit }));
+  await act(async () => void fireEvent.press(await findByTestId("compare-stop")));
+  expect(onExit).toHaveBeenCalled();
 });

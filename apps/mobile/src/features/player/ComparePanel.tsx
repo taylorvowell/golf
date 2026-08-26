@@ -7,10 +7,9 @@ import { DECK } from "../../design/deck";
 import { useAuthenticatedImage } from "../../platform/useAuthenticatedImage";
 import { COLORS } from "../../theme";
 import { useSwings } from "../swings/useSwings";
-import { windowBounds } from "./frames";
-import { phaseBands, type PhaseBand } from "./phaseBands";
-import { playbackWindow } from "./overlay/playbackWindow";
-import { useAnalysis } from "./useAnalysis";
+import { anchorsOf, type Anchor } from "./align";
+import { type PhaseBand } from "./phaseBands";
+import { useSyncProfile } from "./useSyncProfile";
 import { SwingLoader } from "../../design/system/SwingLoader";
 
 /**
@@ -48,6 +47,8 @@ export interface ComparePanelProps {
   /** The chosen reference, held by the player so the picture can show it too. */
   reference: SwingSummary | null;
   onReference: (swing: SwingSummary | null) => void;
+  /** Leave the comparison altogether — clears the reference AND puts the sheet away. */
+  onExit: () => void;
 }
 
 type Tab = "reference" | "mine";
@@ -61,6 +62,7 @@ export function ComparePanel({
   tempoRatio,
   reference,
   onReference,
+  onExit,
 }: ComparePanelProps) {
   const { state } = useSwings();
   const [tab, setTab] = useState<Tab>("reference");
@@ -85,6 +87,7 @@ export function ComparePanel({
         tempoRatio={tempoRatio}
         reference={reference}
         onChange={() => onReference(null)}
+        onStop={onExit}
       />
     );
   }
@@ -187,24 +190,21 @@ function Comparison({
   tempoRatio,
   reference,
   onChange,
-}: Omit<ComparePanelProps, "reference" | "onReference"> & {
+  onStop,
+}: Omit<ComparePanelProps, "reference" | "onReference" | "onExit"> & {
   /** Non-null here by construction — the picker is what is shown until one is chosen. */
   reference: SwingSummary;
   onChange: () => void;
+  onStop: () => void;
 }) {
-  const { state } = useAnalysis(reference.id);
-  const refAnalysis = state.kind === "ok" ? state.analysis : null;
-
-  const refBands = useMemo(() => {
-    if (!refAnalysis) return [];
-    return phaseBands(
-      refAnalysis,
-      undefined,
-      windowBounds(reference.frameCount, playbackWindow(refAnalysis)),
-    );
-  }, [refAnalysis, reference.frameCount]);
-
-  const refFps = reference.fps > 0 ? reference.fps : 60;
+  // The projection, not the artifact: this panel needs four frame numbers, and reading them out of
+  // `analysis.json` cost 22 MB on `pro_3` — a second full download beside the pane's own.
+  const state = useSyncProfile(reference.id);
+  const anchors = useMemo(
+    () => (state.kind === "ok" ? anchorsOf(state.profile) : null),
+    [state],
+  );
+  const refFps = state.kind === "ok" && state.profile.fps > 0 ? state.profile.fps : reference.fps;
 
   return (
     <View style={styles.wrap} testID="compare-result">
@@ -235,20 +235,22 @@ function Comparison({
 
       {state.kind === "loading" ? (
         <SwingLoader size={48} ground="dark" style={styles.spinner} />
-      ) : refBands.length === 0 ? (
+      ) : !anchors ? (
         <Text style={styles.empty}>
-          That swing has no analysis, so its phases cannot be timed. The score and tempo above are
-          all it can be compared on.
+          That swing has no positions the analyzer stands behind, so its phases cannot be timed. The
+          score and tempo above are all it can be compared on.
         </Text>
       ) : (
         <>
           <Text style={styles.sectionTitle}>Phase timing</Text>
-          {(["backswing", "downswing", "through"] as const).map((key) => (
+          {PHASES.map(({ key, label, from, to }) => (
             <CompareRow
               key={key}
-              label={labelFor(key)}
+              label={label}
               left={duration(bands, key, fps)}
-              right={duration(refBands, key, refFps)}
+              // An em dash where a position was not admitted: quoting a backswing measured to a
+              // frame the analyzer nudged into place would be a number with nothing behind it.
+              right={spanSeconds(anchors, from, to, refFps)}
             />
           ))}
           {/* Seconds, not frames, because the two clips can be different rates — and "24 frames vs
@@ -268,8 +270,40 @@ function Comparison({
       >
         <Text style={styles.changeText}>Compare with something else</Text>
       </Pressable>
+      {/* The way out. Without it the only exit from a comparison is the orb that opened it, which
+          reads as a toggle nobody can find once the sheet is up. */}
+      <Pressable
+        testID="compare-stop"
+        accessibilityRole="button"
+        accessibilityLabel="Stop comparing"
+        onPress={onStop}
+        style={({ pressed }) => [styles.stopButton, pressed && styles.rowPressed]}
+      >
+        <Text style={styles.stopText}>Stop comparing</Text>
+      </Pressable>
     </View>
   );
+}
+
+/**
+ * The three phases, as the two positions that bound each.
+ *
+ * P1→P4→P7→P10 is the same partition the leader's bands draw, expressed in the vocabulary both
+ * swings share. It is what makes the two columns comparable at all: the leader's are measured from
+ * its events (and any hand correction the golfer made), the reference's from its admitted anchors,
+ * and the two agree on where a backswing starts and stops.
+ */
+const PHASES = [
+  { key: "backswing" as const, label: "Backswing", from: "P1", to: "P4" },
+  { key: "downswing" as const, label: "Downswing", from: "P4", to: "P7" },
+  { key: "through" as const, label: "Through", from: "P7", to: "P10" },
+];
+
+function spanSeconds(anchors: Anchor[], from: string, to: string, fps: number): string {
+  const a = anchors.find((x) => x.p === from);
+  const b = anchors.find((x) => x.p === to);
+  if (!a || !b || fps <= 0 || b.frame <= a.frame) return "—";
+  return `${((b.frame - a.frame) / fps).toFixed(2)}s`;
 }
 
 function CompareRow({ label, left, right }: { label: string; left: string; right: string }) {
@@ -280,10 +314,6 @@ function CompareRow({ label, left, right }: { label: string; left: string; right
       <Text style={[styles.compareValue, styles.compareRight]}>{right}</Text>
     </View>
   );
-}
-
-function labelFor(key: "backswing" | "downswing" | "through"): string {
-  return key === "through" ? "Through" : key === "backswing" ? "Backswing" : "Downswing";
 }
 
 function duration(bands: readonly PhaseBand[], key: string, fps: number): string {
@@ -382,4 +412,6 @@ const styles = StyleSheet.create({
     backgroundColor: DECK.glass.key,
   },
   changeText: { color: COLORS.text, fontSize: 13, fontWeight: "600" },
+  stopButton: { height: 42, alignItems: "center", justifyContent: "center" },
+  stopText: { color: COLORS.muted, fontSize: 12.5, fontWeight: "600" },
 });

@@ -3,6 +3,7 @@ import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 
 import { ReportVideoLayer } from "./VideoLayer";
 import { ApiClientError } from "../../platform/api";
+import { clearSyncProfileCache } from "../player/useSyncProfile";
 import { makeAnalysis } from "../player/overlay/__fixtures__/analysis";
 
 /**
@@ -27,6 +28,7 @@ jest.mock("../../platform/client", () => ({
 }));
 
 beforeEach(() => {
+  clearSyncProfileCache();
   mockMediaSource.mockReset();
   mockRequest.mockReset();
   mockMediaSource.mockResolvedValue({
@@ -220,3 +222,16 @@ it("disables the scrub and the bar when the swing cannot be stepped", async () =
   const toggle = await findByTestId("report-play-toggle");
   expect(toggle.props.accessibilityState.disabled).toBe(true);
 });
+
+/**
+ * NOT TESTED HERE, and the reason is the harness rather than the behaviour: **picking a swing
+ * collapses the picker and puts the two side by side.**
+ *
+ * Neither sheet on this screen opens under jest — pressing `report-overlays-open` or
+ * `report-compare-open` leaves `panel` unset, so the Modal and even its host-tree guard never
+ * mount. It is pre-existing (the overlays sheet behaves identically and has never been covered
+ * here) and it is not specific to compare. The two halves are covered where they can be: the row
+ * press and its callback in `ComparePanel.test.tsx`, the two-pane alignment in
+ * `ReferencePane.test.tsx`. The collapse itself is one line in `onReference` and is Taylor's check
+ * on glass.
+ */
