@@ -11,6 +11,13 @@
     "04": { "status": "not-started" },
     "05": { "status": "not-started" }
   },
-  "blockers": [],
+  "blockers": [
+    {
+      "step": "02",
+      "kind": "EXTERNAL-DEPENDENCY",
+      "added": "2026-08-26",
+      "description": "Step 02's own work is code-complete and its touched suites pass (billing/screens/spotlights/notifications: 34/34; web 256/256; schema 153/153). The full mobile typecheck+test oracle fails ONLY in src/features/player/ReferencePane(.test).tsx against a concurrent, uncommitted rework of features/player/align.ts (+394 lines, not this track's work, present in the working tree mid-edit). Not fixed here deliberately — touching another session's in-flight module invites a collision. Re-run `pnpm --filter mobile typecheck && pnpm --filter mobile test`; when green, mark 02 complete and continue with step 03."
+    }
+  ],
   "skipped": []
 }

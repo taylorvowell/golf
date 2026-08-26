@@ -3,6 +3,27 @@
 Append-only. Binding design: `.claude/architecture/instructor-platform-2026-08-24.md`
 (ACCEPTED 2026-08-26).
 
+## 02 - Two-dimensional entitlement (code-complete; verification held by an external edit)
+**Status:** in-progress — see the blocker in `_STATUS.json`
+**Phase:** Instructor Mode
+**Summary:** `plans.ts`/`entitlement.tsx` rebuilt on the two-dimensional model: `PersonalTier` ×
+`InstructorMembership`, the Gold+/Platinum⇒Pro derivation (`source: "included"`, the included
+Pro's status IS the membership's), `MEMBERSHIP_LIMITS` (all §30.1+D60 dials, placeholder values,
+Infinity = unlimited), `MEMBERSHIPS` copy, `Denial.dimension` + requiredTier/requiredMembership,
+`canHaveInstructor(entitlement)` keyed on the dimension existing. Six instructor scenarios
+(free/free+pro/gold/platinum/gold-grace/gold-hold) join the debug chips; the instructor persona
+maps to them (default `inst-gold`). UpgradeSheet renders the instructor-dimension refusal
+naming a membership; UpgradeScreen makes instructors trial-ineligible; SubscriptionScreen says
+"Included with your … membership" instead of a renew line; SpotlightContext gains `membership`.
+Four instructor SKUs + the one-subscription-group crossgrade note in storeProducts. Amended in
+place: commerce-entitlement.md (two entries rewritten), PROJECT_MAIN §30 (2026-08-26 block) +
+§43 re-key, platform-foundation step 08 (appended design amendment), HANDOFF IAP row (7 SKUs).
+**Notes:** The old `Tier` union and `TIER_RANK` are gone, not aliased. Grep check: `"gold"`/
+`"platinum"` appear only in billing files + debug/persona. Committed with step 01 (one commit
+per run); completion waits only on the external align.ts rework clearing the global oracle.
+
+---
+
 ## 01 - Instructor rename
 **Completed:** 2026-08-26 09:25 UTC
 **Phase:** Instructor Mode
