@@ -5,7 +5,7 @@ import { ApiClientError } from "../../platform/api";
 import { api } from "../../platform/client";
 
 /**
- * The two kilobytes needed to line another swing up against this one.
+ * The half-kilobyte needed to line another swing up against this one.
  *
  * ## Why this is not `useAnalysis`
  *
@@ -36,9 +36,10 @@ export type SyncProfileState =
 /**
  * Profiles already fetched this session, keyed by request path.
  *
- * Unbounded, unlike the artifact cache next door, and deliberately: an entry is on the order of two
- * kilobytes, so a golfer who tried twenty references in one sitting is holding forty. The reason
- * that cache needs a limit — whole-clip keypoints — is exactly what this one does not carry.
+ * Unbounded, unlike the artifact cache next door, and deliberately: an entry is under a kilobyte
+ * (measured 564–584 bytes across the fixtures), so a golfer who tried twenty references in one
+ * sitting is holding about twelve. The reason that cache needs a limit — whole-clip keypoints —
+ * is exactly what this one does not carry.
  */
 const cache = new Map<string, SyncProfile>();
 

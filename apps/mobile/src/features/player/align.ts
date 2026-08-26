@@ -74,7 +74,7 @@ export interface Anchor {
 }
 
 /**
- * Whatever the caller happens to be holding: the whole `analysis.json`, or the two-kilobyte
+ * Whatever the caller happens to be holding: the whole `analysis.json`, or the sub-kilobyte
  * `SyncProfile` the server projects out of it.
  *
  * Structural rather than a union of the two named types, and that is the point — the leader's

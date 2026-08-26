@@ -1,7 +1,7 @@
 import { MIN_CONF, type Analysis, type SyncProfile, type SyncSubject } from "@swingsage/schema/contract";
 
 /**
- * The two kilobytes a client needs to line one swing up against another.
+ * The half-kilobyte a client needs to line one swing up against another.
  *
  * ## Why this route exists at all
  *

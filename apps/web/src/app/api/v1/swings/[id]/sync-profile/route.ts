@@ -6,8 +6,8 @@ import { requireViewAccess, viewParam } from "@/lib/auth";
  * GET /api/v1/swings/:id/sync-profile — the few facts needed to line this swing up against another.
  *
  * Separate from `/analysis` for the same reason `/report` is: different size, different lifetime,
- * different question. The artifact is megabytes of per-frame geometry and this is about two
- * kilobytes — the checkpoint table as published, the frame rate, the picture's shape and a box
+ * different question. The artifact is megabytes of per-frame geometry and this is under a
+ * kilobyte — the checkpoint table as published, the frame rate, the picture's shape and a box
  * around the golfer. A comparison needs all of that for a swing the golfer is not watching, and
  * paying 22 MB for it (`pro_3`) is what made picking a reference feel broken on a phone.
  *
