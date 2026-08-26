@@ -392,7 +392,10 @@ async function launch(target, lan) {
   // white screen with no JS at all — measured 2026-08-21, right after a native install, while
   // this script printed "bundle loaded". The authoritative check is Metro's own inspector
   // registry: a JS runtime only appears there once the bundle has been evaluated on the device.
-  for (let i = 0; i < 10; i += 1) {
+  // 30 polls, not 10: the launch now always force-stops first, and a genuinely cold process
+  // evaluates the bundle in ~20–25s — measured attaching at ~+20s on 2026-08-26, just past
+  // the old 15s window, which printed a false STALE-BUNDLE failure over a working launch.
+  for (let i = 0; i < 30; i += 1) {
     const runtimes = await metroRuntimes();
     if (runtimes.some((r) => r.deviceName && acceptsDevice(r.deviceName, target))) {
       ok("JS runtime connected to Metro — the bundle actually ran");
