@@ -95,7 +95,8 @@ export function SpotlightRail({ navigation, showDismissed = false }: SpotlightRa
   const ctx = useMemo<SpotlightContext>(() => {
     const created = createdAt ? Date.parse(createdAt) : Number.NaN;
     return {
-      tier: entitlement.tier,
+      tier: entitlement.personal.tier,
+      membership: entitlement.instructor?.membership ?? null,
       can: entitlement.can,
       // The golfer's own swings — the bundled pro references are not their milestones.
       swingCount:

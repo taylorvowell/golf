@@ -107,7 +107,7 @@
       "spine": false,
       "lifecycle": "complete",
       "phase": "foundation",
-      "goal": "Promote the analyzer from a hand-invoked CLI to a hosted, queue-driven worker reading and writing object storage. FIRST STEP is a measurement, not a deploy: pose inference currently runs on CPU and only the club detector uses GPU, so measure CPU-vs-CUDA pose on this pipeline and which priced the host choice (settled: Modal, D64). Then the capacity and cost model, per-user fair queuing so one workload cannot degrade everyone else's (\u00a738), backpressure, retry/dead-letter handling, and a validated analysis-latency SLO. The job model carries a kind discriminator (swing | drill | demo | lesson_finalize, D59/D60) and priority classes from day one \u2014 drill, demo-transcode and lesson-finalize jobs are short and CPU-only and must not queue behind swing club-tracking (.claude/architecture/guided-drills-architecture-2026-08-17.md, .claude/architecture/coach-video-lessons-2026-08-18.md).",
+      "goal": "Promote the analyzer from a hand-invoked CLI to a hosted, queue-driven worker reading and writing object storage. FIRST STEP is a measurement, not a deploy: pose inference currently runs on CPU and only the club detector uses GPU, so measure CPU-vs-CUDA pose on this pipeline and which priced the host choice (settled: Modal, D64). Then the capacity and cost model, per-user fair queuing so one workload cannot degrade everyone else's (\u00a738), backpressure, retry/dead-letter handling, and a validated analysis-latency SLO. The job model carries a kind discriminator (swing | drill | demo | lesson_finalize, D59/D60) and priority classes from day one \u2014 drill, demo-transcode and lesson-finalize jobs are short and CPU-only and must not queue behind swing club-tracking (.claude/architecture/guided-drills-architecture-2026-08-17.md, .claude/architecture/instructor-video-lessons-2026-08-18.md).",
       "statusFile": ".claude/feature-tracks/analyzer-service/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#32-analysis-processing-experience",
@@ -441,7 +441,6 @@
       ],
       "owns": [
         "apps/mobile/src/features/coach",
-        "apps/mobile/src/features/instructor",
         "apps/mobile/src/features/progress"
       ],
       "dependsOn": [
@@ -657,7 +656,7 @@
           "track": "history-and-trends"
         },
         {
-          "track": "coach-collaboration",
+          "track": "instructor-collaboration",
           "blocking": false
         },
         {
@@ -673,7 +672,7 @@
           "blocking": false
         }
       ],
-      "sequencingNote": "Depends hard on priority-engine because proposals must come from real, style-gated priority output \u2014 assigning a fault the golfer's style legitimizes is the mis-coaching D54 exists to prevent \u2014 and transitively on analysis-ground-truth: a progress claim over an unvalidated check is unfalsifiable, and 'you fixed it' is the one message the product must never be wrong about. history-and-trends is hard because the evidence history and trend surfaces are its infrastructure. Everything else is a seam: AI-proposed and self-promoted goals with deterministic text work before coach-collaboration (human assignment), ai-coach (narrative), drill-library (linked drills) or notifications (push delivery) land. Goal tracking was carved OUT of history-and-trends' goal by D55, the same way D54 carved practice-loop out of in-app-capture."
+      "sequencingNote": "Depends hard on priority-engine because proposals must come from real, style-gated priority output \u2014 assigning a fault the golfer's style legitimizes is the mis-coaching D54 exists to prevent \u2014 and transitively on analysis-ground-truth: a progress claim over an unvalidated check is unfalsifiable, and 'you fixed it' is the one message the product must never be wrong about. history-and-trends is hard because the evidence history and trend surfaces are its infrastructure. Everything else is a seam: AI-proposed and self-promoted goals with deterministic text work before instructor-collaboration (human assignment), ai-coach (narrative), drill-library (linked drills) or notifications (push delivery) land. Goal tracking was carved OUT of history-and-trends' goal by D55, the same way D54 carved practice-loop out of in-app-capture."
     },
     {
       "id": "achievements",
@@ -846,12 +845,41 @@
       ]
     },
     {
-      "id": "coach-relationships",
+      "id": "instructor-mode",
+      "spine": false,
+      "lifecycle": "active",
+      "phase": "coach-platform",
+      "goal": "The instructor platform's foundation, built UI-FIRST at Taylor's direction (2026-08-26): the internal rename to 'instructor' (role value, instructor_links, routes — while data is dev-only), the TWO-DIMENSIONAL client entitlement model (personal free/pro × instructor membership free/gold/platinum, Gold+ includes Pro, one live store subscription so membership upgrades are store-native prorated crossgrades), the personal/instructor MODE switch (device-local presentation state, role-gated AppHeader dropdown, charcoal INSTRUCTOR theme binding on the token system), and the fully MOCKED instructor surface behind named swap seams — triage dashboard (swings arrive pre-analyzed, queue sorts by what changed — the separating feature no competitor has), roster with groups, student detail (§25.2-complete), typed-card inbox + BCC broadcast composer, drill library, directory listing editor, membership paywall, become-an-instructor onboarding — plus the golfer-side halves of each loop. Step 05 is Taylor's explicit sign-off gate; NOTHING is plumbed before it. Binding design: .claude/architecture/instructor-platform-2026-08-24.md (incl. the §7 gap review).",
+      "statusFile": ".claude/feature-tracks/instructor-mode/_STATUS.json",
+      "specRefs": [
+        ".claude/architecture/instructor-platform-2026-08-24.md",
+        ".claude/ai-instructions/PROJECT_MAIN.md#3-user-types-and-roles",
+        ".claude/ai-instructions/PROJECT_MAIN.md#23-coach-directory",
+        ".claude/ai-instructions/PROJECT_MAIN.md#25-coach-workspace",
+        ".claude/ai-instructions/PROJECT_MAIN.md#30-subscription-tiers"
+      ],
+      "owns": [
+        "apps/mobile/src/features/mode",
+        "apps/mobile/src/features/instructor"
+      ],
+      "dependsOn": [
+        {
+          "track": "design-system"
+        },
+        {
+          "track": "platform-foundation",
+          "blocking": false
+        }
+      ],
+      "sequencingNote": "Created 2026-08-26 on Taylor's acceptance of the instructor-platform architecture — UI-first ahead of the coach-platform phase order, the D61/coach-surface pattern. Takes ownership of apps/mobile/src/features/instructor from coach-surface (whose subject is the AI Coach tab). The later instructor-* tracks (relationships, collaboration, video-lessons) fill this track's named seams; billing-iap prices and sells the memberships; platform-foundation step 08 builds the server entitlement engine two-dimensional per the accepted design. The §7c student-seats question must be answered before billing-iap prices tiers (HANDOFF row)."
+    },
+    {
+      "id": "instructor-relationships",
       "spine": false,
       "lifecycle": "planned",
       "phase": "coach-platform",
       "goal": "The coach directory, the golfer-initiated request/approve relationship with revocable access boundaries, and the coach workspace roster and golfer detail views \u2014 enforced by the row-level policy shape established and tested back in foundation.",
-      "statusFile": ".claude/feature-tracks/coach-relationships/_STATUS.json",
+      "statusFile": ".claude/feature-tracks/instructor-relationships/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#23-coach-directory",
         ".claude/ai-instructions/PROJECT_MAIN.md#24-golfer-coach-relationship",
@@ -871,12 +899,12 @@
       ]
     },
     {
-      "id": "coach-collaboration",
+      "id": "instructor-collaboration",
       "spine": false,
       "lifecycle": "planned",
       "phase": "coach-platform",
-      "goal": "Frame-anchored annotations and comments clearly distinguishable from AI findings, two-way messaging, and coach-created improvement plans the AI Coach is aware of and does not silently contradict. Owns the CONVERSATION SUBSTRATE (D60): conversations/messages/read-state where every coaching artifact \u2014 text, lesson, review request, drill assignment, plan update \u2014 is a typed IMMUTABLE entry in one feed (referenced objects carry state); creation gated on an approved coach_link, threads frozen read-only on relationship end; report/block (UGC store requirement); push-driven refresh with Supabase Realtime as the designed live seam. Owns the REVIEW-REQUEST loop (golfer submits a swing, coach queue = open-request filter over the feed). Builds packages/annotations as a SHARED toolset (tools, color/width state, normalized-coordinate strokes) consumed by both static annotations and the coach-video-lessons recorder.",
-      "statusFile": ".claude/feature-tracks/coach-collaboration/_STATUS.json",
+      "goal": "Frame-anchored annotations and comments clearly distinguishable from AI findings, two-way messaging, and coach-created improvement plans the AI Coach is aware of and does not silently contradict. Owns the CONVERSATION SUBSTRATE (D60): conversations/messages/read-state where every coaching artifact \u2014 text, lesson, review request, drill assignment, plan update \u2014 is a typed IMMUTABLE entry in one feed (referenced objects carry state); creation gated on an approved coach_link, threads frozen read-only on relationship end; report/block (UGC store requirement); push-driven refresh with Supabase Realtime as the designed live seam. Owns the REVIEW-REQUEST loop (golfer submits a swing, coach queue = open-request filter over the feed). Builds packages/annotations as a SHARED toolset (tools, color/width state, normalized-coordinate strokes) consumed by both static annotations and the instructor-video-lessons recorder.",
+      "statusFile": ".claude/feature-tracks/instructor-collaboration/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#26-coach-comments-and-annotations",
         ".claude/ai-instructions/PROJECT_MAIN.md#27-two-way-messaging",
@@ -889,7 +917,7 @@
       ],
       "dependsOn": [
         {
-          "track": "coach-relationships"
+          "track": "instructor-relationships"
         },
         {
           "track": "ai-coach"
@@ -900,19 +928,19 @@
       ]
     },
     {
-      "id": "coach-video-lessons",
+      "id": "instructor-video-lessons",
       "spine": false,
       "lifecycle": "planned",
       "phase": "coach-platform",
       "differentiator": true,
-      "goal": "Coach video lessons (D60, launch-blocking): the coach records a telestration + voiceover lesson over a student's swing \u2014 play/pause/scrub while drawing (straight line, freeform pencil, highlight circle, color/thickness, clear, undo) and talking \u2014 captured as a lesson.json EVENT LOG + AAC audio and replayed by RE-DRIVING the player, never a screen recording. Recorder (mobile v1) with pause/resume, preview-before-send, entitlement-honest length limits; send-time lesson_finalize job (loudness normalization + transcript); delivery as a conversation entry with notification fan-out; the student's replay player with lesson-scrubbing (state at t is a pure function of events \u2264 t); attached notes and drills; coach drill authoring UI (record/upload demo, demo transcode job) over drill-library's authorship dimension; delivered/viewed state. BINDING DESIGN: .claude/architecture/coach-video-lessons-2026-08-18.md (lessons hang off a swing VIEW; recipient-keyed media; immutable conversation entries; replay-fidelity gates). FIRST HANDOFF when this track starts: a second test account (no coach exists in any seeded environment) and a recorded-on-device lesson fixture. PREREQUISITE READING: the D51 Skia measurement \u2014 freeform stroke rendering is its second consumer.",
-      "statusFile": ".claude/feature-tracks/coach-video-lessons/_STATUS.json",
+      "goal": "Coach video lessons (D60, launch-blocking): the coach records a telestration + voiceover lesson over a student's swing \u2014 play/pause/scrub while drawing (straight line, freeform pencil, highlight circle, color/thickness, clear, undo) and talking \u2014 captured as a lesson.json EVENT LOG + AAC audio and replayed by RE-DRIVING the player, never a screen recording. Recorder (mobile v1) with pause/resume, preview-before-send, entitlement-honest length limits; send-time lesson_finalize job (loudness normalization + transcript); delivery as a conversation entry with notification fan-out; the student's replay player with lesson-scrubbing (state at t is a pure function of events \u2264 t); attached notes and drills; coach drill authoring UI (record/upload demo, demo transcode job) over drill-library's authorship dimension; delivered/viewed state. BINDING DESIGN: .claude/architecture/instructor-video-lessons-2026-08-18.md (lessons hang off a swing VIEW; recipient-keyed media; immutable conversation entries; replay-fidelity gates). FIRST HANDOFF when this track starts: a second test account (no coach exists in any seeded environment) and a recorded-on-device lesson fixture. PREREQUISITE READING: the D51 Skia measurement \u2014 freeform stroke rendering is its second consumer.",
+      "statusFile": ".claude/feature-tracks/instructor-video-lessons/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#264-recorded-video-lessons",
         ".claude/ai-instructions/PROJECT_MAIN.md#27-two-way-messaging",
         ".claude/ai-instructions/PROJECT_MAIN.md#185-coach-authored-drills",
         ".claude/ai-instructions/PROJECT_MAIN.md#29-notifications",
-        ".claude/architecture/coach-video-lessons-2026-08-18.md"
+        ".claude/architecture/instructor-video-lessons-2026-08-18.md"
       ],
       "owns": [
         "apps/mobile/src/features/lessons",
@@ -920,10 +948,10 @@
       ],
       "dependsOn": [
         {
-          "track": "coach-relationships"
+          "track": "instructor-relationships"
         },
         {
-          "track": "coach-collaboration"
+          "track": "instructor-collaboration"
         },
         {
           "track": "drill-library"
@@ -935,7 +963,7 @@
           "track": "mobile-player"
         }
       ],
-      "sequencingNote": "Declared launch-blocking by Taylor 2026-08-18 (D60) \u2014 a core piece of the 'AI coach and human coach in one product' differentiator and the feature that justifies Coach tiers. Depends hard on coach-collaboration because that track builds the conversation substrate lessons deliver through and the shared packages/annotations drawing toolset; on drill-library for the authorship dimension and attachment; on notifications for the fan-out. The export-to-MP4 render (server-side burn-in over the same event log) lands with sharing-and-export, not here \u2014 but it doubles as this track's replay-fidelity reference gate, so the pure state_at(t) oracle is built here regardless."
+      "sequencingNote": "Declared launch-blocking by Taylor 2026-08-18 (D60) \u2014 a core piece of the 'AI coach and human coach in one product' differentiator and the feature that justifies Coach tiers. Depends hard on instructor-collaboration because that track builds the conversation substrate lessons deliver through and the shared packages/annotations drawing toolset; on drill-library for the authorship dimension and attachment; on notifications for the fan-out. The export-to-MP4 render (server-side burn-in over the same event log) lands with sharing-and-export, not here \u2014 but it doubles as this track's replay-fidelity reference gate, so the pure state_at(t) oracle is built here regardless."
     },
     {
       "id": "dual-device-capture",
@@ -981,10 +1009,10 @@
           "track": "production-readiness"
         },
         {
-          "track": "coach-collaboration"
+          "track": "instructor-collaboration"
         },
         {
-          "track": "coach-video-lessons"
+          "track": "instructor-video-lessons"
         },
         {
           "track": "dual-device-capture"

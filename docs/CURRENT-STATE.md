@@ -287,7 +287,7 @@ Postgres 16 via Drizzle ORM — local in Docker on **port 5433**, migrations in
 | `scores` | The full scorecard as jsonb + real columns for overall/band/version; source of truth behind the swing's denormalization |
 | `head_markers` | Hand-placed club-head positions, normalized 0–1, unique per (view, frame) — the project's only hand-labelled club-head truth |
 | `swing_stages` | Hand-corrected event keyframes, unique per (view, stage) |
-| `coach_links` | The golfer↔coach relationship the RLS policies reference; pending/approved/revoked |
+| `instructor_links` | The golfer↔instructor relationship the RLS policies reference; pending/approved/revoked (renamed from `coach_links`, migration 0021) |
 
 **Everything frame-indexed hangs off a view, not off a swing** (`jobs`, `scores`,
 `head_markers`, `swing_stages`). A frame number is meaningless without knowing which video

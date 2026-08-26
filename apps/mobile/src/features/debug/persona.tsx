@@ -119,7 +119,7 @@ export const PERSONAS: PersonaDef[] = [
     label: "Instructor",
     caption: "Coaches students",
     blurb: "Dave Kim — Instructor tier, coaches Marcus.",
-    scenario: "instructor",
+    scenario: "inst-gold",
   },
   {
     id: "admin",
@@ -158,17 +158,33 @@ export function personaHasNoSwings(persona: PersonaId | null): boolean {
  * account) sees everything. Empty list = the group hides entirely for that persona.
  */
 const PRO_STATES = ["pro-healthy", "pro-low", "pro-spent", "grace", "hold"];
+const INSTRUCTOR_STATES = [
+  "inst-free",
+  "inst-free-pro",
+  "inst-gold",
+  "inst-platinum",
+  "inst-gold-grace",
+  "inst-gold-hold",
+];
 export const PERSONA_SCENARIOS: Record<PersonaId, string[]> = {
   "new-user": [],
   newby: [],
   existing: ["free-never", "free-expired"],
   trial: ["trial-fresh", "trial-ending"],
   pro: PRO_STATES,
-  // An instructor is only ever on the Instructor plan — they cannot be mid-trial or on the
-  // golfer ladder, so there is nothing to flip.
-  coach: ["instructor"],
+  // The instructor persona flips across the whole membership dimension — free membership on
+  // both personal tiers, the paid memberships with Pro included, and the two payment-recovery
+  // states. Never a trial: trials are a golfer concept.
+  coach: INSTRUCTOR_STATES,
   // The operator flips anything — admin is the debugging persona.
-  admin: ["trial-fresh", "trial-ending", ...PRO_STATES, "instructor", "free-never", "free-expired"],
+  admin: [
+    "trial-fresh",
+    "trial-ending",
+    ...PRO_STATES,
+    ...INSTRUCTOR_STATES,
+    "free-never",
+    "free-expired",
+  ],
 };
 
 const PERSONA_GLYPH: Record<PersonaId, typeof Sparkles> = {

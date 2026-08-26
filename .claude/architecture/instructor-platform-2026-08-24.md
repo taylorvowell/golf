@@ -1,6 +1,12 @@
 # The Instructor Platform: modes, memberships, and the two-dimensional entitlement
 
-**Status: PROPOSED 2026-08-24 — awaiting Taylor's verdict. Nothing below is built.**
+**Status: ACCEPTED 2026-08-26 (Taylor: "create the track and start"). Built by the
+`instructor-mode` track. The §7c open product questions were NOT resolved by the
+acceptance — student seats must be decided before `billing-iap` prices tiers.**
+
+*Correction (2026-08-26, step 01): §1's rename table lists `coach-surface` among the track
+ids to rename — wrong, and not done: that track's subject is the AI Coach tab, where
+"coach" is the correct spelling. Only the three human-coach track ids rename.*
 
 Taylor's spec (2026-08-24, verbatim intent):
 

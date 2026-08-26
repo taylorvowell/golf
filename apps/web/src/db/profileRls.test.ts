@@ -21,7 +21,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const GOLFER_A = "dddddddd-0000-4000-8000-000000000001";
 const GOLFER_B = "dddddddd-0000-4000-8000-000000000002";
-const COACH_C = "dddddddd-0000-4000-8000-000000000003";
+const INSTRUCTOR_C = "dddddddd-0000-4000-8000-000000000003";
 
 const url = process.env.DATABASE_URL;
 let sql: postgres.Sql;
@@ -36,9 +36,9 @@ async function asUser<T>(userId: string, fn: (tx: postgres.TransactionSql) => Pr
 
 async function setLink(status: "pending" | "approved" | "revoked") {
   await sql`
-    insert into public.coach_links (golfer_id, coach_id, status)
-    values (${GOLFER_A}, ${COACH_C}, ${status})
-    on conflict (golfer_id, coach_id) do update set status = ${status}
+    insert into public.instructor_links (golfer_id, instructor_id, status)
+    values (${GOLFER_A}, ${INSTRUCTOR_C}, ${status})
+    on conflict (golfer_id, instructor_id) do update set status = ${status}
   `;
 }
 
@@ -54,14 +54,14 @@ beforeAll(async () => {
     insert into auth.users (id, email) values
       (${GOLFER_A}, 'prof-a@test.local'),
       (${GOLFER_B}, 'prof-b@test.local'),
-      (${COACH_C},  'prof-c@test.local')
+      (${INSTRUCTOR_C},  'prof-c@test.local')
     on conflict (id) do nothing
   `;
   await sql`
     insert into public.users (id, email, display_name) values
       (${GOLFER_A}, 'prof-a@test.local', 'Profile Golfer A'),
       (${GOLFER_B}, 'prof-b@test.local', 'Profile Golfer B'),
-      (${COACH_C},  'prof-c@test.local', 'Profile Coach C')
+      (${INSTRUCTOR_C},  'prof-c@test.local', 'Profile Instructor C')
     on conflict (id) do nothing
   `;
   await sql`
@@ -73,25 +73,25 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (!sql) return;
-  await sql`delete from public.users where id in (${GOLFER_A}, ${GOLFER_B}, ${COACH_C})`;
-  await sql`delete from auth.users where id in (${GOLFER_A}, ${GOLFER_B}, ${COACH_C})`;
+  await sql`delete from public.users where id in (${GOLFER_A}, ${GOLFER_B}, ${INSTRUCTOR_C})`;
+  await sql`delete from auth.users where id in (${GOLFER_A}, ${GOLFER_B}, ${INSTRUCTOR_C})`;
   await sql.end();
 });
 
 describe("user_roles", () => {
   it("a golfer reads their own roles and nobody else's", async () => {
     await sql`
-      insert into public.user_roles (user_id, role) values (${GOLFER_B}, 'coach')
+      insert into public.user_roles (user_id, role) values (${GOLFER_B}, 'instructor')
       on conflict do nothing
     `;
     const mine = await asUser(GOLFER_B, (tx) =>
       tx.unsafe<{ role: string }[]>(`select role from public.user_roles order by role`),
     );
-    expect(mine.map((r) => r.role)).toContain("coach");
+    expect(mine.map((r) => r.role)).toContain("instructor");
 
-    // A holds no visibility into B's roles — not even as an approved coach (see the policy note).
+    // A holds no visibility into B's roles — not even as an approved instructor (see the policy note).
     await setLink("approved");
-    const theirs = await asUser(COACH_C, (tx) =>
+    const theirs = await asUser(INSTRUCTOR_C, (tx) =>
       tx.unsafe<{ n: string }[]>(
         `select count(*)::text as n from public.user_roles where user_id = $1`,
         [GOLFER_B],
@@ -121,12 +121,12 @@ describe("user_roles", () => {
     expect(Number(rows[0].n)).toBe(0);
   });
 
-  it("claims the coach role instantly, and is idempotent (D32)", async () => {
-    await asUser(GOLFER_A, (tx) => tx.unsafe(`select app.claim_role('coach')`));
-    await asUser(GOLFER_A, (tx) => tx.unsafe(`select app.claim_role('coach')`));
+  it("claims the instructor role instantly, and is idempotent (D32)", async () => {
+    await asUser(GOLFER_A, (tx) => tx.unsafe(`select app.claim_role('instructor')`));
+    await asUser(GOLFER_A, (tx) => tx.unsafe(`select app.claim_role('instructor')`));
     const rows = await sql<{ n: string }[]>`
       select count(*)::text as n from public.user_roles
-       where user_id = ${GOLFER_A} and role = 'coach'
+       where user_id = ${GOLFER_A} and role = 'instructor'
     `;
     expect(Number(rows[0].n)).toBe(1);
   });
@@ -134,9 +134,9 @@ describe("user_roles", () => {
   it("cannot grant a role to somebody else — the identity is not an argument", async () => {
     // `claim_role` takes only a role; the user comes from auth.uid(). The test that matters is
     // that acting AS A grants A, never the id named in the row.
-    await asUser(GOLFER_B, (tx) => tx.unsafe(`select app.claim_role('coach')`));
+    await asUser(GOLFER_B, (tx) => tx.unsafe(`select app.claim_role('instructor')`));
     const rows = await sql<{ user_id: string }[]>`
-      select user_id from public.user_roles where role = 'coach' and user_id = ${GOLFER_B}
+      select user_id from public.user_roles where role = 'instructor' and user_id = ${GOLFER_B}
     `;
     expect(rows).toHaveLength(1);
   });
@@ -163,9 +163,9 @@ describe("golfer_profiles — the private half of §5.1", () => {
     expect(Number(rows[0].n)).toBe(0);
   });
 
-  it("an approved coach reads it; a pending or revoked one does not", async () => {
+  it("an approved instructor reads it; a pending or revoked one does not", async () => {
     const visible = async () => {
-      const rows = await asUser(COACH_C, (tx) =>
+      const rows = await asUser(INSTRUCTOR_C, (tx) =>
         tx.unsafe<{ n: string }[]>(
           `select count(*)::text as n from public.golfer_profiles where user_id = $1`,
           [GOLFER_A],
@@ -182,9 +182,9 @@ describe("golfer_profiles — the private half of §5.1", () => {
     expect(await visible()).toBe(0);
   });
 
-  it("an approved coach cannot WRITE it — reading is not editing (§24.3)", async () => {
+  it("an approved instructor cannot WRITE it — reading is not editing (§24.3)", async () => {
     await setLink("approved");
-    await asUser(COACH_C, (tx) =>
+    await asUser(INSTRUCTOR_C, (tx) =>
       tx.unsafe(`update public.golfer_profiles set driver_swing_speed_mph = 70 where user_id = $1`, [
         GOLFER_A,
       ]),

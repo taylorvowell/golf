@@ -1,40 +1,96 @@
 /**
- * Three plans. Free, Pro, and Instructor (Taylor, 2026-08-24: instructors are their own tier —
- * everything Pro has, plus the instructor tools).
+ * The subscription model is TWO-DIMENSIONAL (the instructor-platform architecture, accepted
+ * 2026-08-26): a **personal tier** (free | pro — the golfer ladder) and, for accounts holding
+ * the instructor role, an **instructor membership** (free | gold | platinum). The one
+ * derivation rule lives in `entitlement.tsx`: Gold and Platinum INCLUDE personal Pro.
+ * A single rank ladder cannot express "a free-membership instructor on personal Pro", which is
+ * why the old `Tier = free | pro | instructor` union is gone rather than extended — a rank
+ * compare across the two dimensions must be a type error, not a plausible bug.
  *
- * The prices and the allowance are the accepted decision in
- * `docs/decisions/commerce-entitlement.md`. They live here as **fallback copy only**: on a real
- * device the price string comes from StoreKit or Play Billing (`storeProducts.ts`), because the
- * stores localize, tax-adjust and discount per storefront and a hardcoded "$119.99" is wrong
- * everywhere except the US.
+ * Prices and the allowance are the accepted decision in `docs/decisions/commerce-entitlement.md`.
+ * They live here as **fallback copy only**: on a real device the price string comes from StoreKit
+ * or Play Billing (`storeProducts.ts`), because the stores localize, tax-adjust and discount per
+ * storefront and a hardcoded "$119.99" is wrong everywhere except the US. Gold/Platinum carry no
+ * fallback price yet — pricing is TBD and lands with `billing-iap`.
  *
- * Nothing here decides whether a capability is allowed — that is `entitlement.ts`, resolving a
- * server payload. This file is what the paywall *says*, never what the app *enforces* (§30.1).
+ * Nothing here decides whether a capability is allowed — that is `entitlement.tsx`, resolving a
+ * server payload later. This file is what the paywalls *say*, never what the app *enforces*
+ * (§30.1).
  */
 
-export type Tier = "free" | "pro" | "instructor";
+export type PersonalTier = "free" | "pro";
+export type InstructorMembership = "free" | "gold" | "platinum";
 
 /**
  * Named capabilities — the client mirror of the closed set `packages/schema` will own
- * (platform-foundation step 08). Gating on a string outside this union is a compile error, which
- * is the point: an ungated capability cannot be discovered after launch.
+ * (platform-foundation step 08). Gating on a string outside these unions is a compile error,
+ * which is the point: an ungated capability cannot be discovered after launch.
  *
- * With one paid tier, every entry requires `pro`. The map is kept rather than collapsed to a
- * boolean because the *reason* a capability is refused still has to reach the golfer by name,
- * and because a second paid tier later becomes a value change here rather than a new concept.
+ * Split along the model's own line: golfer capabilities gate on the personal tier, instructor
+ * capabilities on the membership. The maps are kept rather than collapsed to booleans because
+ * the *reason* a capability is refused still has to reach the person by name.
  */
-export type Capability =
+export type GolferCapability =
   | "analysis"
   | "ai_coach_chat"
   | "overlays"
   | "swing_comparison"
   | "pro_comparison"
   | "dual_device"
-  | "export_share"
-  | "instructor_tools";
+  | "export_share";
+
+export type InstructorCapability = "instructor_tools";
+
+export type Capability = GolferCapability | InstructorCapability;
+
+export const REQUIRED_PERSONAL: Record<GolferCapability, PersonalTier> = {
+  analysis: "pro",
+  ai_coach_chat: "pro",
+  overlays: "pro",
+  swing_comparison: "pro",
+  pro_comparison: "pro",
+  dual_device: "pro",
+  export_share: "pro",
+};
+
+/** Any instructor — the free membership included — holds the tools; the DIALS differ by
+ *  membership (`MEMBERSHIP_LIMITS`). */
+export const REQUIRED_MEMBERSHIP: Record<InstructorCapability, InstructorMembership> = {
+  instructor_tools: "free",
+};
+
+export function isGolferCapability(c: Capability): c is GolferCapability {
+  return c in REQUIRED_PERSONAL;
+}
+
+/**
+ * §30.1's instructor dials, per membership — configuration, not code. Every value below is a
+ * PLACEHOLDER until Gold/Platinum pricing is decided (`billing-iap`); the shape is what step 08
+ * builds server-side. `Infinity` is deliberate for "unlimited": comparisons stay plain numbers
+ * and no sentinel null threads through the UI.
+ */
+export interface MembershipLimits {
+  rosterSize: number;
+  lessonsPerMonth: number;
+  maxLessonMinutes: number;
+  drillLibrarySize: number;
+  broadcastsPerMonth: number;
+}
+
+export const MEMBERSHIP_LIMITS: Record<InstructorMembership, MembershipLimits> = {
+  free: { rosterSize: 3, lessonsPerMonth: 2, maxLessonMinutes: 3, drillLibrarySize: 5, broadcastsPerMonth: 2 },
+  gold: { rosterSize: 30, lessonsPerMonth: 30, maxLessonMinutes: 10, drillLibrarySize: 100, broadcastsPerMonth: 20 },
+  platinum: {
+    rosterSize: Infinity,
+    lessonsPerMonth: Infinity,
+    maxLessonMinutes: 15,
+    drillLibrarySize: Infinity,
+    broadcastsPerMonth: Infinity,
+  },
+};
 
 export interface Plan {
-  tier: Tier;
+  tier: PersonalTier;
   name: string;
   /** One line. What this tier IS — not a feature list. */
   pitch: string;
@@ -50,7 +106,7 @@ export interface Plan {
   retention: string;
 }
 
-export const PLANS: Record<Tier, Plan> = {
+export const PLANS: Record<PersonalTier, Plan> = {
   free: {
     tier: "free",
     name: "Free",
@@ -83,52 +139,73 @@ export const PLANS: Record<Tier, Plan> = {
     ],
     retention: "Kept for as long as you subscribe",
   },
-  instructor: {
-    tier: "instructor",
+};
+
+export interface MembershipPlan {
+  membership: InstructorMembership;
+  name: string;
+  pitch: string;
+  /** Fallback only, and null until priced (billing-iap). Free is never a store product. */
+  priceMonthly: string | null;
+  priceAnnual: string | null;
+  /** Whether personal Pro rides along — the §2 derivation rule, stated as copy. */
+  includesPro: boolean;
+  unlocks: string[];
+}
+
+/**
+ * The instructor ladder. Free is granted at instructor onboarding (a grant, no store
+ * transaction); Gold/Platinum are sold ONLY on the instructor-mode paywall — the golfer paywall
+ * never mentions them. Store SKUs in `storeProducts.ts`; all four paid products share one
+ * subscription group so a membership upgrade from personal Pro is a store-native prorated
+ * crossgrade (the §3 billing invariant).
+ */
+export const MEMBERSHIPS: Record<InstructorMembership, MembershipPlan> = {
+  free: {
+    membership: "free",
     name: "Instructor",
-    pitch: "Everything in Pro, plus your students.",
-    analysesPerMonth: 100,
-    // Not store-buyable yet — the tier is granted through instructor onboarding, so there is
-    // no fallback price to show. Store products land with the coach platform.
+    pitch: "Your listing, your students, the tools to teach them.",
     priceMonthly: null,
     priceAnnual: null,
-    annualNote: null,
+    includesPro: false,
     unlocks: [
-      "Everything in Pro",
-      "Your student roster and their swings",
-      "Review, annotate and message students",
-      "Lesson notes and drills you assign",
+      "A directory listing golfers can find",
+      "A small roster and 1:1 messaging",
+      "Review and annotate student swings",
     ],
-    retention: "Kept for as long as you subscribe",
+  },
+  gold: {
+    membership: "gold",
+    name: "Instructor Gold",
+    pitch: "A working teaching business, with Pro for your own game included.",
+    priceMonthly: null,
+    priceAnnual: null,
+    includesPro: true,
+    unlocks: [
+      "SwingSage Pro for your own swings — included",
+      "A full roster with groups and broadcasts",
+      "Video lessons and your own drill library",
+    ],
+  },
+  platinum: {
+    membership: "platinum",
+    name: "Instructor Platinum",
+    pitch: "No ceilings — every tool, every student, Pro included.",
+    priceMonthly: null,
+    priceAnnual: null,
+    includesPro: true,
+    unlocks: [
+      "Everything in Gold, without limits",
+      "Unlimited roster, lessons and drills",
+      "Longer video lessons",
+    ],
   },
 };
 
-/** The only tier you can buy in-app. Instructor is granted, never sold on this paywall. */
-export const PAID_TIER: Tier = "pro";
+/** The only tier sold on the GOLFER paywall. Memberships sell in instructor mode only. */
+export const PAID_TIER: PersonalTier = "pro";
 
-/** Every golfer capability is Pro; the instructor tools are the Instructor tier's own. Free
- *  keeps what it already has; it does not produce anything new. */
-export const REQUIRED_TIER: Record<Capability, Tier> = {
-  analysis: "pro",
-  ai_coach_chat: "pro",
-  overlays: "pro",
-  swing_comparison: "pro",
-  pro_comparison: "pro",
-  dual_device: "pro",
-  export_share: "pro",
-  instructor_tools: "instructor",
-};
-
-/**
- * An instructor cannot HAVE an instructor (Taylor, 2026-08-24) — the find-an-instructor
- * directory, the connected-instructor card and every link-a-coach door hide on the
- * Instructor tier. A rule, not a capability: rank-based `can()` would grant it upward.
- */
-export function canHaveInstructor(tier: Tier): boolean {
-  return tier !== "instructor";
-}
-
-/** Golfer-facing name for a capability. A refusal says this, never the enum. */
+/** Person-facing name for a capability. A refusal says this, never the enum. */
 export const CAPABILITY_LABEL: Record<Capability, string> = {
   analysis: "Swing analysis",
   ai_coach_chat: "AI coach conversation",
@@ -149,14 +226,15 @@ export const CAPABILITY_PITCH: Record<Capability, string> = {
   pro_comparison: "Put your swing beside a tour pro at the same checkpoint.",
   dual_device: "Down-the-line and face-on at once, from two phones, in sync.",
   export_share: "Send a swing to anyone, with the analysis attached.",
-  instructor_tools: "Your student roster, their swings, and the tools to coach them.",
+  instructor_tools: "Your student roster, their swings, and the tools to teach them.",
 };
 
 /**
  * The safety valve, not a tier. A consumable that never renews, so it does not make the ladder
  * three-deep — it is what lets ONE paid plan carry a golfer who practises far above the average
  * without either an unlimited allowance (whose cost rises forever) or a second subscription.
- * It surfaces only at the moment the month runs out.
+ * It surfaces only at the moment the month runs out — and it works the same for an instructor
+ * whose included-Pro allowance runs out.
  */
 export const TOP_UP = {
   analyses: 50,

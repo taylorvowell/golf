@@ -186,7 +186,7 @@ export async function requireUserIdOrNull(): Promise<string | null> {
  * "Is this caller signed in" is not enough for a swing-scoped route: it would let any account
  * fetch any swing by id, which for the video route means watching a stranger's footage of
  * themselves. So this answers the real question — may THIS user see THIS swing — using the same
- * rule as the `swings_select` policy: the owner, or a coach whose link is approved.
+ * rule as the `swings_select` policy: the owner, or an instructor whose link is approved.
  *
  * It resolves the view in the same round trip rather than in a second query, because the video
  * route runs this once per HTTP Range request and scrubbing issues a great many of them.
@@ -226,10 +226,10 @@ export async function requireViewAccess(
        and (
          s.user_id = ${userId}
          or exists (
-           select 1 from public.coach_links cl
-            where cl.golfer_id = s.user_id
-              and cl.coach_id = ${userId}
-              and cl.status = 'approved'
+           select 1 from public.instructor_links il
+            where il.golfer_id = s.user_id
+              and il.instructor_id = ${userId}
+              and il.status = 'approved'
          )
        )
      order by v.is_primary desc, v.created_at asc
@@ -249,7 +249,7 @@ export async function requireViewAccess(
     view: row.view,
     mediaKey: row.media_key,
     revision: row.artifact_revision,
-    // Built from the OWNER's id, never the caller's. An approved coach reading a golfer's swing
+    // Built from the OWNER's id, never the caller's. An approved instructor reading a golfer's swing
     // is the case that makes this load-bearing: keying the prefix off `userId` would send them to
     // their own empty namespace and 404 a swing they are entitled to see.
     address: {
@@ -265,7 +265,7 @@ export async function requireViewAccess(
  * The same view as a `ResolvedView`, keyed to the OWNER.
  *
  * `ViewAccess.userId` is whoever is asking; `ResolvedView.userId` is whose namespace the media
- * lives in, and for an approved coach those are different people. Anything that derives a storage
+ * lives in, and for an approved instructor those are different people. Anything that derives a storage
  * address (`mediaAddress`) must use the owner or it looks in an empty namespace and 404s a swing
  * the caller is entitled to see — the same reasoning that produced `ViewAccess.address`.
  */
@@ -281,7 +281,7 @@ export function ownedView(access: ViewAccess): ResolvedView {
 }
 
 export interface ViewAccess {
-  /** Who is asking. May be the owner, or an approved coach. */
+  /** Who is asking. May be the owner, or an approved instructor. */
   userId: string;
   /** Who owns the swing — whose namespace the media lives in. */
   ownerId: string;

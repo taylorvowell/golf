@@ -95,30 +95,32 @@ identity that arrives without an address — match the code, never the prose. Ph
 provider that produces that case, and the constraint landed before it deliberately.
 **See:** ARCHIVE D31, D43, D45.
 
-### One identity for everyone; a coach is a golfer who also coaches
+### One identity for everyone; an instructor is a golfer who also teaches
 
-**Decision:** Authentication is **one system with one identity**. There is no coach sign-in, no
-separate coach account, and no role question on the sign-in screen. What differs for a coach is
-onboarding and directory listing — never authentication.
+**Decision:** Authentication is **one system with one identity**. There is no instructor sign-in,
+no separate instructor account, and no role question on the sign-in screen. What differs for an
+instructor is onboarding and directory listing — never authentication.
 **See:** ARCHIVE D32.
 
-### Roles are rows, claiming coach is instant, and admin is not claimable
+### Roles are rows, claiming instructor is instant, and admin is not claimable
 
-**Decision:** `user_roles` holds one row per (account, role) — `golfer | coach | admin` — so §3.3's
-"both" is data rather than a schema change and §4.4's "addable later" is an insert. Every account
-gets `golfer` from `app.ensure_profile()`, so "signed in but holds no role" is unreachable.
-Claiming `coach` is **free and instant** and unlocks the workspace with an empty roster; being
-**listed** in the directory is the reviewed application, and that gate belongs to
-`coach-relationships`/`admin-surface`. `user_roles` has **no INSERT policy at all** — grants go
-through `app.claim_role(role)`, SECURITY DEFINER, identity read from `auth.uid()` internally and
-the role checked against a whitelist, so both "grant myself admin" and "grant someone else a role"
-are inexpressible rather than merely rejected. Server-side enforcement is `requireRole()`
-(`lib/roles.ts`), which answers 403 `role_required`; the first route behind it is
-`GET /api/v1/coach/roster`.
-**Gotchas:** The role gate answers "may this account use the coach surface", never "whose data may
-it see" — the relationship is still enforced by RLS on `coach_links`, and conflating the two is how
-a role check ends up standing in for an access-control boundary. Roles are readable only by their
-holder, not by an approved coach: which roles an account holds is not part of what §24 grants.
+**Decision:** `user_roles` holds one row per (account, role) — `golfer | instructor | admin`
+(the value renamed from `coach` in migration 0021, per the accepted instructor-platform
+architecture) — so §3.3's "both" is data rather than a schema change and §4.4's "addable later"
+is an insert. Every account gets `golfer` from `app.ensure_profile()`, so "signed in but holds
+no role" is unreachable. Claiming `instructor` is **free and instant** and unlocks the workspace
+with an empty roster; being **listed** in the directory is the reviewed application, and that
+gate belongs to `instructor-relationships`/`admin-surface`. `user_roles` has **no INSERT policy
+at all** — grants go through `app.claim_role(role)`, SECURITY DEFINER, identity read from
+`auth.uid()` internally and the role checked against a whitelist, so both "grant myself admin"
+and "grant someone else a role" are inexpressible rather than merely rejected. Server-side
+enforcement is `requireRole()` (`lib/roles.ts`), which answers 403 `role_required`; the first
+route behind it is `GET /api/v1/instructor/roster`.
+**Gotchas:** The role gate answers "may this account use the instructor surface", never "whose
+data may it see" — the relationship is still enforced by RLS on `instructor_links`, and
+conflating the two is how a role check ends up standing in for an access-control boundary. Roles
+are readable only by their holder, not by an approved instructor: which roles an account holds is
+not part of what §24 grants.
 **See:** ARCHIVE D32; `PROJECT_MAIN.md` §3, §4.4, §31.
 
 ### Debug personas are real seeded accounts, and the picker signs in as them

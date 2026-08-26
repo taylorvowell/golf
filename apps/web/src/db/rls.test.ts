@@ -9,8 +9,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
  * exists to make "a golfer can read another golfer's swing" a failing test rather than an
  * incident.
  *
- * **Coach cases are tested here even though the coach feature is five phases away**
- * (`coach-relationships`). That is deliberate, and it is the cheapest insurance available against
+ * **Instructor cases are tested here even though the instructor feature is five phases away**
+ * (`instructor-relationships`). That is deliberate, and it is the cheapest insurance available against
  * the one bug in this product that would be genuinely unrecoverable: showing one golfer another
  * golfer's video of themselves. The gap between designing a policy and first exercising it is
  * exactly where a wrong shape survives unnoticed.
@@ -26,7 +26,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const GOLFER_A = "aaaaaaaa-0000-4000-8000-000000000001";
 const GOLFER_B = "aaaaaaaa-0000-4000-8000-000000000002";
-const COACH_C = "aaaaaaaa-0000-4000-8000-000000000003";
+const INSTRUCTOR_C = "aaaaaaaa-0000-4000-8000-000000000003";
 // Fixed uuids rather than generated ones: the suite has to name the same rows across cases, and
 // `swings.id` is a uuid since migration 0006 (it used to be the analyzer's folder name).
 const SWING_A = "bbbbbbbb-0000-4000-8000-000000000001";
@@ -77,9 +77,9 @@ async function countVisibleViews(userId: string): Promise<number> {
 
 async function setLink(status: "pending" | "approved" | "revoked") {
   await sql`
-    insert into public.coach_links (golfer_id, coach_id, status)
-    values (${GOLFER_A}, ${COACH_C}, ${status})
-    on conflict (golfer_id, coach_id) do update set status = ${status}
+    insert into public.instructor_links (golfer_id, instructor_id, status)
+    values (${GOLFER_A}, ${INSTRUCTOR_C}, ${status})
+    on conflict (golfer_id, instructor_id) do update set status = ${status}
   `;
 }
 
@@ -96,14 +96,14 @@ beforeAll(async () => {
     insert into auth.users (id, email) values
       (${GOLFER_A}, 'rls-a@test.local'),
       (${GOLFER_B}, 'rls-b@test.local'),
-      (${COACH_C},  'rls-c@test.local')
+      (${INSTRUCTOR_C},  'rls-c@test.local')
     on conflict (id) do nothing
   `;
   await sql`
     insert into public.users (id, email, display_name) values
       (${GOLFER_A}, 'rls-a@test.local', 'RLS Golfer A'),
       (${GOLFER_B}, 'rls-b@test.local', 'RLS Golfer B'),
-      (${COACH_C},  'rls-c@test.local', 'RLS Coach C')
+      (${INSTRUCTOR_C},  'rls-c@test.local', 'RLS Instructor C')
     on conflict (id) do nothing
   `;
   await sql`
@@ -120,8 +120,8 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (!sql) return;
-  // auth.users cascades to public.users, which cascades to swings and coach_links.
-  await sql`delete from auth.users where id in (${GOLFER_A}, ${GOLFER_B}, ${COACH_C})`;
+  // auth.users cascades to public.users, which cascades to swings and instructor_links.
+  await sql`delete from auth.users where id in (${GOLFER_A}, ${GOLFER_B}, ${INSTRUCTOR_C})`;
   await sql.end();
 });
 
@@ -198,73 +198,73 @@ describe("row-level security — golfer isolation", () => {
   });
 });
 
-describe("row-level security — coach access, before the coach feature exists", () => {
-  it("denies a coach with no relationship at all", async () => {
-    await sql`delete from public.coach_links where golfer_id = ${GOLFER_A}`;
-    expect(await countVisibleSwings(COACH_C)).toBe(0);
+describe("row-level security — instructor access, before the instructor feature exists", () => {
+  it("denies an instructor with no relationship at all", async () => {
+    await sql`delete from public.instructor_links where golfer_id = ${GOLFER_A}`;
+    expect(await countVisibleSwings(INSTRUCTOR_C)).toBe(0);
   });
 
-  it("denies a coach whose request is still pending", async () => {
+  it("denies an instructor whose request is still pending", async () => {
     // An unapproved request must grant nothing. The golfer has not said yes yet.
     await setLink("pending");
-    expect(await countVisibleSwings(COACH_C)).toBe(0);
+    expect(await countVisibleSwings(INSTRUCTOR_C)).toBe(0);
   });
 
-  it("allows an approved coach to read the linked golfer's swing", async () => {
+  it("allows an approved instructor to read the linked golfer's swing", async () => {
     await setLink("approved");
-    expect(await countVisibleSwings(COACH_C)).toBe(1);
+    expect(await countVisibleSwings(INSTRUCTOR_C)).toBe(1);
   });
 
   it("ends access the moment the relationship is revoked", async () => {
     await setLink("approved");
-    expect(await countVisibleSwings(COACH_C)).toBe(1);
+    expect(await countVisibleSwings(INSTRUCTOR_C)).toBe(1);
     await setLink("revoked");
     // Immediately, with no cache to expire and no session to end — §24.4's requirement that the
     // golfer can end access is enforced by the same query that grants it.
-    expect(await countVisibleSwings(COACH_C)).toBe(0);
+    expect(await countVisibleSwings(INSTRUCTOR_C)).toBe(0);
   });
 
-  it("never lets even an approved coach write the golfer's swing", async () => {
+  it("never lets even an approved instructor write the golfer's swing", async () => {
     await setLink("approved");
-    const rows = await asUser(COACH_C, (tx) =>
-      tx.unsafe(`update public.swings set notes = 'coach edit' where id = $1 returning id`, [
+    const rows = await asUser(INSTRUCTOR_C, (tx) =>
+      tx.unsafe(`update public.swings set notes = 'instructor edit' where id = $1 returning id`, [
         SWING_A,
       ]),
     );
     expect(rows.length).toBe(0);
   });
 
-  it("does not leak a different golfer's swing to an approved coach", async () => {
+  it("does not leak a different golfer's swing to an approved instructor", async () => {
     // Approved for A must not mean approved for everyone. This is the mistake a policy written
-    // as "is this user a coach" instead of "is this user THIS golfer's coach" would make.
+    // as "is this user an instructor" instead of "is this user THIS golfer's instructor" would make.
     await setLink("approved");
     await sql`
       insert into public.swings (id, user_id, handedness)
       values (${SWING_B}, ${GOLFER_B}, 'right')
       on conflict (id) do nothing
     `;
-    const rows = await asUser(COACH_C, (tx) =>
+    const rows = await asUser(INSTRUCTOR_C, (tx) =>
       tx.unsafe(`select 1 from public.swings where id = $1`, [SWING_B]),
     );
     expect(rows.length).toBe(0);
   });
 
-  it("only lets the golfer change the relationship, never the coach", async () => {
+  it("only lets the golfer change the relationship, never the instructor", async () => {
     await setLink("approved");
-    const byCoach = await asUser(COACH_C, (tx) =>
+    const byInstructor = await asUser(INSTRUCTOR_C, (tx) =>
       tx.unsafe(
-        `update public.coach_links set status = 'approved'
-         where golfer_id = $1 and coach_id = $2 returning id`,
-        [GOLFER_A, COACH_C],
+        `update public.instructor_links set status = 'approved'
+         where golfer_id = $1 and instructor_id = $2 returning id`,
+        [GOLFER_A, INSTRUCTOR_C],
       ),
     );
-    expect(byCoach.length).toBe(0);
+    expect(byInstructor.length).toBe(0);
 
     const byGolfer = await asUser(GOLFER_A, (tx) =>
       tx.unsafe(
-        `update public.coach_links set status = 'revoked'
-         where golfer_id = $1 and coach_id = $2 returning id`,
-        [GOLFER_A, COACH_C],
+        `update public.instructor_links set status = 'revoked'
+         where golfer_id = $1 and instructor_id = $2 returning id`,
+        [GOLFER_A, INSTRUCTOR_C],
       ),
     );
     expect(byGolfer.length).toBe(1);

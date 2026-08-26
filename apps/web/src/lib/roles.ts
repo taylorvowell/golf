@@ -12,14 +12,14 @@ import type { UserRole } from "@/db/schema";
  * `user_roles_select_self` policy filters it — a caller cannot even observe somebody else's roles,
  * let alone act on them.
  *
- * **Holding a role is not being listed** (D32). `coach` is free and instant and unlocks the coach
- * workspace with an empty roster; appearing in the directory is a reviewed application belonging
- * to `coach-relationships`. Nothing in this file grants visibility to anyone — it answers "what
- * may this account do", never "who should see this account".
+ * **Holding a role is not being listed** (D32). `instructor` is free and instant and unlocks the
+ * instructor workspace with an empty roster; appearing in the directory is a reviewed application
+ * belonging to `instructor-relationships`. Nothing in this file grants visibility to anyone — it
+ * answers "what may this account do", never "who should see this account".
  */
 
 /** Roles a person may grant themselves. `admin` is deliberately absent, and so is any argument. */
-export const CLAIMABLE_ROLES: readonly UserRole[] = ["golfer", "coach"] as const;
+export const CLAIMABLE_ROLES: readonly UserRole[] = ["golfer", "instructor"] as const;
 
 export function isClaimableRole(value: string): value is UserRole {
   return (CLAIMABLE_ROLES as readonly string[]).includes(value);
@@ -50,19 +50,19 @@ export async function hasRole(userId: string, role: UserRole): Promise<boolean> 
  * The user is NOT a parameter. `app.claim_role` reads `auth.uid()` internally and whitelists the
  * role, so "grant somebody else a role" and "grant myself admin" are both inexpressible rather
  * than merely rejected — the same shape as `ensure_profile` and `delete_own_account` (D26).
- * Idempotent, because a golfer tapping "I'm a coach" twice is not an error.
+ * Idempotent, because a golfer tapping "I'm an instructor" twice is not an error.
  */
 export async function claimRole(userId: string, role: UserRole): Promise<void> {
   await withUser(userId, (tx) => tx.execute(sql`select app.claim_role(${role})`));
 }
 
 /**
- * The guard a coach-only route calls: the caller's id, or a 403 Response.
+ * The guard an instructor-only route calls: the caller's id, or a 403 Response.
  *
  * Returns the Response rather than throwing so a route reads as a straight line, matching
- * `requireViewAccess`. 403 and not 404 — unlike a swing, the existence of a coach endpoint is not
- * a disclosure about any person, so there is nothing to hide by lying about it, and a golfer who
- * has not claimed the role needs to be told to claim it rather than shown a dead end.
+ * `requireViewAccess`. 403 and not 404 — unlike a swing, the existence of an instructor endpoint
+ * is not a disclosure about any person, so there is nothing to hide by lying about it, and a
+ * golfer who has not claimed the role needs to be told to claim it rather than shown a dead end.
  */
 export async function requireRole(
   userId: string | null,

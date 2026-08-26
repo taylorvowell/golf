@@ -28,7 +28,8 @@ export function AllowanceMeter({
 }) {
   const t = useTheme();
   const styles = useStyles();
-  const { remaining, remainingFraction, usage, status } = useEntitlement();
+  const { remaining, remainingFraction, usage, personal } = useEntitlement();
+  const status = personal.status;
 
   if (!always && remainingFraction > SURFACE_BELOW) return null;
   if (usage.included === 0 && !always) return null;

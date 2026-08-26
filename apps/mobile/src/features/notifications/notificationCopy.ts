@@ -77,12 +77,12 @@ export const NOTIFICATION_LOOK: Record<Notification["kind"], NotificationLook> =
   swing_reviewed: { icon: ClipboardCheck, tone: "accent" },
 
   // Golfer — the coach relationship
-  coach_request_approved: { icon: CircleCheck, tone: "good" },
-  coach_request_declined: { icon: CircleX, tone: "bad" },
-  coach_comment: { icon: MessageSquare, tone: "accent" },
-  coach_annotation: { icon: PenLine, tone: "accent" },
-  coach_message: { icon: MessageCircle, tone: "accent" },
-  coach_plan: { icon: ClipboardCheck, tone: "accent" },
+  instructor_request_approved: { icon: CircleCheck, tone: "good" },
+  instructor_request_declined: { icon: CircleX, tone: "bad" },
+  instructor_comment: { icon: MessageSquare, tone: "accent" },
+  instructor_annotation: { icon: PenLine, tone: "accent" },
+  instructor_message: { icon: MessageCircle, tone: "accent" },
+  instructor_plan: { icon: ClipboardCheck, tone: "accent" },
   lesson_sent: { icon: Video, tone: "accent" },
   conversation_reply: { icon: Reply, tone: "accent" },
   review_answered: { icon: MessageSquareText, tone: "accent" },
@@ -160,12 +160,12 @@ export function foldLabel(kind: Notification["kind"], count: number): string | n
  * at all because they carry no `groupKey`.
  */
 const FOLD_NOUN: Partial<Record<Notification["kind"], string>> = {
-  coach_message: "messages",
+  instructor_message: "messages",
   student_message: "messages",
   conversation_reply: "replies",
   golfer_reply: "replies",
-  coach_comment: "comments",
-  coach_annotation: "annotations",
+  instructor_comment: "comments",
+  instructor_annotation: "annotations",
   analysis_ready: "swings analysed",
   analysis_failed: "swings that didn't analyse",
   golfer_swing: "new swings",

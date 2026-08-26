@@ -18,7 +18,7 @@ import type { DbTx } from "@/db/session";
  *     able to tell those apart.
  *
  * Access control is row-level, not checked here: every function takes a `DbTx` from `withUser`,
- * so `sessions_write` (owner only) and `sessions_select` (owner or approved coach) decide what
+ * so `sessions_write` (owner only) and `sessions_select` (owner or approved instructor) decide what
  * a query can see. A session id belonging to someone else simply matches no row — the caller
  * gets `null` and answers 404, which is also the right answer for "does not exist" and does not
  * leak which of the two it was.

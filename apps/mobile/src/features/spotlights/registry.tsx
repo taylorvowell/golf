@@ -1,7 +1,7 @@
 import { type ReactNode } from "react";
 import { Film, Gauge, ScanLine, Sparkles } from "lucide-react-native";
 
-import type { Capability, Tier } from "../billing/plans";
+import type { Capability, InstructorMembership, PersonalTier } from "../billing/plans";
 import { PLANS } from "../billing/plans";
 import type { Navigation } from "../../navigation";
 import { ON_DARK } from "../../theme/palette";
@@ -26,7 +26,10 @@ import { MultiviewCard } from "./MultiviewCard";
  */
 
 export interface SpotlightContext {
-  tier: Tier;
+  /** The EFFECTIVE personal tier (membership-included Pro counts as pro). */
+  tier: PersonalTier;
+  /** The instructor membership, or null for golfers — future instructor cards key on it. */
+  membership: InstructorMembership | null;
   /** The entitlement seam — capability questions go here, never an inline tier compare. */
   can: (capability: Capability) => boolean;
   /** The golfer's own analysed swings — bundled pro references excluded. */
@@ -105,8 +108,9 @@ export const SPOTLIGHTS: SpotlightDef[] = [
   },
   {
     // The upsell. Tier read, not a capability check, because "should we sell Pro" IS a tier
-    // question — the same read ProfileScreen's upgrade door makes. Only Free sees it:
-    // Pro already bought, and an Instructor holds everything Pro has.
+    // question — the same read ProfileScreen's upgrade door makes. Only effective-Free sees
+    // it: Pro already bought, and Gold/Platinum instructors hold Pro included (their
+    // effective tier is pro, so this hides on its own).
     id: "pro.v1",
     label: "the SwingSage Pro card",
     eligible: (ctx) => ctx.tier === "free",

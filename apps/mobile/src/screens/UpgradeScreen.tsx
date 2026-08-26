@@ -36,14 +36,18 @@ export function UpgradeScreen() {
   const insets = useSafeAreaInsets();
   const styles = useStyles();
   const t = useTheme();
-  const { status } = useEntitlement();
+  const { personal, instructor } = useEntitlement();
+  const status = personal.status;
   const products = useStoreProducts();
   const [period, setPeriod] = useState<BillingPeriod>("annual");
 
   const plan = PLANS.pro;
   const product = period === "annual" ? products.annual : products.monthly;
   const trialDays = product?.introTrialDays ?? TRIAL_DAYS;
-  const eligibleForTrial = status === "none" || status === "trialing";
+  // Trials are a golfer concept: an instructor is never mid-trial and never offered one —
+  // included Pro carries no trial, and even a free-membership instructor buys Pro trial-less.
+  const eligibleForTrial =
+    instructor == null && (status === "none" || status === "trialing");
   const periodWord = period === "annual" ? "year" : "month";
 
   return (

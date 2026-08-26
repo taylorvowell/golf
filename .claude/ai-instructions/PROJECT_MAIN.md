@@ -2064,6 +2064,19 @@ Required tiers:
 > arranged and paid for locally. Coach-side entitlement dimensions below stay as named
 > capabilities that currently resolve to "allowed".
 
+> **AMENDED 2026-08-26 — the model is two-dimensional, and the instructor ladder is
+> Free / Gold / Platinum** (the instructor-platform architecture, accepted; supersedes the
+> 2026-08-19 "coaches are entirely free" position while keeping its on-ramp). The golfer
+> ladder stays Free and Pro. An instructor account additionally carries a **membership**:
+> Free (granted at instructor onboarding — the directory-density on-ramp survives), or
+> Gold / Platinum, both of which **include personal Pro**. All paid subscriptions share one
+> store subscription group, so a membership upgrade from personal Pro is a store-native
+> prorated crossgrade — one live subscription per account, ever. Instructor dials (§30.1's
+> coach dimensions + the D60 lesson dials) become per-membership configuration
+> (`MEMBERSHIP_LIMITS`); exact limits and prices are TBD with `billing-iap`. "No money moves
+> between golfer and instructor inside the app" stands unchanged. Wherever §43 or older
+> text asks about `Coach Standard`/`Coach Pro` limits, read Gold/Platinum.
+
 Stripe is the requested billing platform.
 
 The build roadmap must ensure subscription behavior is compatible with the distribution requirements of the iPhone and Android applications.
@@ -2597,8 +2610,8 @@ The following items should not be silently assumed. The build roadmap should mak
 
 - Exact limits for Free.
 - Exact limits for Pro.
-- Exact limits for Coach Standard.
-- Exact limits for Coach Pro.
+- Exact limits for the Instructor Gold membership (2026-08-26: replaces Coach Standard).
+- Exact limits for the Instructor Platinum membership (2026-08-26: replaces Coach Pro).
 - Downgrade behavior when stored swings exceed a new plan's limit.
 - Grace periods before retention-based deletion.
 - Whether users can purchase temporary add-ons.

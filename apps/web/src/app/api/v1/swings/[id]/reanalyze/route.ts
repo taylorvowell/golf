@@ -21,9 +21,9 @@ export async function POST(
   const { id } = await params;
   const access = await requireViewAccess(id, viewParam(req));
   if ("error" in access) return access.error;
-  // Owner only. `requireViewAccess` also admits an approved coach, which is right for reading a
+  // Owner only. `requireViewAccess` also admits an approved instructor, which is right for reading a
   // swing and wrong for spending GPU time on it — and `jobs_write` would refuse the insert anyway,
-  // so without this the coach path fails as a 500 instead of an answer.
+  // so without this the instructor path fails as a 500 instead of an answer.
   if (access.userId !== access.ownerId) {
     return Response.json({ error: "only the swing's owner can re-analyse it" }, { status: 403, headers: noStore });
   }

@@ -96,7 +96,7 @@ export function OnboardingScreen() {
     navigation.goBack();
   };
 
-  const claimRoles = (roles: ("golfer" | "coach")[]) => {
+  const claimRoles = (roles: ("golfer" | "instructor")[]) => {
     for (const role of roles) {
       api
         .request<RolesResponse>("roles", {
@@ -179,8 +179,8 @@ export function OnboardingScreen() {
               {(
                 [
                   { key: "golfer", label: "I'm a golfer", roles: ["golfer"] as const },
-                  { key: "coach", label: "I'm a coach", roles: ["coach"] as const },
-                  { key: "both", label: "Both", roles: ["golfer", "coach"] as const },
+                  { key: "instructor", label: "I'm an instructor", roles: ["instructor"] as const },
+                  { key: "both", label: "Both", roles: ["golfer", "instructor"] as const },
                 ] as const
               ).map((opt) => (
                 <BigCard

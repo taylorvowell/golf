@@ -21,7 +21,7 @@ import { endAppPool, withUser } from "./session";
 
 const GOLFER_A = "dddddddd-0000-4000-8000-000000000001";
 const GOLFER_B = "dddddddd-0000-4000-8000-000000000002";
-const COACH_C = "dddddddd-0000-4000-8000-000000000003";
+const INSTRUCTOR_C = "dddddddd-0000-4000-8000-000000000003";
 const SWING_A = "eeeeeeee-0000-4000-8000-000000000001";
 const VIEW_A = "ffffffff-0000-4000-8000-000000000001";
 
@@ -45,14 +45,14 @@ beforeAll(async () => {
     insert into auth.users (id, email) values
       (${GOLFER_A}, 'app-a@test.local'),
       (${GOLFER_B}, 'app-b@test.local'),
-      (${COACH_C},  'app-c@test.local')
+      (${INSTRUCTOR_C},  'app-c@test.local')
     on conflict (id) do nothing
   `;
   await owner`
     insert into public.users (id, email, display_name) values
       (${GOLFER_A}, 'app-a@test.local', 'App Golfer A'),
       (${GOLFER_B}, 'app-b@test.local', 'App Golfer B'),
-      (${COACH_C},  'app-c@test.local', 'App Coach C')
+      (${INSTRUCTOR_C},  'app-c@test.local', 'App Instructor C')
     on conflict (id) do nothing
   `;
   await owner`
@@ -69,7 +69,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (owner) {
-    await owner`delete from auth.users where id in (${GOLFER_A}, ${GOLFER_B}, ${COACH_C})`;
+    await owner`delete from auth.users where id in (${GOLFER_A}, ${GOLFER_B}, ${INSTRUCTOR_C})`;
     await owner.end();
   }
   await endAppPool();
@@ -159,18 +159,18 @@ describe("the app's own connection is bound by row-level security", () => {
     expect(rows.length).toBe(0);
   });
 
-  it("grants and then revokes a coach, with no restart in between", async () => {
+  it("grants and then revokes an instructor, with no restart in between", async () => {
     const setLink = (status: string) => owner`
-      insert into public.coach_links (golfer_id, coach_id, status)
-      values (${GOLFER_A}, ${COACH_C}, ${status})
-      on conflict (golfer_id, coach_id) do update set status = ${status}
+      insert into public.instructor_links (golfer_id, instructor_id, status)
+      values (${GOLFER_A}, ${INSTRUCTOR_C}, ${status})
+      on conflict (golfer_id, instructor_id) do update set status = ${status}
     `;
     await setLink("pending");
-    expect(await swingsVisibleTo(COACH_C)).toBe(0);
+    expect(await swingsVisibleTo(INSTRUCTOR_C)).toBe(0);
     await setLink("approved");
-    expect(await swingsVisibleTo(COACH_C)).toBe(1);
+    expect(await swingsVisibleTo(INSTRUCTOR_C)).toBe(1);
     await setLink("revoked");
-    expect(await swingsVisibleTo(COACH_C)).toBe(0);
+    expect(await swingsVisibleTo(INSTRUCTOR_C)).toBe(0);
   });
 
   it("refuses to run a query with no identity at all", async () => {

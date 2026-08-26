@@ -10,9 +10,9 @@ import { getMediaStore } from "@/lib/media/store";
  * `GET /api/v1/users/:id/avatar?r=<rev>` — an uploaded profile photo, as bytes.
  *
  * An id in the path, unlike every `/profile` route, because an avatar is the one piece of a
- * profile someone ELSE legitimately renders: a coach's roster shows their golfers' faces. Who may
- * see it is not decided here — the `users_select_self` RLS policy (self, or an approved coach via
- * `has_coach_access`) answers it, exactly as it does for the roster query itself. A caller the
+ * profile someone ELSE legitimately renders: an instructor's roster shows their golfers' faces. Who may
+ * see it is not decided here — the `users_select_self` RLS policy (self, or an approved instructor via
+ * `has_instructor_access`) answers it, exactly as it does for the roster query itself. A caller the
  * policy excludes reads "not found", never "forbidden": a 403 would confirm the account exists.
  *
  * Revision-addressed (`?r=`), so the URL is immutable — a changed photo is a NEW URL from the

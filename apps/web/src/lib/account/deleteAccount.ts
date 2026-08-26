@@ -13,7 +13,7 @@ import { canDeleteAuthIdentity, deleteAuthIdentity } from "./identity";
  *   * every uploaded video and every artifact derived from it, in both buckets
  *   * every swing, view, score, stage, marker and analysis job
  *   * the equipment bag, practice sessions and goals
- *   * every coach link, from both sides — a coach loses access the moment the account goes
+ *   * every instructor link, from both sides — an instructor loses access the moment the account goes
  *   * the sign-in identity itself, so the address is no longer known to the auth provider
  *
  * **The order is the design.** Each step is chosen so that a failure leaves a state a person can

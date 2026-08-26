@@ -63,8 +63,8 @@ const ROW_SCOPED: Record<string, string> = {
     "user id inside `withUser` — another golfer's session matches no row and answers 404.",
   "v1/users/[id]/avatar":
     "A user id. The visibility probe runs inside `withUser`, so `users_select_self` (self, or an " +
-    "approved coach via has_coach_access) decides who may fetch the photo — the same policy the " +
-    "coach roster reads through. Anyone the policy excludes gets 404, and no bytes are read.",
+    "approved instructor via has_instructor_access) decides who may fetch the photo — the same policy the " +
+    "instructor roster reads through. Anyone the policy excludes gets 404, and no bytes are read.",
 };
 
 const routeId = (file: string) =>

@@ -5,9 +5,9 @@ import { CLAIMABLE_ROLES, claimRole, isClaimableRole, rolesOf } from "@/lib/role
  * `GET /api/v1/roles` — which roles the caller holds, and which they may claim.
  * `POST /api/v1/roles` — claim one. §4.4, D32.
  *
- * The claim is free and instant by design: a coach exploring the product gets the workspace with
+ * The claim is free and instant by design: an instructor exploring the product gets the workspace with
  * an empty roster, and the friction lands where it belongs — being LISTED in the directory is a
- * reviewed application (`coach-relationships`/`admin-surface`), not this route.
+ * reviewed application (`instructor-relationships`/`admin-surface`), not this route.
  *
  * `claimable` is in the response so a client never has to hardcode the rule. `admin` is not in it
  * and cannot be claimed here or anywhere on a request path; `app.claim_role` refuses it in the
@@ -44,7 +44,7 @@ export async function POST(req: Request) {
     );
   }
 
-  // Idempotent — a golfer tapping "I'm a coach" twice is not an error, and the database says so
+  // Idempotent — a golfer tapping "I'm an instructor" twice is not an error, and the database says so
   // with `on conflict do nothing` rather than this route checking first and racing itself.
   await claimRole(userId, role);
   return Response.json({ roles: await rolesOf(userId) }, { headers: { "Cache-Control": "no-store" } });

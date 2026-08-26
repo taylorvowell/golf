@@ -7,7 +7,7 @@ import { golferProfiles, users, type GolferProfileRow } from "@/db/schema";
  * Reading and writing §5's profile, on the server side.
  *
  * The shape crossing the wire has two halves for the same reason the schema does: `public` is what
- * a coach directory or a shared swing may show, `private` is what the product asks the golfer.
+ * an instructor directory or a shared swing may show, `private` is what the product asks the golfer.
  * A single flat body would have made the split a convention that every future field has to
  * remember; two objects make putting a field in the wrong one visible in a diff.
  *

@@ -28,11 +28,26 @@ import { PLANS, TOP_UP, TRIAL_DAYS } from "./plans";
  * rather than the screen calling the store itself.
  */
 
-/** Product identifiers as they must be registered in App Store Connect and Play Console. */
+/**
+ * Product identifiers as they must be registered in App Store Connect and Play Console.
+ *
+ * **All four subscriptions live in ONE iOS subscription group, ranked pro < gold < platinum**
+ * (the instructor-platform architecture §3): Gold/Platinum include personal Pro, so nobody ever
+ * holds two subscriptions, and every transition is a store crossgrade — upgrades prorate
+ * immediately (StoreKit does the math; Play uses `ReplacementMode.CHARGE_PRORATED_PRICE`),
+ * downgrades land at renewal (`DEFERRED`). The server never computes proration; it re-derives
+ * entitlement from whichever subscription the receipts now evidence. The free instructor
+ * membership is a grant at onboarding — never a store product. Gold/Platinum prices are TBD
+ * (billing-iap) and sell only on the instructor-mode paywall.
+ */
 export const PRODUCT_IDS = {
   proMonthly: "com.swingsage.app.pro.monthly",
   proAnnual: "com.swingsage.app.pro.annual",
   topUp50: "com.swingsage.app.topup.50",
+  instructorGoldMonthly: "com.swingsage.app.instructor.gold.monthly",
+  instructorGoldAnnual: "com.swingsage.app.instructor.gold.annual",
+  instructorPlatinumMonthly: "com.swingsage.app.instructor.platinum.monthly",
+  instructorPlatinumAnnual: "com.swingsage.app.instructor.platinum.annual",
 } as const;
 
 export type BillingPeriod = "monthly" | "annual";

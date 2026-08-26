@@ -7,8 +7,8 @@ import { ProfileError, readProfile, updateProfile, type ProfilePatch } from "@/l
  *
  * **No id in the path, on either verb.** The only profile these routes can touch is the one that
  * authenticated the request — the same property that makes `DELETE /api/v1/account` safe. A
- * golfer reading a coach's client's profile is a real feature (§26) and it belongs on a
- * coach-scoped route where the relationship can be named and checked, not here behind a query
+ * golfer reading an instructor's client's profile is a real feature (§26) and it belongs on a
+ * instructor-scoped route where the relationship can be named and checked, not here behind a query
  * parameter.
  *
  * PATCH and not PUT: onboarding submits a few answers at a time and the profile screen edits one

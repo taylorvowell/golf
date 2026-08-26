@@ -217,7 +217,7 @@ function useDebugStates() {
                   },
                   {
                     id: "dev-3",
-                    kind: "coach_plan",
+                    kind: "instructor_plan",
                     title: "Your coach updated your plan",
                     body: null,
                     data: {},
@@ -239,7 +239,7 @@ function useDebugStates() {
                 notifications: [
                   {
                     id: "dev-g",
-                    kind: "coach_message",
+                    kind: "instructor_message",
                     title: "Mark Bennett",
                     body: "Let's look at that transition again before Saturday.",
                     data: {},

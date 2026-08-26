@@ -16,7 +16,7 @@ const noStore = { "Cache-Control": "no-store" };
  * must, since `MediaStore.put` is byte-oriented) would be a memory fault rather than a slow path.
  * A deployment reaching this route with real users is misconfigured, not merely unoptimised.
  *
- * Owner only. `requireViewAccess` also admits an approved coach, which is correct for reading a
+ * Owner only. `requireViewAccess` also admits an approved instructor, which is correct for reading a
  * swing and wrong for writing its source — the same distinction `reanalyze` draws.
  */
 export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {

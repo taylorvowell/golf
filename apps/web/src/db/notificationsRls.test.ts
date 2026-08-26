@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
  * Three properties carry the design and each gets exercised here:
  *
  *   1. **The inbox is personal.** Owner reads own rows; another golfer — and even an approved
- *      coach — reads nothing. (The coach case matters: every other golfer table grants coach
+ *      instructor — reads nothing. (The instructor case matters: every other golfer table grants instructor
  *      read, so this table's NARROWER policy is exactly the kind of difference a copy-paste
  *      policy would erase.)
  *   2. **Emission crosses users but only through `app.notify()`.** A direct INSERT as
@@ -23,7 +23,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const GOLFER_A = "dddddddd-0000-4000-8000-000000000001";
 const GOLFER_B = "dddddddd-0000-4000-8000-000000000002";
-const COACH_C = "dddddddd-0000-4000-8000-000000000003";
+const INSTRUCTOR_C = "dddddddd-0000-4000-8000-000000000003";
 
 const url = process.env.DATABASE_URL;
 let sql: postgres.Sql;
@@ -36,7 +36,7 @@ async function asUser<T>(userId: string, fn: (tx: postgres.TransactionSql) => Pr
   });
 }
 
-/** Emit as `caller`, targeting `target` — the §29 cross-user shape (coach acts, golfer hears). */
+/** Emit as `caller`, targeting `target` — the §29 cross-user shape (instructor acts, golfer hears). */
 async function notifyAs(
   caller: string,
   target: string,
@@ -75,37 +75,37 @@ beforeAll(async () => {
     insert into auth.users (id, email) values
       (${GOLFER_A}, 'notif-a@test.local'),
       (${GOLFER_B}, 'notif-b@test.local'),
-      (${COACH_C},  'notif-c@test.local')
+      (${INSTRUCTOR_C},  'notif-c@test.local')
     on conflict (id) do nothing
   `;
   await sql`
     insert into public.users (id, email, display_name) values
       (${GOLFER_A}, 'notif-a@test.local', 'Notif Golfer A'),
       (${GOLFER_B}, 'notif-b@test.local', 'Notif Golfer B'),
-      (${COACH_C},  'notif-c@test.local', 'Notif Coach C')
+      (${INSTRUCTOR_C},  'notif-c@test.local', 'Notif Instructor C')
     on conflict (id) do nothing
   `;
-  // An APPROVED coach link, so the "even an approved coach reads nothing" case is real.
+  // An APPROVED instructor link, so the "even an approved instructor reads nothing" case is real.
   await sql`
-    insert into public.coach_links (golfer_id, coach_id, status)
-    values (${GOLFER_A}, ${COACH_C}, 'approved')
-    on conflict (golfer_id, coach_id) do update set status = 'approved'
+    insert into public.instructor_links (golfer_id, instructor_id, status)
+    values (${GOLFER_A}, ${INSTRUCTOR_C}, 'approved')
+    on conflict (golfer_id, instructor_id) do update set status = 'approved'
   `;
 });
 
 afterAll(async () => {
   if (!sql) return;
-  await sql`delete from auth.users where id in (${GOLFER_A}, ${GOLFER_B}, ${COACH_C})`;
+  await sql`delete from auth.users where id in (${GOLFER_A}, ${GOLFER_B}, ${INSTRUCTOR_C})`;
   await sql.end();
 });
 
 describe("notifications — emission", () => {
   it("app.notify inserts for a DIFFERENT user under a plain authenticated role", async () => {
-    // The whole reason the function exists: the coach acts, the golfer's inbox hears.
-    await notifyAs(COACH_C, GOLFER_A, "coach_comment", "New comment on your swing");
+    // The whole reason the function exists: the instructor acts, the golfer's inbox hears.
+    await notifyAs(INSTRUCTOR_C, GOLFER_A, "instructor_comment", "New comment on your swing");
     const inbox = await inboxOf(GOLFER_A);
     expect(inbox.length).toBe(1);
-    expect(inbox[0].kind).toBe("coach_comment");
+    expect(inbox[0].kind).toBe("instructor_comment");
   });
 
   it("refuses a direct INSERT as authenticated, even into one's OWN inbox", async () => {
@@ -114,7 +114,7 @@ describe("notifications — emission", () => {
       asUser(GOLFER_A, (tx) =>
         tx.unsafe(
           `insert into public.notifications (user_id, kind, title)
-           values ($1, 'coach_message', 'forged')`,
+           values ($1, 'instructor_message', 'forged')`,
           [GOLFER_A],
         ),
       ),
@@ -123,23 +123,23 @@ describe("notifications — emission", () => {
 
   it("refuses an unknown kind", async () => {
     await expect(
-      notifyAs(COACH_C, GOLFER_A, "not_a_kind", "nope"),
+      notifyAs(INSTRUCTOR_C, GOLFER_A, "not_a_kind", "nope"),
     ).rejects.toThrow();
   });
 });
 
 describe("notifications — the inbox is personal", () => {
-  it("hides A's inbox from another golfer AND from A's approved coach", async () => {
+  it("hides A's inbox from another golfer AND from A's approved instructor", async () => {
     expect((await inboxOf(GOLFER_A)).length).toBeGreaterThan(0);
     const asB = await asUser(GOLFER_B, (tx) =>
       tx.unsafe(`select 1 from public.notifications where user_id = $1`, [GOLFER_A]),
     );
-    const asCoach = await asUser(COACH_C, (tx) =>
+    const asInstructor = await asUser(INSTRUCTOR_C, (tx) =>
       tx.unsafe(`select 1 from public.notifications where user_id = $1`, [GOLFER_A]),
     );
     expect(asB.length).toBe(0);
     // Narrower than every other golfer table: §24's grant is swing data, not the inbox.
-    expect(asCoach.length).toBe(0);
+    expect(asInstructor.length).toBe(0);
   });
 
   it("lets only the owner ack, and only read_at", async () => {
@@ -173,7 +173,7 @@ describe("notifications — the inbox is personal", () => {
 
 describe("notifications — dismissing (0018)", () => {
   it("lets the owner delete their own row, and nobody else delete it", async () => {
-    const id = await notifyAs(COACH_C, GOLFER_A, "coach_comment", "Dismiss me");
+    const id = await notifyAs(INSTRUCTOR_C, GOLFER_A, "instructor_comment", "Dismiss me");
 
     // Another golfer's DELETE matches no row — 0 rows, not an error, and nothing removed.
     const byOther = await asUser(GOLFER_B, (tx) =>
@@ -191,7 +191,7 @@ describe("notifications — dismissing (0018)", () => {
 
   it("still refuses every write that is not the ack or the dismiss", async () => {
     // 0018 opens DELETE and nothing else — the surface it widened must not have widened twice.
-    const id = await notifyAs(COACH_C, GOLFER_A, "coach_comment", "Untouchable");
+    const id = await notifyAs(INSTRUCTOR_C, GOLFER_A, "instructor_comment", "Untouchable");
     await expect(
       asUser(GOLFER_A, (tx) =>
         tx.unsafe(`update public.notifications set title = 'rewritten' where id = $1`, [id]),
@@ -207,9 +207,9 @@ describe("notifications — grouped delivery (D60)", () => {
   const GROUP = "conversation:test-thread";
 
   it("folds a second event into the open group instead of adding a row", async () => {
-    const first = await notifyAs(COACH_C, GOLFER_B, "conversation_reply", "Coach replied", GROUP);
+    const first = await notifyAs(INSTRUCTOR_C, GOLFER_B, "conversation_reply", "Instructor replied", GROUP);
     const second = await notifyAs(
-      COACH_C, GOLFER_B, "conversation_reply", "2 new replies", GROUP,
+      INSTRUCTOR_C, GOLFER_B, "conversation_reply", "2 new replies", GROUP,
     );
     expect(second).toBe(first);
 
@@ -224,7 +224,7 @@ describe("notifications — grouped delivery (D60)", () => {
     await asUser(GOLFER_B, (tx) =>
       tx.unsafe(`update public.notifications set read_at = now() where user_id = $1`, [GOLFER_B]),
     );
-    await notifyAs(COACH_C, GOLFER_B, "conversation_reply", "Another reply", GROUP);
+    await notifyAs(INSTRUCTOR_C, GOLFER_B, "conversation_reply", "Another reply", GROUP);
 
     const inbox = await inboxOf(GOLFER_B);
     expect(inbox.length).toBe(2);
@@ -234,8 +234,8 @@ describe("notifications — grouped delivery (D60)", () => {
   });
 
   it("never groups events with a null group_key", async () => {
-    await notifyAs(COACH_C, GOLFER_B, "swing_reviewed", "Reviewed 1", null);
-    await notifyAs(COACH_C, GOLFER_B, "swing_reviewed", "Reviewed 2", null);
+    await notifyAs(INSTRUCTOR_C, GOLFER_B, "swing_reviewed", "Reviewed 1", null);
+    await notifyAs(INSTRUCTOR_C, GOLFER_B, "swing_reviewed", "Reviewed 2", null);
     const inbox = await inboxOf(GOLFER_B);
     const reviews = inbox.filter((n) => n.kind === "swing_reviewed");
     expect(reviews.length).toBe(2);

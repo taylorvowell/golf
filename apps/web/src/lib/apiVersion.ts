@@ -60,7 +60,7 @@ function storeUrlFor(req: Request): string | null {
  *
  * Deliberately fails OPEN for a caller that sends no version header. The web app is deployed
  * with this server and cannot lag it, and neither can a server-to-server call; 426-ing them
- * would take the coach workspace down over a guard meant for phones.
+ * would take the instructor workspace down over a guard meant for phones.
  */
 export function guardClientVersion(req: Request): Response | null {
   if (!isClientTooOld(clientVersionOf(req), MINIMUM_CLIENT_VERSION)) return null;

@@ -5,7 +5,7 @@ import { FONT_BODY } from "../../design/system/typography";
 import { useAppNavigation } from "../../navigation";
 import { themedStyles } from "../../theme";
 import type { Denial } from "./entitlement";
-import { CAPABILITY_LABEL, CAPABILITY_PITCH, PLANS, TOP_UP } from "./plans";
+import { CAPABILITY_LABEL, CAPABILITY_PITCH, MEMBERSHIPS, PLANS, TOP_UP } from "./plans";
 
 /**
  * The moment a capability is refused — one sheet, rendering the denial payload.
@@ -33,8 +33,33 @@ export function UpgradeSheet({ denial, onClose }: { denial: Denial | null; onClo
 
   const capability = CAPABILITY_LABEL[denial.capability];
 
+  // An INSTRUCTOR-dimension refusal names a membership, never a golfer plan — telling an
+  // instructor whose roster is full to "upgrade to Pro" is the cross-dimension confusion the
+  // split Denial exists to prevent. The CTA lands on the membership surface (the instructor
+  // paywall — step 04's Membership screen; the Upgrade route hosts it until then).
+  if (denial.reason === "tier" && denial.dimension === "instructor") {
+    const membership = MEMBERSHIPS[denial.requiredMembership ?? "free"];
+    return (
+      <Sheet
+        visible
+        onClose={onClose}
+        title={capability}
+        subtitle={CAPABILITY_PITCH[denial.capability]}
+        testID="upgrade-sheet-membership"
+      >
+        <View style={styles.body}>
+          <Text style={styles.line}>
+            Part of <Text style={styles.strong}>{membership.name}</Text>.
+          </Text>
+          <Button label={`See ${membership.name}`} variant="primary" onPress={seePlans} />
+          <Button label="Not now" variant="ghost" onPress={onClose} />
+        </View>
+      </Sheet>
+    );
+  }
+
   if (denial.reason === "tier") {
-    const plan = PLANS[denial.requiredTier];
+    const plan = PLANS[denial.requiredTier ?? "pro"];
     return (
       <Sheet
         visible

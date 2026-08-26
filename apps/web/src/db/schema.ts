@@ -38,13 +38,13 @@ export const users = pgTable("users", {
    * §5.1 says sensitive information must not automatically be publicly visible, and §34.1 asks
    * "what appears publicly" as a question the schema should already answer. An `is_public` boolean
    * per field answers it in the application, which means every future reader has to remember to
-   * ask. Two tables answer it in the shape: everything on `users` is what a coach directory or a
+   * ask. Two tables answer it in the shape: everything on `users` is what an instructor directory or a
    * shared swing may show, and everything on `golfer_profiles` is private to the golfer and the
    * coaches they have approved. Adding a field to the wrong one is then a visible design mistake
    * rather than an unnoticed default.
    */
   avatarUrl: text("avatar_url"),
-  /** §5.1 — a short bio. Public because a coach directory listing is unusable without one. */
+  /** §5.1 — a short bio. Public because an instructor directory listing is unusable without one. */
   bio: text("bio"),
   /** §5.1 — "location or general region IF the user chooses". Free text, never derived. */
   region: text("region"),
@@ -54,24 +54,24 @@ export const users = pgTable("users", {
 /** §5.5 Tier 1 — the miss vocabulary, shared by the driver and iron fields. */
 /**
  * §3's roles, as rows rather than a column, because §3.3 is explicit that one account can be both
- * a golfer and a coach and §4.4 requires a role to be addable later without a new account.
+ * a golfer and an instructor and §4.4 requires a role to be addable later without a new account.
  *
  * A `role` column would make holding both a schema change; an array column would make "does this
  * user hold role X" unindexable and RLS policy over it unpleasant. A row per (user, role) makes
  * both trivial and gives the grant a timestamp, which is what an audit of "when did this account
- * become a coach" needs.
+ * become an instructor" needs.
  *
- * **Holding a role is not being listed** (D32). Claiming `coach` is free and instant and unlocks
- * the coach workspace with an empty roster; appearing in the directory is a reviewed application
- * belonging to `coach-relationships`/`admin-surface`. That split exists here from the start
- * because it is what puts the friction at the point where a stranger's golf video becomes
- * reachable, and nowhere earlier.
+ * **Holding a role is not being listed** (D32). Claiming `instructor` is free and instant and
+ * unlocks the instructor workspace with an empty roster; appearing in the directory is a reviewed
+ * application belonging to `instructor-relationships`/`admin-surface`. That split exists here from
+ * the start because it is what puts the friction at the point where a stranger's golf video
+ * becomes reachable, and nowhere earlier.
  *
  * `admin` is in the vocabulary and is deliberately NOT self-grantable — see `app.claim_role()`.
  */
 export const userRoles = pgTable("user_roles", {
   userId: uuid("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  role: text("role", { enum: ["golfer", "coach", "admin"] }).notNull(),
+  role: text("role", { enum: ["golfer", "instructor", "admin"] }).notNull(),
   grantedAt: timestamp("granted_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [primaryKey({ columns: [t.userId, t.role] })]);
 
@@ -243,8 +243,8 @@ export const swings = pgTable("swings", {
   /** §7.3 organization — what the swing log filters and sorts on. */
   favourite: boolean("favourite").notNull().default(false),
   tags: text("tags").array().notNull().default([]),
-  /** §7.2 — set when a coach has reviewed it, so "unreviewed" is a real filter. */
-  coachReviewedAt: timestamp("coach_reviewed_at", { withTimezone: true }),
+  /** §7.2 — set when an instructor has reviewed it, so "unreviewed" is a real filter. */
+  instructorReviewedAt: timestamp("instructor_reviewed_at", { withTimezone: true }),
 
   /**
    * Set on the tour-quality model swings bundled with the app (§20), null on a golfer's own.
@@ -455,30 +455,30 @@ export const swingStages = pgTable("swing_stages", {
 }, (t) => [uniqueIndex("swing_stages_view_stage").on(t.viewId, t.stage)]);
 
 /**
- * The golfer-coach relationship, and the reason it exists this early.
+ * The golfer-instructor relationship, and the reason it exists this early.
  *
- * The coach FEATURE is five phases away in `coach-relationships`. What has to exist now is the
+ * The instructor FEATURE belongs to `instructor-relationships`. What has to exist now is the
  * shape the RLS policies reference, because D7 makes the database the authorization boundary and
  * a boundary cannot be tested before the thing it depends on exists. `src/db/rls.test.ts`
  * exercises linked, pending, revoked and cross-golfer access against these rows today.
  *
  * `revoked` is a real status rather than a deleted row: §24.4 requires the golfer to be able to
- * end access, and knowing a coach *could* see a golfer's swings between two dates is worth more
- * than a tidy table. Only the golfer may write this row — enforced in the policy, not the UI.
+ * end access, and knowing an instructor *could* see a golfer's swings between two dates is worth
+ * more than a tidy table. Only the golfer may write this row — enforced in the policy, not the UI.
  */
-export const coachLinks = pgTable("coach_links", {
+export const instructorLinks = pgTable("instructor_links", {
   id: uuid("id").primaryKey().defaultRandom(),
   golferId: uuid("golfer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  coachId: uuid("coach_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  instructorId: uuid("instructor_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   status: text("status", { enum: ["pending", "approved", "revoked"] }).notNull().default("pending"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-}, (t) => [uniqueIndex("coach_links_pair").on(t.golferId, t.coachId)]);
+}, (t) => [uniqueIndex("instructor_links_pair").on(t.golferId, t.instructorId)]);
 
 /**
  * §29's inbox rows — the source of truth every delivery channel (push, email, the bell) fans
  * out from. Two design points live in migration 0013 rather than here: emission is ONLY
- * `app.notify()` (a SECURITY DEFINER function, because a coach action notifies a golfer and
+ * `app.notify()` (a SECURITY DEFINER function, because an instructor action notifies a golfer and
  * an insert policy cannot express that safely), and grouped delivery is the partial unique
  * index on (user_id, group_key) where read_at is null — an unread group folds, `count` grows,
  * reading it closes the group. The `kind` enum mirrors
@@ -491,12 +491,12 @@ export const notifications = pgTable("notifications", {
   kind: text("kind", {
     enum: [
       // golfer (§29 + D55 + D60 + D62)
-      "analysis_ready", "analysis_failed", "coach_request_approved", "coach_request_declined",
-      "swing_reviewed", "coach_comment", "coach_annotation", "coach_message",
-      "coach_plan", "subscription_event", "goal_assigned", "goal_achieved",
+      "analysis_ready", "analysis_failed", "instructor_request_approved", "instructor_request_declined",
+      "swing_reviewed", "instructor_comment", "instructor_annotation", "instructor_message",
+      "instructor_plan", "subscription_event", "goal_assigned", "goal_achieved",
       "goal_regressed", "lesson_sent", "conversation_reply", "review_answered",
       "achievement_earned",
-      // coach
+      // instructor
       "golfer_request", "golfer_swing", "golfer_reply", "plan_progress",
       "review_requested", "student_message", "lesson_viewed", "drill_done",
       "student_goal_achieved",
@@ -539,13 +539,13 @@ export type NewClubRow = typeof clubs.$inferInsert;
 export type User = typeof users.$inferSelect;
 export type UserRoleRow = typeof userRoles.$inferSelect;
 export type NewUserRoleRow = typeof userRoles.$inferInsert;
-/** golfer | coach | admin — §3's role vocabulary. */
+/** golfer | instructor | admin — §3's role vocabulary. */
 export type UserRole = UserRoleRow["role"];
 export type GolferProfileRow = typeof golferProfiles.$inferSelect;
 export type NewGolferProfileRow = typeof golferProfiles.$inferInsert;
 export type Handedness = NonNullable<GolferProfileRow["handedness"]>;
-export type CoachLinkRow = typeof coachLinks.$inferSelect;
-export type NewCoachLinkRow = typeof coachLinks.$inferInsert;
+export type InstructorLinkRow = typeof instructorLinks.$inferSelect;
+export type NewInstructorLinkRow = typeof instructorLinks.$inferInsert;
 export type NewUser = typeof users.$inferInsert;
 export type SwingRow = typeof swings.$inferSelect;
 export type NewSwingRow = typeof swings.$inferInsert;

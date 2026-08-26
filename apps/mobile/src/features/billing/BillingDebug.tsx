@@ -4,7 +4,7 @@ import { useDebugGroups } from "../debug/DebugOverlay";
 import { PERSONA_SCENARIOS, usePersona } from "../debug/persona";
 import type { Denial } from "./entitlement";
 import { SCENARIOS, useEntitlement, useEntitlementScenario } from "./entitlement";
-import { REQUIRED_TIER } from "./plans";
+import { REQUIRED_MEMBERSHIP, REQUIRED_PERSONAL } from "./plans";
 import { UpgradeSheet } from "./UpgradeSheet";
 
 /**
@@ -26,7 +26,7 @@ import { UpgradeSheet } from "./UpgradeSheet";
  */
 export function BillingDebug() {
   const { scenarioId, setScenarioId } = useEntitlementScenario();
-  const { usage, tier } = useEntitlement();
+  const { usage, personal } = useEntitlement();
   const persona = usePersona();
   const [denial, setDenial] = useState<Denial | null>(null);
 
@@ -66,7 +66,9 @@ export function BillingDebug() {
             onPress: () =>
               setDenial({
                 capability: "analysis",
-                requiredTier: tier,
+                dimension: "personal",
+                requiredTier: personal.tier,
+                requiredMembership: null,
                 usage,
                 reason: "allowance",
               }),
@@ -78,7 +80,23 @@ export function BillingDebug() {
             onPress: () =>
               setDenial({
                 capability: "dual_device",
-                requiredTier: REQUIRED_TIER.dual_device,
+                dimension: "personal",
+                requiredTier: REQUIRED_PERSONAL.dual_device,
+                requiredMembership: null,
+                usage: null,
+                reason: "tier",
+              }),
+          },
+          {
+            key: "denial-membership",
+            label: "Locked instructor tools",
+            detail: "The instructor-dimension refusal — names a membership, never a golfer plan.",
+            onPress: () =>
+              setDenial({
+                capability: "instructor_tools",
+                dimension: "instructor",
+                requiredTier: null,
+                requiredMembership: REQUIRED_MEMBERSHIP.instructor_tools,
                 usage: null,
                 reason: "tier",
               }),
@@ -86,7 +104,7 @@ export function BillingDebug() {
         ],
       },
     ];
-  }, [persona, scenarioId, setScenarioId, tier, usage]);
+  }, [persona, scenarioId, setScenarioId, personal.tier, usage]);
 
   useDebugGroups("billing", groups);
 

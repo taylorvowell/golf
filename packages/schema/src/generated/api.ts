@@ -29,6 +29,10 @@ export type JobStatusResponse = Job | JobIdle;
  * via the `definition` "handedness".
  */
 export type Handedness = "right" | "left";
+/**
+ * Which way this golfer swings. Two swings of opposite handedness are mirror images, and showing them side by side unmirrored compares a turn against its own reflection.
+ */
+export type Handedness1 = "right" | "left";
 
 /**
  * Every JSON request and response body of the versioned HTTP API, in one place.
@@ -400,13 +404,13 @@ export interface Notification {
   kind:
     | "analysis_ready"
     | "analysis_failed"
-    | "coach_request_approved"
-    | "coach_request_declined"
+    | "instructor_request_approved"
+    | "instructor_request_declined"
     | "swing_reviewed"
-    | "coach_comment"
-    | "coach_annotation"
-    | "coach_message"
-    | "coach_plan"
+    | "instructor_comment"
+    | "instructor_annotation"
+    | "instructor_message"
+    | "instructor_plan"
     | "subscription_event"
     | "goal_assigned"
     | "goal_achieved"
@@ -621,4 +625,64 @@ export interface ProfilePatchRequest {
 export interface RolesResponse {
   roles: string[];
   claimable: string[];
+}
+/**
+ * One of the ten coaching positions as PUBLISHED by the analyzer — including the rows it does not stand behind. The admission rules (confidence floor, the ordering-nudge fingerprint) live in the client, not here, so a stored artifact is never re-interpreted by whichever server version happens to answer: two clients on two app versions must be able to disagree about what is trustworthy without the wire format changing under them.
+ *
+ * This interface was referenced by `Api`'s JSON-Schema
+ * via the `definition` "syncAnchor".
+ */
+export interface SyncAnchor {
+  /**
+   * P1…P10.
+   */
+  p: string;
+  frame: number;
+  /**
+   * As published. 0.30 marks one of `checkpoints.py`'s two admitted proxies; 0.35 with a one-frame gap to a neighbour is the ordering nudge's fingerprint.
+   */
+  conf: number;
+}
+/**
+ * A box around the golfer across the swing, normalized 0–1 against the frame — the same convention as every other coordinate in the contract. Two swings filmed at two distances put the golfer at two sizes, and a side-by-side comparison of two differently-scaled golfers is the thing this exists to prevent. Null when pose confidence never cleared the floor.
+ *
+ * This interface was referenced by `Api`'s JSON-Schema
+ * via the `definition` "syncSubject".
+ */
+export interface SyncSubject {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+/**
+ * Everything needed to line one swing up against another, and nothing else.
+ *
+ * `analysis.json` already carries all of this, and reading it for the purpose costs 5.9 MB on `6iron-1` and 22 MB on `pro_3` — for ten integers and a frame rate. That download is not a detail on a phone: it is the difference between a comparison that appears when the golfer taps and one that arrives long enough after the tap to read as broken. This is the same facts at about two kilobytes.
+ *
+ * It is a projection of a stored artifact, never a second source of truth: nothing here is computed that `analysis.json` does not already state, and a client that already holds the artifact must get the same answer from either.
+ *
+ * This interface was referenced by `Api`'s JSON-Schema
+ * via the `definition` "syncProfile".
+ */
+export interface SyncProfile {
+  swingId: string;
+  /**
+   * The camera this profile describes — `dtl` or `face_on`.
+   */
+  view: string;
+  /**
+   * The CFR rate the clip was normalized to, not the source rate.
+   */
+  fps: number;
+  frameCount: number;
+  width: number;
+  height: number;
+  handedness: Handedness1;
+  checkpoints: SyncAnchor[];
+  /**
+   * The heard strike and the seen Impact do not agree — `audio_impact.agrees === false`. FALSE covers three different situations that are all equally not-evidence: they agree, the clip has no audio, or the artifact predates schema 10. The heard FRAME is deliberately absent: it carries 121–148 ms of unmeasured recording latency, so it may veto Impact and must never replace it.
+   */
+  audioDisagrees: boolean;
+  subject: SyncSubject | null;
 }

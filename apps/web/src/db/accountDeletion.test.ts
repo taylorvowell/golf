@@ -23,7 +23,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const GOLFER_A = "dddddddd-0000-4000-8000-000000000001";
 const GOLFER_B = "dddddddd-0000-4000-8000-000000000002";
-const COACH_C = "dddddddd-0000-4000-8000-000000000003";
+const INSTRUCTOR_C = "dddddddd-0000-4000-8000-000000000003";
 const SWING_A = "eeeeeeee-0000-4000-8000-000000000001";
 const VIEW_A = "ffffffff-0000-4000-8000-000000000001";
 
@@ -79,9 +79,9 @@ async function survivingRows(userId: string): Promise<Record<string, number>> {
         join public.swings s on s.id = v.swing_id where s.user_id = ${userId}`,
   );
   await one(
-    "coach_links",
-    sql`select count(*)::text as n from public.coach_links
-        where golfer_id = ${userId} or coach_id = ${userId}`,
+    "instructor_links",
+    sql`select count(*)::text as n from public.instructor_links
+        where golfer_id = ${userId} or instructor_id = ${userId}`,
   );
   await one("auth_users", sql`select count(*)::text as n from auth.users where id = ${userId}`);
   return counts;
@@ -115,9 +115,9 @@ async function seedGolferA() {
     values (${VIEW_A}, 'test', 50, 'fair',
        '{}'::jsonb, '{}'::jsonb, '[]'::jsonb, '[]'::jsonb, '{}'::jsonb, '{}'::jsonb)`;
   await sql`
-    insert into public.coach_links (golfer_id, coach_id, status)
-    values (${GOLFER_A}, ${COACH_C}, 'approved')
-    on conflict (golfer_id, coach_id) do nothing`;
+    insert into public.instructor_links (golfer_id, instructor_id, status)
+    values (${GOLFER_A}, ${INSTRUCTOR_C}, 'approved')
+    on conflict (golfer_id, instructor_id) do nothing`;
 }
 
 beforeAll(async () => {
@@ -131,7 +131,7 @@ beforeAll(async () => {
 
   for (const [id, email, name] of [
     [GOLFER_B, "del-b@test.local", "Delete Golfer B"],
-    [COACH_C, "del-c@test.local", "Delete Coach C"],
+    [INSTRUCTOR_C, "del-c@test.local", "Delete Instructor C"],
   ]) {
     await sql`insert into auth.users (id, email) values (${id}, ${email}) on conflict (id) do nothing`;
     await sql`
@@ -143,8 +143,8 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (!sql) return;
-  await sql`delete from auth.users where id in (${GOLFER_A}, ${GOLFER_B}, ${COACH_C})`;
-  await sql`delete from public.users where id in (${GOLFER_A}, ${GOLFER_B}, ${COACH_C})`;
+  await sql`delete from auth.users where id in (${GOLFER_A}, ${GOLFER_B}, ${INSTRUCTOR_C})`;
+  await sql`delete from public.users where id in (${GOLFER_A}, ${GOLFER_B}, ${INSTRUCTOR_C})`;
   await sql.end();
 });
 
@@ -182,16 +182,16 @@ describe("app.delete_own_account", () => {
       swings: 0,
       swing_views: 0,
       scores: 0,
-      coach_links: 0,
+      instructor_links: 0,
       auth_users: 0,
     });
   });
 
-  it("takes the coach's access with it", async () => {
-    // A revoked relationship and a deleted golfer must look the same to a coach. This is the row
-    // that would otherwise leave a coach linked to an account that no longer exists.
+  it("takes the instructor's access with it", async () => {
+    // A revoked relationship and a deleted golfer must look the same to an instructor. This is the row
+    // that would otherwise leave an instructor linked to an account that no longer exists.
     const rows = await sql<{ n: string }[]>`
-      select count(*)::text as n from public.coach_links where coach_id = ${COACH_C}`;
+      select count(*)::text as n from public.instructor_links where instructor_id = ${INSTRUCTOR_C}`;
     expect(Number(rows[0].n)).toBe(0);
   });
 

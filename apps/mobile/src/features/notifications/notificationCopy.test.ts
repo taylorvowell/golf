@@ -17,13 +17,13 @@ const DAY = 24 * HOUR;
 const ALL_KINDS: Notification["kind"][] = [
   "analysis_ready",
   "analysis_failed",
-  "coach_request_approved",
-  "coach_request_declined",
+  "instructor_request_approved",
+  "instructor_request_declined",
   "swing_reviewed",
-  "coach_comment",
-  "coach_annotation",
-  "coach_message",
-  "coach_plan",
+  "instructor_comment",
+  "instructor_annotation",
+  "instructor_message",
+  "instructor_plan",
   "subscription_event",
   "goal_assigned",
   "goal_achieved",
@@ -56,8 +56,8 @@ describe("NOTIFICATION_LOOK", () => {
   });
 
   it("keeps a refusal and an arrival visually distinct", () => {
-    expect(NOTIFICATION_LOOK.coach_request_declined.tone).toBe("bad");
-    expect(NOTIFICATION_LOOK.coach_request_approved.tone).toBe("good");
+    expect(NOTIFICATION_LOOK.instructor_request_declined.tone).toBe("bad");
+    expect(NOTIFICATION_LOOK.instructor_request_approved.tone).toBe("good");
     expect(NOTIFICATION_LOOK.goal_regressed.tone).toBe("bad");
   });
 });
@@ -93,12 +93,12 @@ describe("relativeAge", () => {
 
 describe("foldLabel", () => {
   it("stays silent on an ungrouped row — '1 message' is a line that adds nothing", () => {
-    expect(foldLabel("coach_message", 1)).toBeNull();
-    expect(foldLabel("coach_message", 0)).toBeNull();
+    expect(foldLabel("instructor_message", 1)).toBeNull();
+    expect(foldLabel("instructor_message", 0)).toBeNull();
   });
 
   it("names what the fold contains", () => {
-    expect(foldLabel("coach_message", 3)).toBe("3 messages");
+    expect(foldLabel("instructor_message", 3)).toBe("3 messages");
     expect(foldLabel("conversation_reply", 2)).toBe("2 replies");
     expect(foldLabel("analysis_ready", 4)).toBe("4 swings analysed");
   });

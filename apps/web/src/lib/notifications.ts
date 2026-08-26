@@ -6,7 +6,7 @@ import type { NotificationKind, NotificationRow } from "@/db/schema";
 /**
  * §29's notification backbone, server side. Three readers (list, unread count, ack) and one
  * writer. The writer goes through `app.notify()` — a SECURITY DEFINER function — because
- * emission crosses users (a coach action notifies a golfer) and RLS insert policies cannot
+ * emission crosses users (an instructor action notifies a golfer) and RLS insert policies cannot
  * express that safely; see migration 0013's header for the whole argument. Everything here
  * takes a `DbTx` and therefore runs inside `withUser`, so RLS scopes every read and ack to
  * the caller no matter what the JS says.

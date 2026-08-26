@@ -12,7 +12,7 @@ import { endAppPool, withUser } from "./session";
  * and each would look fine without the other:
  *
  *   1. **Whose session is it.** Row-level security decides — `sessions_write` is owner-only and
- *      `sessions_select` is owner-or-approved-coach. Asserted through `withUser` plus the real
+ *      `sessions_select` is owner-or-approved-instructor. Asserted through `withUser` plus the real
  *      `lib/sessions` functions rather than hand-rolled SQL, so a route that forgets a `where`
  *      clause is still caught: the policy is the backstop, not the check.
  *   2. **A session's type locks once it has swings.** That one is application logic, not a
@@ -25,7 +25,7 @@ import { endAppPool, withUser } from "./session";
 
 const GOLFER_A = "cccccccc-0000-4000-8000-000000000001";
 const GOLFER_B = "cccccccc-0000-4000-8000-000000000002";
-const COACH_C = "cccccccc-0000-4000-8000-000000000003";
+const INSTRUCTOR_C = "cccccccc-0000-4000-8000-000000000003";
 const SWING_A = "cccccccc-1111-4000-8000-000000000001";
 
 /** The OWNER connection — fixtures and swing attachment only, never an assertion. */
@@ -48,29 +48,29 @@ beforeAll(async () => {
     insert into auth.users (id, email) values
       (${GOLFER_A}, 'sess-a@test.local'),
       (${GOLFER_B}, 'sess-b@test.local'),
-      (${COACH_C},  'sess-c@test.local')
+      (${INSTRUCTOR_C},  'sess-c@test.local')
     on conflict (id) do nothing
   `;
   await owner`
     insert into public.users (id, email, display_name) values
       (${GOLFER_A}, 'sess-a@test.local', 'Session Golfer A'),
       (${GOLFER_B}, 'sess-b@test.local', 'Session Golfer B'),
-      (${COACH_C},  'sess-c@test.local', 'Session Coach C')
+      (${INSTRUCTOR_C},  'sess-c@test.local', 'Session Instructor C')
     on conflict (id) do nothing
   `;
-  // An APPROVED coach, so "a coach can read but still cannot rename" is a real case rather
+  // An APPROVED instructor, so "an instructor can read but still cannot rename" is a real case rather
   // than a stranger being denied.
   await owner`
-    insert into public.coach_links (golfer_id, coach_id, status)
-    values (${GOLFER_A}, ${COACH_C}, 'approved')
-    on conflict (golfer_id, coach_id) do update set status = 'approved'
+    insert into public.instructor_links (golfer_id, instructor_id, status)
+    values (${GOLFER_A}, ${INSTRUCTOR_C}, 'approved')
+    on conflict (golfer_id, instructor_id) do update set status = 'approved'
   `;
 });
 
 afterAll(async () => {
   if (owner) {
     await owner`delete from public.swings where id = ${SWING_A}`;
-    await owner`delete from auth.users where id in (${GOLFER_A}, ${GOLFER_B}, ${COACH_C})`;
+    await owner`delete from auth.users where id in (${GOLFER_A}, ${GOLFER_B}, ${INSTRUCTOR_C})`;
     await owner.end();
   }
   await endAppPool();
@@ -110,19 +110,19 @@ describe("a session belongs to the golfer who recorded it", () => {
     expect(theirs.some((s) => s.id === session.id)).toBe(false);
   });
 
-  it("lets an approved coach read the session but never rename it", async () => {
-    const session = await mint(GOLFER_A, { name: "Coach can see this" });
+  it("lets an approved instructor read the session but never rename it", async () => {
+    const session = await mint(GOLFER_A, { name: "Instructor can see this" });
 
-    const seen = await withUser(COACH_C, (tx) => listSessions(tx, GOLFER_A));
+    const seen = await withUser(INSTRUCTOR_C, (tx) => listSessions(tx, GOLFER_A));
     expect(seen.some((s) => s.id === session.id)).toBe(true);
 
-    // §24.3 — a coach reviews a golfer's practice, never edits it.
-    const attempted = await withUser(COACH_C, (tx) =>
-      updateSession(tx, GOLFER_A, session.id, { name: "coach renamed it" }));
+    // §24.3 — an instructor reviews a golfer's practice, never edits it.
+    const attempted = await withUser(INSTRUCTOR_C, (tx) =>
+      updateSession(tx, GOLFER_A, session.id, { name: "instructor renamed it" }));
     expect(attempted).toBeNull();
 
     const after = await withUser(GOLFER_A, (tx) => listSessions(tx, GOLFER_A));
-    expect(after.find((s) => s.id === session.id)?.name).toBe("Coach can see this");
+    expect(after.find((s) => s.id === session.id)?.name).toBe("Instructor can see this");
   });
 
   it("refuses another golfer's rename and leaves the name alone", async () => {

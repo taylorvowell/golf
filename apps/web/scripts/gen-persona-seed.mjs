@@ -133,7 +133,7 @@ for (const [persona, u] of Object.entries(manifest.users)) {
     `insert into public.user_roles (user_id, role) values (${q(u.id)}, 'golfer') on conflict do nothing;`,
   );
   if (persona === "coach")
-    lines.push(`insert into public.user_roles (user_id, role) values (${q(u.id)}, 'coach') on conflict do nothing;`);
+    lines.push(`insert into public.user_roles (user_id, role) values (${q(u.id)}, 'instructor') on conflict do nothing;`);
   if (persona === "admin")
     lines.push(`insert into public.user_roles (user_id, role) values (${q(u.id)}, 'admin') on conflict do nothing;`);
   // Everyone except the brand-new user has finished onboarding.
@@ -153,9 +153,9 @@ for (const key of ["spotlight.deep-intro.v1", "spotlight.stance-intro.v1"]) {
   );
 }
 
-// The coach coaches Marcus — approved, so RLS opens Marcus's swings to Dave.
+// The instructor coaches Marcus — approved, so RLS opens Marcus's swings to Dave.
 lines.push(
-  `insert into public.coach_links (golfer_id, coach_id, status) values (${q(manifest.users.existing.id)}, ${q(manifest.users.coach.id)}, 'approved') on conflict (golfer_id, coach_id) do update set status = 'approved';`,
+  `insert into public.instructor_links (golfer_id, instructor_id, status) values (${q(manifest.users.existing.id)}, ${q(manifest.users.coach.id)}, 'approved') on conflict (golfer_id, instructor_id) do update set status = 'approved';`,
 );
 
 // Sessions, swings, views.

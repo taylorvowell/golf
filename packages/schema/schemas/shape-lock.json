@@ -1615,12 +1615,6 @@
       "\"achievement_earned\"",
       "\"analysis_failed\"",
       "\"analysis_ready\"",
-      "\"coach_annotation\"",
-      "\"coach_comment\"",
-      "\"coach_message\"",
-      "\"coach_plan\"",
-      "\"coach_request_approved\"",
-      "\"coach_request_declined\"",
       "\"conversation_reply\"",
       "\"drill_done\"",
       "\"goal_achieved\"",
@@ -1629,6 +1623,12 @@
       "\"golfer_reply\"",
       "\"golfer_request\"",
       "\"golfer_swing\"",
+      "\"instructor_annotation\"",
+      "\"instructor_comment\"",
+      "\"instructor_message\"",
+      "\"instructor_plan\"",
+      "\"instructor_request_approved\"",
+      "\"instructor_request_declined\"",
       "\"lesson_sent\"",
       "\"lesson_viewed\"",
       "\"plan_progress\"",
@@ -2071,6 +2071,95 @@
   },
   "api#/definitions/swingViewSummary/properties/width": {
     "type": "integer|null"
+  },
+  "api#/definitions/syncAnchor": {
+    "type": "object",
+    "required": [
+      "conf",
+      "frame",
+      "p"
+    ]
+  },
+  "api#/definitions/syncAnchor/properties/conf": {
+    "type": "number"
+  },
+  "api#/definitions/syncAnchor/properties/frame": {
+    "type": "integer"
+  },
+  "api#/definitions/syncAnchor/properties/p": {
+    "type": "string"
+  },
+  "api#/definitions/syncProfile": {
+    "type": "object",
+    "required": [
+      "audioDisagrees",
+      "checkpoints",
+      "fps",
+      "frameCount",
+      "handedness",
+      "height",
+      "subject",
+      "swingId",
+      "view",
+      "width"
+    ]
+  },
+  "api#/definitions/syncProfile/properties/audioDisagrees": {
+    "type": "boolean"
+  },
+  "api#/definitions/syncProfile/properties/checkpoints": {
+    "type": "array"
+  },
+  "api#/definitions/syncProfile/properties/checkpoints/items": {
+    "ref": "#/definitions/syncAnchor"
+  },
+  "api#/definitions/syncProfile/properties/fps": {
+    "type": "number"
+  },
+  "api#/definitions/syncProfile/properties/frameCount": {
+    "type": "integer"
+  },
+  "api#/definitions/syncProfile/properties/handedness": {
+    "ref": "#/definitions/handedness"
+  },
+  "api#/definitions/syncProfile/properties/height": {
+    "type": "integer"
+  },
+  "api#/definitions/syncProfile/properties/subject/anyOf/0": {
+    "ref": "#/definitions/syncSubject"
+  },
+  "api#/definitions/syncProfile/properties/subject/anyOf/1": {
+    "type": "null"
+  },
+  "api#/definitions/syncProfile/properties/swingId": {
+    "type": "string"
+  },
+  "api#/definitions/syncProfile/properties/view": {
+    "type": "string"
+  },
+  "api#/definitions/syncProfile/properties/width": {
+    "type": "integer"
+  },
+  "api#/definitions/syncSubject": {
+    "type": "object",
+    "required": [
+      "x0",
+      "x1",
+      "y0",
+      "y1"
+    ]
+  },
+  "api#/definitions/syncSubject/properties/x0": {
+    "type": "number"
+  },
+  "api#/definitions/syncSubject/properties/x1": {
+    "type": "number"
+  },
+  "api#/definitions/syncSubject/properties/y0": {
+    "type": "number"
+  },
+  "api#/definitions/syncSubject/properties/y1": {
+    "type": "number"
   },
   "api#/definitions/upgradeRequired": {
     "type": "object",

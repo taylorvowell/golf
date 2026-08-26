@@ -111,3 +111,16 @@ over-consumed under concurrent requests; an admin grant overrides the absence of
 Do not set the actual tier limits here. §43 leaves "exact limits for Free / Pro / Coach Standard
 / Coach Pro" explicitly open, and guessing them now would bake a product decision into the
 platform. The engine must make those numbers trivial to change; that is the whole point.
+
+> **DESIGN AMENDMENT 2026-08-26 (appended, not rewriting the steps above) — the engine is
+> TWO-DIMENSIONAL from birth.** Per the accepted instructor-platform architecture
+> (`.claude/architecture/instructor-platform-2026-08-24.md` §2–§3) and the client seam that
+> now already models it (`apps/mobile/src/features/billing/entitlement.tsx`): the entitlement
+> record carries a **personal dimension** (tier free|pro, source purchase|included|none,
+> status, usage) and an **instructor dimension** (membership free|gold|platinum, status, or
+> absent without the role). The resolver derives both from whatever subscription the receipts
+> evidence — one live store subscription per account, Gold/Platinum imply personal Pro with
+> `source: "included"`. The 402 denial body carries `dimension` + `requiredTier` /
+> `requiredMembership` (the client's `Denial` shape is the contract to mirror). Membership
+> dials (`MEMBERSHIP_LIMITS`) are per-membership configuration. "Coach Standard / Coach Pro"
+> in the note above reads Gold / Platinum.

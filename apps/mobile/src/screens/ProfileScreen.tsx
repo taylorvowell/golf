@@ -16,8 +16,8 @@ import {
 import { SideDrawer, type DrawerClose } from "../design/system";
 import { displayLine, FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
 import { Avatar } from "../features/profile/Avatar";
-import { useEntitlement } from "../features/billing/entitlement";
-import { canHaveInstructor, PLANS } from "../features/billing/plans";
+import { canHaveInstructor, useEntitlement } from "../features/billing/entitlement";
+import { PLANS } from "../features/billing/plans";
 import { ProCard } from "../features/billing/ProCard";
 import { useInstructor } from "../features/instructor/useInstructor";
 import { useAuth } from "../features/auth/AuthProvider";
@@ -51,7 +51,8 @@ export function ProfileScreen() {
   const navigation = useAppNavigation();
   const { email, firstName, signOut } = useAuth();
   const instructor = useInstructor();
-  const { tier } = useEntitlement();
+  const entitlement = useEntitlement();
+  const { personal } = entitlement;
   const t = useTheme();
   const styles = useStyles();
   const [signingOut, setSigningOut] = useState(false);
@@ -106,18 +107,18 @@ export function ProfileScreen() {
                 gets one card rather than a badge on every locked control. On Pro it becomes a
                 quiet status line: continuing to sell to someone who already bought is the
                 clutter rule's second test failing. */}
-            {tier === "free" ? (
+            {personal.tier === "free" ? (
               <ProCard onPress={() => close(() => navigation.navigate("Upgrade"))} />
             ) : (
               <View style={styles.planRow}>
                 <Text style={styles.microLabel}>Plan</Text>
-                <Text style={styles.planName}>{`SwingSage ${PLANS[tier].name}`}</Text>
+                <Text style={styles.planName}>{`SwingSage ${PLANS[personal.tier].name}`}</Text>
               </View>
             )}
 
             {/* An instructor cannot HAVE an instructor — the whole block (connected card AND
                 the directory door) is for golfers only. */}
-            {canHaveInstructor(tier) ? (
+            {canHaveInstructor(entitlement) ? (
               <>
             <Text style={styles.section}>Instructor</Text>
 

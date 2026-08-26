@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button, Eyebrow, ListGroup, ListRow, Panel, Tag, TitleText } from "../design/system";
 import { FONT_BODY } from "../design/system/typography";
 import { AllowanceMeter } from "../features/billing/AllowanceMeter";
-import { isRecoverable, useEntitlement } from "../features/billing/entitlement";
+import { isRecoverable, membershipName, useEntitlement } from "../features/billing/entitlement";
 import { PLANS } from "../features/billing/plans";
 import {
   manageSubscriptionUrl,
@@ -27,7 +27,8 @@ export function SubscriptionScreen() {
   const insets = useSafeAreaInsets();
   const styles = useStyles();
   const navigation = useAppNavigation();
-  const { tier, status, trialDaysLeft, renewsOn } = useEntitlement();
+  const { personal, instructor } = useEntitlement();
+  const { tier, status, trialDaysLeft, renewsOn, source } = personal;
   const plan = PLANS[tier];
   const paid = status === "active";
   /** The manage row is shown to anyone the store still holds a subscription for — including a
@@ -51,7 +52,16 @@ export function SubscriptionScreen() {
         </View>
         <TitleText>{plan.name}</TitleText>
         <Text style={styles.copy}>{plan.pitch}</Text>
-        {paid && renewsOn != null && <Text style={styles.meta}>Renews {renewsOn}</Text>}
+        {/* Included Pro has no bill of its own — the membership is the subscription, so the
+            line says where the plan comes from instead of when it renews. */}
+        {source === "included" && instructor != null && (
+          <Text style={styles.meta}>
+            Included with your {membershipName(instructor.membership)} membership
+          </Text>
+        )}
+        {source !== "included" && paid && renewsOn != null && (
+          <Text style={styles.meta}>Renews {renewsOn}</Text>
+        )}
       </Panel>
 
       {/* Payment recovery. Grace and hold are the two states a golfer cannot act on from inside
@@ -83,7 +93,8 @@ export function SubscriptionScreen() {
         </Panel>
       )}
 
-      {/* Only Free is sold to — an Instructor already holds everything Pro has. */}
+      {/* Only Free is sold to. A free-membership instructor on personal Free sees this too —
+          they CAN buy Pro; Gold/Platinum never do, their Pro is included. */}
       {tier === "free" && (
         <Button
           testID="subscription-upgrade"

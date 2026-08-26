@@ -14,7 +14,7 @@ import {
  *
  * Both directions matter and only one is obvious. Serving a build that is too old is the failure
  * everyone thinks of; 426-ing a caller that should have been served is the one that takes the
- * whole coach workspace down, because the web app sends no version header at all.
+ * whole instructor workspace down, because the web app sends no version header at all.
  */
 
 const req = (headers: Record<string, string> = {}) =>

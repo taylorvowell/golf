@@ -1,44 +1,53 @@
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
 
 import {
+  MEMBERSHIPS,
   PLANS,
-  REQUIRED_TIER,
+  REQUIRED_MEMBERSHIP,
+  REQUIRED_PERSONAL,
   TRIAL_ANALYSES,
   TRIAL_DAYS,
+  isGolferCapability,
   type Capability,
-  type Tier,
+  type InstructorMembership,
+  type PersonalTier,
 } from "./plans";
 
 /**
  * The entitlement seam, client side — and today, a mock behind it.
  *
- * **Every gate in the app asks this and only this.** No screen compares a tier name inline
- * (`if (tier === "pro")`), because that is the per-screen hard-coding §30.1 exists to forbid:
- * the moment tier limits become server configuration, an inline comparison is a lie the deploy
- * cannot fix. Screens ask `can(capability)` and render `deny(capability)`.
+ * **Every gate in the app asks this and only this.** No screen compares a tier or membership
+ * name inline, because that is the per-screen hard-coding §30.1 exists to forbid: the moment
+ * limits become server configuration, an inline comparison is a lie the deploy cannot fix.
+ * Screens ask `can(capability)` and render `deny(capability)`.
  *
- * The `Denial` shape below is deliberately the shape platform-foundation step 08 specifies for
- * the server's 402 body — capability, the tier that unlocks it, and current usage. That is what
- * makes swapping the mock for the real resolver a one-file change: the paywall already renders
- * from the payload rather than from a hardcoded switch, so the server owns the rules and the
- * client owns only the pixels.
+ * The model is TWO-DIMENSIONAL (instructor-platform architecture, accepted 2026-08-26):
+ * a personal tier (free | pro) and, for instructor-role accounts, a membership
+ * (free | gold | platinum). **The one derivation rule:** an ENTITLED Gold or Platinum
+ * membership includes personal Pro — `personal.tier` is the EFFECTIVE tier after inclusion,
+ * with `source: "included"` saying where it came from. Everything else survives from the
+ * one-dimension seam unchanged: status outranks tier (in both dimensions), only `analysis`
+ * meters the allowance, and the `Denial` mirrors the server's planned 402 body (step 08) —
+ * now carrying which dimension refused.
  *
- * Until billing exists every capability that the *tier* grants is allowed — the mock's job is to
- * let the upgrade experience be walked and judged on a device, not to enforce anything. The
- * debug sheet's Subscription state group is how each state is reached without a purchase.
+ * Until billing exists every capability the *state* grants is allowed — the mock's job is to
+ * let the upgrade and instructor experiences be walked and judged on a device, not to enforce
+ * anything. The debug sheet's Subscription state group is how each state is reached without a
+ * purchase.
  */
 
 /**
  * Every state a subscription can really be in — including the two payment-recovery states the
  * stores drive and the app does not, which are the ones a hand-written status enum always misses.
  *
- * - `in_grace` — renewal payment failed and the store is retrying. **Access continues.** Play's
- *   `queryPurchasesAsync` keeps returning the purchase, so an app that only asks "is there a
- *   purchase" handles this by accident; one that models status itself must decide deliberately.
- * - `on_hold`  — grace ran out without recovery. **Access stops**, but the golfer is not gone:
- *   Play holds for up to 60 days (raised from 30 in Dec 2025) and a recovered payment restarts
- *   the same subscription. Treating hold as `expired` throws away a subscriber who is coming back.
+ * - `in_grace` — renewal payment failed and the store is retrying. **Access continues.**
+ * - `on_hold`  — grace ran out without recovery. **Access stops**, but the person is not gone:
+ *   Play holds for up to 60 days and a recovered payment restarts the same subscription.
+ *   Treating hold as `expired` throws away a subscriber who is coming back.
  * - `paused`   — Play-only, golfer-initiated. Access stops; it resumes on a date they chose.
+ *
+ * A FREE instructor membership is a grant, not a store subscription — it is modelled as
+ * `active`, because a grant that exists is entitled and there is nothing for a store to recover.
  */
 export type SubscriptionStatus =
   | "trialing"
@@ -71,158 +80,284 @@ export interface Usage {
 /** What a refused capability returns. Mirrors the server's denial body (step 08). */
 export interface Denial {
   capability: Capability;
-  requiredTier: Tier;
+  /** Which dimension refused — the sheet's copy and CTA differ completely. */
+  dimension: "personal" | "instructor";
+  /** Set when `dimension === "personal"`. */
+  requiredTier: PersonalTier | null;
+  /** Set when `dimension === "instructor"`. */
+  requiredMembership: InstructorMembership | null;
   /** Present only when the refusal was a spent allowance rather than a missing tier. */
   usage: Usage | null;
   /** Which of the two refusals this is — the sheet that renders differs. */
   reason: "tier" | "allowance";
 }
 
-export interface Entitlement {
-  tier: Tier;
+export interface PersonalEntitlement {
+  /** The EFFECTIVE tier, after membership inclusion. */
+  tier: PersonalTier;
+  /** Where Pro came from. `included` = granted by Gold/Platinum; `none` = free. */
+  source: "purchase" | "included" | "none";
+  /** For `included`, this is the MEMBERSHIP's status — the granting subscription's. */
   status: SubscriptionStatus;
   /** Null unless `status === "trialing"`. */
   trialDaysLeft: number | null;
   usage: Usage;
   /** Human, short — "1 Sep 2027". Null when nothing renews. */
   renewsOn: string | null;
+}
+
+export interface InstructorEntitlement {
+  membership: InstructorMembership;
+  status: SubscriptionStatus;
+  renewsOn: string | null;
+}
+
+export interface Entitlement {
+  personal: PersonalEntitlement;
+  /** Null unless the account holds the instructor role. */
+  instructor: InstructorEntitlement | null;
   can: (capability: Capability) => boolean;
   deny: (capability: Capability) => Denial | null;
+  /** The metered allowance, surfaced top-level — there is exactly one, and it is personal. */
+  usage: Usage;
+  remaining: number;
   /** Fraction of the allowance still unspent, 0–1. */
   remainingFraction: number;
-  remaining: number;
 }
 
-const TIER_RANK: Record<Tier, number> = { free: 0, pro: 1, instructor: 2 };
-
-/** A tier grants a capability when it sits at or above the capability's required tier. */
-function tierGrants(tier: Tier, capability: Capability): boolean {
-  return TIER_RANK[tier] >= TIER_RANK[REQUIRED_TIER[capability]];
+/**
+ * An instructor cannot HAVE an instructor (Taylor, 2026-08-24) — the find-an-instructor
+ * directory, the connected-instructor card and every link-an-instructor door hide when the
+ * account holds the role. A rule keyed on the DIMENSION existing, not on any rank — which is
+ * exactly what the old rank ladder could not express.
+ */
+export function canHaveInstructor(entitlement: Entitlement): boolean {
+  return entitlement.instructor == null;
 }
 
-/** Capabilities that spend the monthly allowance. Everything else is a pure tier gate. */
+const TIER_RANK: Record<PersonalTier, number> = { free: 0, pro: 1 };
+const MEMBERSHIP_RANK: Record<InstructorMembership, number> = { free: 0, gold: 1, platinum: 2 };
+
+/** Capabilities that spend the monthly allowance. Everything else is a pure gate. */
 const METERED: ReadonlySet<Capability> = new Set<Capability>(["analysis"]);
 
 // ---------------------------------------------------------------------------
-// Scenarios — the mock's whole surface. Each is a state a golfer can really be in.
+// Scenarios — the mock's whole surface. Each is a state a person can really be in.
+// The one-subscription invariant (§3 of the architecture) is why no scenario holds a
+// personal purchase AND a paid membership: Gold/Platinum replace Pro at the store.
 // ---------------------------------------------------------------------------
 
 export interface Scenario {
   id: string;
   /** What this state IS, in the words you would use walking someone through it. */
   label: string;
-  tier: Tier;
-  status: SubscriptionStatus;
-  trialDaysLeft: number | null;
-  used: number;
-  /** Overrides the plan allowance — used by the trial, which has its own ceiling. */
-  included?: number;
-  renewsOn: string | null;
-  resetsOn: string;
+  personal: {
+    tier: PersonalTier;
+    status: SubscriptionStatus;
+    trialDaysLeft: number | null;
+    used: number;
+    /** Overrides the plan allowance — used by the trial, which has its own ceiling. */
+    included?: number;
+    renewsOn: string | null;
+    resetsOn: string;
+  };
+  /** Absent on every golfer scenario — the account holds no instructor role. */
+  instructor?: {
+    membership: InstructorMembership;
+    status: SubscriptionStatus;
+    renewsOn: string | null;
+  };
 }
 
 export const SCENARIOS: Scenario[] = [
   {
     id: "trial-fresh",
     label: "On trial, day 1",
-    tier: "pro",
-    status: "trialing",
-    trialDaysLeft: TRIAL_DAYS,
-    used: 0,
-    included: TRIAL_ANALYSES,
-    renewsOn: null,
-    resetsOn: "when your trial ends",
+    personal: {
+      tier: "pro",
+      status: "trialing",
+      trialDaysLeft: TRIAL_DAYS,
+      used: 0,
+      included: TRIAL_ANALYSES,
+      renewsOn: null,
+      resetsOn: "when your trial ends",
+    },
   },
   {
     id: "trial-ending",
     label: "On trial, 3 days left",
-    tier: "pro",
-    status: "trialing",
-    trialDaysLeft: 3,
-    used: 11,
-    included: TRIAL_ANALYSES,
-    renewsOn: null,
-    resetsOn: "when your trial ends",
+    personal: {
+      tier: "pro",
+      status: "trialing",
+      trialDaysLeft: 3,
+      used: 11,
+      included: TRIAL_ANALYSES,
+      renewsOn: null,
+      resetsOn: "when your trial ends",
+    },
   },
   {
     id: "pro-healthy",
     label: "Pro, plenty left",
-    tier: "pro",
-    status: "active",
-    trialDaysLeft: null,
-    used: 22,
-    renewsOn: "1 Sep 2027",
-    resetsOn: "1 Sep",
-  },
-  {
-    id: "instructor",
-    label: "Instructor",
-    tier: "instructor",
-    status: "active",
-    trialDaysLeft: null,
-    used: 18,
-    renewsOn: "1 Sep 2027",
-    resetsOn: "1 Sep",
+    personal: {
+      tier: "pro",
+      status: "active",
+      trialDaysLeft: null,
+      used: 22,
+      renewsOn: "1 Sep 2027",
+      resetsOn: "1 Sep",
+    },
   },
   {
     id: "pro-low",
     label: "Pro, running low",
-    tier: "pro",
-    status: "active",
-    trialDaysLeft: null,
-    used: 84,
-    renewsOn: "1 Sep 2027",
-    resetsOn: "1 Sep",
+    personal: {
+      tier: "pro",
+      status: "active",
+      trialDaysLeft: null,
+      used: 84,
+      renewsOn: "1 Sep 2027",
+      resetsOn: "1 Sep",
+    },
   },
   {
     id: "pro-spent",
     label: "Pro, allowance spent",
-    tier: "pro",
-    status: "active",
-    trialDaysLeft: null,
-    used: 100,
-    renewsOn: "1 Sep 2027",
-    resetsOn: "1 Sep",
+    personal: {
+      tier: "pro",
+      status: "active",
+      trialDaysLeft: null,
+      used: 100,
+      renewsOn: "1 Sep 2027",
+      resetsOn: "1 Sep",
+    },
   },
   {
     id: "grace",
     label: "Payment failed — in grace",
-    tier: "pro",
-    status: "in_grace",
-    trialDaysLeft: null,
-    used: 40,
-    renewsOn: null,
-    resetsOn: "1 Sep",
+    personal: {
+      tier: "pro",
+      status: "in_grace",
+      trialDaysLeft: null,
+      used: 40,
+      renewsOn: null,
+      resetsOn: "1 Sep",
+    },
   },
   {
     id: "hold",
     label: "Payment failed — on hold",
-    tier: "pro",
-    status: "on_hold",
-    trialDaysLeft: null,
-    used: 40,
-    renewsOn: null,
-    resetsOn: "1 Sep",
+    personal: {
+      tier: "pro",
+      status: "on_hold",
+      trialDaysLeft: null,
+      used: 40,
+      renewsOn: null,
+      resetsOn: "1 Sep",
+    },
   },
   {
     id: "free-never",
     label: "Free — never subscribed",
-    tier: "free",
-    status: "none",
-    trialDaysLeft: null,
-    used: 0,
-    renewsOn: null,
-    resetsOn: "—",
+    personal: {
+      tier: "free",
+      status: "none",
+      trialDaysLeft: null,
+      used: 0,
+      renewsOn: null,
+      resetsOn: "—",
+    },
   },
   {
     id: "free-expired",
     label: "Free — trial is over",
-    tier: "free",
-    status: "expired",
-    trialDaysLeft: null,
-    used: 0,
-    renewsOn: null,
-    resetsOn: "—",
+    personal: {
+      tier: "free",
+      status: "expired",
+      trialDaysLeft: null,
+      used: 0,
+      renewsOn: null,
+      resetsOn: "—",
+    },
+  },
+  // ---- instructor states ------------------------------------------------------------------
+  {
+    id: "inst-free",
+    label: "Instructor — free membership",
+    personal: {
+      tier: "free",
+      status: "none",
+      trialDaysLeft: null,
+      used: 0,
+      renewsOn: null,
+      resetsOn: "—",
+    },
+    instructor: { membership: "free", status: "active", renewsOn: null },
+  },
+  {
+    id: "inst-free-pro",
+    label: "Instructor — free membership, personal Pro",
+    personal: {
+      tier: "pro",
+      status: "active",
+      trialDaysLeft: null,
+      used: 31,
+      renewsOn: "1 Sep 2027",
+      resetsOn: "1 Sep",
+    },
+    instructor: { membership: "free", status: "active", renewsOn: null },
+  },
+  {
+    id: "inst-gold",
+    label: "Instructor Gold — Pro included",
+    personal: {
+      tier: "free",
+      status: "none",
+      trialDaysLeft: null,
+      used: 18,
+      renewsOn: null,
+      resetsOn: "1 Sep",
+    },
+    instructor: { membership: "gold", status: "active", renewsOn: "1 Sep 2027" },
+  },
+  {
+    id: "inst-platinum",
+    label: "Instructor Platinum — Pro included",
+    personal: {
+      tier: "free",
+      status: "none",
+      trialDaysLeft: null,
+      used: 42,
+      renewsOn: null,
+      resetsOn: "1 Sep",
+    },
+    instructor: { membership: "platinum", status: "active", renewsOn: "1 Sep 2027" },
+  },
+  {
+    id: "inst-gold-grace",
+    label: "Instructor Gold — payment in grace",
+    personal: {
+      tier: "free",
+      status: "none",
+      trialDaysLeft: null,
+      used: 18,
+      renewsOn: null,
+      resetsOn: "1 Sep",
+    },
+    instructor: { membership: "gold", status: "in_grace", renewsOn: null },
+  },
+  {
+    id: "inst-gold-hold",
+    label: "Instructor Gold — payment on hold",
+    personal: {
+      tier: "free",
+      status: "none",
+      trialDaysLeft: null,
+      used: 18,
+      renewsOn: null,
+      resetsOn: "—",
+    },
+    instructor: { membership: "gold", status: "on_hold", renewsOn: null },
   },
 ];
 
@@ -235,34 +370,96 @@ export const DEFAULT_SCENARIO = "free-never";
 // ---------------------------------------------------------------------------
 
 function build(scenario: Scenario): Entitlement {
-  const included = scenario.included ?? PLANS[scenario.tier].analysesPerMonth;
-  const usage: Usage = { used: scenario.used, included, resetsOn: scenario.resetsOn };
-  const remaining = Math.max(0, included - scenario.used);
+  const instructor: InstructorEntitlement | null = scenario.instructor ?? null;
+  const membershipEntitled = instructor != null && ENTITLED.has(instructor.status);
+
+  // The derivation rule. `personal.tier` is EFFECTIVE: an entitled Gold/Platinum membership
+  // includes Pro, and the included Pro's status IS the membership's status — there is one
+  // subscription behind both, so there is one payment state.
+  const included =
+    membershipEntitled && instructor != null && MEMBERSHIP_RANK[instructor.membership] >= 1;
+  const tier: PersonalTier = included ? "pro" : scenario.personal.tier;
+  const status = included && instructor != null ? instructor.status : scenario.personal.status;
+  const source: PersonalEntitlement["source"] = included
+    ? "included"
+    : scenario.personal.tier === "pro"
+      ? "purchase"
+      : "none";
+
+  const includedAllowance = scenario.personal.included ?? PLANS[tier].analysesPerMonth;
+  const usage: Usage = {
+    used: scenario.personal.used,
+    included: includedAllowance,
+    resetsOn: scenario.personal.resetsOn,
+  };
+  const remaining = Math.max(0, includedAllowance - scenario.personal.used);
+
+  const personal: PersonalEntitlement = {
+    tier,
+    source,
+    status,
+    trialDaysLeft: scenario.personal.trialDaysLeft,
+    usage,
+    renewsOn: included && instructor != null ? instructor.renewsOn : scenario.personal.renewsOn,
+  };
 
   const deny = (capability: Capability): Denial | null => {
-    // Status outranks tier: a Pro golfer on account hold holds the tier and none of its
-    // capabilities. Checking tier alone is how a lapsed payment keeps its entitlement.
-    if (!tierGrants(scenario.tier, capability) || !ENTITLED.has(scenario.status)) {
-      return { capability, requiredTier: REQUIRED_TIER[capability], usage: null, reason: "tier" };
+    if (isGolferCapability(capability)) {
+      // Status outranks tier: a Pro golfer on account hold holds the tier and none of its
+      // capabilities. Checking tier alone is how a lapsed payment keeps its entitlement.
+      if (TIER_RANK[tier] < TIER_RANK[REQUIRED_PERSONAL[capability]] || !ENTITLED.has(status)) {
+        return {
+          capability,
+          dimension: "personal",
+          requiredTier: REQUIRED_PERSONAL[capability],
+          requiredMembership: null,
+          usage: null,
+          reason: "tier",
+        };
+      }
+      if (METERED.has(capability) && remaining <= 0) {
+        // The tier is fine; the month is spent. A Pro golfer with nothing left is offered
+        // capacity, never a tier they already hold — hence reason and requiredTier are separate.
+        return {
+          capability,
+          dimension: "personal",
+          requiredTier: tier,
+          requiredMembership: null,
+          usage,
+          reason: "allowance",
+        };
+      }
+      return null;
     }
-    if (METERED.has(capability) && remaining <= 0) {
-      // The tier is fine; the month is spent. A Pro golfer with nothing left is offered
-      // capacity, never a tier they already hold — hence reason and requiredTier are separate.
-      return { capability, requiredTier: scenario.tier, usage, reason: "allowance" };
+
+    // Instructor dimension. No role → no membership → refused at the ladder's foot; a held
+    // membership is refused the same way a held Pro is — status outranks membership.
+    const required = REQUIRED_MEMBERSHIP[capability];
+    if (
+      instructor == null ||
+      !ENTITLED.has(instructor.status) ||
+      MEMBERSHIP_RANK[instructor.membership] < MEMBERSHIP_RANK[required]
+    ) {
+      return {
+        capability,
+        dimension: "instructor",
+        requiredTier: null,
+        requiredMembership: required,
+        usage: null,
+        reason: "tier",
+      };
     }
     return null;
   };
 
   return {
-    tier: scenario.tier,
-    status: scenario.status,
-    trialDaysLeft: scenario.trialDaysLeft,
-    usage,
-    renewsOn: scenario.renewsOn,
+    personal,
+    instructor,
     can: (capability) => deny(capability) == null,
     deny,
+    usage,
     remaining,
-    remainingFraction: included === 0 ? 0 : remaining / included,
+    remainingFraction: includedAllowance === 0 ? 0 : remaining / includedAllowance,
   };
 }
 
@@ -317,4 +514,9 @@ export function useGuard() {
     (capability: Capability): Denial | null => entitlement.deny(capability),
     [entitlement],
   );
+}
+
+/** The membership's display name, for status lines ("Included with your Gold membership"). */
+export function membershipName(membership: InstructorMembership): string {
+  return MEMBERSHIPS[membership].name;
 }

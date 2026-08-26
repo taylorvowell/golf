@@ -1,9 +1,9 @@
-# coach-video-lessons — Progress
+# instructor-video-lessons — Progress
 
 Track created 2026-08-18 from D60 (launch-blocking, Taylor's call). Binding design:
 `.claude/architecture/coach-video-lessons-2026-08-18.md`. Step files are authored lazily by
-`/feature coach-video-lessons` from the track's ROADMAP goal when the track starts — it is
-gated behind coach-relationships, coach-collaboration (conversation substrate + shared
+`/feature instructor-video-lessons` from the track's ROADMAP goal when the track starts — it is
+gated behind instructor-relationships, instructor-collaboration (conversation substrate + shared
 `packages/annotations` toolset), drill-library (authorship dimension), and notifications.
 
 Standing notes for whoever starts this track:

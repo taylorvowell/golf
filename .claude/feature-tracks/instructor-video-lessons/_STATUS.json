@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "currentStep": "01",
-  "phase": "Coach Video Lessons",
+  "phase": "Instructor Video Lessons",
   "lastUpdated": "2026-08-18T00:00:00Z",
   "steps": {
     "01": { "status": "not-started" }

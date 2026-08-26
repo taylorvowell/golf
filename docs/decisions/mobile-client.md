@@ -1795,11 +1795,16 @@ mic while playing video) is known platform work, flagged for the track's first s
 coach — the Coach tab, coach notes, coach priorities are all the AI persona. The human
 professional is an **Instructor**: "find a local instructor", "your instructor", instructor
 chat. The Coach tab is strictly the AI coach while the instructor system is designed.
-**Scope:** user-facing strings only — mobile today, web when its golfer/instructor surfaces
-are built. Internal identifiers do not rename: `coach_links`, the `coach` role, `coach_report`,
-`/api/v1/coach/*`, and the coach-platform track/phase names all keep their spelling; renaming a
-live RLS-bearing schema for vocabulary is churn without user value. PROJECT_MAIN still says
-"coach" for the human role in its §23–§29 sections — read those as "instructor".
+**Scope:** everywhere, including internal identifiers (the instructor-platform architecture,
+accepted 2026-08-26, lifted the earlier internals carve-out while all data was dev-only):
+the role value is `instructor`, the table is `instructor_links`, the access primitive is
+`has_instructor_access`, the roster route is `/api/v1/instructor/roster`, the notification
+kinds are `instructor_*`, and the human-coach tracks are `instructor-relationships` /
+`instructor-collaboration` / `instructor-video-lessons` (migration 0021). What deliberately
+KEEPS the coach spelling: everything meaning the AI — `features/coach/`, the Coach tab,
+`coach_report.json` (a versioned analyzer contract), `appPrefs.coachId`, the `coach`
+BrandIcon, and the `coach-surface` track (its subject is the AI Coach tab). PROJECT_MAIN
+still says "coach" for the human role in its §23–§29 sections — read those as "instructor".
 
 ### Instructor presence is one flag driving three surfaces
 

@@ -148,6 +148,13 @@
       "when": 1787918400000,
       "tag": "0020_user_dismissals",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1788048000000,
+      "tag": "0021_instructor_rename",
+      "breakpoints": true
     }
   ]
 }

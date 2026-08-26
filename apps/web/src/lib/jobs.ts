@@ -106,7 +106,7 @@ const STAGES: [RegExp, string, number][] = [
  * Persist a job's state.
  *
  * `actorId` rather than the swing's owner: a job row is written under the identity of whoever is
- * driving the analysis, and `jobs_write` only admits the owner. That is the point — a coach
+ * driving the analysis, and `jobs_write` only admits the owner. That is the point — an instructor
  * polling a golfer's swing must not be silently promoted to the golfer in order to write a row.
  *
  * Called from `setInterval` and from the child process's `close` handler, both of which run long
@@ -162,8 +162,8 @@ async function reconcile(actorId: string, job: Job, view: ResolvedView): Promise
 
   job.finishedAt = Date.now();
   // Every write here is best-effort and always was. What changed with D42 is *why* one can fail:
-  // an approved coach may legitimately read this job (`jobs_select` follows the swing), but
-  // `jobs_write` admits the owner only, so a coach polling a stuck job settles nothing. Correct —
+  // an approved instructor may legitimately read this job (`jobs_select` follows the swing), but
+  // `jobs_write` admits the owner only, so an instructor polling a stuck job settles nothing. Correct —
   // the golfer's next poll does it — and the alternative, running these as the owner, would put an
   // elevated write on a request path.
   if (wroteArtifact) {
@@ -188,7 +188,7 @@ async function reconcile(actorId: string, job: Job, view: ResolvedView): Promise
 
 /**
  * Settle a queue job the remote side will never finish. Same best-effort write semantics as
- * the spawn branch: `jobs_write` admits the owner only, so a coach's poll settles nothing and
+ * the spawn branch: `jobs_write` admits the owner only, so an instructor's poll settles nothing and
  * the golfer's next poll does it.
  */
 async function reconcileQueue(actorId: string, job: Job): Promise<Job> {
@@ -228,7 +228,7 @@ export async function getJob(tx: DbTx, actorId: string, view: ResolvedView): Pro
 
 /**
  * `actorId` is the caller, and the reanalyze route rejects anyone but the owner before reaching
- * here — a coach may watch a golfer's swing, not spend GPU time on it.
+ * here — an instructor may watch a golfer's swing, not spend GPU time on it.
  */
 export async function startReanalysis(
   tx: DbTx,
@@ -244,7 +244,7 @@ export async function startReanalysis(
     // Backpressure at the door: one user piles work behind their own cap, never behind
     // everyone else's. The per-view "one active job" check above still applies; this bounds
     // the actor ACROSS views. The count joins to swing ownership rather than trusting RLS
-    // visibility, which also admits coach-readable rows.
+    // visibility, which also admits instructor-readable rows.
     const cap = envInt("JOBS_MAX_ACTIVE_PER_USER", 3);
     const active = await tx.select({ id: jobsTable.id })
       .from(jobsTable)

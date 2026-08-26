@@ -23,7 +23,8 @@ export function SettingsScreen() {
   const insets = useSafeAreaInsets();
   const styles = useStyles();
   const t = useTheme();
-  const { tier, status } = useEntitlement();
+  const { personal } = useEntitlement();
+  const { tier, status } = personal;
   const [prefs, setPrefs] = useAppPrefs();
 
   return (

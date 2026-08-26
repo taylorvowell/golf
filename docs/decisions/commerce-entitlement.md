@@ -37,34 +37,54 @@ cannot be independently verified.
 position-error metric, so no accuracy number in this project is independently verifiable. Event
 accuracy was once claimed "verified ±2 frames" while Address was 48 frames early.
 
-### Three plans: Free, Pro, and Instructor
+### The model is two-dimensional: a personal tier, and an instructor membership
 
-**Decision:** One golfer paid tier (Pro) plus the **Instructor** tier — everything Pro has,
-plus the instructor tools (roster, student swings, review/annotate/message, assigned drills).
-An instructor **cannot have an instructor**: the find-an-instructor directory, the connected
-card and every link-a-coach door hide on the tier (`canHaveInstructor()` in `plans.ts`), and
-no Pro upsell is ever shown to one. Instructor is **granted through instructor onboarding,
-never sold on the in-app paywall** — `PAID_TIER` stays `pro`, and its store products and price
-land with the coach platform.
+**Decision:** Subscriptions have TWO independent dimensions (the instructor-platform
+architecture, accepted 2026-08-26). The **personal tier** is the golfer ladder — Free or Pro.
+An account holding the instructor role additionally carries an **instructor membership** —
+Free, Gold or Platinum. **Gold and Platinum include personal Pro** (`source: "included"` in the
+entitlement); a Free-membership instructor is on personal Free and may buy Pro like any golfer.
+An instructor **cannot have an instructor**: keyed on the membership dimension existing
+(`canHaveInstructor()` in `entitlement.tsx`), never on rank. Golfer capabilities gate on the
+effective personal tier; instructor capabilities and the §30.1 dials (roster size,
+lessons/month, lesson length, drill-library size, broadcast reach) gate on the membership
+(`MEMBERSHIP_LIMITS`, values TBD with pricing). The **free membership is granted at instructor
+onboarding** — a grant, never a store product; Gold/Platinum are **sold only on the
+instructor-mode paywall**. `PAID_TIER` stays `pro` on the golfer paywall, which never mentions
+memberships.
 
-| Tier | Monthly | Annual | Analyses/mo |
+| Plan | Monthly | Annual | Analyses/mo |
 |---|---|---|---|
 | Free | — | — | 0 new (history + re-watch of existing reports retained) |
 | Pro | $16.99 | **$119.99** | 100 |
-| Instructor | TBD (coach platform) | TBD | 100 |
+| Instructor (free membership) | — | — | personal tier's |
+| Instructor Gold | TBD (billing-iap) | TBD | 100 (Pro included) |
+| Instructor Platinum | TBD (billing-iap) | TBD | 100 (Pro included) |
 | Top-up | — | $9.99 / 50 analyses | — |
+
+**Billing invariant — one live subscription per account.** Pro, Gold and Platinum share ONE
+iOS subscription group ranked `pro < gold < platinum` (Play: subscription replacement), so a
+membership upgrade from personal Pro is a **store-native prorated crossgrade** — the store
+cancels the Pro time, prorates it and starts the membership in one operation
+(`CHARGE_PRORATED_PRICE` up, `DEFERRED` down). The server never computes proration; the
+webhook/receipt pipeline re-derives the entitlement record from whichever subscription is now
+live. A lapsed membership drops the instructor dimension AND its included Pro — the cancel
+copy says so. SKUs in `storeProducts.ts` (`com.swingsage.app.instructor.gold|platinum.*`).
 
 **Scope:** Trial is **21 days, capped at 15 analyses** — three weekends in a weather-dependent
 sport, with the cap bounding trial compute exposure to ~$0.40. Monthly is deliberately priced 41%
 above the annual equivalent: golf churns seasonally and annual is the retention mechanism. The
-top-up is a **consumable, not a tier** — it is what lets one paid plan carry a golfer practising
-far above the average without an unlimited allowance, and it surfaces only when a month runs out.
-Trials are a golfer concept: an Instructor is never mid-trial and never on the golfer ladder.
+top-up is a **consumable, not a tier** — and it works identically for an instructor whose
+included-Pro allowance runs out. Trials are a golfer concept: an instructor is never mid-trial
+and never offered one, whatever their membership.
 **Gotchas:** Free is a **post-trial resting state, not an on-ramp** — it keeps what was already
-analysed and grants no new analyses. A conventional freemium on-ramp converts ~5× worse, and the
-tier still satisfies §30's requirement that a Free tier exist. **Unlimited analysis can never be a
-tier**: retained video is a ratchet, so a heavy golfer costs more every month they stay.
-**See:** the marginal-cost model in [`../SCALE-10K-MAU.md`](../SCALE-10K-MAU.md).
+analysed and grants no new analyses. **Unlimited analysis can never be a tier**: retained video
+is a ratchet, so a heavy golfer costs more every month they stay. A four-rung rank ladder was
+rejected: it cannot express a free-membership instructor on personal Pro, and rank compares
+across dimensions are the bug class the two-type model makes a compile error. **Open (HANDOFF):**
+whether Gold/Platinum include student Pro seats / sponsored analyses — decide before pricing.
+**See:** the marginal-cost model in [`../SCALE-10K-MAU.md`](../SCALE-10K-MAU.md);
+`.claude/architecture/instructor-platform-2026-08-24.md` §2–§3.
 
 ### The price on screen comes from the store, never from our constants
 
@@ -79,17 +99,19 @@ length, its price, an auto-renew statement, a working **Restore purchases**, and
 and Privacy. Cancellation is a hand-off to the store — neither platform lets us cancel on a
 golfer's behalf.
 
-### Coaches are free; coach monetization is a separate, later path
+### The instructor on-ramp is free; Gold and Platinum are optional
 
-**Decision:** A coach signs up **free**. The coach product is directory listing, a communication
-channel with their golfers, and the tools to analyse and support them. There is **no Coach
-Standard / Coach Pro subscription** at launch.
-**Scope:** This supersedes §30's required `Coach Standard` and `Coach Pro` tiers. Coach-side
-entitlement dimensions (roster size, lessons per month, drill-library size) still exist as
-**named capabilities in the entitlement engine** — they resolve to "allowed" and become
-configurable when a coach paid tier is designed.
-**Gotchas:** Coaches are supply, not demand. Charging them at launch suppresses directory
-density, which is the thing that makes the coach surface worth anything to a golfer.
+**Decision:** Signing up as an instructor is **free and instant** (the role claim + the free
+membership grant) — directory listing, a small roster, messaging, review tools. Gold and
+Platinum are **optional paid memberships** an instructor upgrades into from instructor mode.
+**Scope:** Supersedes both §30's original `Coach Standard`/`Coach Pro` tiers AND the interim
+"coaches are entirely free, no coach subscription" position (2026-08-19): the paid ladder is
+back, as Gold/Platinum, but the free membership keeps the on-ramp open. The §30.1 dials are
+per-membership configuration in `MEMBERSHIP_LIMITS`, not code.
+**Gotchas:** Instructors are supply, not demand — the free membership exists because charging
+at the door suppresses directory density, which is what makes the instructor surface worth
+anything to a golfer. **Downgrade overflow goes read-only, never destructive**: a membership
+dropping below its roster leaves over-cap relationships readable; ending one stays a human act.
 
 ### No money moves between golfer and coach inside SwingSage
 
