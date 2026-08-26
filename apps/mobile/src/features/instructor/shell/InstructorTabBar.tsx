@@ -1,13 +1,12 @@
 import { useState } from "react";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
-import { Text, View } from "react-native";
+import { View } from "react-native";
 import { House, MessageSquare, User, Users } from "lucide-react-native";
 
-import { Sheet, WaveNav, type WaveNavItem } from "../../../design/system";
+import { WaveNav, type WaveNavItem } from "../../../design/system";
 import { useNavVisibility } from "../../../design/system/navVisibility";
-import { FONT_BODY } from "../../../design/system/typography";
-import { themedStyles } from "../../../theme";
 import { BroadcastButton } from "./BroadcastButton";
+import { BroadcastComposer } from "./BroadcastComposer";
 
 /**
  * The instructor shell's bottom bar — the same `WaveNav`, different doors (architecture §4a):
@@ -41,7 +40,6 @@ function icon(route: string): WaveNavItem["icon"] {
 export function InstructorTabBar({ state, navigation }: BottomTabBarProps) {
   const { hidden } = useNavVisibility();
   const [broadcastOpen, setBroadcastOpen] = useState(false);
-  const styles = useStyles();
 
   const tabs: WaveNavItem[] = state.routes.map((route, index) => ({
     key: route.key,
@@ -79,28 +77,8 @@ export function InstructorTabBar({ state, navigation }: BottomTabBarProps) {
         onRecord={() => undefined}
         centerSlot={<BroadcastButton onPress={() => setBroadcastOpen(true)} />}
       />
-      <Sheet
-        visible={broadcastOpen}
-        onClose={() => setBroadcastOpen(false)}
-        title="Broadcast"
-        subtitle="One message to every student — replies come back privately."
-        testID="broadcast-placeholder"
-      >
-        <Text style={styles.placeholder}>
-          The composer lands with the next step: pick an audience, write once, and it arrives in
-          each student's chat as a normal message from you.
-        </Text>
-      </Sheet>
+      <BroadcastComposer visible={broadcastOpen} onClose={() => setBroadcastOpen(false)} />
     </View>
   );
 }
 
-const useStyles = themedStyles((t) => ({
-  placeholder: {
-    color: t.textSoft,
-    fontFamily: FONT_BODY.regular,
-    fontSize: 13,
-    lineHeight: 19,
-    paddingBottom: 8,
-  },
-}));

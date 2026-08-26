@@ -43,6 +43,20 @@ export type RootStackParamList = {
    *  shape by decision (2026-08-17); the legacy after-swing/checkpoint params died with the
    *  second player surface. */
   SwingDetail: { id: string };
+  /** An import the golfer just saved: the STANDARD single swing view, playing the trimmed
+   *  local clip with the live analysis status over it, until the real report exists to swap
+   *  to. Params are the saved clip verbatim (`SavedImport` from useImportSwing). */
+  PendingSwing: {
+    localId: string;
+    /** The server's swing row, minted before navigation — the standard page reads it. */
+    swingId: string | null;
+    /** Absolute path to the TRIMMED clip, no `file://` scheme. */
+    path: string;
+    fps: number;
+    durationMs: number;
+    slowMoFactor?: number;
+    view: "dtl" | "face_on";
+  };
   /** The capture surface — a full-screen modal until the capture release fills it in. */
   Record: undefined;
   Profile: undefined;
@@ -60,6 +74,16 @@ export type RootStackParamList = {
    *  One route serves connected and not-connected states (the store decides). */
   Instructor: undefined;
   InstructorChat: undefined;
+  /** INSTRUCTOR MODE's stacked pages (architecture §4a) — mocked until the platform tracks
+   *  fill their seams. Reachable only from instructor-mode surfaces; the shared stack simply
+   *  holds them, the same way it holds the golfer-only pages. */
+  StudentDetail: { studentId: string };
+  InstructorThread: { studentId: string };
+  DrillLibrary: undefined;
+  ListingEditor: undefined;
+  Membership: undefined;
+  /** The way in — a golfer's door to the instructor role (§4a.8). */
+  BecomeInstructor: undefined;
   /** The guided stance analysis — the first AI coaching act, scripted UI (coach-surface). */
   StanceAnalysis: undefined;
   /** The deep swing analysis — the coach drives the video, pausing at checkpoints to

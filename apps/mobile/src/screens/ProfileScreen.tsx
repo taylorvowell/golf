@@ -2,11 +2,16 @@ import { useState, type ComponentType } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import {
+  ArrowLeftRight,
   Bell,
   ChevronRight,
   Clock,
+  Dumbbell,
+  GraduationCap,
   HelpCircle,
+  IdCard,
   Lock,
+  Megaphone,
   Settings as SettingsIcon,
   Sparkles,
   UserRound,
@@ -16,10 +21,12 @@ import {
 import { SideDrawer, type DrawerClose } from "../design/system";
 import { displayLine, FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
 import { Avatar } from "../features/profile/Avatar";
-import { canHaveInstructor, useEntitlement } from "../features/billing/entitlement";
+import { canHaveInstructor, membershipName, useEntitlement } from "../features/billing/entitlement";
 import { PLANS } from "../features/billing/plans";
 import { ProCard } from "../features/billing/ProCard";
 import { useInstructor } from "../features/instructor/useInstructor";
+import { setAppMode, useAppMode } from "../features/mode/appMode";
+import { useInstructorEligible } from "../features/mode/useRoles";
 import { useAuth } from "../features/auth/AuthProvider";
 import { useAppNavigation } from "../navigation";
 import { themedStyles, useTheme } from "../theme";
@@ -53,6 +60,8 @@ export function ProfileScreen() {
   const instructor = useInstructor();
   const entitlement = useEntitlement();
   const { personal } = entitlement;
+  const mode = useAppMode();
+  const instructorEligible = useInstructorEligible();
   const t = useTheme();
   const styles = useStyles();
   const [signingOut, setSigningOut] = useState(false);
@@ -102,6 +111,67 @@ export function ProfileScreen() {
               </View>
             </View>
 
+            {mode === "instructor" ? (
+              /* INSTRUCTOR MODE's drawer (architecture §4a): the same surface, its own menu.
+                 Membership stands where the golfer's plan row stands; the golfer-only blocks
+                 (ProCard, the connected-instructor card) never render here. */
+              <>
+                <Pressable
+                  testID="profile-membership"
+                  accessibilityRole="button"
+                  accessibilityLabel="Your membership"
+                  onPress={() => close(() => navigation.navigate("Membership"))}
+                  style={({ pressed }) => [styles.planRow, pressed && styles.pressedFade]}
+                >
+                  <Text style={styles.microLabel}>Membership</Text>
+                  <Text style={styles.planName}>
+                    {membershipName(entitlement.instructor?.membership ?? "free")}
+                  </Text>
+                </Pressable>
+
+                <Text style={styles.section}>Teaching</Text>
+                <View style={styles.group}>
+                  <MenuRow
+                    testID="profile-listing"
+                    icon={IdCard}
+                    title="Directory listing"
+                    subtitle="Your public face, and its review state"
+                    onPress={() => close(() => navigation.navigate("ListingEditor"))}
+                  />
+                  <MenuRow
+                    testID="profile-drills"
+                    icon={Dumbbell}
+                    title="Drill library"
+                    subtitle="The drills you author and assign"
+                    onPress={() => close(() => navigation.navigate("DrillLibrary"))}
+                  />
+                  <MenuRow
+                    testID="profile-broadcasts"
+                    icon={Megaphone}
+                    title="Broadcasts"
+                    subtitle="Everything you've sent to your students"
+                    onPress={() =>
+                      close(() => navigation.navigate("Tabs", { screen: "InstructorInbox" }))
+                    }
+                  />
+                  <MenuRow
+                    testID="profile-settings-instructor"
+                    icon={SettingsIcon}
+                    title="Settings"
+                    subtitle="Playback, capture, and app preferences"
+                    onPress={() => close(() => navigation.navigate("Settings"))}
+                  />
+                  <MenuRow
+                    testID="profile-switch-personal"
+                    icon={ArrowLeftRight}
+                    title="Switch to personal"
+                    subtitle="Back to your own game"
+                    onPress={() => close(() => setAppMode("personal"))}
+                  />
+                </View>
+              </>
+            ) : (
+              <>
             {/* The upgrade door. Directly under identity because that is where a golfer looks
                 to answer "what am I on" — and it is the only paid decision in the product, so it
                 gets one card rather than a badge on every locked control. On Pro it becomes a
@@ -196,6 +266,21 @@ export function ProfileScreen() {
               </>
             ) : null}
 
+            {/* The way in (§4a.8) — golfers who don't hold the role yet. An eligible account
+                already has the header dropdown, and an instructor cannot have an instructor,
+                so exactly one of these three instructor affordances ever shows. */}
+            {canHaveInstructor(entitlement) && !instructorEligible && (
+              <View style={styles.group}>
+                <MenuRow
+                  testID="profile-become-instructor"
+                  icon={GraduationCap}
+                  title="Become an instructor"
+                  subtitle="Teach on SwingSage — free to start"
+                  onPress={() => close(() => navigation.navigate("BecomeInstructor"))}
+                />
+              </View>
+            )}
+
             <Text style={styles.section}>Menu</Text>
             <View style={styles.group}>
               <MenuRow
@@ -247,6 +332,8 @@ export function ProfileScreen() {
                 subtitle="Guides, filming tips, and support"
               />
             </View>
+              </>
+            )}
 
             <Pressable
               testID="profile-sign-out"

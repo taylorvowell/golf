@@ -56,6 +56,18 @@ export function InstructorScreen() {
               <MessageCircle size={16} color={t.onDark} strokeWidth={2.2} />
               <Text style={styles.chatCtaLabel}>Message instructor</Text>
             </Pressable>
+            {/* The golfer's §25.3/D60 act — ask for eyes on a swing. It lands as a typed
+                review-request entry in the one conversation; the chat carries the same door.
+                Swing-page placement is a step-05 iteration question (tracked). */}
+            <Pressable
+              testID="instructor-request-review"
+              accessibilityRole="button"
+              accessibilityLabel="Ask for a swing review"
+              onPress={() => navigation.navigate("InstructorChat")}
+              style={({ pressed }) => [styles.reviewCta, pressed && styles.pressed]}
+            >
+              <Text style={styles.reviewCtaLabel}>Ask for a swing review</Text>
+            </Pressable>
           </LinearGradient>
 
           <Panel radius="feature" style={styles.block}>
@@ -130,6 +142,21 @@ const useStyles = themedStyles((t) => ({
   },
   chatCtaLabel: {
     color: t.onDark,
+    fontFamily: FONT_DISPLAY.black,
+    fontSize: 10,
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+  },
+  reviewCta: {
+    alignItems: "center",
+    justifyContent: "center",
+    height: 40,
+    marginTop: 6,
+    borderRadius: 12,
+    backgroundColor: t.surface2,
+  },
+  reviewCtaLabel: {
+    color: t.text,
     fontFamily: FONT_DISPLAY.black,
     fontSize: 10,
     letterSpacing: 0.8,

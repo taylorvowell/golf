@@ -3,6 +3,39 @@
 Append-only. Binding design: `.claude/architecture/instructor-platform-2026-08-24.md`
 (ACCEPTED 2026-08-26).
 
+## 04 - The mocked instructor screens
+**Completed:** 2026-08-26 15:30 UTC
+**Phase:** Instructor Mode
+**Summary:** The full first-draft instructor UI, mocked behind named seams
+(`features/instructor/mock/` — `types.ts` is the seam contract, `seams.ts` the swap point,
+`sampleData.ts` an eight-student roster with a face for every state). Surfaces: Home = the
+TRIAGE queue (review request / regression / compliance / quiet / goal cards + analysed-swing
+feed + Gold upsell for free-membership instructors); Students (search, group chips that double
+as broadcast audiences, pending/invited block, invite QR sheet with the golfer-still-accepts
+copy); StudentDetail (full §25.2: profile+goals+equipment, §28 plan card or create door,
+measured-progress sparkbars, swings with mark-reviewed/annotate/record-a-lesson doors, drills
+with the camera-verified/self-reported split, the 3-slot focus rule incl. slots-full, private
+notes, end-relationship); Inbox (typed-card conversations + broadcast history rollouts, frozen
+and blocked states) + InstructorThread (ThreadEntryCard typed feed, report/block overflow) +
+BroadcastComposer (audience picker, BCC copy, toast send); DrillLibrary (authored drills,
+create sheet, programs door); ListingEditor (§23.1 fields, §31.5 lifecycle incl. rejected/
+suspended, request-verification, preview-as-golfers-see-it); Membership (Free/Gold/Platinum
+from MEMBERSHIP_LIMITS, crossgrade copy, Restore purchases, demoable instructor-dimension
+refusal); BecomeInstructor (the way in — completes into instructor mode via the dev role
+flag). Golfer halves: InstructorChatScreen rebuilt as the student side of the SAME
+ThreadEntryCard feed (received broadcast reads personal) + ask-for-review quick action;
+InstructorScreen's connected card gains the request-review door. Instructor-mode Profile
+drawer (membership row, listing, drills, broadcasts, switch-to-personal) branches inside
+ProfileScreen; golfers who lack the role get the Become-an-instructor door. DEBUG →
+"Instructor mock": empty roster, thread active/frozen/blocked, all five listing lifecycles,
+focus-slots-full.
+**Notes:** Seam guarantee grep-checked: no screen imports sampleData, no instructor surface
+imports the ApiClient — zero network by construction. Swing-page placement of ask-for-review
+is a NAMED step-05 iteration question. On-glass walk carried into step 05 (phone was off the
+LAN all session; retried after commit). Oracles: mobile typecheck clean + 547/547 (60 suites).
+
+---
+
 ## 03 - Mode, theme, and shell chrome
 **Completed:** 2026-08-26 12:10 UTC
 **Phase:** Instructor Mode

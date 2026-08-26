@@ -1,7 +1,7 @@
 # 04 - The mocked instructor screens
 
 **Phase:** Instructor Mode
-**Status:** not-started
+**Status:** complete
 **Estimated effort:** 2–3 days
 
 ## Overview
