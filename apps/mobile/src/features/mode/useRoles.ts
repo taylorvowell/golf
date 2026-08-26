@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { RolesResponse } from "@swingsage/schema/contract";
 
 import { api } from "../../platform/client";
@@ -11,12 +10,13 @@ import { api } from "../../platform/client";
  * is still the server's RLS — this read gates chrome, never data (architecture §4: mode is
  * presentation, not authorization).
  *
+ * There is deliberately NO dev force-flag (Taylor, 2026-08-26): the debug personas are real
+ * seeded accounts, so the instructor persona (Dave Kim) IS the way to be an instructor on a
+ * dev device — eligibility always comes from the signed-in identity, exactly as in release.
+ *
  * Module-level cache, one fetch per session: roles change on the order of onboarding events,
  * not screens. `clearRolesCache()` runs on sign-out (ModeGuard) so the next identity is never
  * read through the last one's answer.
- *
- * The DEV force-flag lets Taylor walk instructor mode on a persona whose account holds no
- * role row — a debug toggle, `__DEV__`-gated at the read so release cannot carry it.
  */
 
 type RolesState =
@@ -70,55 +70,17 @@ export function useRoles(): RolesState {
   return value;
 }
 
-// ---- the DEV force flag ---------------------------------------------------------------------
-
-const FORCE_KEY = "swingsage.debug-force-instructor-role.v1";
-
-let forced: boolean | null = null;
-let forcedLoading: Promise<boolean> | null = null;
-
-async function ensureForcedLoaded(): Promise<boolean> {
-  if (forced !== null) return forced;
-  forcedLoading ??= AsyncStorage.getItem(FORCE_KEY)
-    .then((raw) => raw === "true")
-    .catch(() => false);
-  const loaded = await forcedLoading;
-  // Same race guard as `appMode`: a toggle during the read wins over the stored value.
-  if (forced === null) forced = loaded;
-  return forced;
-}
-
-export function setForceInstructorRole(next: boolean): void {
-  forced = next;
-  void AsyncStorage.setItem(FORCE_KEY, String(next)).catch(() => undefined);
-  notify();
-}
-
-/** The raw flag, for the debug toggle's own state. */
-export function useForceInstructorRole(): boolean {
-  const [on, setOn] = useState(() => forced ?? false);
-  useEffect(() => {
-    let live = true;
-    const update = () => {
-      if (live) setOn(forced ?? false);
-    };
-    listeners.add(update);
-    void ensureForcedLoaded().then(update);
-    return () => {
-      live = false;
-      listeners.delete(update);
-    };
-  }, []);
-  return on;
-}
-
 /**
- * The one question the switcher asks. True when the account holds the `instructor` role —
- * or, under `__DEV__` only, when the debug force flag is on.
+ * The one question the switcher asks. True when the account holds the instructor role.
+ *
+ * `"coach"` is accepted as a TRANSITION alias: migration 0021 renamed the role value, but the
+ * production database migrates on the next deploy, so a live account (the Dave Kim persona
+ * included) still answers with the old spelling until then. Delete the alias when
+ * `swingsage-prod` carries 0021 — it is the only place the old value survives client-side.
  */
 export function useInstructorEligible(): boolean {
   const roles = useRoles();
-  const forcedOn = useForceInstructorRole();
-  if (__DEV__ && forcedOn) return true;
-  return roles.kind === "ok" && roles.roles.includes("instructor");
+  return (
+    roles.kind === "ok" && (roles.roles.includes("instructor") || roles.roles.includes("coach"))
+  );
 }

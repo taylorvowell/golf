@@ -6,8 +6,9 @@ import { Button, Eyebrow, FloatingBack, Panel, Tag } from "../design/system";
 import { FONT_BODY, FONT_DISPLAY } from "../design/system/typography";
 import { MEMBERSHIPS } from "../features/billing/plans";
 import { setAppMode } from "../features/mode/appMode";
-import { setForceInstructorRole } from "../features/mode/useRoles";
+import { clearRolesCache } from "../features/mode/useRoles";
 import { useAppNavigation } from "../navigation";
+import { api } from "../platform/client";
 import { themedStyles } from "../theme";
 
 /**
@@ -16,10 +17,12 @@ import { themedStyles } from "../theme";
  * get, the membership you start on, go. Being LISTED in the directory stays a separate,
  * reviewed application (D32) — the listing editor says so; this door never overpromises.
  *
- * Mocked: completing it forces the dev role flag and switches the device into instructor
- * mode, so the walk continues straight into the shell. The real completion is one
- * `claim_role("instructor")` + the membership grant — the same seam onboarding's role step
- * already calls.
+ * The claim is REAL — `app.claim_role` is free, instant and idempotent by design (D32), so
+ * this screen posts it rather than mocking it. Both spellings go up during the rename
+ * transition (the deployed server still whitelists `coach` until migration 0021 reaches
+ * production; the renamed server accepts `instructor`) — each is idempotent and the wrong one
+ * for the moment is rejected harmlessly. Delete the `coach` post with the eligibility alias
+ * in `useRoles.ts`. Only the membership GRANT stays mocked (billing has no server yet).
  */
 export function BecomeInstructorScreen() {
   const styles = useStyles();
@@ -28,7 +31,17 @@ export function BecomeInstructorScreen() {
   const [step, setStep] = useState<0 | 1>(0);
 
   const finish = () => {
-    if (__DEV__) setForceInstructorRole(true);
+    for (const role of ["instructor", "coach"]) {
+      api
+        .request("roles", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ role }),
+        })
+        .catch(() => undefined);
+    }
+    // Eligibility re-reads the account, so the header dropdown appears without a relaunch.
+    clearRolesCache();
     setAppMode("instructor");
     navigation.navigate("Tabs");
   };
