@@ -172,6 +172,14 @@ export interface VideoSource {
    * True when the phone wrote variable frame rate, which breaks frame ↔ time arithmetic until normalized.
    */
   is_vfr: boolean;
+  /**
+   * The rate the SENSOR ran at, when known — 240 for a phone slow-mo written at 30. 0 = a real-time clip (or nothing claimed one). The retime decision's input, recorded so a wrong retime is attributable.
+   */
+  capture_fps?: number;
+  /**
+   * Where capture_fps came from: the client's source manifest (threaded through the job spec), the container's own com.android.capture.fps tag, or nowhere.
+   */
+  capture_fps_source?: "manifest" | "container_tag" | "none";
   codec: string;
   rotation: number;
   width: number;

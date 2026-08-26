@@ -140,6 +140,9 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
   private var recordSurface: Surface? = null
   /** The rate the session was actually configured at — never the rate that was asked for. */
   private var achievedFps: Int = 0
+  /** The size the recorder was configured at — the source-manifest's dims come from here,
+   *  because the manifest records what the RECORDER did, never what a probe later infers. */
+  private var recordedSize: Size? = null
   private var recordStartedAtMs: Long = 0L
   @Volatile private var recording: Boolean = false
 
@@ -762,6 +765,7 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
       recordSurface = recSurface
     }
     achievedFps = fps
+    recordedSize = size
 
     // STOP THE OLD REQUEST FIRST. Creating a session waits for the device to go idle, and a
     // repeating request left running never lets it — the create blocks ~11 s and then fails
@@ -943,6 +947,8 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
         "fps" to achievedFps,
         "durationMs" to durationMs,
         "bytes" to file.length(),
+        "width" to (recordedSize?.width ?: 0),
+        "height" to (recordedSize?.height ?: 0),
       ))
     }
   }
@@ -1072,6 +1078,8 @@ class HighSpeedCameraView(context: Context, appContext: AppContext) : ExpoView(c
             "fps" to achievedFps,
             "durationMs" to durationMs,
             "bytes" to file.length(),
+            "width" to (recordedSize?.width ?: 0),
+            "height" to (recordedSize?.height ?: 0),
           )
         } else {
           runCatching { file?.delete() }

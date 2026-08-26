@@ -109,14 +109,15 @@ export function PendingSwingScreen({
     dismissImport(localId);
     retryProcessing(localId, {
       // fps 0, like importSwing: ingest never reads it and the analyzer probes the real rate.
-      clip: { path, fps: 0, durationMs },
+      // slowMoFactor rides along so the retry's poster samples real seconds too.
+      clip: { path, fps: 0, durationMs, slowMoFactor },
       view,
       handedness: handedness === "left" ? "left" : "right",
       sessionId,
       analyze: true,
     });
     if (sessionId) trackImport(localId, sessionId, Date.now(), path);
-  }, [durationMs, handedness, localId, path, pendingRows, view]);
+  }, [durationMs, handedness, localId, path, pendingRows, slowMoFactor, view]);
 
   /** One slot, two states — the same rule the after-swing screen keeps, so the notice and the
    * progress track can never draw over each other. */

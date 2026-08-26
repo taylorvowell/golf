@@ -17,6 +17,7 @@ export type * from "./generated/analysis";
 export type * from "./generated/api";
 export type * from "./generated/coach-report";
 export type * from "./generated/silhouette";
+export type * from "./generated/source-manifest";
 
 export {
   API_VERSIONS,

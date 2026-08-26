@@ -12,6 +12,13 @@ export interface RecordingResult {
   fps: number;
   durationMs: number;
   bytes: number;
+  /**
+   * The size the recorder was configured at — the source manifest's dims. Optional because an
+   * installed native build may predate them (JS/native skew must degrade); absent or 0 means
+   * unknown, never a size.
+   */
+  width?: number;
+  height?: number;
 }
 
 export interface HighSpeedCameraViewProps {

@@ -60,16 +60,34 @@ export interface CreatedCapture {
    * when the analyzer renders `contact.jpg` — which still takes over once it exists.
    */
   posterUpload: UploadTarget;
+  /**
+   * Where to PUT `source_manifest.json` — the client's authoritative record of the clip's
+   * capture clock and trim (schema `source-manifest`). The dispatcher reads it at enqueue and
+   * hands the capture facts to the worker, because the phone-side remux drops the container
+   * tag those facts otherwise live in. Absence is tolerated forever (older clients).
+   */
+  manifestUpload: UploadTarget;
 }
 
 /** The client-extracted poster frame, beside the original in the source bucket. */
 export const POSTER_NAME = "poster.jpg";
+
+/** The client-built source manifest, beside the original in the source bucket. */
+export const MANIFEST_NAME = "source_manifest.json";
 
 /** Where a view's poster lives — the thumb route's fallback re-derives this from the row. */
 export function posterKeyFor(view: ResolvedView): string {
   return sourceKey(
     { userId: view.userId, swingId: view.swingId, viewId: view.viewId, revision: view.revision },
     POSTER_NAME,
+  );
+}
+
+/** Where a view's source manifest lives — the dispatcher re-derives this from the row. */
+export function manifestKeyFor(view: ResolvedView): string {
+  return sourceKey(
+    { userId: view.userId, swingId: view.swingId, viewId: view.viewId, revision: view.revision },
+    MANIFEST_NAME,
   );
 }
 
@@ -147,6 +165,13 @@ export async function createCapture(
     POSTER_NAME,
   );
   const posterSigned = await store.signedUploadUrl(SOURCE_BUCKET, posterKey, "image/jpeg");
+  const manifestKey = sourceKey(
+    { userId, swingId: swing.id, viewId: view.id, revision: view.revision },
+    MANIFEST_NAME,
+  );
+  const manifestSigned = await store.signedUploadUrl(
+    SOURCE_BUCKET, manifestKey, "application/json",
+  );
 
   return {
     swingId: swing.id,
@@ -163,6 +188,12 @@ export async function createCapture(
       url: `/api/v1/swings/${swing.id}/poster?view=${input.view}`,
       method: "PUT",
       headers: { "content-type": "image/jpeg" },
+      expiresIn: 60 * 60,
+    },
+    manifestUpload: manifestSigned ?? {
+      url: `/api/v1/swings/${swing.id}/manifest?view=${input.view}`,
+      method: "PUT",
+      headers: { "content-type": "application/json" },
       expiresIn: 60 * 60,
     },
   };

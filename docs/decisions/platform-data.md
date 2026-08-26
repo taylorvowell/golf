@@ -203,6 +203,9 @@ quiet stretch on CPU) and `queued` rows older than `JOBS_QUEUE_PENDING_TIMEOUT_S
 3600 — the backstop behind the failure callback). **Backpressure** — enqueue refuses,
 user-readably, once the actor holds `JOBS_MAX_ACTIVE_PER_USER` (default 3) active queue jobs,
 counted by swing ownership join, not RLS visibility (which would count coach-readable rows).
+Backpressure and the one-live-job-per-view check guard **both** enqueue doors — re-analysis
+and first capture (`startCaptureAnalysis`); a second `source/complete` while a job is live
+returns the existing job, and re-enqueue-as-retry applies to failed/absent jobs only.
 **Gotchas:** Refusals (`PipelineError`, acked 200) never retry and never dead-letter — only
 infra failures reach the DLQ, so the failure callback firing always means infrastructure.
 Every done event self-reports `elapsedS` (true pipeline seconds) into the job log — telemetry,
@@ -218,6 +221,60 @@ the SLO, not an optimisation. Cost is roughly $0.03–0.05/swing at L4 per-secon
 Cold-start cost (8.4GB image pull + model load from the volume) is real but not yet
 isolated as a number — measure it before quoting p95 for a cold fleet.
 **See:** ARCHIVE D9, D18, D26.
+
+### The worker refuses oversized or unreadable work before the GPU, and never re-runs a deterministic failure
+
+**Decision:** `run_queue_job` ffprobes the downloaded source before any pipeline stage and
+refuses — terminally, with a golfer-readable sentence — anything outside the workload budget:
+estimated normalized frames over **2,000**, real (retime-aware) duration over **15s**, a
+dimension over **4320px**, an unknown codec, or a file ffprobe cannot read. The estimate
+mirrors the normalize stage's own arithmetic (`retime_factor` + `cfr_target_fps`), so a
+stamped slow-mo is judged by its real seconds, and the probed facts are logged to the job row
+either way — the telemetry that will size the source-manifest thresholds. Budgets live in one
+place (`guard_budgets()` in `service/jobrun.py`), env-overridable
+(`SWINGSAGE_GUARD_MAX_FRAMES|MAX_REAL_S|MAX_DIM`). Deterministic failures — guard refusals and
+`PipelineError` — post `failed` and **return normally**, so every retry layer above (QStash
+redelivery, `modal.Retries`) sees success-of-delivery and cannot re-run them; only genuinely
+transient infrastructure raises.
+**Gotchas:** The guard is retime-aware through the SOURCE MANIFEST (next entry): a trimmed
+slow-mo import loses its `com.android.capture.fps` stamp in the phone remux, and the
+manifest's `capture_fps` (threaded through the job spec) is what lets the guard judge it by
+its real seconds. A manifest-less slow-mo trim is still refused at container length — the
+correct degradation, never a mis-analysis. The CLI (`burnin.py`) is deliberately unguarded —
+fixtures and dev runs answer to a human.
+**See:** the incident this closes: one ~41s clip → ~2,445 normalized frames → runner timeout →
+retried ×2 by Modal → 75 GPU-minutes for one deterministic failure (2026-08-26).
+
+### The source manifest is the one authority for capture-clock facts
+
+**Decision:** Every upload travels with `source_manifest.json` (schema `source-manifest` in
+`packages/schema`, additive-locked): the ORIGINAL container's capture facts (capture fps +
+provenance + confidence, presentation fps, slow-mo factor, dims, audio presence), the trim as
+requested AND as the muxer actually wrote it (`trimClip` returns real boundaries — a
+keyframe-aligned start lands earlier than asked), and how the window was chosen
+(detector method, versioned thresholds, confidence class, user-adjusted flag). The client
+builds it from the one place each fact is certain — the recorder's own configuration, or a
+probe of the original BEFORE the remux that drops the container tag — and runs a pre-upload
+preflight (`judgeTrimmedClip`, budgets mirroring the worker guard) so a cut contradicting its
+manifest fails on the device, where the original still exists to re-trim.
+**The authority rule:** the analyzer may consume `source` and `trim`; it must never read
+`client_detection` as an impact measurement — no field on the manifest names an impact time
+as a measurement, and the golfer's mark itself is never uploaded.
+**Flow:** `createCapture` hands out a third upload target; the client PUTs the manifest
+before `source/complete`; the DISPATCHER (not the worker) reads and schema-validates it at
+enqueue, logs present/absent/invalid onto the job row, and threads `capture_fps` +
+`source_fps` through the job spec — the worker's four-URL world is untouched. The worker
+prefers spec facts over container tags for the guard and the retime, fails terminally when a
+manifest contradicts its own probe (presentation-rate mismatch >20%), and records
+`capture_fps`/`capture_fps_source` (`manifest | container_tag | none`) into
+`analysis.json.video.source`.
+**Gotchas:** Absence is tolerated FOREVER (older clients; retries that outlived the review) —
+the container-tag fallback is the one temporary mechanism, removal condition: client version
+floor past the manifest ship (video-analysis-redesign step 14). Old workers refuse specs
+carrying the new fields (`unknown job spec field`) — deploy the Modal worker before or with
+the web app. SWISH parity between the Kotlin seed detector and `audio_impact.py` is pinned by
+shared parameter fixtures (`tests/data/swish_parity.json` + `test_swish_parity.py`); the
+Kotlin-side runner awaits gradle test infrastructure in the expo-module.
 
 ### The analysis bottleneck is the club-trace variants, not pose
 
@@ -291,13 +348,19 @@ four auth env names on Vercel (`SUPABASE_URL`, `SUPABASE_SECRET_KEY`, the two `N
 are the ONLY place the choice lives; the integration-injected `POSTGRES_*` vars still point at
 `swingsage-prod` and are unused by the app (it reads `APP_DATABASE_URL`).
 
-### Production queue jobs run variants-off (`JOBS_CLUB_VARIANTS=false` on Vercel)
+### Queue jobs run variants-off by default (`JOBS_CLUB_VARIANTS` is an opt-IN)
 
-**Decision:** The deployed dispatcher enqueues `club_variants: false`. On the L4 worker the
-dev shape is 676.6s and can exceed the runner's own 1800s timeout on long clips — a default
-that FAILS jobs is not a product option, so production runs the shape that meets the SLO
-(124.6s). The variants instrument is untouched everywhere else: fixture runs, `burnin.py`, and
-the local spawn path keep it ON, and the flag is one env var to flip if Taylor rules otherwise.
+**Decision:** `clubVariants()` defaults **false** — every queue job enqueues
+`club_variants: false` unless a deployment sets `JOBS_CLUB_VARIANTS=true` explicitly. On the
+L4 worker the dev shape is 676.6s and can exceed the runner's own 1800s timeout on long clips
+— a default that FAILS jobs is not a product option, so the default is the shape that meets
+the SLO (124.6s). The code default is the mechanism (an unset var on any future deployment
+must not silently pay 5×); no env var is needed anywhere to get production behavior. The
+variants instrument is untouched everywhere else: fixture runs, `burnin.py`, and the local
+spawn path keep it ON, and a dev deployment opts in with one env var for the club-trace-verdict
+work — the 27-variant artifact stays available per-run.
+**Gotchas:** the player's variant picker tolerates absent variants (`clubVariantOptions` reads
+what exists), and existing 27-variant artifacts are unchanged — only new artifacts shrink.
 **See:** the capacity model above; `.claude/architecture/swing-analysis-speed-2026-08-18.md` §5.
 
 ### SLO targets

@@ -1,12 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { Client } from "@upstash/qstash";
+import { validateSourceManifest } from "@swingsage/schema";
+import type { SourceManifest } from "@swingsage/schema/contract";
 import type { DbTx } from "@/db/session";
 import { jobs as jobsTable, swingViews as viewsTable } from "@/db/schema";
 import { mediaAddress, type ResolvedView } from "@/db/views";
 import { getAnalysis } from "@/lib/swings";
+import { manifestKeyFor } from "@/lib/ingest";
 import { SOURCE_BUCKET } from "@/lib/media/keys";
-import { getMediaStore } from "@/lib/media/store";
+import { getJson, getMediaStore } from "@/lib/media/store";
 import { signJobToken } from "@/lib/jobs/token";
 import { clubVariants, envInt, queuePublishOptions } from "@/lib/jobs/policy";
 import type { Job } from "@/lib/jobs";
@@ -45,7 +48,52 @@ export interface QueueJobSpec {
     club_detector: string | null;
     /** Stated explicitly on every spec — see policy.clubVariants (JOBS_CLUB_VARIANTS). */
     club_variants: boolean;
+    /**
+     * Capture-clock facts from the client's source manifest, read from storage at enqueue —
+     * the web app is the only party that reads storage, so the worker's four-URL world stays
+     * intact. 0 = unknown (no manifest, or the manifest itself says unknown), and the worker
+     * falls back to the container tag exactly as before. `capture_fps` is what the sensor
+     * did; `source_fps` is the container's presentation rate, for the worker's
+     * manifest-vs-probe consistency check.
+     */
+    capture_fps?: number;
+    source_fps?: number;
   };
+}
+
+/**
+ * The capture facts an upload's source manifest carries, or honest zeros without one.
+ *
+ * The manifest is validated against the shared schema before anything is read off it — an
+ * invalid manifest is IGNORED (with its reason logged onto the job), never trusted halfway,
+ * and never a refusal: the upload itself is fine and analyzes exactly as a manifest-less one.
+ */
+async function sourceManifestFacts(
+  view: ResolvedView,
+): Promise<{ captureFps: number; sourceFps: number; note: string }> {
+  const absent = { captureFps: 0, sourceFps: 0 };
+  try {
+    const store = await getMediaStore();
+    const raw = await getJson<unknown>(store, SOURCE_BUCKET, manifestKeyFor(view));
+    if (raw === null) return { ...absent, note: "source manifest: absent" };
+    const check = validateSourceManifest(raw);
+    if (!check.valid) {
+      return { ...absent, note: `source manifest: invalid, ignored (${check.errors[0] ?? "?"})` };
+    }
+    const m = raw as SourceManifest;
+    const captureFps = m.source.capture_fps > 0 ? m.source.capture_fps : 0;
+    const sourceFps = m.source.presentation_fps > 0 ? m.source.presentation_fps : 0;
+    return {
+      captureFps,
+      sourceFps,
+      note:
+        `source manifest: present (capture ${captureFps || "unknown"} @ container ` +
+        `${sourceFps || "unknown"}fps, ${m.source.capture_fps_source})`,
+    };
+  } catch (e) {
+    // A storage blip must not fail the enqueue — the worker's own fallback covers it.
+    return { ...absent, note: `source manifest: unreadable, ignored (${String(e)})` };
+  }
 }
 
 export async function enqueueReanalysis(
@@ -79,6 +127,7 @@ export async function enqueueReanalysis(
   const detector = requireEnv("WORKER_CLUB_DETECTOR");
   const clubDetector = detector === "none" ? null : detector;
 
+  const manifest = await sourceManifestFacts(view);
   return publishJob(tx, {
     actorId,
     view,
@@ -86,11 +135,14 @@ export async function enqueueReanalysis(
     // object storage has no rename-into-place, so overwriting is a real failure, not a theory.
     targetRevision: view.revision + 1,
     type: "reanalyze",
+    logLines: [manifest.note],
     analysis: {
       view: analysis.video.view,
       handedness: analysis.video.handedness,
       club_detector: clubDetector,
       club_variants: clubVariants(),
+      capture_fps: manifest.captureFps,
+      source_fps: manifest.sourceFps,
     },
   });
 }
@@ -127,16 +179,20 @@ export async function enqueueCapture(
   }
 
   const detector = requireEnv("WORKER_CLUB_DETECTOR");
+  const manifest = await sourceManifestFacts(view);
   return publishJob(tx, {
     actorId,
     view,
     targetRevision: view.revision,
     type: "analyze",
+    logLines: [manifest.note],
     analysis: {
       view: view.view,
       handedness,
       club_detector: detector === "none" ? null : detector,
       club_variants: clubVariants(),
+      capture_fps: manifest.captureFps,
+      source_fps: manifest.sourceFps,
     },
   });
 }
@@ -158,6 +214,8 @@ async function publishJob(
     targetRevision: number;
     type: "analyze" | "reanalyze";
     analysis: QueueJobSpec["analysis"];
+    /** Enqueue-time facts worth keeping on the row (e.g. whether a source manifest existed). */
+    logLines?: string[];
   },
 ): Promise<Job> {
   const { actorId, view, targetRevision, type } = opts;
@@ -190,7 +248,7 @@ async function publishJob(
     stage: "queued",
     progressPct: 0,
     message: "queued for the analysis worker",
-    log: [],
+    log: opts.logLines ?? [],
     startedAt: Date.now(),
     finishedAt: null,
     lastEventAt: null,
@@ -199,7 +257,7 @@ async function publishJob(
 
   await tx.insert(jobsTable).values({
     id: jobId, viewId: view.viewId, type,
-    status: "queued", stage: "queued", progressPct: 0, message: job.message, log: [],
+    status: "queued", stage: "queued", progressPct: 0, message: job.message, log: job.log,
     runner: "queue", targetRevision,
   });
   await tx.update(viewsTable).set({ status: "queued" }).where(eq(viewsTable.id, view.viewId));

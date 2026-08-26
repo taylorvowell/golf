@@ -24,7 +24,12 @@ import { FONT_BODY, FONT_DISPLAY } from "../../design/system/typography";
 import { PRESS_SUNK } from "../../design/system/press";
 import { COLORS, SEMANTIC } from "../../theme";
 import { STRIP_FRAMES, STRIP_PX } from "./captureConstants";
-import { pickImpactSeed, reviewWindowAround } from "./reviewWindow";
+import {
+  pickImpactSeed,
+  reviewWindowAround,
+  windowActivityConfidence,
+  type ImpactSeed,
+} from "./reviewWindow";
 import { ChoiceSheet } from "./sheets/ChoiceSheet";
 import { SwingPreviewPip } from "./SwingPreviewPip";
 import {
@@ -90,17 +95,39 @@ const A11Y_STEP_S = 0.1;
 export interface SwingTake {
   /** Absolute path to the untrimmed take, as the native recorder wrote it. */
   path: string;
-  /** The rate the session was CONFIGURED at — never the rate that was requested. */
+  /**
+   * The CONTAINER's frame clock — frames per FILE second, what `seekToFrame` and every
+   * `frame = round(t × fps)` are exact against. For anything this app records it equals the
+   * configured capture rate (the takes are real-time); for an imported phone slow-mo it is
+   * the ~30 the file plays at, and the capture rate is `fps × slowMoFactor`. Stamping the
+   * capture rate here instead put a 240 clock on a 30fps container and corrupted every seek
+   * on a slow-mo import (audit, 2026-08-26).
+   */
   fps: number;
   durationMs: number;
   /** How much slower the file's timeline runs than the world — 8 for a phone slow-mo clip. */
   slowMoFactor?: number;
 }
 
+/**
+ * How the saved window came to be — the source manifest's `client_detection` facts. Nothing in
+ * here is, or may ever become, an impact measurement: it records how the CLIENT chose what to
+ * upload, and the analyzer is forbidden from reading it as evidence (the manifest's authority
+ * rule).
+ */
+export interface SaveDetection {
+  /** The detector's answer, when THIS screen ran detection. Null when seeded from upstream
+   *  (the import flow detects behind its loading pass and passes `seedSec`). */
+  seed: ImpactSeed | null;
+  /** True when the golfer moved the mark instead of accepting the seed. */
+  userAdjusted: boolean;
+}
+
 export interface SwingReviewProps {
   take: SwingTake;
-  /** Keep it: the window in seconds, cut around the marked strike. */
-  onSave: (window: { startSec: number; endSec: number }) => void;
+  /** Keep it: the window in seconds, cut around the marked strike. `detection` rides along
+   *  for the source manifest; callers that ignore it stay correct. */
+  onSave: (window: { startSec: number; endSec: number }, detection?: SaveDetection) => void;
   /** Bin it. Nothing has been created server-side, so this costs nothing but the take. */
   onDelete: () => void;
   /** True while the save is in flight — the buttons lock rather than double-firing. */
@@ -224,6 +251,15 @@ export function SwingReview({
    */
   const markRef = useRef(0);
 
+  /** The detector's answer for THIS take, kept for the save's detection facts. Null while
+   *  detection is pending, and permanently null when the seed came from upstream. */
+  const seedRef = useRef<ImpactSeed | null>(null);
+  /** Whether the golfer moved the mark — a tap, a drag, a screen-reader step — after seeding. */
+  const adjustedRef = useRef(false);
+  /** The off-window warning (WP-006): armed when Save is pressed with the mark dragged away
+   *  from everything the take's audio heard. Override always allowed. */
+  const [confirmingOffWindow, setConfirmingOffWindow] = useState(false);
+
   const setMark = useCallback((next: number) => {
     const clamped = Math.min(Math.max(next, 0), durationS);
     markRef.current = clamped;
@@ -247,7 +283,8 @@ export function SwingReview({
   // place rather than the screen waiting on it. A failure is silent by design.
   useEffect(() => {
     // Detection already ran upstream (the import flow's loading pass) — seed from its answer
-    // rather than paying for it twice and risking a different one.
+    // rather than paying for it twice and risking a different one. The upstream flow keeps its
+    // own detection facts, so this screen's seedRef stays null on purpose.
     if (seedSec !== undefined) {
       setMark(seedSec);
       setAnchorSec(markRef.current);
@@ -261,7 +298,10 @@ export function SwingReview({
         .catch(() => []);
       if (cancelled) return;
       // The LAST plausible strike, not the strongest — the practice swing comes first.
-      setMark(pickImpactSeed(found, durationS));
+      const seed = pickImpactSeed(found, durationS);
+      seedRef.current = seed;
+      adjustedRef.current = false;
+      setMark(seed.seedSec);
       setAnchorSec(markRef.current);
       seekTo(markRef.current);
       commitMark();
@@ -335,6 +375,7 @@ export function SwingReview({
         onMoveShouldSetPanResponder: () => true,
         onPanResponderGrant: (evt) => {
           setDragging(true);
+          adjustedRef.current = true;
           // ABSOLUTE position, never an accumulated delta. On a warped axis a pixel is a
           // different number of seconds depending on where it lands, so travel cannot be
           // integrated — where the finger IS is the only question the axis can answer.
@@ -513,6 +554,7 @@ export function SwingReview({
           accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
           onAccessibilityAction={(e) => {
             const step = e.nativeEvent.actionName === "increment" ? A11Y_STEP_S : -A11Y_STEP_S;
+            adjustedRef.current = true;
             setMark(markRef.current + step);
             seekTo(markRef.current);
             commitMark();
@@ -607,7 +649,16 @@ export function SwingReview({
             onPress={() => {
               // The clip is built AROUND the mark. The golfer never chose these edges and is
               // never shown them — that is the whole point of asking for one moment.
-              onSave(windowAround(impactSec ?? 0));
+              const window = windowAround(impactSec ?? 0);
+              // The sanity check (WP-006): the take's audio heard strikes, and the mark was
+              // dragged to a window containing none of them. Warn once, never block —
+              // "save anyway" is always available, and silence (no candidates) never warns.
+              const activity = windowActivityConfidence(seedRef.current?.candidates ?? [], window);
+              if (activity === 0) {
+                setConfirmingOffWindow(true);
+                return;
+              }
+              onSave(window, { seed: seedRef.current, userAdjusted: adjustedRef.current });
             }}
             style={({ pressed }) => [styles.save, pressed && styles.pressedHard]}
           >
@@ -623,6 +674,43 @@ export function SwingReview({
         </View>
       </Animated.View>
 
+      <ChoiceSheet
+        visible={confirmingOffWindow}
+        onClose={() => setConfirmingOffWindow(false)}
+        title="No swing heard in this window"
+        subtitle="The strike this recording picked up is outside the part you're saving."
+        testID="take-off-window-confirm"
+        choices={[
+          {
+            key: "recenter",
+            icon: Undo2,
+            title: "Jump to the strike",
+            detail: "Move the mark back to where the hit was heard",
+            onPress: () => {
+              setConfirmingOffWindow(false);
+              const seed = seedRef.current;
+              if (!seed) return;
+              adjustedRef.current = false;
+              setMark(seed.seedSec);
+              seekTo(markRef.current);
+              commitMark();
+            },
+          },
+          {
+            key: "save-anyway",
+            icon: Check,
+            title: "Save it as marked",
+            detail: "Keep the window exactly where you put it",
+            onPress: () => {
+              setConfirmingOffWindow(false);
+              onSave(windowAround(impactSec ?? 0), {
+                seed: seedRef.current,
+                userAdjusted: adjustedRef.current,
+              });
+            },
+          },
+        ]}
+      />
       <ChoiceSheet
         visible={confirmingDelete}
         onClose={() => setConfirmingDelete(false)}

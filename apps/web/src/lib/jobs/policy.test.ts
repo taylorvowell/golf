@@ -13,18 +13,18 @@ describe("clubVariants", () => {
     delete process.env.TEST_CLUB_VARIANTS;
   });
 
-  it("defaults ON — the variants-off production default is Taylor's pending call, not this knob's", () => {
-    expect(clubVariants("TEST_CLUB_VARIANTS")).toBe(true);
+  it("defaults OFF — production pays the 124.6s shape; variants are an explicit dev opt-in", () => {
+    expect(clubVariants("TEST_CLUB_VARIANTS")).toBe(false);
   });
 
-  it("only an explicit false/0/off turns it off", () => {
-    for (const off of ["false", "0", "off", " FALSE ", "Off"]) {
-      process.env.TEST_CLUB_VARIANTS = off;
-      expect(clubVariants("TEST_CLUB_VARIANTS")).toBe(false);
-    }
-    for (const on of ["true", "1", "yes", "", "banana"]) {
+  it("only an explicit true/1/on turns it on", () => {
+    for (const on of ["true", "1", "on", " TRUE ", "On"]) {
       process.env.TEST_CLUB_VARIANTS = on;
       expect(clubVariants("TEST_CLUB_VARIANTS")).toBe(true);
+    }
+    for (const off of ["false", "0", "off", "", "yes", "banana"]) {
+      process.env.TEST_CLUB_VARIANTS = off;
+      expect(clubVariants("TEST_CLUB_VARIANTS")).toBe(false);
     }
   });
 });

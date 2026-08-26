@@ -1093,6 +1093,17 @@
       "width"
     ]
   },
+  "analysis#/definitions/videoSource/properties/capture_fps": {
+    "type": "number"
+  },
+  "analysis#/definitions/videoSource/properties/capture_fps_source": {
+    "type": "string",
+    "enum": [
+      "\"container_tag\"",
+      "\"manifest\"",
+      "\"none\""
+    ]
+  },
   "analysis#/definitions/videoSource/properties/codec": {
     "type": "string"
   },
@@ -2676,5 +2687,146 @@
   },
   "silhouette#/properties/width": {
     "type": "integer"
+  },
+  "source-manifest#": {
+    "type": "object",
+    "required": [
+      "source",
+      "source_manifest_version"
+    ]
+  },
+  "source-manifest#/definitions/audioCandidate": {
+    "type": "object",
+    "required": [
+      "real_ms",
+      "score"
+    ]
+  },
+  "source-manifest#/definitions/audioCandidate/properties/real_ms": {
+    "type": "number"
+  },
+  "source-manifest#/definitions/audioCandidate/properties/score": {
+    "type": "number"
+  },
+  "source-manifest#/definitions/clientDetection": {
+    "type": "object",
+    "required": [
+      "method",
+      "threshold_version"
+    ]
+  },
+  "source-manifest#/definitions/clientDetection/properties/audio_candidates": {
+    "type": "array"
+  },
+  "source-manifest#/definitions/clientDetection/properties/audio_candidates/items": {
+    "ref": "#/definitions/audioCandidate"
+  },
+  "source-manifest#/definitions/clientDetection/properties/audio_confidence": {
+    "type": "string",
+    "enum": [
+      "\"ambiguous\"",
+      "\"confident\"",
+      "\"none\""
+    ]
+  },
+  "source-manifest#/definitions/clientDetection/properties/method": {
+    "type": "string"
+  },
+  "source-manifest#/definitions/clientDetection/properties/threshold_version": {
+    "type": "string"
+  },
+  "source-manifest#/definitions/clientDetection/properties/user_adjusted_window": {
+    "type": "boolean"
+  },
+  "source-manifest#/definitions/clientDetection/properties/visual_fallback_used": {
+    "type": "boolean"
+  },
+  "source-manifest#/definitions/clientDetection/properties/window_motion_confidence": {
+    "type": "number"
+  },
+  "source-manifest#/definitions/sourceFacts": {
+    "type": "object",
+    "required": [
+      "capture_fps",
+      "capture_fps_source",
+      "container_duration_ms",
+      "presentation_fps"
+    ]
+  },
+  "source-manifest#/definitions/sourceFacts/properties/audio_present": {
+    "type": "boolean"
+  },
+  "source-manifest#/definitions/sourceFacts/properties/capture_fps": {
+    "type": "number"
+  },
+  "source-manifest#/definitions/sourceFacts/properties/capture_fps_confidence": {
+    "type": "number"
+  },
+  "source-manifest#/definitions/sourceFacts/properties/capture_fps_source": {
+    "type": "string",
+    "enum": [
+      "\"device_metadata\"",
+      "\"probe\"",
+      "\"recorder_config\"",
+      "\"unknown\""
+    ]
+  },
+  "source-manifest#/definitions/sourceFacts/properties/codec": {
+    "type": "string"
+  },
+  "source-manifest#/definitions/sourceFacts/properties/container_duration_ms": {
+    "type": "number"
+  },
+  "source-manifest#/definitions/sourceFacts/properties/height": {
+    "type": "integer"
+  },
+  "source-manifest#/definitions/sourceFacts/properties/presentation_fps": {
+    "type": "number"
+  },
+  "source-manifest#/definitions/sourceFacts/properties/slowmo_factor": {
+    "type": "number"
+  },
+  "source-manifest#/definitions/sourceFacts/properties/width": {
+    "type": "integer"
+  },
+  "source-manifest#/definitions/trimFacts": {
+    "type": "object",
+    "required": [
+      "requested_file_end_pts_ms",
+      "requested_file_start_pts_ms"
+    ]
+  },
+  "source-manifest#/definitions/trimFacts/properties/actual_remux_end_pts_ms": {
+    "type": "number"
+  },
+  "source-manifest#/definitions/trimFacts/properties/actual_remux_start_pts_ms": {
+    "type": "number"
+  },
+  "source-manifest#/definitions/trimFacts/properties/pad_real_ms": {
+    "type": "number"
+  },
+  "source-manifest#/definitions/trimFacts/properties/requested_file_end_pts_ms": {
+    "type": "number"
+  },
+  "source-manifest#/definitions/trimFacts/properties/requested_file_start_pts_ms": {
+    "type": "number"
+  },
+  "source-manifest#/definitions/trimFacts/properties/requested_real_end_ms": {
+    "type": "number"
+  },
+  "source-manifest#/definitions/trimFacts/properties/requested_real_start_ms": {
+    "type": "number"
+  },
+  "source-manifest#/properties/client_detection": {
+    "ref": "#/definitions/clientDetection"
+  },
+  "source-manifest#/properties/source": {
+    "ref": "#/definitions/sourceFacts"
+  },
+  "source-manifest#/properties/source_manifest_version": {
+    "type": "integer"
+  },
+  "source-manifest#/properties/trim": {
+    "ref": "#/definitions/trimFacts"
   }
 }

@@ -50,6 +50,15 @@ import { SessionDock } from "./SessionDock";
 import { SESSION_NAV_CLEARANCE } from "./SessionNav";
 import { calendarDate, createSession } from "./sessionApi";
 import { loadSessionDefaults } from "./sessionDefaults";
+import { windowActivityConfidence } from "./reviewWindow";
+import {
+  buildSourceManifest,
+  detectionFacts,
+  importedSourceFacts,
+  judgeTrimmedClip,
+  recordedSourceFacts,
+  trimFacts,
+} from "./sourceManifest";
 import {
   DEFAULT_SESSION_SETTINGS,
   initialSessionState,
@@ -59,7 +68,7 @@ import { DevClipsSheet } from "./sheets/DevClipsSheet";
 import { DualSyncSheet } from "./sheets/DualSyncSheet";
 import { SessionSettingsSheet } from "./sheets/SessionSettingsSheet";
 import { SessionTypeInfoSheet } from "./sheets/SessionTypeInfoSheet";
-import { SwingReview } from "./SwingReview";
+import { SwingReview, type SaveDetection } from "./SwingReview";
 import { useRecordSounds } from "./useRecordSounds";
 import { useDevClips } from "./useDevClips";
 import { useImpactMethod } from "./useImpactMethod";
@@ -241,7 +250,7 @@ export function SessionScreen() {
   /** Save on the review screen: trim to the chosen window, then mint the swing. */
   const [savingTake, setSavingTake] = useState(false);
   const saveTake = useCallback(
-    async (window: { startSec: number; endSec: number }) => {
+    async (window: { startSec: number; endSec: number }, detection?: SaveDetection) => {
       const take = state.pendingTake;
       if (!take || savingTake) return;
       setSavingTake(true);
@@ -250,7 +259,52 @@ export function SessionScreen() {
         // a finger that stopped a hair early never clips the takeaway.
         const startSec = Math.max(0, window.startSec - SAVE_PAD_S);
         const endSec = Math.min(take.durationMs / 1000, window.endSec + SAVE_PAD_S);
-        const { path } = await HighSpeedCamera.trimClip(take.path, startSec, endSec);
+        const trimmed = await HighSpeedCamera.trimClip(take.path, startSec, endSec);
+        const { path } = trimmed;
+        const slowMo = Math.max(1, take.slowMoFactor ?? 1);
+        // The source manifest: capture facts from the recorder's own configuration (a dev
+        // clip states what its container said instead), the trim as requested AND as the
+        // muxer actually wrote it, and how the window was chosen. Uploaded beside the bytes
+        // so the analyzer never depends on a container tag surviving this remux.
+        const manifest = buildSourceManifest({
+          source: take.dev
+            ? importedSourceFacts({
+                captureFps: slowMo > 1 ? take.fps * slowMo : 0,
+                videoFps: take.fps,
+                durationMs: take.durationMs,
+                width: take.width,
+                height: take.height,
+              })
+            : recordedSourceFacts(take),
+          trim: trimFacts({
+            fileStartSec: startSec,
+            fileEndSec: endSec,
+            padFileSec: SAVE_PAD_S,
+            slowMoFactor: slowMo,
+            actualStartPtsMs: trimmed.actualStartPtsMs,
+            actualEndPtsMs: trimmed.actualEndPtsMs,
+          }),
+          detection: detection
+            ? detectionFacts({
+                method: impactMethod.method,
+                seed: detection.seed,
+                slowMoFactor: slowMo,
+                userAdjusted: detection.userAdjusted,
+                windowActivity: windowActivityConfidence(
+                  detection.seed?.candidates ?? [],
+                  window,
+                ),
+              })
+            : undefined,
+        });
+        // The preflight (WP-003): the trimmed output must AGREE with the manifest before a
+        // byte is uploaded — a contradiction here is the slow-mo math being wrong, and the
+        // cheap place to catch it is on the device that still holds the original.
+        const verdict = judgeTrimmedClip(
+          await HighSpeedCamera.probeClip(path).catch(() => null),
+          manifest,
+        );
+        if (verdict) throw new Error(verdict);
         // The trimmed clip is now the retained copy; the untrimmed source has served its
         // purpose. (The upload-acceptance half of the deletion contract arrives with step
         // 06 — locally, a successful trim IS acceptance.) A DEV clip is not ours to destroy:
@@ -260,15 +314,40 @@ export function SessionScreen() {
         dispatch({
           type: "save-take",
           at: Date.now(),
-          clip: { path, fps: take.fps, durationMs: Math.round((endSec - startSec) * 1000) },
+          clip: {
+            path,
+            fps: take.fps,
+            durationMs: Math.round((endSec - startSec) * 1000),
+            ...(take.slowMoFactor ? { slowMoFactor: take.slowMoFactor } : {}),
+            manifest,
+          },
         });
       } catch {
-        // Trim failed: the take is the ONLY copy of the swing, so it becomes the clip
-        // untrimmed rather than being lost (capture spec §00.10 — never lose the only copy).
+        // Trim (or its preflight) failed: the take is the ONLY copy of the swing, so it
+        // becomes the clip untrimmed rather than being lost (capture spec §00.10 — never lose
+        // the only copy). The whole-clip fallback still carries a manifest — source facts
+        // only, no trim block, exactly what the schema means by an untouched original.
+        const slowMo = Math.max(1, take.slowMoFactor ?? 1);
         dispatch({
           type: "save-take",
           at: Date.now(),
-          clip: { path: take.path, fps: take.fps, durationMs: take.durationMs },
+          clip: {
+            path: take.path,
+            fps: take.fps,
+            durationMs: take.durationMs,
+            ...(take.slowMoFactor ? { slowMoFactor: take.slowMoFactor } : {}),
+            manifest: buildSourceManifest({
+              source: take.dev
+                ? importedSourceFacts({
+                    captureFps: slowMo > 1 ? take.fps * slowMo : 0,
+                    videoFps: take.fps,
+                    durationMs: take.durationMs,
+                    width: take.width,
+                    height: take.height,
+                  })
+                : recordedSourceFacts(take),
+            }),
+          },
         });
         // ...and SAY so. The realistic cause is a phone with no room left (1080p240 is the
         // heaviest thing this app writes), and the golfer is about to watch a thirty-second
@@ -283,7 +362,7 @@ export function SessionScreen() {
         setSavingTake(false);
       }
     },
-    [devClips, savingTake, state.pendingTake, toast],
+    [devClips, impactMethod.method, savingTake, state.pendingTake, toast],
   );
 
   /**

@@ -25,6 +25,29 @@ export interface ImpactCandidate {
 }
 
 /**
+ * Version tag for the seeding rule and its thresholds (`CANDIDATE_FLOOR`, the confidence
+ * classes below). Travels in the source manifest's `client_detection`, so a recorded score or
+ * class is only ever compared within one rule set. Bump on any change to the rule.
+ */
+export const SEED_THRESHOLD_VERSION = "seed-v1";
+
+/** How sure the seed is — the WP-005 go/no-go telemetry class, never a measurement. */
+export type SeedConfidence = "confident" | "ambiguous" | "none";
+
+export interface ImpactSeed {
+  /** Where the mark starts, in FILE seconds. Always set — the fallback is a place, not an error. */
+  seedSec: number;
+  /**
+   * `confident` — exactly one plausible strike; `ambiguous` — several plausible (two balls in
+   * one take, or a noisy bay); `none` — nothing heard, seeded by position alone.
+   */
+  confidence: SeedConfidence;
+  /** The plausible candidates (within `CANDIDATE_FLOOR` of the best), earliest first — what
+   *  the manifest records as non-authoritative `audio_candidates`. */
+  candidates: ImpactCandidate[];
+}
+
+/**
  * The strongest candidate wins, unless a later one is nearly as strong.
  *
  * A golfer may hit two balls in one take, and then the second is the one being marked. The old
@@ -38,13 +61,43 @@ export interface ImpactCandidate {
 export function pickImpactSeed(
   found: readonly ImpactCandidate[],
   durationS: number,
-): number {
+): ImpactSeed {
   const best = found.length ? Math.max(...found.map((c) => c.score)) : 0;
-  const real = [...found]
+  const plausible = [...found]
     .filter((c) => c.score >= best * CANDIDATE_FLOOR)
-    .sort((a, b) => a.timeSec - b.timeSec)
-    .at(-1);
-  return real ? real.timeSec : Math.max(0, durationS - FALLBACK_FROM_END_SEC);
+    .sort((a, b) => a.timeSec - b.timeSec);
+  const real = plausible.at(-1);
+  if (!real) {
+    return {
+      seedSec: Math.max(0, durationS - FALLBACK_FROM_END_SEC),
+      confidence: "none",
+      candidates: [],
+    };
+  }
+  return {
+    seedSec: real.timeSec,
+    confidence: plausible.length === 1 ? "confident" : "ambiguous",
+    candidates: plausible,
+  };
+}
+
+/**
+ * Does the chosen window contain anything that was HEARD? The WP-006 sanity check, v1:
+ * audio-energy only, from the candidates the seed already decoded — 1 when a plausible
+ * candidate sits inside the window, 0 when candidates exist and none does (the golfer dragged
+ * the mark away from everything the take recorded), and null when nothing was heard at all —
+ * silence says nothing about the window. Telemetry and a soft warning's input, NEVER uploaded
+ * as impact evidence.
+ */
+export function windowActivityConfidence(
+  candidates: readonly ImpactCandidate[],
+  window: { startSec: number; endSec: number },
+): number | null {
+  if (!candidates.length) return null;
+  const inside = candidates.some(
+    (c) => c.timeSec >= window.startSec && c.timeSec <= window.endSec,
+  );
+  return inside ? 1 : 0;
 }
 
 /**

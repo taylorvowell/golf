@@ -1,0 +1,185 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://swingsage.dev/schemas/source-manifest.schema.json",
+  "title": "SourceManifest",
+  "description": "The authoritative record of what a clip IS, written by the client that recorded or imported it and uploaded beside the source bytes — because the facts it carries (capture rate, slow-motion factor, trim boundaries) otherwise depend on a container tag surviving a phone-side remux, and MediaMuxer drops `com.android.capture.fps` (the 2,445-frame slow-mo incident class).\n\nTHE AUTHORITY RULE: the analyzer may consume `source` and `trim` — the capture-clock and timeline facts. It must NEVER read anything under `client_detection` as an impact measurement: audio candidates and the user's window are how the CLIENT chose what to upload, not evidence about where Impact is. There is deliberately no field on this object that names an impact time as a measurement; the analyzer locates Impact from the pixels and audio it analyzes itself.\n\nWritten from the ORIGINAL asset before the remux, then updated with the remux's actual boundaries. A server may receive uploads with no manifest at all (older clients) — every consumer falls back to container tags, never worse than today.",
+  "type": "object",
+  "required": ["source_manifest_version", "source"],
+  "properties": {
+    "source_manifest_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Version of this manifest shape, starting at 1. Additive evolution only."
+    },
+    "source": {
+      "$ref": "#/definitions/sourceFacts"
+    },
+    "trim": {
+      "$ref": "#/definitions/trimFacts"
+    },
+    "client_detection": {
+      "$ref": "#/definitions/clientDetection"
+    }
+  },
+  "definitions": {
+    "sourceFacts": {
+      "title": "SourceFacts",
+      "description": "Facts about the ORIGINAL asset, read before any remux could lose them.",
+      "type": "object",
+      "required": [
+        "container_duration_ms",
+        "presentation_fps",
+        "capture_fps",
+        "capture_fps_source"
+      ],
+      "properties": {
+        "container_duration_ms": {
+          "type": "number",
+          "minimum": 0,
+          "description": "The original container's own duration, in file (presentation) milliseconds."
+        },
+        "presentation_fps": {
+          "type": "number",
+          "minimum": 0,
+          "description": "The container's frame clock — frames per FILE second (~30 for a phone slow-mo, the capture rate for a real-time recording)."
+        },
+        "capture_fps": {
+          "type": "number",
+          "minimum": 0,
+          "description": "What the sensor actually did. 0 when unknown — never guessed. For a real-time recording it equals presentation_fps."
+        },
+        "capture_fps_confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "How sure the client is of capture_fps, 0–1. Omitted means the source speaks for itself (a recorder config is definitionally certain)."
+        },
+        "capture_fps_source": {
+          "type": "string",
+          "enum": ["device_metadata", "recorder_config", "probe", "unknown"],
+          "description": "Where capture_fps came from: the asset's own metadata tag, the recorder configuration that produced it, a client-side probe, or nowhere."
+        },
+        "slowmo_factor": {
+          "type": "number",
+          "minimum": 1,
+          "description": "File seconds per real second — capture_fps / presentation_fps. Absent or 1 for a real-time clip."
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "codec": {
+          "type": "string",
+          "description": "The video codec name when the client could read it (e.g. \"h264\", \"hevc\")."
+        },
+        "audio_present": {
+          "type": "boolean",
+          "description": "Whether the original carried an audio track — the audio-first impact seed depends on it."
+        }
+      }
+    },
+    "trimFacts": {
+      "title": "TrimFacts",
+      "description": "What the client cut, requested vs. actually written — a keyframe-aligned remux starts EARLIER than asked (PREVIOUS_SYNC), so the requested window and the produced file disagree by design and both are recorded. All `_pts_ms` fields are on the ORIGINAL file's presentation timeline. Absent entirely when the upload is the untouched original (the whole-clip fallback).",
+      "type": "object",
+      "required": ["requested_file_start_pts_ms", "requested_file_end_pts_ms"],
+      "properties": {
+        "requested_real_start_ms": {
+          "type": "number",
+          "minimum": 0,
+          "description": "The window's start in REAL milliseconds from the start of the source."
+        },
+        "requested_real_end_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "pad_real_ms": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Slack added to each end beyond the window the golfer saw (SAVE_PAD_S), in real ms."
+        },
+        "requested_file_start_pts_ms": {
+          "type": "number",
+          "minimum": 0,
+          "description": "The start handed to the cutter, in file milliseconds (real ms × slowmo_factor)."
+        },
+        "requested_file_end_pts_ms": {
+          "type": "number",
+          "minimum": 0
+        },
+        "actual_remux_start_pts_ms": {
+          "type": "number",
+          "minimum": 0,
+          "description": "The first sample the muxer actually wrote, in source-file milliseconds. At most requested_file_start_pts_ms (the keyframe seek goes backward)."
+        },
+        "actual_remux_end_pts_ms": {
+          "type": "number",
+          "minimum": 0,
+          "description": "The last sample the muxer actually wrote, in source-file milliseconds."
+        }
+      }
+    },
+    "clientDetection": {
+      "title": "ClientDetection",
+      "description": "How the client chose the window — context for telemetry and debugging, NEVER an input to analysis. Nothing in here is an impact measurement (the authority rule above).",
+      "type": "object",
+      "required": ["method", "threshold_version"],
+      "properties": {
+        "audio_candidates": {
+          "type": "array",
+          "description": "What the on-device audio detector heard, strongest first — non-authoritative metadata.",
+          "items": {
+            "$ref": "#/definitions/audioCandidate"
+          }
+        },
+        "method": {
+          "type": "string",
+          "description": "The audio detector that seeded the window (e.g. \"swish\")."
+        },
+        "threshold_version": {
+          "type": "string",
+          "description": "Version tag of the detector thresholds in force when the window was chosen."
+        },
+        "audio_confidence": {
+          "type": "string",
+          "enum": ["confident", "ambiguous", "none"],
+          "description": "The seed's confidence class — the WP-005 go/no-go telemetry."
+        },
+        "visual_fallback_used": {
+          "type": "boolean",
+          "description": "Whether a visual trim fallback chose the window (deferred WP-005; always false until it exists)."
+        },
+        "window_motion_confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "The window sanity check's score — how much activity the chosen window contains."
+        },
+        "user_adjusted_window": {
+          "type": "boolean",
+          "description": "True when the golfer moved the mark by hand instead of accepting the seed."
+        }
+      }
+    },
+    "audioCandidate": {
+      "title": "AudioCandidate",
+      "type": "object",
+      "required": ["real_ms", "score"],
+      "properties": {
+        "real_ms": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Candidate time in REAL milliseconds on the source timeline."
+        },
+        "score": {
+          "type": "number",
+          "description": "The detector's own score — comparable within one method+threshold_version only."
+        }
+      }
+    }
+  }
+}

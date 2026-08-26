@@ -241,22 +241,7 @@ export async function startReanalysis(
   }
 
   if (jobsDriverName() === "queue") {
-    // Backpressure at the door: one user piles work behind their own cap, never behind
-    // everyone else's. The per-view "one active job" check above still applies; this bounds
-    // the actor ACROSS views. The count joins to swing ownership rather than trusting RLS
-    // visibility, which also admits instructor-readable rows.
-    const cap = envInt("JOBS_MAX_ACTIVE_PER_USER", 3);
-    const active = await tx.select({ id: jobsTable.id })
-      .from(jobsTable)
-      .innerJoin(viewsTable, eq(jobsTable.viewId, viewsTable.id))
-      .innerJoin(swingsTable, eq(viewsTable.swingId, swingsTable.id))
-      .where(and(
-        eq(swingsTable.userId, actorId),
-        eq(jobsTable.runner, "queue"),
-        inArray(jobsTable.status, ["queued", "running"]),
-      ));
-    const refusal = queueAdmission(active.length, cap);
-    if (refusal) throw new Error(refusal);
+    await refuseOverActorCap(tx, actorId);
 
     // Dynamic import so the spawn path never loads the QStash client or its configuration.
     const { enqueueReanalysis } = await import("@/lib/jobs/dispatch");
@@ -285,6 +270,28 @@ export async function startReanalysis(
 }
 
 /**
+ * Backpressure at the door: one user piles work behind their own cap, never behind everyone
+ * else's. The per-view "one active job" checks still apply; this bounds the actor ACROSS
+ * views. The count joins to swing ownership rather than trusting RLS visibility, which also
+ * admits instructor-readable rows. Shared by both enqueue doors — re-analysis and first
+ * capture — because the capture path ran with no admission at all until 2026-08-26.
+ */
+async function refuseOverActorCap(tx: DbTx, actorId: string): Promise<void> {
+  const cap = envInt("JOBS_MAX_ACTIVE_PER_USER", 3);
+  const active = await tx.select({ id: jobsTable.id })
+    .from(jobsTable)
+    .innerJoin(viewsTable, eq(jobsTable.viewId, viewsTable.id))
+    .innerJoin(swingsTable, eq(viewsTable.swingId, swingsTable.id))
+    .where(and(
+      eq(swingsTable.userId, actorId),
+      eq(jobsTable.runner, "queue"),
+      inArray(jobsTable.status, ["queued", "running"]),
+    ));
+  const refusal = queueAdmission(active.length, cap);
+  if (refusal) throw new Error(refusal);
+}
+
+/**
  * The FIRST analysis of a freshly uploaded capture, run as a child process of this server.
  *
  * The queue path (`enqueueCapture`) hands a hosted worker a set of URLs and is what production
@@ -303,6 +310,15 @@ export async function startCaptureAnalysis(
   handedness: "right" | "left",
 ): Promise<Job> {
   if (jobsDriverName() === "queue") {
+    // Same guard order as `startReanalysis`, closed 2026-08-26: the capture door had neither
+    // check, so a double `source/complete` (a client retry, a dropped response) minted two
+    // QStash jobs for one view. A live job is returned as-is — the route's advertised
+    // re-enqueue-as-retry applies to failed/absent jobs only.
+    const existing = await getJob(tx, actorId, view);
+    if (existing && (existing.status === "running" || existing.status === "queued")) {
+      return existing;
+    }
+    await refuseOverActorCap(tx, actorId);
     const { enqueueCapture } = await import("@/lib/jobs/dispatch");
     return enqueueCapture(tx, actorId, view, handedness);
   }

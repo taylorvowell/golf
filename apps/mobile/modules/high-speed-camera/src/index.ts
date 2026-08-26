@@ -140,14 +140,35 @@ interface HighSpeedCameraModule {
     timesSec: number[],
     width: number,
   ): Promise<Array<{ path: string; timeSec: number; width: number; height: number }>>;
-  /** Remux a window out of a take. No re-encode — milliseconds, and no quality lost. */
-  trimClip(path: string, startSec: number, endSec: number): Promise<{ path: string }>;
+  /**
+   * Remux a window out of a take. No re-encode — milliseconds, and no quality lost.
+   *
+   * `actualStartPtsMs`/`actualEndPtsMs` are the video samples the muxer REALLY wrote, in
+   * milliseconds on the source file's timeline — the keyframe-aligned start lands earlier
+   * than asked (PREVIOUS_SYNC), and the source manifest records that truth. Optional because
+   * an installed native build may predate them; absent means unknown, and the manifest simply
+   * omits its `actual_remux_*` fields.
+   */
+  trimClip(
+    path: string,
+    startSec: number,
+    endSec: number,
+  ): Promise<{ path: string; actualStartPtsMs?: number; actualEndPtsMs?: number }>;
   /**
    * What an arbitrary clip IS, from its own container — for imports. `captureFps` is the
    * slow-motion truth (`com.android.capture.fps`): 0 means not stamped, an ordinary
-   * real-time clip. Never treat 0 as a rate.
+   * real-time clip. Never treat 0 as a rate. Dims and audio presence ride along for the
+   * source manifest; all three are optional (an older native build omits them) and 0/absent
+   * means the container did not say.
    */
-  probeClip(path: string): Promise<{ captureFps: number; videoFps: number; durationMs: number }>;
+  probeClip(path: string): Promise<{
+    captureFps: number;
+    videoFps: number;
+    durationMs: number;
+    width?: number;
+    height?: number;
+    hasAudio?: boolean;
+  }>;
   /** Remove a recording the flow is finished with (a trimmed-away source, a binned take),
    * along with its filmstrip. Resolves false when the file was already gone — never an error. */
   deleteClip(path: string): Promise<boolean>;

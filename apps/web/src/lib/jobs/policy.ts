@@ -22,17 +22,16 @@ export function envInt(name: string, fallback: number, min = 1): number {
 }
 
 /**
- * Whether queue jobs carry the club-variants stage. Default TRUE — the dev instrument stays
- * on until the variants-off-in-production proposal is accepted (swing-analysis-speed doc §5,
- * awaiting Taylor); this knob is the MECHANISM for that decision, not the decision. On the
- * deployed L4 worker the difference is 124.6s vs 676.6s of pipeline per job, and a long clip
- * with variants on can exceed the runner's own timeout — so e2e runs against the deployed
- * worker set JOBS_CLUB_VARIANTS=false explicitly.
+ * Whether queue jobs carry the club-variants stage. Default FALSE — production pays the
+ * 124.6s pipeline shape; variants-on measured 676.6s on the same L4, and a long clip with
+ * variants on can exceed the runner's own timeout, which turns one job into a retried
+ * timeout. Variants are the dev instrument for the club-trace-verdict work: an explicit
+ * JOBS_CLUB_VARIANTS=true opts a deployment in, and the 27-variant artifact remains available
+ * per-run. The flip is recorded in docs/decisions/platform-data.md.
  */
 export function clubVariants(name = "JOBS_CLUB_VARIANTS"): boolean {
   const raw = (process.env[name] ?? "").trim().toLowerCase();
-  if (raw === "false" || raw === "0" || raw === "off") return false;
-  return true;
+  return raw === "true" || raw === "1" || raw === "on";
 }
 
 /** Null = admit; a string = the user-readable refusal. Backpressure, not a silent pile-up. */

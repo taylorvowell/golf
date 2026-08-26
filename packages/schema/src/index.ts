@@ -3,9 +3,11 @@ import analysisSchema from "../schemas/analysis.schema.json" with { type: "json"
 import apiSchema from "../schemas/api.schema.json" with { type: "json" };
 import coachReportSchema from "../schemas/coach-report.schema.json" with { type: "json" };
 import silhouetteSchema from "../schemas/silhouette.schema.json" with { type: "json" };
+import sourceManifestSchema from "../schemas/source-manifest.schema.json" with { type: "json" };
 import type { Analysis } from "./generated/analysis";
 import type { CoachReport } from "./generated/coach-report";
 import type { Silhouette } from "./generated/silhouette";
+import type { SourceManifest } from "./generated/source-manifest";
 
 /**
  * One contract, three consumers: a Python producer and two TypeScript clients.
@@ -26,7 +28,7 @@ import type { Silhouette } from "./generated/silhouette";
 export * from "./contract";
 export { breakingChanges, schemaSignature } from "./shape";
 export type { ShapeEntry, Signature } from "./shape";
-export { analysisSchema, apiSchema, coachReportSchema, silhouetteSchema };
+export { analysisSchema, apiSchema, coachReportSchema, silhouetteSchema, sourceManifestSchema };
 
 /**
  * `strict: false` because the schemas carry prose the strict meta-schema objects to, and
@@ -38,6 +40,7 @@ const ajv = new Ajv({ allErrors: true, strict: false });
 const validateAnalysisFn = ajv.compile(analysisSchema);
 const validateCoachReportFn = ajv.compile(coachReportSchema);
 const validateSilhouetteFn = ajv.compile(silhouetteSchema);
+const validateSourceManifestFn = ajv.compile(sourceManifestSchema);
 
 export interface ValidationResult {
   valid: boolean;
@@ -59,6 +62,8 @@ export const validateCoachReport = (data: unknown): ValidationResult =>
   run(validateCoachReportFn, data);
 export const validateSilhouette = (data: unknown): ValidationResult =>
   run(validateSilhouetteFn, data);
+export const validateSourceManifest = (data: unknown): ValidationResult =>
+  run(validateSourceManifestFn, data);
 
 function assertWith(label: string, result: ValidationResult): void {
   if (!result.valid) {
@@ -77,4 +82,8 @@ export function assertCoachReport(data: unknown): asserts data is CoachReport {
 
 export function assertSilhouette(data: unknown): asserts data is Silhouette {
   assertWith("silhouette.json", validateSilhouette(data));
+}
+
+export function assertSourceManifest(data: unknown): asserts data is SourceManifest {
+  assertWith("source_manifest.json", validateSourceManifest(data));
 }

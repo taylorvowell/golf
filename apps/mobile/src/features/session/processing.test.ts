@@ -22,6 +22,7 @@ jest.mock("../../platform/client", () => ({
 import {
   clearProcessing,
   getProcessing,
+  posterSampleTimes,
   startProcessing,
   subscribeProcessing,
   type ProcessingInput,
@@ -198,4 +199,15 @@ it("starts one run per swing, however many times a screen mounts", async () => {
   // A second upload would mint a second swing row for one hit.
   expect(mockUploadAsync).toHaveBeenCalledTimes(1);
   expect(mockRequest.mock.calls.filter(([p]) => p === "swings")).toHaveLength(1);
+});
+
+it("samples the poster in real seconds — a slow-mo clip's times are scaled onto its file clock", () => {
+  // 8 file seconds per real second: the address moments 0.05/0.5/1.5s into the swing live at
+  // 0.4/4/12s of the file. Unscaled, all three chances collapse onto one fifth of a real
+  // second (audit, 2026-08-26). An ordinary recording — factor absent or 1 — is untouched.
+  expect(posterSampleTimes(8)).toEqual([0.4, 4, 12]);
+  expect(posterSampleTimes()).toEqual([0.05, 0.5, 1.5]);
+  expect(posterSampleTimes(1)).toEqual([0.05, 0.5, 1.5]);
+  // A nonsense factor never pushes samples BEFORE their real-time moments.
+  expect(posterSampleTimes(0)).toEqual([0.05, 0.5, 1.5]);
 });

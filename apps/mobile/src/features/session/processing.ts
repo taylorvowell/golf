@@ -168,10 +168,26 @@ interface CreatedCapture {
   upload: { url: string; method: string; headers: Record<string, string> };
   /** Where the poster frame goes. Optional so a server predating it changes nothing here. */
   posterUpload?: { url: string; method: string; headers: Record<string, string> };
+  /** Where `source_manifest.json` goes. Optional for the same version-skew reason. */
+  manifestUpload?: { url: string; method: string; headers: Record<string, string> };
 }
 
 /** Poster decode width — card-and-cover sized, a few tens of KB as JPEG. */
 const POSTER_PX = 720;
+
+/**
+ * The poster's sample points, in FILE seconds.
+ *
+ * The moments are chosen in REAL seconds — the golfer at address lives in the first ~1.5s of
+ * the trimmed swing — and scaled onto the clip's own clock. On a slow-mo import one real
+ * second is `slowMoFactor` file seconds; unscaled, all three chances collapsed onto the first
+ * fifth of a real second (audit, 2026-08-26). Pure and exported so the arithmetic is pinned
+ * without driving the upload pipeline.
+ */
+export function posterSampleTimes(slowMoFactor = 1): number[] {
+  const factor = Math.max(1, slowMoFactor);
+  return [0.05, 0.5, 1.5].map((t) => t * factor);
+}
 
 /**
  * Extract one frame of the clip — the golfer at address — and send it to the poster target.
@@ -185,16 +201,18 @@ const POSTER_PX = 720;
 async function uploadPoster(
   target: NonNullable<CreatedCapture["posterUpload"]>,
   clipPath: string,
+  slowMoFactor = 1,
 ): Promise<void> {
   try {
     const { default: HighSpeedCamera } = await import("../../../modules/high-speed-camera/src");
     if (typeof HighSpeedCamera?.clipThumbnailsAt !== "function") return;
     // Three early sample points, first hit wins — the extractor answers with the nearest sync
-    // frame and skips misses, so one request is one chance (pendingImports' lesson). All three
-    // sit at the front of the clip, which the trim put at the golfer's address.
+    // frame and skips misses, so one request is one chance (pendingImports' lesson). All
+    // three sit at the front of the clip, which the trim put at the golfer's address; see
+    // `posterSampleTimes` for the slow-mo clock scaling.
     const frames = await HighSpeedCamera.clipThumbnailsAt(
       clipPath.replace(/^file:\/\//, ""),
-      [0.05, 0.5, 1.5],
+      posterSampleTimes(slowMoFactor),
       POSTER_PX,
     );
     const frame = frames?.[0]?.path;
@@ -280,6 +298,31 @@ function toFileUri(path: string): string {
   return path.startsWith("file://") ? path : `file://${path}`;
 }
 
+/**
+ * PUT the source manifest to its target — small JSON, sent from memory.
+ *
+ * Awaited (unlike the poster) because ordering is part of the contract: the manifest must be
+ * in place before `source/complete`, which is where the server records whether one exists.
+ * Failure is still tolerated — the server accepts manifest-absent uploads by design (older
+ * clients forever will be), so a swing must never fail for its metadata. Loud in dev only.
+ */
+async function uploadManifest(
+  target: NonNullable<CreatedCapture["manifestUpload"]>,
+  manifest: NonNullable<ProcessingInput["clip"]["manifest"]>,
+): Promise<void> {
+  try {
+    const { url, headers } = await api.uploadTarget(target.url, target.headers);
+    const res = await fetch(url, {
+      method: target.method === "POST" ? "POST" : "PUT",
+      headers: { ...headers, "content-type": "application/json" },
+      body: JSON.stringify(manifest),
+    });
+    if (__DEV__ && !res.ok) console.warn(`manifest upload refused ${res.status}`);
+  } catch (err) {
+    if (__DEV__) console.warn("manifest upload failed", err);
+  }
+}
+
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /**
@@ -341,12 +384,21 @@ async function run(localId: string, input: ProcessingInput): Promise<void> {
   emit(localId, state);
 
   // The poster races the video and wins by minutes — see `uploadPoster`. Never awaited.
-  if (created.posterUpload) void uploadPoster(created.posterUpload, input.clip.path);
+  if (created.posterUpload) {
+    void uploadPoster(created.posterUpload, input.clip.path, input.clip.slowMoFactor);
+  }
 
   try {
     await uploadSwingVideo(created.upload, input.clip.path);
   } catch (err) {
     return fail(localId, state, err, "The video didn't finish uploading.");
+  }
+
+  // The source manifest lands BEFORE `source/complete` — that call is where the server
+  // records whether one exists, and the guard reads it on delivery. Awaited but tolerant:
+  // see `uploadManifest`.
+  if (created.manifestUpload && input.clip.manifest) {
+    await uploadManifest(created.manifestUpload, input.clip.manifest);
   }
 
   let job: JobStatusResponse;

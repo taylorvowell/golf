@@ -209,13 +209,14 @@ importers:
         version: 4.1.10(@types/node@20.19.43)(@vitest/coverage-v8@4.1.10)(jsdom@20.0.3)(vite@8.2.1(@types/node@20.19.43)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.49.2)(tsx@4.23.8)(yaml@2.9.0))
 
   packages/schema:
+    dependencies:
+      ajv:
+        specifier: ^8.20.0
+        version: 8.20.0
     devDependencies:
       '@types/node':
         specifier: ^20.19.43
         version: 20.19.43
-      ajv:
-        specifier: ^8.20.0
-        version: 8.20.0
       json-schema-to-typescript:
         specifier: ^15.0.4
         version: 15.0.4

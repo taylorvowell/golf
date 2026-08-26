@@ -3,11 +3,30 @@ import { AppState } from "react-native";
 import { CheckCircle2, FileVideo, VideoOff } from "lucide-react-native";
 import type { SessionSummary } from "@swingsage/schema/contract";
 
+// Static, like SwingReview's own import: every host of this hook renders the review screens,
+// which already put the module in the bundle graph — and jest's global camera mock only
+// covers a static import (a runtime `import()` dies in jest's VM, which is how the detector
+// bug below went untestable).
+import HighSpeedCamera, { type ImpactMethod } from "../../../modules/high-speed-camera/src";
+import type { SourceManifest } from "@swingsage/schema/contract";
 import { SAVE_PAD_S } from "../session/captureConstants";
 import { getProcessing, subscribeProcessing } from "../session/processing";
-import { pickImpactSeed } from "../session/reviewWindow";
+import {
+  pickImpactSeed,
+  windowActivityConfidence,
+  type ImpactSeed,
+} from "../session/reviewWindow";
 import type { CaptureView } from "../session/sessionState";
+import {
+  buildSourceManifest,
+  detectionFacts,
+  importedSourceFacts,
+  judgeTrimmedClip,
+  trimFacts,
+  type ImportProbe,
+} from "../session/sourceManifest";
 import type { SwingTake } from "../session/SwingReview";
+import { resolveImpactSeeding } from "../session/useImpactMethod";
 import { useHandedness } from "../profile/useProfile";
 import { useToast } from "../toast/ToastProvider";
 import { importSwing, pickSwingVideo, type PickedClip } from "./importSwing";
@@ -54,6 +73,13 @@ export type ImportReview =
       view: CaptureView;
       /** Detection's answer, in file seconds — the confirm loop and the edit seed share it. */
       impactSec: number;
+      /** The ORIGINAL container's facts, read before the trim that loses them — the source
+       *  manifest is built from these at save. Null when the probe could not read the clip. */
+      probe: ImportProbe | null;
+      /** The full seed (confidence + candidates) — the manifest's detection facts. */
+      seed: ImpactSeed;
+      /** Which detector seeded it, resolved once for the whole review. */
+      method: ImpactMethod;
     }
   | { phase: "saving"; clip: PickedClip; take: SwingTake; view: CaptureView };
 
@@ -73,8 +99,11 @@ export interface SavedImport {
   swingId: string | null;
   /** Absolute path to the trimmed cut, no `file://` scheme. */
   path: string;
+  /** The CONTAINER's frame clock (frames per file second) — what frame math seeks against.
+   *  For a slow-mo import that is ~30; the capture rate is `fps × slowMoFactor`. */
   fps: number;
   durationMs: number;
+  /** File seconds per real second — 8 for a phone slow-mo clip. Drives playback rate. */
   slowMoFactor?: number;
   view: CaptureView;
 }
@@ -237,7 +266,12 @@ export function useImportSwing(
    * what the pending-swing page watches.
    */
   const run = useCallback(
-    async (clip: PickedClip, view: CaptureView): Promise<string | null> => {
+    async (
+      clip: PickedClip,
+      view: CaptureView,
+      slowMoFactor?: number,
+      manifest?: SourceManifest,
+    ): Promise<string | null> => {
         let localId: string;
         try {
           localId = await importSwing({
@@ -245,6 +279,8 @@ export function useImportSwing(
             view,
             handedness: handedness === "left" ? "left" : "right",
             sessions: sessionsRef.current,
+            slowMoFactor,
+            manifest,
           });
         } catch (err) {
           toast({
@@ -252,7 +288,7 @@ export function useImportSwing(
             title: "Couldn't add that swing",
             detail: `${err instanceof Error ? err.message : String(err)} — tap to try again.`,
             icon: VideoOff,
-            onPress: () => void run(clip, view),
+            onPress: () => void run(clip, view, slowMoFactor, manifest),
           });
           return null;
         }
@@ -292,7 +328,7 @@ export function useImportSwing(
               // and here the useful destination is another attempt.
               detail: `${state.message ?? "The analysis didn't finish."} Tap to try again.`,
               icon: VideoOff,
-              onPress: () => void run(clip, view),
+              onPress: () => void run(clip, view, slowMoFactor, manifest),
             });
             // The placeholder has already left the log and any empty swing behind it is being
             // cleaned up; refresh so the list agrees.
@@ -318,21 +354,26 @@ export function useImportSwing(
         // The native detector and cutter open the file themselves — they want a bare path,
         // not a file:// URI (the recorder has always handed them one).
         const path = clip.uri.replace(/^file:\/\//, "");
-        // What the clip actually is, from its own container: a phone slow-mo is captured at
-        // 240 and WRITTEN at 30, and every second of its timeline is 1/8th of a real second.
-        // Without this the review's before/after window is 8× too generous and the analyzer
-        // is handed a swing that appears to take twenty seconds (Taylor, 2026-08-23).
+        // Two clocks, kept apart. `fps` is the CONTAINER's frame clock — the rate
+        // `frame = round(t × fps)` and every seek are exact against, ~30 on a phone slow-mo.
+        // `slowMoFactor` is how much slower that timeline runs than the world (240 captured /
+        // 30 written = 8), and it alone scales the real-seconds math: without it the review
+        // window is 8× too generous and the analyzer is handed a swing that appears to take
+        // twenty seconds (Taylor, 2026-08-23). Promoting captureFps INTO `fps` — the previous
+        // shape — stamped a 240 clock on a 30fps container and corrupted every seek and
+        // frame count downstream (audit, 2026-08-26).
         let fps = 30;
         let slowMoFactor: number | undefined;
         let durationMs = clip.durationMs ?? 0;
-        let camera: typeof import("../../../modules/high-speed-camera/src").default | null = null;
+        // The ORIGINAL container's facts, kept whole: the source manifest is built from this
+        // read, because the trim ahead drops `com.android.capture.fps` and re-probing the cut
+        // would find nothing (the 2,445-frame incident class).
+        let probe: ImportProbe | null = null;
         try {
-          camera = (await import("../../../modules/high-speed-camera/src")).default;
-          const probe = await camera.probeClip(path);
+          probe = await HighSpeedCamera.probeClip(path);
           if (probe.durationMs > 0) durationMs = probe.durationMs;
           if (probe.videoFps > 0) fps = probe.videoFps;
           if (probe.captureFps > probe.videoFps && probe.videoFps > 0) {
-            fps = probe.captureFps;
             slowMoFactor = probe.captureFps / probe.videoFps;
           }
         } catch {
@@ -343,21 +384,34 @@ export function useImportSwing(
           // A clip whose length nothing could read cannot drive a review. Rare; the
           // whole-clip upload is the honest fallback, and the analyzer still finds the swing.
           setReview(null);
-          void run(clip, view);
+          void run(
+            clip, view, slowMoFactor,
+            probe
+              ? buildSourceManifest({ source: importedSourceFacts(probe, clip.durationMs ?? 0) })
+              : undefined,
+          );
           return;
         }
         // Same detector, same defaults, same seed rule as the recorded path's review — the
         // confirm screen's auto-cut has to be the clip the scrubber would have started on.
-        const found = camera
-          ? await camera.detectImpacts(path, 3, undefined, true).catch(() => [])
-          : [];
+        // Resolved, not hardcoded: `resolveImpactSeeding` reads the debug menu's stored pick
+        // in dev and is always `swish` in release. Passing `undefined` here let Kotlin's
+        // Method.parse(null) fall back to ATTACK while this comment claimed parity.
+        const seeding = await resolveImpactSeeding();
+        const found = await HighSpeedCamera.detectImpacts(
+          path, 3, seeding.method, seeding.edgeWeighting,
+        ).catch(() => []);
         if (runId !== reviewRun.current) return;
+        const seed = pickImpactSeed(found, durationMs / 1000);
         setReview({
           phase: "confirm",
           clip,
           take: { path, fps, durationMs, slowMoFactor },
           view,
-          impactSec: pickImpactSeed(found, durationMs / 1000),
+          impactSec: seed.seedSec,
+          probe,
+          seed,
+          method: seeding.method,
         });
       })();
     },
@@ -377,20 +431,62 @@ export function useImportSwing(
       const current = review;
       // Only the two screens may save, and only once — the phase swap IS the double-fire lock.
       if (!current || (current.phase !== "confirm" && current.phase !== "edit")) return;
-      const { clip, take, view } = current;
+      const { clip, take, view, probe, seed, method } = current;
+      // Reaching the edit screen at all is the adjustment — the confirm pass saves the seed's
+      // own window, so a save from "edit" means the golfer moved (or meant to move) the mark.
+      const userAdjusted = current.phase === "edit";
       setReview({ phase: "saving", clip, take, view });
       void (async () => {
         try {
-          // Lazy: the native module throws where it does not exist (jest), and this flow only
-          // needs the cutter at the moment of save.
-          const { default: HighSpeedCamera } = await import("../../../modules/high-speed-camera/src");
           // Same slack the recorded path gives (SessionScreen.saveTake): the box on screen is
           // the promise, the pad protects the takeaway from a finger that stopped a hair early.
           const startSec = Math.max(0, window.startSec - SAVE_PAD_S);
           const endSec = Math.min(take.durationMs / 1000, window.endSec + SAVE_PAD_S);
-          const { path } = await HighSpeedCamera.trimClip(take.path, startSec, endSec);
+          const trimmed = await HighSpeedCamera.trimClip(take.path, startSec, endSec);
+          const { path } = trimmed;
+          const slowMo = Math.max(1, take.slowMoFactor ?? 1);
+          // The source manifest: the ORIGINAL container's capture facts (the remux just
+          // dropped its tags), the window as requested and as actually written, and how it
+          // was chosen. This travels beside the upload so the analyzer's retime never again
+          // depends on a tag the cutter destroys.
+          const manifest = buildSourceManifest({
+            source: probe
+              ? importedSourceFacts(probe, clip.durationMs ?? 0)
+              : importedSourceFacts(
+                  { captureFps: 0, videoFps: take.fps, durationMs: take.durationMs },
+                ),
+            trim: trimFacts({
+              fileStartSec: startSec,
+              fileEndSec: endSec,
+              padFileSec: SAVE_PAD_S,
+              slowMoFactor: slowMo,
+              actualStartPtsMs: trimmed.actualStartPtsMs,
+              actualEndPtsMs: trimmed.actualEndPtsMs,
+            }),
+            detection: detectionFacts({
+              method,
+              seed,
+              slowMoFactor: slowMo,
+              userAdjusted,
+              windowActivity: windowActivityConfidence(seed.candidates, window),
+            }),
+          });
+          // The preflight (WP-003): the cut must agree with the manifest BEFORE a byte is
+          // uploaded — a contradiction is the slow-mo arithmetic being wrong, and the device
+          // still holds the original to re-trim from. The thrown sentence lands in the trim
+          // toast below, which already names the failure and keeps the clip in the library.
+          const verdict = judgeTrimmedClip(
+            await HighSpeedCamera.probeClip(path).catch(() => null),
+            manifest,
+          );
+          if (verdict) throw new Error(verdict);
           const trimmedMs = Math.round((endSec - startSec) * 1000);
-          const localId = await run({ ...clip, uri: path, durationMs: trimmedMs }, view);
+          const localId = await run(
+            { ...clip, uri: path, durationMs: trimmedMs },
+            view,
+            take.slowMoFactor,
+            manifest,
+          );
           // Only once the run is actually away — a trim that threw lands in the catch below,
           // and a run that never started has already said so through its own toast; moving the
           // golfer to a pending page with nothing behind it would be a lie either way.

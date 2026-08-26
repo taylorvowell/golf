@@ -1,0 +1,67 @@
+{
+  "version": "swish-parity-v1",
+  "description": "Shared SWISH parity fixtures (C9, video-analysis-redesign step 02): synthesized signals \u2014 parameters, not bytes \u2014 that BOTH swish implementations must rank the same way. The Python runner is tests/test_swish_parity.py (synthesizes the PCM from these parameters, writes a WAV, runs swingsage.audio_impact.candidates). The Kotlin runner does not exist yet \u2014 the expo-module has no gradle test infrastructure \u2014 and is the named shortfall of this step: when it lands, it synthesizes the SAME PCM from this file and asserts the same expectations against SwingClip's swish path. Until then this file is the single statement of what both must agree on.",
+  "sample_rate": 44100,
+  "noise_floor_amplitude": 0.004,
+  "noise_seed": 7,
+  "clips": [
+    {
+      "name": "whoosh_then_click",
+      "duration_s": 8.0,
+      "description": "The canonical strike: a club audibly swinging, ending in a broadband click. The candidate must land on the click.",
+      "events": [
+        {
+          "kind": "whoosh",
+          "start_s": 3.5,
+          "end_s": 3.95,
+          "amplitude": 0.03
+        },
+        {
+          "kind": "click",
+          "at_s": 4.0,
+          "amplitude": 0.6
+        }
+      ],
+      "expect": {
+        "top_candidate_s": 4.0,
+        "tolerance_s": 0.2
+      }
+    },
+    {
+      "name": "bare_click_loses_to_swung_click",
+      "duration_s": 10.0,
+      "description": "The discriminator swish exists for: a LOUDER bare transient (a ball dropped on the mat) versus a quieter click with a swing in front of it. The swung click must win.",
+      "events": [
+        {
+          "kind": "click",
+          "at_s": 2.5,
+          "amplitude": 0.7
+        },
+        {
+          "kind": "whoosh",
+          "start_s": 6.0,
+          "end_s": 6.45,
+          "amplitude": 0.03
+        },
+        {
+          "kind": "click",
+          "at_s": 6.5,
+          "amplitude": 0.5
+        }
+      ],
+      "expect": {
+        "top_candidate_s": 6.5,
+        "tolerance_s": 0.2
+      }
+    },
+    {
+      "name": "silence_answers_nothing",
+      "duration_s": 6.0,
+      "description": "Noise floor only. An empty candidate list is the required answer \u2014 never an invented strike.",
+      "events": [],
+      "expect": {
+        "no_candidates_above_floor": true
+      }
+    }
+  ]
+}

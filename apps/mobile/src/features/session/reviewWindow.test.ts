@@ -3,6 +3,7 @@ import {
   FALLBACK_FROM_END_SEC,
   pickImpactSeed,
   reviewWindowAround,
+  windowActivityConfidence,
 } from "./reviewWindow";
 
 /**
@@ -48,7 +49,11 @@ describe("pickImpactSeed", () => {
       ],
       30,
     );
-    expect(seed).toBe(14);
+    expect(seed.seedSec).toBe(14);
+    // Two plausible strikes is the honest class for the manifest's telemetry: the pick is
+    // right for the two-balls case, and the recording says the take was not unambiguous.
+    expect(seed.confidence).toBe("ambiguous");
+    expect(seed.candidates.map((c) => c.timeSec)).toEqual([8, 14]);
   });
 
   it("ignores candidates below the plausibility floor", () => {
@@ -59,14 +64,37 @@ describe("pickImpactSeed", () => {
       ],
       30,
     );
-    expect(seed).toBe(8);
+    expect(seed.seedSec).toBe(8);
+    expect(seed.confidence).toBe("confident");
+    expect(seed.candidates.map((c) => c.timeSec)).toEqual([8]);
   });
 
   it("falls back near the end when nothing was heard — never an error, never an empty state", () => {
-    expect(pickImpactSeed([], 30)).toBe(30 - FALLBACK_FROM_END_SEC);
+    const seed = pickImpactSeed([], 30);
+    expect(seed.seedSec).toBe(30 - FALLBACK_FROM_END_SEC);
+    expect(seed.confidence).toBe("none");
+    expect(seed.candidates).toEqual([]);
   });
 
   it("never falls back before the start of a short clip", () => {
-    expect(pickImpactSeed([], 4)).toBe(0);
+    expect(pickImpactSeed([], 4).seedSec).toBe(0);
+  });
+});
+
+describe("windowActivityConfidence", () => {
+  const window = { startSec: 10, endSec: 15 };
+
+  it("scores 1 when a candidate sits inside the window", () => {
+    expect(windowActivityConfidence([{ timeSec: 12, score: 1 }], window)).toBe(1);
+  });
+
+  it("scores 0 when strikes were heard and the window contains none of them", () => {
+    // The case the warn exists for: the golfer dragged the mark away from everything the
+    // take's audio picked up.
+    expect(windowActivityConfidence([{ timeSec: 25, score: 1 }], window)).toBe(0);
+  });
+
+  it("abstains on silence — no candidates says nothing about the window", () => {
+    expect(windowActivityConfidence([], window)).toBeNull();
   });
 });

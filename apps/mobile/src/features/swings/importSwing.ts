@@ -139,6 +139,11 @@ export async function importSwing(input: {
   view: CaptureView;
   handedness: "right" | "left";
   sessions: readonly SessionSummary[];
+  /** File seconds per real second — 8 for a phone slow-mo clip, absent when unknown. Ingest
+   *  never reads it; it scales the poster's sample times into the file's clock. */
+  slowMoFactor?: number;
+  /** The source manifest built from the ORIGINAL container — uploaded beside the bytes. */
+  manifest?: import("@swingsage/schema/contract").SourceManifest;
 }): Promise<string> {
   const localId = `import-${++importCounter}-${input.clip.uri.slice(-24)}`;
   // The session is resolved BEFORE the run starts, so the swing is attached at creation rather
@@ -158,6 +163,8 @@ export async function importSwing(input: {
       // inventing a number nothing needs.
       fps: 0,
       durationMs: input.clip.durationMs ?? 0,
+      slowMoFactor: input.slowMoFactor,
+      manifest: input.manifest,
     },
     view: input.view,
     handedness: input.handedness,

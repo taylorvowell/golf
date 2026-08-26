@@ -1008,7 +1008,19 @@ object SwingClip {
     }
   }
 
-  fun trim(path: String, startSec: Double, endSec: Double, outDir: File): String {
+  /**
+   * What a trim actually produced: the file, and the first/last VIDEO sample written, in
+   * milliseconds on the ORIGINAL file's timeline. The keyframe-aligned start writes EARLIER
+   * than asked (PREVIOUS_SYNC), so the request and the produced file disagree by design — the
+   * source manifest records this truth beside the request rather than trusting either alone.
+   */
+  data class TrimResult(
+    val path: String,
+    val actualStartPtsMs: Double,
+    val actualEndPtsMs: Double,
+  )
+
+  fun trim(path: String, startSec: Double, endSec: Double, outDir: File): TrimResult {
     val source = File(path)
     require(source.exists()) { "no such clip: $path" }
     require(endSec > startSec) { "trim window is empty" }
@@ -1031,11 +1043,13 @@ object SwingClip {
       // explicit is what stops audio samples being written into the video track on a clip whose
       // tracks are ordered the other way round.
       val indexMap = HashMap<Int, Int>()
+      var videoTrack = -1
       var maxInputSize = 0
       for (i in 0 until extractor.trackCount) {
         val fmt = extractor.getTrackFormat(i)
         val mime = fmt.getString(MediaFormat.KEY_MIME) ?: continue
         if (!mime.startsWith("video/") && !mime.startsWith("audio/")) continue
+        if (mime.startsWith("video/")) videoTrack = i
         extractor.selectTrack(i)
         indexMap[i] = muxerOut.addTrack(fmt)
         if (fmt.containsKey(MediaFormat.KEY_MAX_INPUT_SIZE)) {
@@ -1059,6 +1073,9 @@ object SwingClip {
       // Every track is rebased on the same origin — the first sample actually written — so the two
       // tracks stay in sync with each other rather than each starting at its own zero.
       var origin = -1L
+      // The video track's real boundaries, in SOURCE time — what the manifest records.
+      var firstVideoUs = -1L
+      var lastVideoUs = -1L
 
       while (true) {
         val size = extractor.readSampleData(buffer, 0)
@@ -1073,6 +1090,10 @@ object SwingClip {
             info.presentationTimeUs = time - origin
             info.flags = extractor.sampleFlags
             muxerOut.writeSampleData(target, buffer, info)
+            if (extractor.sampleTrackIndex == videoTrack) {
+              if (firstVideoUs < 0) firstVideoUs = time
+              if (time > lastVideoUs) lastVideoUs = time
+            }
           }
         }
         if (time > endUs) break
@@ -1080,7 +1101,12 @@ object SwingClip {
       }
 
       muxerOut.stop()
-      return out.absolutePath
+      require(firstVideoUs >= 0) { "trim wrote no video samples — the window missed the stream" }
+      return TrimResult(
+        path = out.absolutePath,
+        actualStartPtsMs = firstVideoUs / 1000.0,
+        actualEndPtsMs = lastVideoUs / 1000.0,
+      )
     } catch (e: Throwable) {
       runCatching { out.delete() }
       throw e

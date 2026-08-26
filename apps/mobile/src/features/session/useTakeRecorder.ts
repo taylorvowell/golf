@@ -113,12 +113,22 @@ export function useTakeRecorder(
    * screen or deleted, never merely dropped.
    */
   const deliverTake = useCallback(
-    (path: string, fps: number, durationMs: number) => {
+    (path: string, fps: number, durationMs: number, width?: number, height?: number) => {
       if (modeRef.current !== "recording") {
         void HighSpeedCamera.deleteClip?.(path);
         return;
       }
-      dispatch({ type: "take-ready", take: { path, fps, durationMs } });
+      // Dims ride along for the source manifest — the recorder's own configuration is the one
+      // place they are certain. 0/absent (an older native build) simply leaves them off.
+      dispatch({
+        type: "take-ready",
+        take: {
+          path,
+          fps,
+          durationMs,
+          ...(width && height ? { width, height } : {}),
+        },
+      });
     },
     [dispatch],
   );
@@ -136,7 +146,7 @@ export function useTakeRecorder(
       const result = await camera.current?.stopRecording();
       active.current = false;
       if (result) {
-        deliverTake(result.path, result.fps, result.durationMs);
+        deliverTake(result.path, result.fps, result.durationMs, result.width, result.height);
       } else {
         // The ref was gone (view unmounted mid-take) — nothing was finalized.
         dispatch({ type: "record-failed" });
@@ -158,7 +168,7 @@ export function useTakeRecorder(
         active.current = false;
         const ev = e.nativeEvent;
         if (ev.reason === "cap") {
-          deliverTake(ev.path, ev.fps, ev.durationMs);
+          deliverTake(ev.path, ev.fps, ev.durationMs, ev.width, ev.height);
         } else {
           dispatch({ type: "record-failed" });
           onError(ev.error);

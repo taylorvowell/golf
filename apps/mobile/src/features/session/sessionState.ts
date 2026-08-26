@@ -72,7 +72,10 @@ export function defaultZoomFor(view: CaptureView, range: ZoomRange): CameraZoom 
 export interface SwingClipRef {
   /** Absolute path in the app cache, no `file://` scheme — as the native recorder wrote it. */
   path: string;
-  /** The rate the session was CONFIGURED at — never the rate that was requested. */
+  /** The CONTAINER's frame clock (frames per file second) — for an app recording that is the
+   *  configured capture rate; for an imported slow-mo it is the ~30 the file plays at, and
+   *  the capture rate is `fps × slowMoFactor`. Frame math seeks against THIS, never the
+   *  capture rate (SwingTake documents the incident). */
   fps: number;
   durationMs: number;
   /**
@@ -83,6 +86,16 @@ export interface SwingClipRef {
    * of a second of actual swing and the backswing falls outside the window (Taylor, 2026-08-22).
    */
   slowMoFactor?: number;
+  /** The recorder's configured frame size, when known — the source manifest's dims. */
+  width?: number;
+  height?: number;
+  /**
+   * The source manifest for this clip (`@swingsage/schema` source-manifest) — capture facts
+   * and trim boundaries, built by whichever flow produced the file and uploaded beside it.
+   * Absent on legacy clips and on retries that outlived the review; the server tolerates
+   * absence by design (container-tag fallback).
+   */
+  manifest?: import("@swingsage/schema/contract").SourceManifest;
 }
 
 /**

@@ -136,6 +136,13 @@ class AnalysisRequest:
     club_model_traj_gate: bool = False
     club_variants: bool = True
     wholebody: bool = True
+    # Capture-clock facts from the client's SOURCE MANIFEST, threaded through the job spec by
+    # the enqueue side (the only party that reads storage). 0.0 = unknown: the pipeline then
+    # probes the container's own tag exactly as it always has. The manifest wins over tags
+    # because the phone-side remux DROPS `com.android.capture.fps` — a trimmed slow-mo import
+    # otherwise analyzes at its slowed length (the 2,445-frame incident class, 2026-08-26).
+    capture_fps: float = 0.0     # what the sensor did (240 for a Samsung slow-mo)
+    source_fps: float = 0.0      # the container's presentation rate, for the guard's cross-check
 
 
 @dataclass(frozen=True)
@@ -310,7 +317,14 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
         # (every tempo and velocity number 8x wrong, found on the first hosted import,
         # 2026-08-23). The retimed clip then normalizes at its TRUE rate, so nothing
         # downstream knows the file was ever slow.
-        capture_fps = video.probe_capture_fps(src)
+        tag_capture_fps = video.probe_capture_fps(src)
+        # The manifest's fact beats the container tag (see AnalysisRequest.capture_fps) — and
+        # the provenance is recorded in the artifact, so a wrong retime is attributable.
+        capture_fps = req.capture_fps or tag_capture_fps
+        capture_fps_source = (
+            "manifest" if req.capture_fps
+            else ("container_tag" if tag_capture_fps else "none")
+        )
         retime = video.retime_factor(src_info, capture_fps)
         if retime:
             print(f"retime     slow-motion source: capture {capture_fps:.0f}fps written at "
@@ -959,6 +973,9 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
                     "path": _checked_source(src), "width": src_info.width, "height": src_info.height,
                     "codec": src_info.codec, "rotation": src_info.rotation,
                     "fps": src_info.fps, "is_vfr": src_info.is_vfr,
+                    # Where the retime decision's capture rate came from — additive provenance
+                    # (step 02): "manifest" | "container_tag" | "none". 0.0 = real-time clip.
+                    "capture_fps": capture_fps, "capture_fps_source": capture_fps_source,
                 },
                 "analysis_res": {"width": anal.width, "height": anal.height},
             },

@@ -196,10 +196,18 @@ class HighSpeedCameraModule : Module() {
       }
     }
 
-    /** Remux a window out of a take — no re-encode, so it costs milliseconds and loses nothing. */
+    /** Remux a window out of a take — no re-encode, so it costs milliseconds and loses nothing.
+     *  Resolves with the boundaries the muxer actually wrote (source-file ms) beside the path:
+     *  a keyframe-aligned start lands EARLIER than asked, and the source manifest records the
+     *  truth rather than the request. */
     AsyncFunction("trimClip") { path: String, startSec: Double, endSec: Double, promise: Promise ->
       try {
-        promise.resolve(mapOf("path" to SwingClip.trim(path, startSec, endSec, context.cacheDir)))
+        val result = SwingClip.trim(path, startSec, endSec, context.cacheDir)
+        promise.resolve(mapOf(
+          "path" to result.path,
+          "actualStartPtsMs" to result.actualStartPtsMs,
+          "actualEndPtsMs" to result.actualEndPtsMs,
+        ))
       } catch (e: Throwable) {
         promise.reject("TRIM_CLIP", e.message ?: "trim failed", e)
       }
@@ -229,10 +237,24 @@ class HighSpeedCameraModule : Module() {
             android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_FRAME_COUNT,
           )?.toDoubleOrNull() ?: 0.0
           val video = if (frames > 0 && durationMs > 0) frames * 1000.0 / durationMs else 0.0
+          // Coded dims + audio presence ride along for the source manifest — read here, before
+          // any remux could lose them. 0 / absent means the container did not say.
+          val width = mmr.extractMetadata(
+            android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH,
+          )?.toIntOrNull() ?: 0
+          val height = mmr.extractMetadata(
+            android.media.MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT,
+          )?.toIntOrNull() ?: 0
+          val hasAudio = mmr.extractMetadata(
+            android.media.MediaMetadataRetriever.METADATA_KEY_HAS_AUDIO,
+          ) != null
           promise.resolve(mapOf(
             "captureFps" to capture,
             "videoFps" to video,
             "durationMs" to durationMs,
+            "width" to width,
+            "height" to height,
+            "hasAudio" to hasAudio,
           ))
         } finally {
           mmr.release()

@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
-  "currentStep": "01",
+  "currentStep": "03",
   "phase": "Foundations",
-  "lastUpdated": "2026-08-26T00:00:00Z",
+  "lastUpdated": "2026-08-26T18:05:00Z",
   "steps": {
     "00": { "status": "complete", "completedAt": "2026-08-26T00:00:00Z" },
-    "01": { "status": "not-started" },
-    "02": { "status": "not-started" },
+    "01": { "status": "complete", "completedAt": "2026-08-26T17:30:00Z" },
+    "02": { "status": "complete", "completedAt": "2026-08-26T18:05:00Z" },
     "03": { "status": "not-started" },
     "04": { "status": "not-started" },
     "05": { "status": "not-started" },

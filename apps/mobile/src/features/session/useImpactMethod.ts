@@ -59,6 +59,28 @@ export interface ImpactSeeding {
   edgeWeighting: boolean;
 }
 
+/**
+ * The seeding resolved once, outside React — for the import flow, whose detection runs behind
+ * a loading screen where the session screen (and its debug menu hook) may not be mounted.
+ *
+ * Reads the SAME stored preference as the hook, so the two paths cannot disagree: in dev the
+ * debug menu's pick applies to imports too, and in release both are always `swish`. This
+ * exists because the import path once passed `undefined`, which Kotlin's `Method.parse(null)`
+ * silently turned into ATTACK — the detector `swish` replaced — while the comment beside the
+ * call claimed parity (audit, 2026-08-26).
+ */
+export async function resolveImpactSeeding(): Promise<ImpactSeeding> {
+  if (!__DEV__) return { method: DEFAULT_IMPACT_METHOD, edgeWeighting: true };
+  const [method, edge] = await Promise.all([
+    AsyncStorage.getItem(STORAGE_KEY).catch(() => null),
+    AsyncStorage.getItem(EDGE_KEY).catch(() => null),
+  ]);
+  return {
+    method: isMethod(method) ? method : DEFAULT_IMPACT_METHOD,
+    edgeWeighting: edge == null ? true : edge === "1",
+  };
+}
+
 export function useImpactMethod(): ImpactSeeding {
   const [method, setMethod] = useState<ImpactMethod>(DEFAULT_IMPACT_METHOD);
   const [edgeWeighting, setEdgeWeighting] = useState(true);

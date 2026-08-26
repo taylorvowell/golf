@@ -19,13 +19,26 @@ Failure taxonomy, and it matters (the delivery layer keys retries off it):
 * ``PipelineError`` — a deterministic refusal ("pose confidence too low"). An ANSWER. Reported
   to the callback as ``failed`` and returned as a completed run; retrying would burn GPU time
   to fail identically.
+* A **workload-guard refusal** (below) — the same class, decided BEFORE any pipeline stage or
+  model load. An oversized, unreadable or unsupported clip fails here for the cost of a
+  download and an ffprobe, with a sentence the golfer can act on.
 * Anything else (source download failed, artifact upload failed, callback unreachable) — an
   OUTAGE. Raised to the caller, so the HTTP layer returns 5xx and QStash's retry schedule
   applies. The job row is deliberately NOT marked failed: a retry may still succeed.
+
+**Deterministic failures are never re-run, and the mechanism is the return path, not a flag.**
+Every retry layer above this module — QStash redelivery for the local worker, ``modal.Retries``
+on the hosted Runner — keys off whether this function RAISES. So a deterministic failure posts
+its terminal ``failed`` event and returns normally: the delivery layer sees success-of-delivery
+and no machinery anywhere can run the job again. Raising one instead would hand Modal a reason
+to burn the same GPU minutes twice more to fail identically — which is exactly what happened to
+a single oversized clip on 2026-08-26 (75 GPU-minutes, retried to death). Only genuinely
+transient infrastructure may raise.
 """
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import sys
 import tempfile
@@ -33,10 +46,11 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Callable, Optional
 
+from swingsage import video
 from swingsage.pipeline import PipelineError, PipelineEvent, run
 
 from .worker import SPEC_SCHEMA, SpecError, request_from_spec
@@ -258,6 +272,107 @@ def download(url: str, token: str, dest: Path, timeout_s: float = 300.0) -> None
 
 
 # ---------------------------------------------------------------------------
+# The pre-GPU workload guard.
+
+#: Codecs a real phone hands this product, all decodable by the normalize stage. Anything else
+#: is refused by name at the door rather than discovered minutes later as an ffmpeg error.
+GUARD_CODECS = {"h264", "hevc", "av1", "vp9", "mpeg4", "mjpeg", "prores"}
+
+
+def _env_num(name: str, fallback: float) -> float:
+    try:
+        value = float(os.environ.get(name) or "")
+    except ValueError:
+        return fallback
+    return value if value > 0 else fallback
+
+
+def guard_budgets() -> dict[str, float]:
+    """The guard's thresholds — ONE place, env-overridable.
+
+    Sized from the product's own shape: a trimmed swing is ~5.2 real seconds (the review
+    window plus its pads), so even a 240fps take estimates ~1,300 normalized frames. These
+    budgets admit every legitimate clip with headroom while refusing the ~41s/2,445-frame
+    class that burned 75 GPU-minutes on 2026-08-26. Step 02's source manifest hardens the
+    numbers; the class is closed now.
+    """
+    return {
+        "max_frames": _env_num("SWINGSAGE_GUARD_MAX_FRAMES", 2000.0),
+        "max_real_s": _env_num("SWINGSAGE_GUARD_MAX_REAL_S", 15.0),
+        "max_dim": _env_num("SWINGSAGE_GUARD_MAX_DIM", 4320.0),
+    }
+
+
+@dataclass(frozen=True)
+class WorkloadVerdict:
+    """The guard's answer. ``refusal`` is the golfer's sentence, or None to admit. ``facts``
+    is what was probed — logged to the job row either way, because these numbers are also the
+    telemetry that sizes step 02's manifest thresholds."""
+
+    refusal: Optional[str]
+    facts: dict[str, Any]
+
+
+def guard_workload(
+    info: video.VideoInfo,
+    capture_fps: float,
+    budgets: Optional[dict[str, float]] = None,
+) -> WorkloadVerdict:
+    """Decide whether a downloaded source is worth a GPU, before any pipeline stage runs.
+
+    Mirrors the normalize stage's own arithmetic (pipeline.py): a slow-motion source is put
+    back on the world's clock (``retime_factor``), then normalized at its true capture rate
+    (``cfr_target_fps``) — so the frame estimate here is the count the pipeline would actually
+    pay for. A stamped slow-mo (41.6 container-seconds, 5.2 real) is admitted; the same
+    container with no capture stamp is 41.6 REAL seconds of 60fps normalization and is exactly
+    the incident this guard exists to refuse.
+    """
+    b = budgets or guard_budgets()
+    retime = video.retime_factor(info, capture_fps)
+    real_duration = info.duration * retime if retime else info.duration
+    effective = replace(info, fps=capture_fps, nominal_fps=capture_fps) if retime else info
+    target_fps = video.cfr_target_fps(effective)
+    est_frames = int(round(real_duration * target_fps))
+    facts: dict[str, Any] = {
+        "codec": info.codec,
+        "size": f"{info.width}x{info.height}",
+        "fps": round(info.fps, 3),
+        "capture_fps": round(capture_fps, 1),
+        "duration_s": round(info.duration, 2),
+        "real_duration_s": round(real_duration, 2),
+        "target_fps": target_fps,
+        "est_frames": est_frames,
+    }
+
+    def refuse(sentence: str) -> WorkloadVerdict:
+        return WorkloadVerdict(refusal=sentence, facts=facts)
+
+    if info.codec not in GUARD_CODECS:
+        return refuse(
+            f"This video's format ({info.codec}) isn't one SwingSage can analyze — "
+            "export it as a standard MP4 and try again."
+        )
+    if info.width <= 0 or info.height <= 0 or max(info.width, info.height) > b["max_dim"]:
+        return refuse(
+            f"This video's resolution ({info.width}×{info.height}) is outside what "
+            "SwingSage can analyze."
+        )
+    if real_duration <= 0:
+        return refuse("This video reports no length, so it can't be analyzed.")
+    if real_duration > b["max_real_s"]:
+        return refuse(
+            f"This clip is {real_duration:.0f} seconds long — SwingSage analyzes one trimmed "
+            "swing of a few seconds. Trim the video down to just the swing and try again."
+        )
+    if est_frames > b["max_frames"]:
+        return refuse(
+            f"This clip is too much video to analyze ({est_frames} frames at {target_fps}fps) "
+            "— trim it down to just the swing and try again."
+        )
+    return WorkloadVerdict(refusal=None, facts=facts)
+
+
+# ---------------------------------------------------------------------------
 
 
 class _EventForwarder:
@@ -324,12 +439,15 @@ def run_queue_job(
     send: HttpSend = http_send,
     fetch: Callable[[str, str, Path], None] = lambda url, token, dest: download(url, token, dest),
     pipeline_run: Callable[..., Any] = run,
+    probe_source: Callable[[Path], video.VideoInfo] = video.probe,
+    probe_capture: Callable[[Path], float] = video.probe_capture_fps,
     scratch_root: Optional[Path] = None,
 ) -> bool:
     """Execute one queue job end to end. True = analysis succeeded; False = a deterministic
-    answer that has ALREADY been reported terminally (a pipeline refusal, or an infra failure
-    no retry can fix). Only genuinely transient failures raise, because only those are worth
-    the delivery layer running the whole job again."""
+    answer that has ALREADY been reported terminally (a workload-guard or pipeline refusal, or
+    an infra failure no retry can fix). Only genuinely transient failures raise, because only
+    those are worth the delivery layer running the whole job again — see the module docstring
+    for why this return path is what keeps Modal's retries off deterministic failures."""
     forward = _EventForwarder(job, send)
     scratch = Path(tempfile.mkdtemp(prefix=f"swingsage-job-{job.id[:8]}-", dir=scratch_root))
     keep_scratch = False
@@ -349,6 +467,43 @@ def run_queue_job(
             # the golfer's words, instead of going quiet until the orphan sweep guesses.
             print(f"job {job.id}: unretryable transfer failure — {e}", file=sys.stderr)
             forward.post({"kind": "failed", "reason": e.user_message})
+            return False
+
+        # The workload guard: refuse deterministically-oversized or unreadable work while it
+        # has cost nothing but a download. Runs before request validation touches the file and
+        # long before any model loads.
+        try:
+            info = probe_source(source)
+        except OSError:
+            raise  # ffprobe itself missing/broken is this host's outage, not the clip's fault
+        except Exception as e:  # noqa: BLE001 — any probe failure IS the verdict: unreadable
+            print(f"job {job.id}: source probe failed — {e}", file=sys.stderr)
+            forward.post({"kind": "failed",
+                          "reason": "This swing's video could not be read for analysis."})
+            return False
+        # Capture facts: the client's source manifest (threaded through the spec by the
+        # enqueue side) beats the container tag — the phone remux DROPS the tag, which is how
+        # a trimmed slow-mo used to reach this guard looking like 41s of real-time video.
+        spec_capture = float(job.analysis.get("capture_fps") or 0.0)
+        spec_fps = float(job.analysis.get("source_fps") or 0.0)
+        tag_capture = probe_capture(source)
+        # Manifest-vs-probe consistency: a manifest describing a DIFFERENT video is terminal —
+        # trusting either half blindly would retime by the wrong factor and score garbage.
+        if spec_fps > 0 and info.fps > 0 and abs(info.fps - spec_fps) > max(2.0, spec_fps * 0.2):
+            delta = f"manifest says {spec_fps:.1f}fps, the file plays at {info.fps:.3f}fps"
+            print(f"job {job.id}: manifest contradicts probe — {delta}", file=sys.stderr)
+            forward.post_soft({"kind": "progress", "logLine": f"workload guard: {delta}"})
+            forward.post({"kind": "failed",
+                          "reason": "This upload does not match its own recording facts — "
+                                    "try uploading the swing again."})
+            return False
+        verdict = guard_workload(info, spec_capture or tag_capture)
+        facts = " ".join(f"{k}={v}" for k, v in verdict.facts.items())
+        facts += f" manifest_capture_fps={spec_capture} tag_capture_fps={round(tag_capture, 1)}"
+        forward.post_soft({"kind": "progress", "logLine": f"workload guard: {facts}"})
+        if verdict.refusal:
+            print(f"job {job.id}: workload refused — {facts}", file=sys.stderr)
+            forward.post({"kind": "failed", "reason": verdict.refusal})
             return False
 
         out_dir = scratch / "out"
