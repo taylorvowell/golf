@@ -354,6 +354,14 @@ function tunnelHost(target, lan) {
 async function launch(target, lan) {
   const host = tunnelHost(target, lan);
   step(`Launching against ${host}:${METRO_PORT}`);
+  // ALWAYS from a fresh process. A wedged dev client (alive, React context never ready —
+  // `ReactHost: Tried to access onNewIntent while context is not ready` repeating) swallows
+  // every deep-link into the same dead process and reads as "stale cached bundle"; it cost
+  // three launch attempts on 2026-08-26, and the same pid surviving across launches was the
+  // tell. A force-stop costs half a second on a healthy process and is the entire fix on a
+  // wedged one — the relaunch IS the reload either way.
+  sh("adb", ["-s", target, "shell", "am", "force-stop", "com.swingsage.spike"]);
+  await sleep(500);
   const url = encodeURIComponent(`http://${host}:${METRO_PORT}`);
   sh("adb", [
     "-s",

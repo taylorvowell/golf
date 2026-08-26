@@ -13,15 +13,14 @@
  *   2. **The last port that worked**, cached in `.adb-phone.json` (gitignored). A port survives
  *      until wireless debugging is toggled, so across a reboot of THIS pc the cached one is
  *      usually still live. One TCP connect, instant.
- *   3. **mDNS**, then a **port sweep of the phone's LAN address**. mDNS is the documented answer
- *      and it works *sometimes* — it resolved the device on 2026-08-20 and returned nothing on
- *      2026-08-11 and again on 2026-08-22. The sweep is what makes this reliable anyway: adb's
- *      wireless port always lands in the ephemeral range, the phone answers a TCP connect on
- *      exactly one of them, and 20k ports in parallel batches takes about twenty seconds.
- *
- * The phone's IP comes from the ARP table rather than being hardcoded — this PC has talked to it,
- * so it is there, and a DHCP move that changed the address would otherwise look like the phone
- * being off.
+ *   3. **The phone's STATIC address** (Taylor reserved 10.0.1.25 for it on 2026-08-26 — see
+ *      docs/ENVIRONMENT.md). The port still randomizes on every wireless-debugging toggle
+ *      (Android's design; only the PAIRING persists — which is why `adb connect` needs no
+ *      re-pair), so this rung scans the one known host across the ephemeral range: ~20s
+ *      worst-case instead of a whole-LAN sweep.
+ *   4. **mDNS**, then a **port sweep of every ARP neighbour** — the fallback for the day the
+ *      reservation changes. mDNS is the documented answer and works *sometimes* — it resolved
+ *      the device on 2026-08-20 and returned nothing on 2026-08-11, 2026-08-22 and 2026-08-26.
  *
  *   node scripts/adb-phone.mjs            # connect, print the serial
  *   node scripts/adb-phone.mjs --quiet    # exit 0/1, print only the serial
@@ -39,6 +38,9 @@ const QUIET = args.includes("--quiet");
 const FAST = args.includes("--fast");
 
 const CACHE = join(process.cwd(), ".adb-phone.json");
+/** The S25+'s DHCP reservation (Taylor, 2026-08-26; MAC 0c:32:3a:68:b3:83). Facts in
+ *  docs/ENVIRONMENT.md — if the reservation ever moves, the ARP sweep below still finds it. */
+const PHONE_IP = "10.0.1.25";
 /** Wireless debugging has never been observed outside this range. */
 const PORT_LO = 30000;
 const PORT_HI = 50000;
@@ -158,6 +160,17 @@ async function main() {
 
   if (FAST) return 1;
 
+  // The static address first: one host, ~20s worst-case, deterministic while the phone is on
+  // the LAN with wireless debugging enabled.
+  log(`scanning the phone's static address ${PHONE_IP} (${PORT_LO}-${PORT_HI})…`);
+  const staticHit = await sweep(PHONE_IP);
+  if (staticHit) {
+    log(`phone found on its static address — ${staticHit}`);
+    if (QUIET) console.log(staticHit);
+    writeCache(staticHit);
+    return 0;
+  }
+
   // mDNS: cheap, occasionally right, and the documented route.
   const mdns = await adb(["mdns", "services"]);
   const service = /(\d+\.\d+\.\d+\.\d+:\d+)/.exec(mdns);
@@ -168,7 +181,7 @@ async function main() {
     return 0;
   }
 
-  const hosts = await arpHosts();
+  const hosts = (await arpHosts()).filter((ip) => ip !== PHONE_IP);
   log(`sweeping ${PORT_LO}-${PORT_HI} on ${hosts.length} LAN neighbour(s)…`);
   for (const host of hosts) {
     const addr = await sweep(host);
