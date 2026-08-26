@@ -50,8 +50,3 @@ test("eligible: opens the menu and switches the device into instructor mode", as
   expect(await screen.findByTestId("probe-mode")).toHaveTextContent("instructor");
 });
 
-test("the transition alias: the old `coach` role value is still eligible until prod migrates", async () => {
-  mockRoles = ["golfer", "coach"];
-  await render(<ModeSwitch />);
-  expect(await screen.findByTestId("mode-switch")).toBeTruthy();
-});

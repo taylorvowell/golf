@@ -70,17 +70,8 @@ export function useRoles(): RolesState {
   return value;
 }
 
-/**
- * The one question the switcher asks. True when the account holds the instructor role.
- *
- * `"coach"` is accepted as a TRANSITION alias: migration 0021 renamed the role value, but the
- * production database migrates on the next deploy, so a live account (the Dave Kim persona
- * included) still answers with the old spelling until then. Delete the alias when
- * `swingsage-prod` carries 0021 — it is the only place the old value survives client-side.
- */
+/** The one question the switcher asks. True when the account holds the instructor role. */
 export function useInstructorEligible(): boolean {
   const roles = useRoles();
-  return (
-    roles.kind === "ok" && (roles.roles.includes("instructor") || roles.roles.includes("coach"))
-  );
+  return roles.kind === "ok" && roles.roles.includes("instructor");
 }
