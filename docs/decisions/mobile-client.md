@@ -178,7 +178,7 @@ of unmeasured latency. **`tempoIsFlagged` is not a usable second opinion** — m
 nineteen stored artifacts it fires on the slow-motion references (`pro_3`, `perfect`) this feature
 exists to compare against, and on a confirmed rehearsal swing.
 
-### Lining two swings up costs two kilobytes, not the artifact
+### Lining two swings up costs half a kilobyte, not the artifact
 
 **Decision:** `GET /api/v1/swings/:id/sync-profile` projects the checkpoint table, frame rate,
 picture shape, handedness and a subject box out of a stored `analysis.json`. The comparison reads
@@ -1332,8 +1332,8 @@ wherever it appears — its chip is different because it floats over footage, no
 
 **Decision (Taylor, 2026-08-23):** The capture surface has an **Upload pill** (`UploadPill.tsx`),
 top right under the header, running the swing log's own `useImportSwing` — picker → angle sheet →
-mark-impact review → upload, identical past the picker to a recorded take. A golfer holding a clip
-filmed elsewhere is standing on the camera screen, so the door belongs there too.
+confirm-first review (below) → upload, identical past the picker to a recorded take. A golfer
+holding a clip filmed elsewhere is standing on the camera screen, so the door belongs there too.
 **Scope:** A second door, never a second kind of swing: there is one ingest path (`importSwing.ts`)
 and the review Modal is the same `SwingReview` the recorder's take gets. **Saving an upload leaves
 for the swing log** (`useImportSwing`'s `onSaved`, fired only once the run is actually away) — the
@@ -1345,15 +1345,76 @@ barely-there glass — because it is the secondary action on a surface whose sub
 button. It lives in the idle chrome, so arming fades it. Its review is its own `Modal` above the
 camera surface, so this screen's chrome cannot float over the Save button.
 
-### The capture screen names nothing: no session title, no swing number
+### An import's review is confirm-first: the auto-cut swing, then "is this it?"
 
-**Decision (Taylor, 2026-08-23):** The capture and after-swing screens carry **no session name, no
-"New Session" pill and no swing-number heading**. Sessions are not something a golfer manages, so
-naming and renaming are gone end to end: no `SessionTitle`/`SessionHeading` component, no `rename`
-action, no `renamed` flag, and no `PATCH /sessions/:id` from the app.
-**Scope:** `createSession` always sends `name: null`, which is what keeps the swing log printing a
-date title. The reducer's `title` survives only as the app's own "Session N" numbering, said out
-loud once by the log's arrival card when a session ends.
+**Decision (Taylor, 2026-08-26):** An imported clip's review opens on a **confirm screen**
+(`ImportConfirm.tsx`), not the scrubber: impact detection runs behind a full-screen "Loading
+Swing Video" loader, and the golfer is shown the auto-cut window looping at real speed under
+"Does the above video show your entire swing from address to finish?" — **Yes, Save swing**
+uploads exactly that window; **No, edit swing** opens the mark-impact scrubber (`SwingReview`),
+seeded with the same detection via `seedSec`, whose back arrow returns to the confirm question.
+Save from either screen holds a full-screen "Trimming and Saving Swing Video" loader for the
+trim only; the upload still runs unheld through the toasts. Most imports need one tap; only a
+wrong detection costs a drag. **Saving lands on the pending-swing page** (`PendingSwingScreen`,
+route `PendingSwing`) — never back on a list to wait, and never a screen of its own design: it
+is the record flow's after-swing presentation minus the session dock — the trimmed clip looping
+full-bleed (`LocalClipPlayer`, which plays a slow-mo import at real speed via `slowMoFactor`)
+with the pipeline's `AnalyzingBar` bottom-left. When analysis lands the page `replace`s itself
+with the standard single swing view (`SwingDetail`, after `refreshSwings` so the report never
+opens on "Swing not found") — scrubbing and the scorecard live there; a failure degrades to
+`AnalysisFailedNotice` over the still-playing clip, with a retry that reruns the pipeline under
+the same localId.
+**Scope:** Imports only — both hosts mount one shared `ImportReviewFlow.tsx`, so the flow cannot
+drift between the log and session mode. A take recorded in session mode still lands directly on
+the scrubber: the phone heard that strike seconds ago and the golfer is mid-session.
+**Gotchas:** The confirm loop and the save cut share one implementation
+(`session/reviewWindow.ts` — `reviewWindowAround` + `pickImpactSeed`); a second copy would let
+the preview drift from the clip that gets saved. The confirm player copies `SwingPreviewPip`'s
+loop rules (never `player.loop`, one seek per window, test only the end). `seedSec` exists so
+the scrubber never re-runs detection it would then disagree with. A discard during the saving
+phase is refused — a trim in flight cannot be un-asked. **`trimClip`'s MediaMuxer remux DROPS
+`com.android.capture.fps`** — a trimmed phone slow-mo reaches ingest as an ordinary ~30 fps
+clip, so the analyzer normalized a ~40 s slow-motion timeline as real-time video (~2,445
+frames — 2× the size that already blew the Modal runner timeout) and every time-based number
+would have been 8× off. Measured in production 2026-08-26: four imports burned ~75 GPU-minutes
+and none could finish. Until ingest carries the capture rate end-to-end (client probe →
+`POST /swings` → job spec → analyzer retime), slow-mo imports must not be re-tried. The angle
+sheet opens the moment the
+golfer returns from the system picker — preview slot spinning, Import greyed — because the
+picked video is copied into the app cache before the picker resolves, and on a long clip that
+gap read as nothing happening; a 250 ms grace on the return keeps a cancel from flashing it
+(`useImportSwing.begin`).
+
+### A session is a recording STATE, not an object — nothing names it and nothing ends it
+
+**Decision (Taylor, 2026-08-23, completed 2026-08-26):** Session mode exists so the SECOND swing
+is easier to record than the first. It is not a thing the golfer names, numbers, manages or
+finishes, and no surface may imply otherwise.
+
+- **Nothing names it.** No session name, no "New Session" pill, no swing-number heading, no
+  `SessionTitle`/`SessionHeading`, no `rename` action, no `renamed` flag, no `PATCH /sessions/:id`
+  from the app. `createSession` always sends `name: null`, which is what keeps the swing log
+  printing a date title. The reducer holds no `title` and no `dateLabel` at all.
+- **Nothing ends it.** The after-swing bar's left control is **Done** (a check), which navigates
+  to the swing log and commits nothing — every swing behind it is already a row, already
+  uploading or analysed, and already in the log. It replaced "End Session", whose whole framing
+  was that something had to be closed. There is no arrival moment on the log either: the staged
+  "Saving session…" beat, the card that sprang in and the counts that rolled up over the real
+  ones are gone, because they celebrated a boundary that does not exist. The log a golfer lands
+  on is simply already correct, with the swing they just hit on it as a live processing row.
+- **Nothing traps them in it.** Having recorded a swing no longer locks the surface. Back on the
+  after-swing screen means the camera (one meaning, matching its own back arrow — the "record
+  another / end session" sheet is deleted); back on the camera leaves; the header's profile door
+  stays open throughout.
+- **The `Swings` door is not the log.** The after-swing bar's other left control opens the sheet
+  listing what was recorded on this visit. `Done` is the door to the log itself; two controls
+  claiming the same destination is why the sheet's label stopped saying "Swing Log".
+
+**Scope:** The golfer-facing concept only. The `sessions` ROW survives untouched — it is the
+invisible grouping layer the log reads (D29), minted on the first swing, and `mergeByDay` already
+draws it as a day rather than a session. **`sessions.session_type` and the `SessionType` union
+also survive**: contract evolution is additive-only (D41), and rows written before 2026-08-26
+carry `practice_drills`/`video_only` for real and must keep being excluded from durable averages.
 
 ### One player: the legacy SwingPlayer surface is deleted
 
@@ -1520,6 +1581,26 @@ inside a zero-height parent, so `onLayout` reports 0, so the box never learns a 
 and the content never appears. The animated value is in PIXELS rather than 0→1 — a 0→1 value needs
 an `interpolate` whose `outputRange` is rebuilt on every measurement change, which is a second
 place for the current height to be wrong.
+
+### A starred swing is a row's field, not a phone's
+
+**Decision (2026-08-26):** Starring writes `swings.favourite` through `PATCH /api/v1/swings/:id`.
+It used to be one JSON array in AsyncStorage, because the contract had no such field — so a star
+survived a restart but not a reinstall, and never reached a second device, for a flag whose entire
+purpose is finding a swing again later. `useStarred` keeps its `{ starred, toggle }` shape; only
+what is behind it changed.
+**Scope:** The write is **optimistic**, unlike `deleteSwing`, and the asymmetry is deliberate: a
+delete that vanished and then failed reads as data loss, while a star is a toggle whose job is
+instant feedback and whose worst failure is a filled star that empties again. So the cache flips
+first, the confirmed row overwrites it, and a failure restores the value that was there — never a
+blind flip back, which would clobber a second tap that landed while the first was in flight. A
+failed write toasts.
+**Gotchas:** The hook reads through `useCachedSwing`, which subscribes to the shared swing cache
+and **fetches nothing** — `useSwings()` revalidates on mount, and this hook renders once per row
+in the session's swing list, so ten rows would have been ten identical list requests. Every screen
+hosting a star already mounts the fetching hook itself. A swing with no server row yet cannot be
+starred and says so with `pending`, which draws the control disabled rather than eating the tap —
+the live case is the after-swing screen while the clip is still uploading.
 
 ### An import shows up in the log while it is still running
 

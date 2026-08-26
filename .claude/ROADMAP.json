@@ -301,6 +301,7 @@
       "lifecycle": "planned",
       "phase": "golfer-core",
       "goal": "Make the analysis falsifiable before anyone pays for it: hand-labelled event frames and club-head positions, a face-on and a left-handed fixture, a club-head position-error metric, and a real rotation estimate so the ten deferred scoring checks can be un-deferred.",
+      "sequencingNote": "OVERLAP (2026-08-26): video-analysis-redesign step 04 builds the club/event ground-truth schemas, labeled golden set and evaluators this track promised. When this track starts, run progress-tracker RECONCILE against that step's deliverables instead of duplicating; what remains native here is the rotation estimate and the un-deferral of the ten scoring checks.",
       "statusFile": ".claude/feature-tracks/analysis-ground-truth/_STATUS.json",
       "specRefs": [
         ".claude/ai-instructions/PROJECT_MAIN.md#153-confidence-and-uncertainty",
@@ -1033,6 +1034,41 @@
           "track": "goal-progression"
         }
       ]
+    },
+    {
+      "id": "video-analysis-redesign",
+      "spine": false,
+      "lifecycle": "active",
+      "phase": "golfer-core",
+      "goal": "Implement the accepted video-analysis redesign (.claude/swingsage_video_analysis_plan_v2/) as a MIGRATION of the existing system, not a parallel build: authoritative source/trim manifest (kills the slow-mo 2,445-frame bug class), pre-GPU workload guard, one frame-identity story incl. corrections provenance, ground truth + evaluators for club/events (positional metrics at last), shared-decode restructure (18 decode passes today), adaptive frame planner (playback fps decoupled from inference fps — the 240fps cost fix), provenance-gated direct-only scoring (fixes interpolated-geometry-scored-as-measured), CADDIE-style 5-keypoint club pose + sequence solver gated on ground truth, calibrated multimodal impact fusion, deferred presentation rendering, measured runtime optimization, and a binding legacy-removal step. Reconciliation record and per-step matrix live in the track directory (AUDIT-*.md, MATRIX-current-vs-target.md).",
+      "statusFile": ".claude/feature-tracks/video-analysis-redesign/_STATUS.json",
+      "specRefs": [
+        ".claude/swingsage_video_analysis_plan_v2/README.md",
+        ".claude/feature-tracks/video-analysis-redesign/MATRIX-current-vs-target.md",
+        ".claude/feature-tracks/video-analysis-redesign/AUDIT-current-state.md",
+        ".claude/ai-instructions/PROJECT_MAIN.md#15-swing-analysis",
+        ".claude/ai-instructions/PROJECT_MAIN.md#153-confidence-and-uncertainty",
+        ".claude/ai-instructions/PROJECT_MAIN.md#32-analysis-processing-experience"
+      ],
+      "owns": [
+        "services/analyzer/swingsage",
+        "services/analyzer/groundtruth",
+        "services/analyzer/service"
+      ],
+      "dependsOn": [
+        {
+          "track": "analyzer-service"
+        },
+        {
+          "track": "session-mode",
+          "blocking": false
+        },
+        {
+          "track": "media-pipeline",
+          "blocking": false
+        }
+      ],
+      "sequencingNote": "Created 2026-08-26 from the v2 planning package after a four-agent code audit (step 00, complete). Steps ordered by dependency and risk: 01 closes live production bugs (variants default-on cost bug, no workload guard, capture admission, two import bugs) before any architecture moves; 02–05 are correctness/measurement foundations; 06–10 are the analysis core behind versioned policy flags with shadow evaluation; 11–13 delivery and reliability; 14 is the binding cleanup — every temporary mechanism carries a removal condition in the MATRIX §4 table. Also touches packages/schema, apps/web/src/lib/jobs.ts and apps/mobile/src/features/session (shared surfaces, not owned). OVERLAPS: step 04 delivers analysis-ground-truth's club/event GT scope (that track reconciles); media-pipeline keeps upload durability; swing-ingest keeps ingest UX. Step 09 gates on Taylor's open club-trace-verdict HANDOFF row for the variants deletion."
     },
     {
       "id": "swing-isolation",

@@ -1,19 +1,27 @@
-import { ListVideo, LogOut, Star, Trash2 } from "lucide-react-native";
+import { Check, ListVideo, Star, Trash2 } from "lucide-react-native";
 
 import { COLORS } from "../../theme";
 import { SessionNav } from "./SessionNav";
 import { SessionRecordButton } from "./SessionRecordButton";
 
 /**
- * The post-recording bar (§9.6, trimmed in step-03 iteration to Taylor's four): end
- * session · swing log on the left, delete · favorite on the right, and the big red Record
- * New Swing in the raised centre — always dead-centre of the screen. Previous-swing and
- * settings moved into the session swing list / capture screen respectively.
+ * The after-swing bar (§9.6, trimmed in step-03 iteration to Taylor's four): Done · Swings on
+ * the left, delete · favorite on the right, and the big red Record New Swing in the raised
+ * centre — always dead-centre of the screen. Previous-swing and settings moved into the swing
+ * list sheet / capture screen respectively.
+ *
+ * **Done is navigation, not a commit** (Taylor, 2026-08-26). It replaced "End Session", which
+ * implied there was something to close: there is not. Every swing here is already saved, and
+ * Done simply lands the golfer on their log. `Swings` opens the sheet listing what they have
+ * recorded on this visit — it is NOT the log itself, which is what Done is for.
  */
 
 export interface SessionSwingDockProps {
   starred: boolean;
-  onEndSession: () => void;
+  /** True while this swing has no server row yet — the star is disabled, never a swallowed tap. */
+  starPending?: boolean;
+  /** Leave the capture surface for the swing log. Ends nothing — see the note above. */
+  onDone: () => void;
   onSwingList: () => void;
   onRecordNew: () => void;
   /** Slides the bar away on scroll, exactly as the tab bar does on a tab screen. */
@@ -24,7 +32,8 @@ export interface SessionSwingDockProps {
 
 export function SessionSwingDock({
   starred,
-  onEndSession,
+  starPending = false,
+  onDone,
   onSwingList,
   onRecordNew,
   hidden = false,
@@ -36,15 +45,15 @@ export function SessionSwingDock({
       hidden={hidden}
       leftItems={[
         {
-          key: "end",
-          label: "End Session",
-          onPress: onEndSession,
-          testID: "session-end",
-          icon: (c) => <LogOut size={23} color={c} strokeWidth={2.2} />,
+          key: "done",
+          label: "Done",
+          onPress: onDone,
+          testID: "session-done",
+          icon: (c) => <Check size={23} color={c} strokeWidth={2.4} />,
         },
         {
-          key: "log",
-          label: "Swing Log",
+          key: "swings",
+          label: "Swings",
           onPress: onSwingList,
           testID: "session-swing-list",
           icon: (c) => <ListVideo size={23} color={c} strokeWidth={2.2} />,
@@ -62,6 +71,7 @@ export function SessionSwingDock({
           key: "favorite",
           label: "Favorite",
           active: starred,
+          disabled: starPending,
           onPress: onToggleFavorite,
           testID: "session-swing-favorite",
           icon: (c) => (

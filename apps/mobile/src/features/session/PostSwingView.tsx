@@ -31,30 +31,34 @@ import { ANALYSIS_ERRORS, type AnalysisErrorKind } from "./analysisError";
  * behaves lives in `SwingPage`; this file owns only what a SESSION adds.
  *
  * A swing minted through the record flow carries its trimmed local clip and plays exactly
- * that. The stand-in path below it survives only for legacy stub swings (a `__DEV__` flow
- * with no clip); step 06 replaces local playback with the served, artifact-backed report
- * once analysis completes.
+ * that until its analysis lands, at which point the SAME screen swaps to the served,
+ * artifact-backed report — phase markers, trace and scorecard, in place rather than by
+ * navigating, so the completion moment plays over one continuous surface. The stand-in path
+ * below survives only for legacy stub swings (a `__DEV__` flow with no clip of their own).
  */
 
 export interface PostSwingViewProps {
   state: SessionState;
   dispatch: (action: SessionAction) => void;
   swing: SessionSwing;
-  /** `stage: false` when the caller has just emptied the session — see `SessionScreen`. */
-  onEndSession: (opts?: { stage?: boolean }) => void;
+  /** Leave the capture surface for the swing log. Ends nothing — see `SessionSwingDock`. */
+  onDone: () => void;
 }
 
-export function PostSwingView({ state, dispatch, swing, onEndSession }: PostSwingViewProps) {
+export function PostSwingView({ state, dispatch, swing, onDone }: PostSwingViewProps) {
   const insets = useSafeAreaInsets();
   const { state: listState } = useSwings();
   const [listOpen, setListOpen] = useState(false);
-  const { starred, toggle } = useStarred(swing.id);
+  // The SERVER's id, not the session's local one: a star is a row's field now, so it cannot be
+  // set on a swing that has not landed yet. `pending` is true for exactly that window — while the
+  // clip uploads — and the dock draws the control disabled rather than eating the tap.
+  const { starred, toggle, pending: starPending } = useStarred(swing.serverId);
 
   /**
-   * A real swing plays the recorded clip's part until capture wiring lands — and it ROTATES by
-   * hit number, so swing 1, 2 and 3 in a session are three different clips (Taylor). Reviewing
-   * the same footage every time made it impossible to tell a re-render from a stale one, and it
-   * hid whether the loop was really moving between swings.
+   * A stand-in clip for the `__DEV__` swings that carry no recording of their own. It ROTATES by
+   * hit number, so swing 1, 2 and 3 are three different clips (Taylor): reviewing the same
+   * footage every time made it impossible to tell a re-render from a stale one, and it hid
+   * whether the loop was really moving between swings. Never reached by a recorded swing.
    *
    * OLDEST first (Taylor): the first clip ever uploaded is the reference the session screens are
    * checked against, so swing 1 of a session is always that same known swing. The modulo wraps,
@@ -108,10 +112,9 @@ export function PostSwingView({ state, dispatch, swing, onEndSession }: PostSwin
       onClose={() => setDeleteOpen(false)}
       isOnlySwing={state.swings.length <= 1}
       onDelete={remove}
-      onDeleteAndEnd={() => {
-        // The session is empty as of this tick, so it must not be announced on the log.
+      onDeleteAndLeave={() => {
         remove();
-        onEndSession({ stage: false });
+        onDone();
       }}
       // Same rule as the dock's Record: land on the capture screen, do not start a timer.
       onDeleteAndRecord={() => {
@@ -165,7 +168,12 @@ export function PostSwingView({ state, dispatch, swing, onEndSession }: PostSwin
     failed ? (
       <AnalysisFailedNotice reason={swing.failure ?? "The analysis didn't finish."} onRetry={retry} />
     ) : !analyzed ? (
-      <AnalyzingBar stage={run?.stage ?? "Uploading"} stageIndex={run?.stageIndex ?? 0} />
+      <AnalyzingBar
+        stage={run?.stage ?? "Uploading"}
+        stageIndex={run?.stageIndex ?? 0}
+        progressPct={run?.progressPct}
+        detail={run?.detail}
+      />
     ) : null;
 
   /** This screen's contribution to the app-wide debug overlay, live only while it is mounted. */
@@ -223,9 +231,8 @@ export function PostSwingView({ state, dispatch, swing, onEndSession }: PostSwin
       // from `SwingPage`'s shared scroll-direction latch.
       hidden={hidden}
       starred={starred}
-      // Wrapped, not passed through: a Pressable hands its gesture event to the first argument,
-      // and this callback's first argument is the staging option.
-      onEndSession={() => onEndSession()}
+      starPending={starPending}
+      onDone={onDone}
       onSwingList={() => setListOpen(true)}
       // Back to the capture screen, NOT straight into a countdown (Taylor, 2026-08-21 —
       // reversing the step-03 behaviour). Arming from here started a timer while the golfer

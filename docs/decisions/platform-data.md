@@ -81,6 +81,40 @@ pre-rendering checkpoint stills at publish time onto these same keys, which turn
 a pure cache hit — the web host then needs no ffmpeg at all (relevant when the worker host
 decision lands).
 
+### Every swing has a thumbnail from its first second — the client uploads a poster at ingest
+
+**Decision:** `createCapture` returns a second upload target (`posterUpload`) beside the video's:
+the phone extracts frame ~0 of the trimmed clip (the golfer at address — the native
+`clipThumbnailsAt`, ~200 ms) and PUTs it as `poster.jpg` next to `original.*` in the source
+bucket, in parallel with the video upload. `/thumb` serves `contact.jpg` when the analyzer has
+rendered it and falls back to the poster before that, so a processing, failed, or
+never-analysed swing still shows its own picture in the log. The server never extracts frames
+from uploads itself — the web host has no ffmpeg, and the phone already holds the decoded
+frames. When neither image exists (pre-poster swings, a poster that never landed), the mobile
+tiles degrade to the capture pose outline for the swing's angle (`PoseTile`), never an empty
+square.
+**Gotchas:** The poster is best-effort in every direction — a swing must never fail because its
+thumbnail didn't land. The fallback response is cached briefly (5 min), unlike the artifact's
+day, because the analysed frame replaces it at the same URL. The local driver gets its own
+owner-only `PUT /swings/:id/poster` route, mirror of `source/route.ts`.
+
+### `PATCH /api/v1/swings/:id` is the swing's own write surface, and it is owner-only
+
+**Decision (2026-08-26):** `favourite` joins `SwingSummary` (additive — not in `required`, so a
+response from an older build still validates and a client reads its absence as false), and
+`PATCH /api/v1/swings/:id` is how it is set. Partial, like the session and profile patches: a
+screen sends only what it edits, so a build written before a field existed cannot erase it. An
+empty patch is a no-op answered with the current row, not a 400.
+**Scope:** This is the first field a CLIENT may write onto a swing, which makes one existing rule
+newly load-bearing: **a coach reads a golfer's swing and never edits it.** The route therefore
+does not reuse the owner-or-approved-coach check the read routes share — it takes the owner-only
+line `DELETE` draws, backed by `swings_write` RLS, so the ownership predicate here is belt to
+those braces. 404 covers "no such swing" and "not yours" alike.
+**Gotchas:** The answer is the whole updated `SwingSummary` rather than 204, so a client writes
+its cache from the confirmed row instead of from what it hoped it sent — it re-reads through
+`listSwings`, the same helper the log uses, so the answer cannot drift from what a refresh shows.
+One extra query, on an action a golfer takes by hand.
+
 ### The API is versioned in the path and the contract is generated from one schema
 
 **Decision:** Four rules, each enforced by something that fails rather than by convention:

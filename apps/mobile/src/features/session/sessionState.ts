@@ -1,9 +1,13 @@
 /**
  * Session mode's one state machine (D61). Every control on the capture and post-swing
  * screens dispatches here — no scattered `useState` — so the rules that protect the golfer
- * live in one testable place: the type locks once a swing exists, a countdown aborts to
- * idle without minting anything, and a session only ever "exists" once `swings` is
- * non-empty (the mint-on-first-swing rule; nothing here talks to a server yet).
+ * live in one testable place: a countdown aborts to idle without minting anything, and a
+ * session row only ever "exists" once `swings` is non-empty (the mint-on-first-swing rule).
+ *
+ * A session is a RECORDING STATE, not an object the golfer manages (Taylor, 2026-08-26): it
+ * has no name, no number, and nothing ends it. It exists so the second swing is easier to
+ * record than the first, and the row behind it is an invisible grouping layer the swing log
+ * reads. Nothing in this file may reintroduce a session the golfer has to think about.
  */
 
 export type SessionType = "swing_analysis" | "practice_drills" | "video_only";
@@ -118,8 +122,8 @@ export interface SessionSwing {
   failure?: string | null;
   status: "analyzing" | "ready" | "failed";
   /** The trimmed local recording. Absent only on legacy stub swings; every swing minted
-   * through `save-take` carries one, and it is what the post-swing screen plays until an
-   * analyzed artifact replaces it (step 06). */
+   * through `save-take` carries one, and it is what the after-swing screen plays until the
+   * analysed artifact replaces it. */
   clip?: SwingClipRef;
 }
 
@@ -129,13 +133,6 @@ export interface SessionSwing {
 export const SHUTTER_DEBOUNCE_MS = 3_000;
 
 export interface SessionState {
-  /**
-   * The app's own numbering — "Session N". Never shown on the capture screen and never sent to
-   * the server as a name: null there is what tells the swing log to keep its date title. It is
-   * the label the log's arrival card says out loud when a session ends.
-   */
-  title: string;
-  dateLabel: string;
   /**
    * The server's session row, once the first swing minted it (D61), or null while the session
    * is still client-side. Every swing recorded after this attaches to it.
@@ -167,9 +164,6 @@ export interface SessionState {
 }
 
 export type SessionAction =
-  /** The app's own numbering ("Session 4"), from the count of sessions the server holds. Never
-   *  a name: it must never make the session look named to the log. */
-  | { type: "set-default-title"; title: string }
   /** The server confirmed the session row. Only ever set once — the first swing mints it. */
   | { type: "session-minted"; sessionId: string }
   | { type: "set-type"; sessionType: SessionType }
@@ -227,24 +221,10 @@ export type SessionAction =
   | { type: "back-to-capture" }
   | { type: "delete-swing"; swingId: string };
 
-const MONTHS = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-] as const;
-
-/** "Aug 18" — the fixed date half of the default `Session N | Aug 18` name. */
-export function sessionDateLabel(when: Date): string {
-  return `${MONTHS[when.getMonth()]} ${when.getDate()}`;
-}
-
 export function initialSessionState(
-  sessionNumber: number,
-  when: Date,
   settings: SessionSettings = DEFAULT_SESSION_SETTINGS,
 ): SessionState {
   return {
-    title: `Session ${sessionNumber}`,
-    dateLabel: sessionDateLabel(when),
     sessionId: null,
     sessionType: "swing_analysis",
     settings,
@@ -261,13 +241,6 @@ export function initialSessionState(
 
 export function sessionReducer(state: SessionState, action: SessionAction): SessionState {
   switch (action.type) {
-    case "set-default-title": {
-      // Never once the session is real — the numbering arrives asynchronously and must not win
-      // a race against the minted row.
-      if (state.sessionId !== null) return state;
-      const title = action.title.trim();
-      return title.length === 0 ? state : { ...state, title };
-    }
     case "session-minted":
       // Idempotent: the mint is fire-and-forget from the save path, and a retry that lands after
       // the first answer must not repoint a session the swings are already attached to.

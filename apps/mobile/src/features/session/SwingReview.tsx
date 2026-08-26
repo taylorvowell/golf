@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { ArrowLeft, Check, Trash2, Undo2, X } from "lucide-react-native";
+import { ArrowLeft, Check, Trash2, Undo2 } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import FrameClockView from "../../../modules/frame-clock/src/FrameClockView";
@@ -19,17 +19,12 @@ import {
   type FrameClockHandle,
 } from "../../../modules/frame-clock/src/FrameClock.types";
 import HighSpeedCamera, { type ImpactMethod } from "../../../modules/high-speed-camera/src";
-import { CoachLoader, SwingLoader } from "../../design/system";
+import { FullScreenLoader, SwingLoader } from "../../design/system";
 import { FONT_BODY, FONT_DISPLAY } from "../../design/system/typography";
 import { PRESS_SUNK } from "../../design/system/press";
 import { COLORS, SEMANTIC } from "../../theme";
-import {
-  CANDIDATE_FLOOR,
-  PRE_ROLL_SEC,
-  REVIEW_WINDOW_S,
-  STRIP_FRAMES,
-  STRIP_PX,
-} from "./captureConstants";
+import { STRIP_FRAMES, STRIP_PX } from "./captureConstants";
+import { pickImpactSeed, reviewWindowAround } from "./reviewWindow";
 import { ChoiceSheet } from "./sheets/ChoiceSheet";
 import { SwingPreviewPip } from "./SwingPreviewPip";
 import {
@@ -92,16 +87,6 @@ const STAGE_H = 5;
  * promises ("just get close"), so a few taps always land the mark. */
 const A11Y_STEP_S = 0.1;
 
-/**
- * Where the mark starts when detection hears nothing.
- *
- * Was `PRE_ROLL_SEC` — 2.5s from the end — which now contradicts the detector's own prior that
- * the last five seconds are the walk back to the phone (Taylor, 2026-08-21). Landing the
- * fallback inside the region every method de-weights would put the silent case exactly where the
- * loud case is told not to look.
- */
-const FALLBACK_FROM_END_SEC = 6;
-
 export interface SwingTake {
   /** Absolute path to the untrimmed take, as the native recorder wrote it. */
   path: string;
@@ -134,10 +119,18 @@ export interface SwingReviewProps {
   /**
    * An IMPORTED clip's review (Taylor, 2026-08-23): the file lives in the golfer's own
    * library and survives whatever happens here, so a bin would promise a deletion this
-   * screen cannot make. The discard becomes an X labelled "Cancel", with no confirmation —
-   * backing out of an import costs nothing.
+   * screen cannot make. Since the confirm-first import flow (2026-08-26) this screen is only
+   * reached by answering "No, edit swing" there, so the discard is a Back arrow returning to
+   * that check — `onDelete` is wired to it by the host — with no confirmation.
    */
   importMode?: boolean;
+  /**
+   * A mark already detected upstream (the import flow runs detection behind its loading
+   * screen, so the confirm pass has a window to play). When set, this screen seeds from it
+   * instead of re-running `detectImpacts` — re-detecting would cost a second wait and could
+   * disagree with the window the golfer just watched and said "No" to.
+   */
+  seedSec?: number;
 }
 
 export function SwingReview({
@@ -149,6 +142,7 @@ export function SwingReview({
   method,
   edgeWeighting = true,
   importMode = false,
+  seedSec,
 }: SwingReviewProps) {
   const insets = useSafeAreaInsets();
   const player = useRef<FrameClockHandle>(null);
@@ -208,14 +202,7 @@ export function SwingReview({
    * worse than no preview at all.
    */
   const windowAround = useCallback(
-    (at: number) => {
-      const pre = PRE_ROLL_SEC * slowMo;
-      const span = REVIEW_WINDOW_S * slowMo;
-      return {
-        startSec: Math.max(0, at - pre),
-        endSec: Math.min(durationS, at - pre + span),
-      };
-    },
+    (at: number) => reviewWindowAround(at, durationS, slowMo),
     [durationS, slowMo],
   );
 
@@ -259,20 +246,22 @@ export function SwingReview({
   // milliseconds; the first frame is already on screen by then, so the handle animates into
   // place rather than the screen waiting on it. A failure is silent by design.
   useEffect(() => {
+    // Detection already ran upstream (the import flow's loading pass) — seed from its answer
+    // rather than paying for it twice and risking a different one.
+    if (seedSec !== undefined) {
+      setMark(seedSec);
+      setAnchorSec(markRef.current);
+      seekTo(markRef.current);
+      commitMark();
+      return undefined;
+    }
     let cancelled = false;
     void (async () => {
       const found = await HighSpeedCamera.detectImpacts(take.path, 3, method, edgeWeighting)
         .catch(() => []);
       if (cancelled) return;
       // The LAST plausible strike, not the strongest — the practice swing comes first.
-      const best = found.length ? Math.max(...found.map((c) => c.score)) : 0;
-      const real = found
-        .filter((c) => c.score >= best * CANDIDATE_FLOOR)
-        .sort((a, b) => a.timeSec - b.timeSec)
-        .at(-1);
-      // Nothing heard → near the end, which is where a swing sits when the golfer walked back
-      // to stop the recording. Never an error, never an empty state.
-      setMark(real ? real.timeSec : Math.max(0, durationS - FALLBACK_FROM_END_SEC));
+      setMark(pickImpactSeed(found, durationS));
       setAnchorSec(markRef.current);
       seekTo(markRef.current);
       commitMark();
@@ -280,7 +269,7 @@ export function SwingReview({
     return () => { cancelled = true; };
     // `method` is a dependency on purpose: switching detector re-seeds the mark in place, which
     // is the whole comparison loop — one clip, four answers, no reload.
-  }, [take.path, durationS, method, edgeWeighting, setMark, seekTo, commitMark]);
+  }, [take.path, durationS, method, edgeWeighting, seedSec, setMark, seekTo, commitMark]);
 
   // The filmstrip. Extracted off the main thread and rendered as it arrives — the screen is
   // already showing the swing by then, so the pictures fill in under a scrubber that works.
@@ -592,7 +581,7 @@ export function SwingReview({
             // A dev clip and an import are both files that survive whatever happens here, so
             // the destructive framing would be a lie — these buttons just back out.
             accessibilityLabel={
-              importMode ? "Cancel this import" : dev ? "Back to the clip library" : "Delete this take"
+              importMode ? "Back to the swing check" : dev ? "Back to the clip library" : "Delete this take"
             }
             disabled={saving}
             onPress={() => (dev || importMode ? onDelete() : setConfirmingDelete(true))}
@@ -600,8 +589,8 @@ export function SwingReview({
           >
             {importMode ? (
               <View style={styles.cancelStack}>
-                <X size={26} color={COLORS.text} strokeWidth={2.4} />
-                <Text style={styles.cancelLabel}>Cancel</Text>
+                <ArrowLeft size={26} color={COLORS.text} strokeWidth={2.4} />
+                <Text style={styles.cancelLabel}>Back</Text>
               </View>
             ) : dev ? (
               <ArrowLeft size={26} color={COLORS.text} strokeWidth={2.2} />
@@ -667,11 +656,7 @@ export function SwingReview({
        * arrived yet, so centring inside it would put the loader wherever a box of unknown size
        * happens to be.
        */}
-      {!ready ? (
-        <View style={styles.loading} pointerEvents="none">
-          <CoachLoader size={96} />
-        </View>
-      ) : null}
+      {!ready ? <FullScreenLoader /> : null}
     </View>
   );
 }
@@ -691,14 +676,6 @@ const styles = StyleSheet.create({
   /** Sits ABOVE the controls and travels with them — tall enough to be a fade rather than a
    *  line, short enough to leave the swing alone. */
   controlsFade: { position: "absolute", left: 0, right: 0, top: -96, height: 96 },
-  /** Dead centre of the SCREEN, over everything. */
-  loading: {
-    position: "absolute",
-    top: 0, left: 0, right: 0, bottom: 0,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: COLORS.bg,
-  },
   seeding: {
     position: "absolute",
     top: 0, left: 0, right: 0, bottom: 0,

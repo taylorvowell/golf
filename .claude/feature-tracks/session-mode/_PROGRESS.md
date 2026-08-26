@@ -4,6 +4,60 @@ Append-only log. Spec: `DESIGN-session-mode.md`. Decision: ARCHIVE D61.
 **2026-08-20:** `.claude/golf_swing_capture_spec/` (00–12) adopted as the governing contract
 for the capture subsystem — where it and older notes disagree, the spec wins.
 
+## 07 - Session loop completion — and the session stops being a thing you finish
+**Completed:** 2026-08-26 21:20 UTC
+**Phase:** Session Mode — Wiring
+**Summary:** The loop closes, and the concept shrinks to what Taylor actually wanted it to be:
+**a recording state, not an object.** "End Session" is now **Done** — a check that navigates to
+the swing log and commits nothing, because every swing behind it is already a row, already
+uploading or analysed, and already in the log. Gone with it: the staged arrival moment on the log
+("Saving session…" → the card springs in → the counts roll up), `sessionArrival.ts`,
+`SessionArrivalCard.tsx`, `SwingExitSheet.tsx`, the reducer's `title`/`dateLabel`/
+`set-default-title`, and the locked-in-a-session rule — back on the after-swing screen means the
+camera (one meaning, matching its own back arrow), back on the camera leaves, and the header's
+profile door no longer seals.
+
+**Starring became a row's field.** `swings.favourite` existed server-side the whole time while the
+client kept one JSON array in AsyncStorage, so a star survived a restart but not a reinstall and
+never reached a second device. It now writes through an owner-only `PATCH /api/v1/swings/:id`
+(the first field a client may write onto a swing, which is what makes "a coach reads and never
+edits" newly load-bearing — the route takes DELETE's owner-only line, not the read routes'
+owner-or-coach one). The write is optimistic where `deleteSwing` deliberately is not, and restores
+the *previous* value on failure rather than flipping back, so a second tap in flight is not
+clobbered.
+
+**The replay-off path finally reports something.** With Video replay off a save leaves the golfer
+on the camera, and until now nothing told them their swing was being worked on. `CaptureStatusChip`
+is the smallest honest report: "Swing 3 analyzing", "2 swings analyzing", or a tappable "Swing 2
+needs a look" — a failure outranks work in progress, because the failure is the only one of the two
+a golfer can act on. No stage name, no percentage, no frame counter; that is the analyzing bar's
+job on a screen where someone is actually reading.
+
+**Two edge cases that only a real phone produces.** `CameraStage` now re-reads the camera/mic grant
+on every foreground — with `check()`, never `request()`, so switching apps does not re-prompt. It
+had only ever asked once at mount, which is precisely the wrong moment: the Settings door this
+screen offers is a round trip out of the app, so the interesting answer always arrives while it is
+backgrounded, in both directions (revoked → a dead preview under a ready-looking Record button;
+newly granted → the same refusal that sent them to Settings). And a failed trim — the realistic
+cause being a full phone, since 1080p240 is the heaviest thing this app writes — already kept the
+untrimmed take rather than losing the only copy, but did it silently; it now says so.
+
+**Notes:** Drills were deliberately NOT touched. Taylor's separate-flow instinct is the accepted
+`guided-drills-architecture-2026-08-17.md` design arriving independently, and that doc's own *Road
+not taken* names `session_type: practice_drills` — what step 05 shipped — as the rejected option.
+An addendum records the confirmation, the Mode-toggle removal it implies, and the two things that
+removal must not do (the enum stays, additive-only; the quarantine predicate stays, because rows
+written before today carry those types for real). Taylor: *"do not do anything yet with the drill,
+just notate it somewhere."*
+
+Step 03 is now the ONLY incomplete step in the track — his sign-off walk, which cannot be
+self-completed. Oracles: web tsc + eslint clean, 264 web vitest, 153 schema vitest (shape-lock
+re-locked, **zero removals**), mobile tsc clean, 60 suites / 550 jest (6 new: the favourite
+optimistic/rollback pair, three on the status chip, and a reducer pin that a session carries no
+name). Named shortfall: the S25+ device pass, filed as a HANDOFF row.
+
+---
+
 ## 06 - Upload and analysis wiring — a recorded swing reaches a real score
 **Date:** 2026-08-22
 **Phase:** Session Mode — Wiring

@@ -324,8 +324,8 @@ export function SystemGalleryScreen() {
             style={{ marginHorizontal: 0 }}
             items={[
               {
-                key: "end",
-                label: "End session",
+                key: "done",
+                label: "Done",
                 tone: "end",
                 onPress: () => {},
                 icon: (c) => <AlignLeft size={18} color={c} strokeWidth={1.9} />,

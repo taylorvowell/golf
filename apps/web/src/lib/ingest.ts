@@ -53,6 +53,24 @@ export interface CreatedCapture {
   swingId: string;
   viewId: string;
   upload: UploadTarget;
+  /**
+   * Where to PUT a small `poster.jpg` — a frame the CLIENT extracts at save (it has the decoded
+   * frames in hand; this server has no ffmpeg). Best-effort and tiny: it lands in under a
+   * second, so the log shows a picture the moment the swing appears instead of minutes later
+   * when the analyzer renders `contact.jpg` — which still takes over once it exists.
+   */
+  posterUpload: UploadTarget;
+}
+
+/** The client-extracted poster frame, beside the original in the source bucket. */
+export const POSTER_NAME = "poster.jpg";
+
+/** Where a view's poster lives — the thumb route's fallback re-derives this from the row. */
+export function posterKeyFor(view: ResolvedView): string {
+  return sourceKey(
+    { userId: view.userId, swingId: view.swingId, viewId: view.viewId, revision: view.revision },
+    POSTER_NAME,
+  );
 }
 
 /** The container formats the analyzer's ffmpeg normalize step accepts from a phone. */
@@ -124,6 +142,11 @@ export async function createCapture(
 
   const store = await getMediaStore();
   const signed = await store.signedUploadUrl(SOURCE_BUCKET, key, input.contentType);
+  const posterKey = sourceKey(
+    { userId, swingId: swing.id, viewId: view.id, revision: view.revision },
+    POSTER_NAME,
+  );
+  const posterSigned = await store.signedUploadUrl(SOURCE_BUCKET, posterKey, "image/jpeg");
 
   return {
     swingId: swing.id,
@@ -134,6 +157,12 @@ export async function createCapture(
       url: `/api/v1/swings/${swing.id}/source?view=${input.view}`,
       method: "PUT",
       headers: { "content-type": input.contentType },
+      expiresIn: 60 * 60,
+    },
+    posterUpload: posterSigned ?? {
+      url: `/api/v1/swings/${swing.id}/poster?view=${input.view}`,
+      method: "PUT",
+      headers: { "content-type": "image/jpeg" },
       expiresIn: 60 * 60,
     },
   };

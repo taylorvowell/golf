@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AppState } from "react-native";
 import { CheckCircle2, FileVideo, VideoOff } from "lucide-react-native";
 import type { SessionSummary } from "@swingsage/schema/contract";
 
 import { SAVE_PAD_S } from "../session/captureConstants";
 import { getProcessing, subscribeProcessing } from "../session/processing";
+import { pickImpactSeed } from "../session/reviewWindow";
 import type { CaptureView } from "../session/sessionState";
 import type { SwingTake } from "../session/SwingReview";
 import { useHandedness } from "../profile/useProfile";
@@ -22,46 +24,147 @@ import { refreshSwings } from "./useSwings";
  *
  * Each state gets one toast with a stable id, so the queue replaces rather than stacks: a golfer
  * importing three clips sees three swings' worth of progress, not fifteen notifications.
+ *
+ * **The review is confirm-first (Taylor, 2026-08-26).** Impact detection runs behind the loading
+ * screen, and the golfer's first question is the easy one — "is this your whole swing?" over the
+ * auto-cut clip, playing. Most imports end there with one tap; only a "No" opens the mark-impact
+ * scrubber. Four phases, one at a time:
+ *
+ *   loading → confirm ⇄ edit → saving
+ *
+ * `loading` covers the container probe + audio detection ("Loading Swing Video"); `saving`
+ * covers the trim ("Trimming and Saving Swing Video") — the upload itself still runs unheld,
+ * through the toasts.
  */
+
+/**
+ * How long after returning from the picker before the loading sheet shows. A cancelled pick
+ * resolves well inside this; a chosen video's copy into the cache does not — so the sheet
+ * appears only when there is genuinely something on its way.
+ */
+const PICKER_RETURN_GRACE_MS = 250;
+
+/** Where the import review is, phase by phase. `clip` rides along for the save/retry paths. */
+export type ImportReview =
+  | { phase: "loading"; clip: PickedClip; view: CaptureView }
+  | {
+      phase: "confirm" | "edit";
+      clip: PickedClip;
+      take: SwingTake;
+      view: CaptureView;
+      /** Detection's answer, in file seconds — the confirm loop and the edit seed share it. */
+      impactSec: number;
+    }
+  | { phase: "saving"; clip: PickedClip; take: SwingTake; view: CaptureView };
+
+/**
+ * What `onSaved` hands the caller: the TRIMMED clip and the pipeline run watching it — exactly
+ * the `PendingSwing` route's params, so a host navigates with this object verbatim.
+ */
+export interface SavedImport {
+  /** The pipeline run's key — `useProcessingState(localId)` is the live status. */
+  localId: string;
+  /**
+   * The server's swing id, waited for before `onSaved` fires (the saving loader holds the extra
+   * beat): the pending page renders the STANDARD swing view off the list row, so navigating
+   * before the row exists would land it on a fallback. Null only if ingest failed to answer in
+   * time — the page then falls back and recovers off the run's own state.
+   */
+  swingId: string | null;
+  /** Absolute path to the trimmed cut, no `file://` scheme. */
+  path: string;
+  fps: number;
+  durationMs: number;
+  slowMoFactor?: number;
+  view: CaptureView;
+}
+
+/**
+ * The moment ingest mints the swing row — the first thing the pipeline does after `run` starts.
+ * Resolves null on failure or timeout rather than throwing; the caller degrades, never blocks.
+ */
+function waitForSwingId(localId: string, timeoutMs: number): Promise<string | null> {
+  const now = getProcessing(localId);
+  if (now?.swingId) return Promise.resolve(now.swingId);
+  if (now?.phase === "failed") return Promise.resolve(null);
+  return new Promise((resolve) => {
+    let off = () => {};
+    const timer = setTimeout(() => done(null), timeoutMs);
+    function done(v: string | null) {
+      clearTimeout(timer);
+      off();
+      resolve(v);
+    }
+    off = subscribeProcessing(localId, () => {
+      const s = getProcessing(localId);
+      if (!s) return;
+      if (s.swingId) done(s.swingId);
+      else if (s.phase === "failed") done(null);
+    });
+  });
+}
 
 export interface ImportHook {
   /** Open the picker. Resolves once the sheet is up, or the attempt has been reported. */
   begin: () => void;
   /** The clip awaiting its angle, or null. */
   pending: PickedClip | null;
+  /**
+   * The golfer picked a clip and the picker is still delivering it. A picked video is COPIED
+   * into the app cache before `pickSwingVideo` resolves, and on a long slow-mo clip that gap
+   * left a blank screen between the picker closing and the sheet appearing (Taylor,
+   * 2026-08-26). The hosts open the angle sheet on this — content loading, Import greyed —
+   * so the sheet is up the moment the picker is gone.
+   */
+  picking: boolean;
   /** Confirm the angle and move to the review pass. */
   confirm: (view: CaptureView) => void;
   cancel: () => void;
   /**
-   * The clip on the mark-impact review screen, or null. An import is a recording that happened
-   * somewhere else (importSwing.ts), so it earns the SAME verification pass a recorded take
-   * gets: nothing becomes a swing until the golfer has seen the window and said save
-   * (capture spec §01.5). Skipping it was the one place the two paths diverged — and it
-   * uploaded whole multi-minute camera-roll clips (Taylor, 2026-08-23).
+   * The review flow's current phase, or null when no import is being reviewed. An import is a
+   * recording that happened somewhere else (importSwing.ts), so it earns the SAME verification
+   * pass a recorded take gets: nothing becomes a swing until the golfer has seen the window and
+   * said save (capture spec §01.5). Skipping it was the one place the two paths diverged — and
+   * it uploaded whole multi-minute camera-roll clips (Taylor, 2026-08-23).
    */
-  reviewing: { take: SwingTake; view: CaptureView } | null;
-  /** Save on the review screen: trim to the window, then upload the cut. */
+  review: ImportReview | null;
+  /** "No, edit swing" on the confirm screen: open the mark-impact scrubber. */
+  editSwing: () => void;
+  /** Back out of the scrubber to the confirm question, detection seed intact. */
+  backToConfirm: () => void;
+  /** Save from either screen: trim to the window, then upload the cut. */
   saveReview: (window: { startSec: number; endSec: number }) => void;
   /** Bin it. Nothing exists server-side yet, so this costs nothing. */
   discardReview: () => void;
-  savingReview: boolean;
 }
 
 /**
  * `onSaved` fires once the golfer has saved an upload's window and the run is on its way — the
- * hook's caller decides where that leaves them. The swing log needs nothing (they are already
- * looking at the list the swing will land in); session mode uses it to take them there, because
- * an uploaded clip is not part of the session they are standing in the middle of.
+ * hook's caller decides where that leaves them. Both hosts take them to the `PendingSwing`
+ * page (Taylor, 2026-08-26): the trimmed swing is watchable and scrubbable immediately, with
+ * the analysis status over it, rather than a log row to wait on.
  */
 export function useImportSwing(
   sessions: readonly SessionSummary[],
-  onSaved?: () => void,
+  onSaved?: (saved: SavedImport) => void,
 ): ImportHook {
   const toast = useToast();
   const handedness = useHandedness();
   const [pending, setPending] = useState<PickedClip | null>(null);
-  const [reviewing, setReviewing] = useState<{ take: SwingTake; view: CaptureView; clip: PickedClip } | null>(null);
-  const [savingReview, setSavingReview] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const [review, setReview] = useState<ImportReview | null>(null);
+
+  /** Which pick the in-flight picker belongs to — bumped by cancel (and unmount), so a loading
+   * sheet the golfer dismissed cannot reopen itself when the copy finally lands. */
+  const pickRun = useRef(0);
+  useEffect(() => () => { pickRun.current++; }, []);
+
+  /**
+   * Which review the in-flight async work belongs to. Bumped by every new confirm and every
+   * discard, and checked before each setState — a golfer who backs out during the loading pass
+   * must not have the confirm screen arrive on top of whatever they went back to.
+   */
+  const reviewRun = useRef(0);
 
   /** The sessions list changes as imports mint into it; the run reads the latest, not a capture. */
   const sessionsRef = useRef(sessions);
@@ -80,9 +183,37 @@ export function useImportSwing(
   }, []);
 
   const begin = useCallback(() => {
+    const runId = ++pickRun.current;
     void (async () => {
+      /**
+       * The loading sheet arms on the RETURN from the picker, not on opening it. The picker is
+       * its own activity, so this app going background → active again is the moment the golfer
+       * has chosen — and the grace beat below is what keeps a CANCEL from flashing the sheet:
+       * a cancelled pick resolves within milliseconds of the return, while a chosen video's
+       * copy into the app cache is the multi-second gap this exists to cover. Going background
+       * again (the permission dialog closing into the picker proper) disarms and re-arms.
+       */
+      let grace: ReturnType<typeof setTimeout> | undefined;
+      const sub = AppState.addEventListener("change", (next) => {
+        if (pickRun.current !== runId) return;
+        if (next === "active") {
+          grace = setTimeout(() => {
+            if (pickRun.current === runId) setPicking(true);
+          }, PICKER_RETURN_GRACE_MS);
+        } else {
+          clearTimeout(grace);
+          setPicking(false);
+        }
+      });
+
       const outcome = await pickSwingVideo();
+      clearTimeout(grace);
+      sub.remove();
+      // The golfer closed the loading sheet (or the screen went) — the pick is abandoned.
+      if (pickRun.current !== runId) return;
+      setPicking(false);
       if (outcome.kind === "picked") {
+        // Batched with the setPicking above, so a loading sheet fills in rather than blinking.
         setPending(outcome.clip);
         return;
       }
@@ -102,10 +233,11 @@ export function useImportSwing(
   /**
    * Start a run and watch it. Split out of `confirm` so a failure's Retry can call exactly the
    * same thing — a retry that took a different path would be a second import flow to keep right.
+   * Resolves with the run's local id once it is away, or null when it never started — the id is
+   * what the pending-swing page watches.
    */
   const run = useCallback(
-    (clip: PickedClip, view: CaptureView) => {
-      void (async () => {
+    async (clip: PickedClip, view: CaptureView): Promise<string | null> => {
         let localId: string;
         try {
           localId = await importSwing({
@@ -120,9 +252,9 @@ export function useImportSwing(
             title: "Couldn't add that swing",
             detail: `${err instanceof Error ? err.message : String(err)} — tap to try again.`,
             icon: VideoOff,
-            onPress: () => run(clip, view),
+            onPress: () => void run(clip, view),
           });
-          return;
+          return null;
         }
 
         toast({
@@ -160,7 +292,7 @@ export function useImportSwing(
               // and here the useful destination is another attempt.
               detail: `${state.message ?? "The analysis didn't finish."} Tap to try again.`,
               icon: VideoOff,
-              onPress: () => run(clip, view),
+              onPress: () => void run(clip, view),
             });
             // The placeholder has already left the log and any empty swing behind it is being
             // cleaned up; refresh so the list agrees.
@@ -168,7 +300,7 @@ export function useImportSwing(
           }
         });
         watching.current.push(off);
-      })();
+        return localId;
     },
     [handedness, toast],
   );
@@ -178,6 +310,10 @@ export function useImportSwing(
       const clip = pending;
       setPending(null);
       if (!clip) return;
+      const runId = ++reviewRun.current;
+      // The loader is up the moment the angle is confirmed — probe and detection both run
+      // behind "Loading Swing Video", so the confirm screen arrives with its window ready.
+      setReview({ phase: "loading", clip, view });
       void (async () => {
         // The native detector and cutter open the file themselves — they want a bare path,
         // not a file:// URI (the recorder has always handed them one).
@@ -189,9 +325,10 @@ export function useImportSwing(
         let fps = 30;
         let slowMoFactor: number | undefined;
         let durationMs = clip.durationMs ?? 0;
+        let camera: typeof import("../../../modules/high-speed-camera/src").default | null = null;
         try {
-          const { default: HighSpeedCamera } = await import("../../../modules/high-speed-camera/src");
-          const probe = await HighSpeedCamera.probeClip(path);
+          camera = (await import("../../../modules/high-speed-camera/src")).default;
+          const probe = await camera.probeClip(path);
           if (probe.durationMs > 0) durationMs = probe.durationMs;
           if (probe.videoFps > 0) fps = probe.videoFps;
           if (probe.captureFps > probe.videoFps && probe.videoFps > 0) {
@@ -201,31 +338,50 @@ export function useImportSwing(
         } catch {
           // A clip the probe cannot read still reviews on the picker's numbers.
         }
+        if (runId !== reviewRun.current) return;
         if (!durationMs || durationMs <= 0) {
-          // A clip whose length nothing could read cannot drive a scrubber. Rare; the
+          // A clip whose length nothing could read cannot drive a review. Rare; the
           // whole-clip upload is the honest fallback, and the analyzer still finds the swing.
-          run(clip, view);
+          setReview(null);
+          void run(clip, view);
           return;
         }
-        setReviewing({
+        // Same detector, same defaults, same seed rule as the recorded path's review — the
+        // confirm screen's auto-cut has to be the clip the scrubber would have started on.
+        const found = camera
+          ? await camera.detectImpacts(path, 3, undefined, true).catch(() => [])
+          : [];
+        if (runId !== reviewRun.current) return;
+        setReview({
+          phase: "confirm",
+          clip,
           take: { path, fps, durationMs, slowMoFactor },
           view,
-          clip,
+          impactSec: pickImpactSeed(found, durationMs / 1000),
         });
       })();
     },
     [pending, run],
   );
 
+  const editSwing = useCallback(() => {
+    setReview((r) => (r?.phase === "confirm" ? { ...r, phase: "edit" } : r));
+  }, []);
+
+  const backToConfirm = useCallback(() => {
+    setReview((r) => (r?.phase === "edit" ? { ...r, phase: "confirm" } : r));
+  }, []);
+
   const saveReview = useCallback(
     (window: { startSec: number; endSec: number }) => {
-      const current = reviewing;
-      if (!current || savingReview) return;
-      setSavingReview(true);
+      const current = review;
+      // Only the two screens may save, and only once — the phase swap IS the double-fire lock.
+      if (!current || (current.phase !== "confirm" && current.phase !== "edit")) return;
+      const { clip, take, view } = current;
+      setReview({ phase: "saving", clip, take, view });
       void (async () => {
-        const { take, view, clip } = current;
         try {
-          // Lazy: the native module throws where it does not exist (jest), and this screen only
+          // Lazy: the native module throws where it does not exist (jest), and this flow only
           // needs the cutter at the moment of save.
           const { default: HighSpeedCamera } = await import("../../../modules/high-speed-camera/src");
           // Same slack the recorded path gives (SessionScreen.saveTake): the box on screen is
@@ -233,13 +389,26 @@ export function useImportSwing(
           const startSec = Math.max(0, window.startSec - SAVE_PAD_S);
           const endSec = Math.min(take.durationMs / 1000, window.endSec + SAVE_PAD_S);
           const { path } = await HighSpeedCamera.trimClip(take.path, startSec, endSec);
-          run(
-            { ...clip, uri: path, durationMs: Math.round((endSec - startSec) * 1000) },
-            view,
-          );
+          const trimmedMs = Math.round((endSec - startSec) * 1000);
+          const localId = await run({ ...clip, uri: path, durationMs: trimmedMs }, view);
           // Only once the run is actually away — a trim that threw lands in the catch below,
-          // where nothing was uploaded and moving the golfer somewhere else would be a lie.
-          onSaved?.();
+          // and a run that never started has already said so through its own toast; moving the
+          // golfer to a pending page with nothing behind it would be a lie either way.
+          if (localId) {
+            // Hold the saving loader the extra beat until ingest mints the row and the list
+            // carries it — the pending page IS the standard swing view, and it reads the row.
+            const swingId = await waitForSwingId(localId, 15_000);
+            if (swingId) await refreshSwings().catch(() => undefined);
+            onSaved?.({
+              localId,
+              swingId,
+              path,
+              fps: take.fps,
+              durationMs: trimmedMs,
+              slowMoFactor: take.slowMoFactor,
+              view,
+            });
+          }
         } catch (err) {
           // Trim failed: the picked clip is still in the golfer's library, so nothing is lost —
           // but silently uploading minutes of footage they just cut down to five seconds is not
@@ -250,7 +419,7 @@ export function useImportSwing(
           // (2026-08-23). MediaMuxer's complaints are specific — an unsupported track, a
           // missing file, an empty window — and each wants a different response.
           const reason = err instanceof Error ? err.message : String(err);
-          console.error(`trimClip failed for ${current.take.path}:`, err);
+          console.error(`trimClip failed for ${take.path}:`, err);
           toast({
             id: "import-trim-failed",
             title: "Couldn't trim that clip",
@@ -258,26 +427,39 @@ export function useImportSwing(
             icon: VideoOff,
           });
         } finally {
-          setSavingReview(false);
-          setReviewing(null);
+          setReview(null);
         }
       })();
     },
-    [onSaved, reviewing, run, savingReview, toast],
+    [onSaved, review, run, toast],
   );
 
-  const discardReview = useCallback(() => setReviewing(null), []);
+  const discardReview = useCallback(() => {
+    // A trim in flight cannot be un-asked — the saving loader holds until it lands either way.
+    setReview((r) => {
+      if (r?.phase === "saving") return r;
+      reviewRun.current++;
+      return null;
+    });
+  }, []);
 
-  const cancel = useCallback(() => setPending(null), []);
+  const cancel = useCallback(() => {
+    // Also invalidates a pick still copying, so its late arrival cannot reopen the sheet.
+    pickRun.current++;
+    setPicking(false);
+    setPending(null);
+  }, []);
 
   return {
     begin,
     pending,
+    picking,
     confirm,
     cancel,
-    reviewing: reviewing ? { take: reviewing.take, view: reviewing.view } : null,
+    review,
+    editSwing,
+    backToConfirm,
     saveReview,
     discardReview,
-    savingReview,
   };
 }

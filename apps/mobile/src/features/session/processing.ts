@@ -34,6 +34,10 @@ export interface ProcessingState {
   stage: string;
   /** Which segment of `ANALYSIS_STAGES` is lit. Never interpolated between stages. */
   stageIndex: number;
+  /** The job's own percent, 0–100 — reported by the pipeline, never derived from a clock. */
+  progressPct: number;
+  /** The job's own fine-grained line ("frame 2256 of 2445"). Empty until the run says one. */
+  detail: string;
   /** The server's swing id, once phase one answered. Null until then. */
   swingId: string | null;
   viewId: string | null;
@@ -59,6 +63,7 @@ export const ANALYSIS_STAGES = [
   "Queued",
   "Analyzing pose",
   "Tracking club",
+  "Rendering",
   "Scoring",
 ] as const;
 
@@ -76,8 +81,9 @@ const STAGE_HINTS: Array<{ match: string; index: number }> = [
   { match: "club", index: 3 },
   { match: "trace", index: 3 },
   { match: "silhouette", index: 3 },
-  { match: "score", index: 4 },
-  { match: "scoring", index: 4 },
+  { match: "render", index: 4 },
+  { match: "score", index: 5 },
+  { match: "scoring", index: 5 },
 ];
 
 function stageIndexFor(job: Job, previous: number): number {
@@ -160,6 +166,51 @@ interface CreatedCapture {
   swingId: string;
   viewId: string;
   upload: { url: string; method: string; headers: Record<string, string> };
+  /** Where the poster frame goes. Optional so a server predating it changes nothing here. */
+  posterUpload?: { url: string; method: string; headers: Record<string, string> };
+}
+
+/** Poster decode width — card-and-cover sized, a few tens of KB as JPEG. */
+const POSTER_PX = 720;
+
+/**
+ * Extract one frame of the clip — the golfer at address — and send it to the poster target.
+ *
+ * Fired alongside the video upload, not before it: the JPEG is tens of kilobytes and lands in
+ * under a second, which is what puts a picture on the swing's log row the moment it exists
+ * instead of minutes later when the analyzer renders `contact.jpg` (Taylor, 2026-08-26).
+ * Best-effort in every direction — a swing must never fail, stall, or even warn a golfer
+ * because its THUMBNAIL didn't make it. Loud in dev only.
+ */
+async function uploadPoster(
+  target: NonNullable<CreatedCapture["posterUpload"]>,
+  clipPath: string,
+): Promise<void> {
+  try {
+    const { default: HighSpeedCamera } = await import("../../../modules/high-speed-camera/src");
+    if (typeof HighSpeedCamera?.clipThumbnailsAt !== "function") return;
+    // Three early sample points, first hit wins — the extractor answers with the nearest sync
+    // frame and skips misses, so one request is one chance (pendingImports' lesson). All three
+    // sit at the front of the clip, which the trim put at the golfer's address.
+    const frames = await HighSpeedCamera.clipThumbnailsAt(
+      clipPath.replace(/^file:\/\//, ""),
+      [0.05, 0.5, 1.5],
+      POSTER_PX,
+    );
+    const frame = frames?.[0]?.path;
+    if (!frame) return;
+    const { url, headers } = await api.uploadTarget(target.url, target.headers);
+    const result = await FileSystem.uploadAsync(url, toFileUri(frame), {
+      httpMethod: target.method === "POST" ? "POST" : "PUT",
+      uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+      headers,
+    });
+    if (__DEV__ && (result.status < 200 || result.status >= 300)) {
+      console.warn(`poster upload refused ${result.status}`);
+    }
+  } catch (err) {
+    if (__DEV__) console.warn("poster upload failed", err);
+  }
 }
 
 /**
@@ -255,6 +306,8 @@ function blank(): ProcessingState {
     phase: "uploading",
     stage: ANALYSIS_STAGES[0],
     stageIndex: 0,
+    progressPct: 0,
+    detail: "",
     swingId: null,
     viewId: null,
     message: null,
@@ -286,6 +339,9 @@ async function run(localId: string, input: ProcessingInput): Promise<void> {
   // deletable row rather than an upload with nothing behind it.
   state = { ...state, swingId: created.swingId, viewId: created.viewId };
   emit(localId, state);
+
+  // The poster races the video and wins by minutes — see `uploadPoster`. Never awaited.
+  if (created.posterUpload) void uploadPoster(created.posterUpload, input.clip.path);
 
   try {
     await uploadSwingVideo(created.upload, input.clip.path);
@@ -353,6 +409,10 @@ async function run(localId: string, input: ProcessingInput): Promise<void> {
       phase: polled.status === "done" ? "done" : polled.status === "failed" ? "failed" : polled.status,
       stage: stageLabelFor(polled, index),
       stageIndex: index,
+      // The pipeline's own numbers, verbatim — the bar shows what the job reports, never a
+      // clock. `message` doubles as the failure sentence, so it is only a DETAIL while running.
+      progressPct: polled.progressPct,
+      detail: polled.status === "running" ? polled.message : "",
       message: polled.status === "failed" ? polled.message || "The analysis didn't finish." : null,
     };
     emit(localId, state);

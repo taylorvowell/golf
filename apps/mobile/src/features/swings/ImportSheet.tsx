@@ -6,6 +6,7 @@ import { Check } from "lucide-react-native";
 import { Button } from "../../design/system/Button";
 import { PoseOutline } from "../../design/system/PoseOutline";
 import { Sheet } from "../../design/system/Sheet";
+import { SwingLoader } from "../../design/system/SwingLoader";
 import { FONT_BODY, FONT_DISPLAY } from "../../design/system/typography";
 import { appStyles, useAppTheme } from "../../theme";
 import { useHandedness } from "../profile/useProfile";
@@ -33,6 +34,13 @@ const OPTIONS: Array<{ view: CaptureView; label: string; detail: string }> = [
 export interface ImportSheetProps {
   visible: boolean;
   clip: PickedClip | null;
+  /**
+   * The picker has delivered nothing yet — the picked video is still being copied into the app
+   * cache. The sheet opens anyway (Taylor, 2026-08-26: the gap read as nothing happening) with
+   * the preview slot spinning and Import greyed; the angle question is already answerable, so
+   * the wait costs the golfer nothing.
+   */
+  loading?: boolean;
   onClose: () => void;
   onConfirm: (view: CaptureView) => void;
 }
@@ -112,7 +120,7 @@ function formatLength(seconds: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
-export function ImportSheet({ visible, clip, onClose, onConfirm }: ImportSheetProps) {
+export function ImportSheet({ visible, clip, loading = false, onClose, onConfirm }: ImportSheetProps) {
   const styles = useStyles();
   const t = useAppTheme();
   const mirrored = useHandedness() === "left";
@@ -131,8 +139,15 @@ export function ImportSheet({ visible, clip, onClose, onConfirm }: ImportSheetPr
       {/* Mounted only while a clip is actually pending — the player is a native object, and one
           held open behind a closed sheet is a decoder kept alive for nothing. The exit is safe:
           the sheet replays the tree it was showing the last time it was visible, so the picture
-          does not blank out mid-slide. */}
-      {clip ? <ClipPreview uri={clip.uri} durationMs={clip.durationMs} /> : null}
+          does not blank out mid-slide. While the picker is still delivering, the same tile spins
+          instead — the picture arrives in place. */}
+      {clip ? (
+        <ClipPreview uri={clip.uri} durationMs={clip.durationMs} />
+      ) : loading ? (
+        <View style={styles.previewLoading} testID="import-loading">
+          <SwingLoader size={28} ground="dark" />
+        </View>
+      ) : null}
 
       <View style={styles.options}>
         {OPTIONS.map((option) => {
@@ -178,8 +193,15 @@ export function ImportSheet({ visible, clip, onClose, onConfirm }: ImportSheetPr
 
       {/* The verb is the action the golfer is mid-way through, not where the file ends up —
           "add to session" described bookkeeping; the session is a given. Sized like the review
-          screen's Save: the one action on the sheet earns the big target (Taylor, 2026-08-23). */}
-      <Button label="Import video" variant="primary" size="large" onPress={() => onConfirm(view)} />
+          screen's Save: the one action on the sheet earns the big target (Taylor, 2026-08-23).
+          Greyed until the clip has actually arrived — importing nothing is not an action. */}
+      <Button
+        label="Import video"
+        variant="primary"
+        size="large"
+        disabled={!clip}
+        onPress={() => onConfirm(view)}
+      />
     </Sheet>
   );
 }
@@ -188,6 +210,14 @@ const useStyles = appStyles((t) => ({
   /** The picture sits on its own dark ground, so a letterboxed portrait clip reads as a framed
    *  thumbnail rather than a hole in the panel. */
   preview: { height: 150, borderRadius: 12, overflow: "hidden", backgroundColor: "#000" },
+  /** The preview tile's exact box, spinning — the picture lands in the same frame, no jump. */
+  previewLoading: {
+    height: 150,
+    borderRadius: 12,
+    backgroundColor: "#000",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   previewVideo: { flex: 1 },
   /** Over the picture, bottom-left — one line, on a scrim so it survives a bright frame. */
   meta: {

@@ -155,3 +155,52 @@ classes so drills don't force a queue redesign later.
 into the `analyzer-service` track goal; this doc is a specRef of the `drill-library` track so
 step authoring reads it; the wrong-execution fixture-pair requirement is named in that
 track's goal so it becomes a HANDOFF row when the track starts.
+
+---
+
+## Addendum 2026-08-26 — confirmed by Taylor, and the capture-side cleanup it implies
+
+**Not a change of design. A confirmation of it, plus the removal work the session-mode track
+shipped against it.** Taylor, unprompted and without having read this doc: *"the user is working
+on a drill and is seeking feedback on if they are doing it right or not. Should we just have that
+be a part of a separate flow somewhere? Entirely separate from swing log, won't record it there.
+It records maybe on the drills page or something. I don't need the 'video only' swing."*
+
+That is the five placements above, arrived at independently. Two consequences follow.
+
+### 1. `session_type: practice_drills` is the rejected option, shipped
+
+`session-mode` step 05 (2026-08-22) added `sessions.session_type` with
+`swing_analysis | practice_drills | video_only`, minting **ordinary `swings` rows** for a drills
+session and quarantining them behind a predicate (`sessions.ts` `isQuarantined`). That is
+verbatim the **Road not taken** entry "Drill reps as `swings` rows with a type flag — quarantine
+by WHERE clause… Lose." It shipped because step 05 was authored before this doc's placements
+reached the session-mode track's step files. A drill rep is a `drill_attempts` row and always was.
+
+### 2. The capture screen's Mode toggle has no remaining job
+
+With drills leaving for their own surface and `video_only` withdrawn by Taylor, all three modes
+collapse to `swing_analysis`, so the toggle is removed (2026-08-26, with the End Session cluster).
+`docs/decisions/mobile-client.md` carries the golfer-facing rule; recorded here because the
+*reason* is this architecture, not a UI preference.
+
+**What the removal must NOT do** — the trap this addendum exists to prevent:
+
+- **The `session_type` column and the `SessionType` union stay.** Contract evolution is
+  additive-only (D41) and a generated-schema enum member is a published shape; removing one to
+  tidy up is the breaking change native clients cannot be force-updated through. Every new
+  session simply writes the default. `drill_attempts` gets its own vocabulary and borrows none
+  of this.
+- **The quarantine predicate stays wired.** Rows written before 2026-08-26 carry
+  `practice_drills`/`video_only` for real, and they must keep being excluded from durable
+  averages. Deleting the filter as "dead code" silently admits exactly the motion D56 exists to
+  keep out — the failure mode is a trend line that moves, not an error.
+
+### 3. Status: notated, not built
+
+Taylor, 2026-08-26: *"do not do anything yet with the drill, just notate it somewhere."* No drill
+code, schema, artifact or surface is being written now. `drill-library` remains `planned` behind
+`priority-engine` and `admin-surface`, and this doc remains its design brief. The one interim
+consequence is that the Coach tab's drill cards stay stubs with **no record door behind them** —
+deliberately no placeholder, because a dead door reads as a broken feature where an absent one
+reads as a feature that has not arrived.

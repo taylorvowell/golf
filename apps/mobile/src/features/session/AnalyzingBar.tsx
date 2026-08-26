@@ -26,15 +26,20 @@ export interface AnalyzingBarProps {
   stage: string;
   /** Which segment is lit. Clamped here so an unexpected value cannot draw an empty track. */
   stageIndex: number;
+  /** The job's own percent (0–100), shown beside the stage once the run reports one. */
+  progressPct?: number;
+  /** The job's own fine-grained line ("frame 2256 of 2445") — proof it is moving, not stuck. */
+  detail?: string;
 }
 
-export function AnalyzingBar({ stage, stageIndex }: AnalyzingBarProps) {
+export function AnalyzingBar({ stage, stageIndex, progressPct = 0, detail }: AnalyzingBarProps) {
   const lit = Math.max(0, Math.min(ANALYSIS_STAGES.length - 1, stageIndex));
+  const pct = Math.max(0, Math.min(100, Math.round(progressPct)));
 
   return (
     <View style={styles.root} testID="analyzing-bar">
       <Text style={styles.label} numberOfLines={1}>
-        {stage}
+        {pct > 0 ? `${stage} — ${pct}%` : stage}
       </Text>
       <View style={styles.row}>
         {/* The spinner says "still working" between stage changes, which are up to a few seconds
@@ -46,9 +51,11 @@ export function AnalyzingBar({ stage, stageIndex }: AnalyzingBarProps) {
           ))}
         </View>
       </View>
-      {/* Names WHAT is running, once, at the smallest size that still reads — the stage above
-          says where it is up to, and this says what it is. */}
-      <Text style={styles.kind}>AI Analysis</Text>
+      {/* The run's own words while it has some — otherwise names WHAT is running, once, at the
+          smallest size that still reads. */}
+      <Text style={styles.kind} numberOfLines={1}>
+        {detail || "AI Analysis"}
+      </Text>
     </View>
   );
 }
@@ -65,11 +72,12 @@ const styles = StyleSheet.create({
   label: { color: COLORS.text, fontFamily: FONT_BODY.semiBold, fontSize: 10.5 },
   row: { flexDirection: "row", alignItems: "center", gap: 6 },
   track: { flex: 1, flexDirection: "row", gap: 3 },
+  /** Was 6pt when it only ever said "AI Analysis"; the run's own line has to be readable. */
   kind: {
     color: "rgba(255,255,255,0.45)",
     fontFamily: FONT_BODY.semiBold,
-    fontSize: 6,
-    letterSpacing: 0.9,
+    fontSize: 8.5,
+    letterSpacing: 0.6,
     textTransform: "uppercase",
   },
   segment: { flex: 1, height: 3, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.22)" },

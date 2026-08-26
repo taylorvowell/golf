@@ -1,0 +1,23 @@
+# File Index
+
+- `00_product_requirements_and_decisions.md` - 4,857 bytes
+- `01_pre_upload_capture_trim_ingest.md` - 7,606 bytes
+- `02_target_architecture_pipeline.md` - 7,003 bytes
+- `03_video_timeline_frame_policy_playback.md` - 5,684 bytes
+- `04_pose_body_tracking_scoring.md` - 4,889 bytes
+- `05_club_tracking.md` - 7,153 bytes
+- `06_events_impact_detection.md` - 5,740 bytes
+- `07_performance_gpu_cost.md` - 5,411 bytes
+- `08_ground_truth_benchmark_evaluation.md` - 5,658 bytes
+- `09_data_contracts_versioning.md` - 4,640 bytes
+- `10_infrastructure_jobs_observability.md` - 4,564 bytes
+- `11_experiment_plan.md` - 5,002 bytes
+- `12_migration_rollout.md` - 3,391 bytes
+- `13_implementation_backlog.md` - 9,090 bytes
+- `14_sources_and_evidence.md` - 5,221 bytes
+- `CHANGES_FROM_PRIOR_PLAN.md` - 1,655 bytes
+- `README.md` - 8,841 bytes
+- `package_manifest.json` - 971 bytes
+- `reference/cross_research_review.md` - 26,903 bytes
+- `reference/current_problem_brief_2026-08-26.md` - 23,008 bytes
+- `reference/original_deep_research_report.md` - 26,706 bytes

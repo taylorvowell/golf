@@ -262,6 +262,25 @@ export function cancelImportForSwing(swingId: string): void {
   publish();
 }
 
+/**
+ * Stop standing for a SESSION that no longer exists.
+ *
+ * Emptying a session deletes it server-side (the last swing's own delete), but a placeholder
+ * bound to that session by id — one whose own swing was deleted earlier, or one that never got
+ * a swing id — kept synthesizing an empty card in the log: the date with "0 swings", stuck
+ * until a restart (Taylor, 2026-08-26). A run pointed at a session that is gone has nothing
+ * left to stand for.
+ */
+export function cancelImportsForSession(sessionId: string): void {
+  for (const [localId, run] of pending) {
+    if (run.sessionId !== sessionId) continue;
+    watchers.get(localId)?.();
+    watchers.delete(localId);
+    pending.delete(localId);
+  }
+  publish();
+}
+
 /** Sign-out, and the tests' reset seam — the same rule `clearProcessing` follows. */
 export function clearPendingImports(): void {
   for (const off of watchers.values()) off();

@@ -20,7 +20,7 @@ import { useSyncProfile } from "./useSyncProfile";
  * Two independent clocks would drift apart within seconds and there would be no correct answer
  * about which of them was right; one clock and a derived follower has exactly one answer.
  *
- * ## It costs two kilobytes, not twenty-two megabytes
+ * ## It costs half a kilobyte, not twenty-two megabytes
  *
  * It used to read the reference's whole `analysis.json` to find its ten checkpoint frames — 5.9 MB
  * on `6iron-1`, 22 MB on `pro_3`, for ten integers. Nothing is drawn on this pane, so the keypoints

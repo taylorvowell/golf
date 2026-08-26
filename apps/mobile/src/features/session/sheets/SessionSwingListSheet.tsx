@@ -12,10 +12,12 @@ import type { SessionSwing } from "../sessionState";
 import { SwingLoader } from "../../../design/system/SwingLoader";
 
 /**
- * Quick access to this session's swings (§9.6) — not the Swing Log page, but dressed in its
- * language (Taylor, step-03 iteration): the swing-timeline treatment — a surface2 group with
- * the connected rail through gradient dots — plus a per-swing thumbnail, with view / delete /
- * star on every row. Tapping the row views the swing, still in session mode.
+ * The swings recorded on THIS visit (§9.6) — the `Swings` door on the after-swing bar. It is
+ * deliberately not the Swing Log page, which is where `Done` goes; it is a short list of what
+ * the golfer has hit since opening the camera, dressed in the log's language (Taylor, step-03
+ * iteration): the swing-timeline treatment — a surface2 group with the connected rail through
+ * gradient dots — plus a per-swing thumbnail, with view / delete / star on every row. Tapping
+ * the row views the swing without leaving the capture surface.
  *
  * The rail + dot construction mirrors `SwingTimelineList` (design/system); the rows differ
  * (thumbnail + actions), which is why this composes the pattern rather than forcing new
@@ -87,7 +89,9 @@ function SwingRow({
   onDelete: () => void;
 }) {
   const t = useTheme();
-  const { starred, toggle } = useStarred(swing.id);
+  // The SERVER's id: a star is a field on the swing row, so a swing still uploading has nothing
+  // to set it on. Disabled for that window rather than swallowing the tap.
+  const { starred, toggle, pending: starPending } = useStarred(swing.serverId);
   return (
     <Pressable
       accessibilityRole="button"
@@ -152,10 +156,16 @@ function SwingRow({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={`Star swing ${swing.number}`}
-        accessibilityState={{ selected: starred }}
+        accessibilityState={{ selected: starred, disabled: starPending }}
+        disabled={starPending}
         onPress={toggle}
         hitSlop={8}
-        style={({ pressed }) => [styles.action, { backgroundColor: t.surface3 }, pressed && styles.pressed]}
+        style={({ pressed }) => [
+          styles.action,
+          { backgroundColor: t.surface3 },
+          starPending && styles.disabled,
+          pressed && styles.pressed,
+        ]}
       >
         <Star
           size={16}
@@ -170,6 +180,8 @@ function SwingRow({
 
 const styles = StyleSheet.create({
   group: { borderRadius: 10, overflow: "hidden" },
+  /** A swing still uploading has no row to star — dimmed, and the press is off. */
+  disabled: { opacity: 0.35 },
   row: {
     flexDirection: "row",
     alignItems: "center",

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode, type Ref } from "react";
 import {
+  AppState,
   Linking,
   PermissionsAndroid,
   Platform,
@@ -29,6 +30,13 @@ import type { CameraZoom, ZoomRange } from "./sessionState";
  * with a door to Settings, and the preview mounts only behind a grant — the native view
  * assumes it. The take itself is driven through `cameraRef` by the session screen — this
  * component only owns the picture and the permission gate.
+ *
+ * **The grant is re-read every time the app comes back to the foreground**, and it has to be:
+ * the Settings door this screen offers is a round trip out of the app, so the interesting
+ * answer always arrives while the screen is backgrounded. It runs both ways. Revoked while
+ * away, a stale `granted` would keep the dead preview mounted and leave Record looking ready
+ * over a black rectangle; newly granted, the golfer would come back to the same refusal that
+ * sent them to Settings and reasonably conclude it had not worked.
  */
 
 export interface CameraStageProps {
@@ -86,9 +94,31 @@ export function CameraStage({
     setPermission(granted ? "granted" : "denied");
   }, []);
 
+  /**
+   * `check`, never `request` — this runs on every foreground, and a screen that re-prompts each
+   * time the golfer switches apps is a screen they turn off notifications to escape. The system
+   * dialog belongs to the mount below and to the explicit Allow button, both of which are the
+   * golfer asking for it.
+   */
+  const recheck = useCallback(async () => {
+    if (Platform.OS !== "android") return;
+    const [camera, mic] = await Promise.all([
+      PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.CAMERA),
+      PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO),
+    ]);
+    setPermission(camera && mic ? "granted" : "denied");
+  }, []);
+
   useEffect(() => {
     void request();
   }, [request]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (next) => {
+      if (next === "active") void recheck();
+    });
+    return () => sub.remove();
+  }, [recheck]);
 
   return (
     <View style={styles.root} onLayout={onLayout} testID="camera-stage">

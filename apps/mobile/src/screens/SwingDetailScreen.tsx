@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Animated, StyleSheet, Text, View } from "react-native";
 import { Star } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -107,16 +107,25 @@ const MAIN_TABS: (keyof TabParamList)[] = ["Home", "SwingLog", "Progress", "Coac
  * moving rather than the swing changing. Everything belonging to THIS swing — picture, heading,
  * transport, scorecard — travels with the finger.
  */
-function StandaloneSwingPage({
+export function StandaloneSwingPage({
   entry,
   prev,
   next,
   onGo,
+  analyzed = true,
+  extras,
+  localVideo = null,
 }: {
   entry: SwingEntry;
   prev: SwingEntry | null;
   next: SwingEntry | null;
   onGo: (id: string) => void;
+  /** False while the pipeline still runs — the pending import page wears this chrome too. */
+  analyzed?: boolean;
+  /** Host chrome over the page (the pending page's analyzing bar). */
+  extras?: ReactNode;
+  /** The just-saved import's trimmed file, until the server has anything to stream. */
+  localVideo?: { path: string; speed?: number } | null;
 }) {
   const navigation = useAppNavigation();
   const insets = useSafeAreaInsets();
@@ -156,6 +165,9 @@ function StandaloneSwingPage({
       // drawing one swing's overlay over another's picture.
       key={swing.id}
       swing={swing}
+      analyzed={analyzed}
+      extras={extras}
+      localVideo={localVideo}
       testID="report"
       // The main menu is worn outside the swipe — see the note above. Nothing goes in this slot.
       menu={() => null}

@@ -129,6 +129,9 @@ export async function listSwings(tx: DbTx, userId: string): Promise<SwingSummary
       // this when it is set and falls back to inferring a session from time when it is not, so
       // a log holding both kinds still reads as one history.
       sessionId: swing.sessionId,
+      // A property of the SWING, not of a phone (§7.3). It used to live in the app's own
+      // AsyncStorage, so a star vanished on reinstall and never reached a second device.
+      favourite: swing.favourite,
       label: swing.referenceLabel ?? primary?.mediaKey ?? swing.id,
       referenceLabel: swing.referenceLabel,
       views,
@@ -200,4 +203,32 @@ export async function getClubOnly(address: ViewAddress): Promise<Silhouette | nu
 export async function hasSilhouette(address: ViewAddress): Promise<boolean> {
   const store = await getMediaStore();
   return store.exists(ARTIFACT_BUCKET, artifactKey(address, "silhouette.json"));
+}
+
+/**
+ * Star or unstar one swing (§7.3) — the whole of `PATCH /api/v1/swings/:id` today.
+ *
+ * **Owner only, and enforced twice.** The `user_id` predicate here is belt to the RLS braces:
+ * `swings_write` already admits the owner alone, so a coach — who may read this swing through
+ * the relationship boundary — cannot reach it even if this predicate were dropped. The same
+ * distinction `DELETE` draws, for the same reason: a coach reviews a golfer's swing and never
+ * restyles their log.
+ *
+ * Null when there is no such swing OR it is not the caller's, deliberately undistinguished —
+ * confirming a stranger's id is real is itself a disclosure.
+ */
+export async function setSwingFavourite(
+  tx: DbTx,
+  userId: string,
+  swingId: string,
+  favourite: boolean,
+): Promise<boolean | null> {
+  const { swings } = await import("../db/schema");
+  const { and, eq } = await import("drizzle-orm");
+  const rows = await tx
+    .update(swings)
+    .set({ favourite })
+    .where(and(eq(swings.id, swingId), eq(swings.userId, userId)))
+    .returning({ favourite: swings.favourite });
+  return rows[0]?.favourite ?? null;
 }

@@ -11,7 +11,7 @@ import type { SwingClipRef } from "./sessionState";
 
 /**
  * The just-recorded clip, looping — what the post-swing screen plays until analysis swaps in
- * the served swing (step 06). The whole trimmed clip IS the loop: it was cut to the review
+ * the served swing. The whole trimmed clip IS the loop: it was cut to the review
  * window on Save, so there is no sub-range to manage here.
  */
 export function LocalClipPlayer({ clip }: { clip: SwingClipRef }) {
@@ -23,9 +23,13 @@ export function LocalClipPlayer({ clip }: { clip: SwingClipRef }) {
 
   const onReady = useCallback((e: { nativeEvent: ReadyEvent }) => {
     durationMsRef.current = e.nativeEvent.durationMs;
+    // An IMPORTED phone slow-mo runs 8× slower than the world in its own timeline — play it at
+    // real speed, like every preview of it did. Anything this app records is factor 1.
+    const speed = Math.max(1, clip.slowMoFactor ?? 1);
+    if (speed !== 1) void player.current?.setPlaybackSpeed(speed);
     void player.current?.seekToFrame(0);
     void player.current?.play();
-  }, []);
+  }, [clip.slowMoFactor]);
 
   /** True between reaching the end and the seek landing — without it, every frame past the
    * last one re-fires the seek instead of one seek re-firing the loop. */

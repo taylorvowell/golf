@@ -29,6 +29,7 @@ export { CoachCard } from "./CoachCard";
 export { StickThumb, STICK, type StickFigure } from "./StickThumb";
 export { FORM_FIGURES, formFigureFor, type FormFigureName } from "./formArt";
 export { CoachLoader } from "./CoachLoader";
+export { FullScreenLoader } from "./FullScreenLoader";
 export { GlowBackdrop } from "./GlowBackdrop";
 export { WeekStrip, type WeekDay } from "./WeekStrip";
 export { BrandLogo, BrandMark, SwingGradient } from "./BrandLogo";

@@ -1,6 +1,7 @@
 import sharp from "sharp";
 
-import { ARTIFACT_BUCKET, artifactKey } from "@/lib/media/keys";
+import { POSTER_NAME } from "@/lib/ingest";
+import { ARTIFACT_BUCKET, SOURCE_BUCKET, artifactKey, sourceKey } from "@/lib/media/keys";
 import { getMediaStore } from "@/lib/media/store";
 import { requireViewAccess, viewParam } from "@/lib/auth";
 
@@ -33,7 +34,26 @@ export async function GET(
     ARTIFACT_BUCKET,
     artifactKey(access.address, "contact.jpg"),
   );
-  if (!bytes) return new Response("not found", { status: 404 });
+  if (!bytes) {
+    /**
+     * No analysis yet (or none ever) — fall back to the poster the CLIENT uploaded at save:
+     * one frame of the golfer at address, extracted on the phone in the same beat as the trim.
+     * It is already a single frame, so the `?poster=1` grid crop below never applies; the
+     * analyzer's contact sheet takes over at this same URL the moment it exists.
+     */
+    const poster = await store.getBytes(SOURCE_BUCKET, sourceKey(access.address, POSTER_NAME));
+    if (!poster) return new Response("not found", { status: 404 });
+    return new Response(new Uint8Array(poster), {
+      status: 200,
+      headers: {
+        "Content-Type": "image/jpeg",
+        "Content-Length": String(poster.byteLength),
+        // Short-lived, unlike the artifact's day: the analysed frame REPLACES this at the same
+        // URL, and a day-long cache would keep showing the plain poster past that swap.
+        "Cache-Control": "private, max-age=300",
+      },
+    });
+  }
 
   let body: Uint8Array<ArrayBuffer> = new Uint8Array(bytes);
   if (new URL(req.url).searchParams.has("poster")) {

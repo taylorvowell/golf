@@ -73,6 +73,12 @@ export interface SwingPageProps {
   /** Host chrome over everything — sheets, the analyzing bar, the completion overlay. */
   extras?: ReactNode;
   /**
+   * Play this LOCAL file instead of the server stream — the just-saved import whose upload is
+   * still in flight (see `ReportVideoLayer.localSource`). The page is otherwise itself: the
+   * standard transport scrubs on the container's own facts, the sheet waits as a skeleton.
+   */
+  localVideo?: { path: string; speed?: number } | null;
+  /**
    * Host chrome belonging to the PICTURE — it rides inside the video-open shell and fades out
    * with the transport as the scorecard comes up (the standalone page's swing heading).
    */
@@ -111,6 +117,7 @@ export function SwingPage({
   staticSheet = false,
   scoreDoor = true,
   extras,
+  localVideo = null,
   pictureChrome,
   onScrollY: onHostScrollY,
   onVideoOpenChange,
@@ -266,6 +273,7 @@ export function SwingPage({
         // An unanalysed swing plays its uploaded original the moment it lands — the analyzer is
         // not a gate on watching the swing that was just hit (Taylor, 2026-08-23).
         videoReady={swing.status === "ready"}
+        localSource={localVideo}
         aspectRatio={aspectRatio}
         score={analyzed && typeof swing.overallScore === "number" ? swing.overallScore : null}
         tempoRatio={analyzed ? swing.tempoRatio : null}

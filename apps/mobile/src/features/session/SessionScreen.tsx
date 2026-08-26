@@ -3,7 +3,6 @@ import {
   Animated,
   BackHandler,
   Easing,
-  Modal,
   StyleSheet,
   Text,
   View,
@@ -11,7 +10,7 @@ import {
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect } from "@react-navigation/native";
-import { VideoOff } from "lucide-react-native";
+import { Scissors, VideoOff } from "lucide-react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import HighSpeedCamera from "../../../modules/high-speed-camera/src";
@@ -20,15 +19,17 @@ import type { HighSpeedCameraViewRef } from "../../../modules/high-speed-camera/
 import { APP_HEADER_BAR, AppHeader, SwingLoader, useNavVisibility } from "../../design/system";
 import { FONT_DISPLAY } from "../../design/system/typography";
 import { useAppNavigation } from "../../navigation";
-import { COLORS, FixedDarkTheme } from "../../theme";
+import { COLORS } from "../../theme";
 import { Avatar } from "../profile/Avatar";
 import { useHandedness } from "../profile/useProfile";
 import { ImportSheet } from "../swings/ImportSheet";
+import { ImportReviewFlow } from "../swings/ImportReviewFlow";
 import { useImportSwing } from "../swings/useImportSwing";
 import { primeSession, useSessions } from "../swings/useSessions";
 import { useSessionPipeline } from "./useSessionPipeline";
 import { CameraControls } from "./CameraControls";
 import { CameraStage } from "./CameraStage";
+import { CaptureStatusChip } from "./CaptureStatusChip";
 import { DualSyncButton } from "./DualSyncButton";
 import { DualSyncConnectOverlay } from "./DualSyncConnectOverlay";
 import { DualSyncPip } from "./DualSyncPip";
@@ -47,9 +48,7 @@ import { ViewToggle } from "./ViewToggle";
 import { RecordingFrame } from "./RecordingFrame";
 import { SessionDock } from "./SessionDock";
 import { SESSION_NAV_CLEARANCE } from "./SessionNav";
-import { SwingExitSheet } from "./sheets/SwingExitSheet";
 import { calendarDate, createSession } from "./sessionApi";
-import { stageSessionArrival } from "./sessionArrival";
 import { loadSessionDefaults } from "./sessionDefaults";
 import {
   DEFAULT_SESSION_SETTINGS,
@@ -71,11 +70,14 @@ import { useToast } from "../toast/ToastProvider";
 /**
  * Session mode (D61) — the capture surface behind the tab bar's Record door.
  *
- * The record chain is real (capture spec §00.3, step 04): Record drives the native
- * high-speed session through `useTakeRecorder`, a finalized take opens `SwingReview`'s
- * six-second window, Save trims and mints the swing, and the post-swing view plays the
- * trimmed clip. Not yet real: upload + analysis (step 06 — the analyzing bar is still the
- * stub driver below) and session persistence (step 05).
+ * The whole chain is real: Record drives the native high-speed session through
+ * `useTakeRecorder`, a finalized take opens `SwingReview`'s window, Save trims and mints the
+ * swing, `useSessionPipeline` uploads it and drives the analyzing bar off the real job, and
+ * the post-swing view swaps the trimmed local clip for the served artifact when it lands.
+ *
+ * **A session is a recording STATE, not an object** (Taylor, 2026-08-26). There is no name, no
+ * number and nothing to end: the golfer leaves whenever they like and every swing is already
+ * saved. The row behind it exists only so the swing log can group a range visit.
  *
  * The route is a TRANSPARENT modal and this screen animates its own entrance (Taylor,
  * step-03 iteration): the session surface slides up over the still-visible previous screen
@@ -111,26 +113,18 @@ export function SessionScreen() {
    * the confirmation IS the transition, so the PiP must not appear behind it.
    */
   const [connecting, setConnecting] = useState(false);
-  /** Hardware back on the post-swing screen asks instead of guessing — see `SwingExitSheet`. */
-  const [exitOpen, setExitOpen] = useState(false);
 
   const [state, dispatch] = useReducer(
     sessionReducer,
     undefined,
-    () => initialSessionState(1, new Date(), DEFAULT_SESSION_SETTINGS),
+    () => initialSessionState(DEFAULT_SESSION_SETTINGS),
   );
   /**
-   * A session EXISTS once a swing is in it, and from that moment the golfer is in the loop
-   * until they end it (Taylor, step-03 iteration). Refs because the back handler is registered
-   * once and must read the live values, never the ones captured when it was installed.
+   * There is no "locked in a session" state (Taylor, 2026-08-26). Having recorded a swing does
+   * not trap the golfer on this surface: every swing is already a row, already uploading or
+   * analysed, and already in the log — so back means back, the profile door stays open, and the
+   * back handler no longer needs to read the swing list to decide where it may go.
    */
-  const locked = state.swings.length > 0;
-  const lockedRef = useRef(locked);
-  const swingsRef = useRef(state.swings);
-  useEffect(() => {
-    lockedRef.current = locked;
-    swingsRef.current = state.swings;
-  }, [locked, state.swings]);
   const [sheet, setSheet] = useState<SheetName>(null);
 
   // ---- The take itself -------------------------------------------------------------------
@@ -276,11 +270,20 @@ export function SessionScreen() {
           at: Date.now(),
           clip: { path: take.path, fps: take.fps, durationMs: take.durationMs },
         });
+        // ...and SAY so. The realistic cause is a phone with no room left (1080p240 is the
+        // heaviest thing this app writes), and the golfer is about to watch a thirty-second
+        // clip where they expected five. Silence there reads as the mark not having taken.
+        toast({
+          id: `trim-failed-${Date.now()}`,
+          title: "Saved the whole recording",
+          detail: "The trim didn't run — your phone may be out of space. The swing is safe.",
+          icon: Scissors,
+        });
       } finally {
         setSavingTake(false);
       }
     },
-    [devClips, savingTake, state.pendingTake],
+    [devClips, savingTake, state.pendingTake, toast],
   );
 
   /**
@@ -351,31 +354,24 @@ export function SessionScreen() {
     };
   }, []);
 
-  // Default name: "Session N" numbered from the sessions the SERVER holds, not from swings
-  // grouped by time — a golfer who hit two balls and left still had a session, and inferring the
-  // number from the swing log skipped it. The list is shared and usually already cached, so this
-  // lands before the golfer sees "1"; the reducer refuses it over a rename or a minted session,
-  // so a slow answer can never overwrite either.
-  const { sessions: sessionRows, loading: sessionsLoading } = useSessions();
-  const sessionNumber = sessionsLoading ? null : sessionRows.length + 1;
+  // The day's sessions, for the import door below — an uploaded clip joins the session the
+  // DAY already has rather than the one being recorded here. Nothing on this screen is numbered
+  // or named: a session is a state, not a thing with an identity (Taylor, 2026-08-26).
+  const { sessions: sessionRows } = useSessions();
 
   /**
    * The import door, the same one the swing log carries: a clip already on the phone gets the
    * identical picker → angle → mark-impact → upload path a recorded take gets. The camera screen
    * is where a golfer holding footage actually stands, so it earns a door of its own.
    */
-  const importer = useImportSwing(sessionRows, () =>
-    // An upload lands in the DAY's session, not the one being recorded here, so saving it takes
-    // the golfer to the log where it will appear (Taylor, 2026-08-23) — a recorded take stays put
-    // and goes to the after-swing screen. Through `leave` so the surface slides out rather than
+  const importer = useImportSwing(sessionRows, (saved) =>
+    // An upload lands in the DAY's session, not the one being recorded here, so saving it leaves
+    // this surface — for the pending-swing page (Taylor, 2026-08-26: the trimmed clip, watchable
+    // while it analyses), not the log list it used to wait on. A recorded take stays put and
+    // goes to the after-swing screen. Through `leave` so the surface slides out rather than
     // popping mid-animation.
-    leave(() => navigation.navigate("Tabs", { screen: "SwingLog" })),
+    leave(() => navigation.navigate("PendingSwing", saved)),
   );
-  useEffect(() => {
-    if (sessionNumber == null) return;
-    dispatch({ type: "set-default-title", title: `Session ${sessionNumber}` });
-  }, [sessionNumber]);
-
   /**
    * The session becomes REAL on the first saved swing, never on opening the camera (D61).
    *
@@ -443,17 +439,13 @@ export function SessionScreen() {
           return true;
         }
         if (reviewingRef.current !== null) {
-          // Back is ambiguous on the post-swing screen — "another swing" and "end the session"
-          // are both plausible and both destructive of the other. Ask.
-          setExitOpen(true);
-        } else if (lockedRef.current) {
-          // A session with swings in it is a LOOP, and the only way out of it is End (Taylor,
-          // step-03 iteration). Back therefore returns to the swing that is already recorded
-          // rather than dropping out of a session the golfer has not finished.
-          const last = swingsRef.current[0];
-          if (last) dispatch({ type: "review", swingId: last.id });
-          else leave(() => navigation.goBack());
+          // Back on the after-swing screen means the camera, exactly as its own back arrow does
+          // — one meaning, not a question. It used to open a "record another / end session"
+          // sheet, which only made sense while a session was something you had to finish.
+          dispatch({ type: "back-to-capture" });
         } else {
+          // And back on the camera leaves. Nothing is unsaved: every swing behind this screen is
+          // already a row, already uploading or analysed, and already in the log.
           leave(() => navigation.goBack());
         }
         return true;
@@ -463,27 +455,18 @@ export function SessionScreen() {
   );
 
   /**
-   * @param stage Whether to announce the session on the log. Pass `false` when the caller has
-   *   just emptied the session in the same tick — `state` here is the render's snapshot, so a
-   *   delete dispatched a moment ago still reads as a swing and would stage a session that no
-   *   longer has one. A session with no swings must leave NOTHING behind (Taylor).
+   * Done — the explicit way off this surface, landing on the swing log.
+   *
+   * It does NOT end anything (Taylor, 2026-08-26): there is no session to close, no arrival to
+   * announce and nothing to save. Every swing left behind is already a row and already in the
+   * pipeline, and coming straight back in simply adds to the same day. This is navigation.
+   *
+   * The nested navigate form is on purpose — a bare `navigate("SwingLog")` searches upward and
+   * fails at runtime.
    */
-  const endSession = useCallback(
-    ({ stage = true }: { stage?: boolean } = {}) => {
-      // Stage the arrival moment for the log, then slide out. The nested navigate form on
-      // purpose — a bare navigate("SwingLog") searches upward and fails at runtime.
-      if (stage && state.swings.length > 0) {
-        stageSessionArrival({
-          title: state.title,
-          swings: state.swings.length,
-          at: Date.now(),
-          sessionType: state.sessionType,
-        });
-      }
-      leave(() => navigation.navigate("Tabs", { screen: "SwingLog" }));
-    },
-    [leave, navigation, state.sessionType, state.swings.length, state.title],
-  );
+  const leaveForLog = useCallback(() => {
+    leave(() => navigation.navigate("Tabs", { screen: "SwingLog" }));
+  }, [leave, navigation]);
 
   // The Bluetooth shutter remote (or the volume rocker) — live for the whole session, both
   // screens; the reducer resolves what a press means from where the golfer is. Except one
@@ -550,7 +533,7 @@ export function SessionScreen() {
             state={state}
             dispatch={dispatch}
             swing={reviewingSwing}
-            onEndSession={endSession}
+            onDone={leaveForLog}
           />
         ) : (
           <CameraStage
@@ -588,6 +571,21 @@ export function SessionScreen() {
                 pointerEvents="box-none"
               >
                 <UploadPill onPress={importer.begin} />
+              </View>
+
+              {/* What the swings behind this screen are doing — the ONLY report the golfer gets
+                  when Video replay is off and a save leaves them standing here (step 07). It
+                  draws in both settings, because a swing can still be analysing after they came
+                  back for the next ball. Opposite the upload door so the top of the frame stays
+                  balanced and neither sits over the golfer. */}
+              <View
+                style={[styles.statusSlot, { top: insets.top + APP_HEADER_BAR + 8 }]}
+                pointerEvents="box-none"
+              >
+                <CaptureStatusChip
+                  swings={state.swings}
+                  onOpen={(swingId) => dispatch({ type: "review", swingId })}
+                />
               </View>
 
               {/* Controls rail — everything you touch while FRAMING THIS phone, in one column:
@@ -702,10 +700,11 @@ export function SessionScreen() {
           <AppHeader
             hero
             chromePx={headerScroll}
-            // The one door off this screen that is not End. Sealed while a session is
-            // running — leaving mid-session is what "End session" is for.
+            // Always open. It used to seal once a swing existed, on the reasoning that leaving
+            // mid-session was what "End session" was for — with no session to be in the middle
+            // of, that is just a dead door.
             avatar={<Avatar size={26} />}
-            onProfile={locked ? undefined : () => navigation.navigate("Profile")}
+            onProfile={() => navigation.navigate("Profile")}
           />
         </Animated.View>
       ) : null}
@@ -722,51 +721,20 @@ export function SessionScreen() {
       <SessionTypeInfoSheet visible={sheet === "info"} onClose={() => setSheet(null)} />
 
       {/* Asked once per import: picking a clip and saying which way the camera pointed is one
-          action, not a flow. */}
+          action, not a flow. Open from the moment the picker hands back (loading) so the
+          delivery gap never reads as nothing happening. */}
       <ImportSheet
-        visible={importer.pending !== null}
+        visible={importer.pending !== null || importer.picking}
         clip={importer.pending}
+        loading={importer.picking}
         onClose={importer.cancel}
         onConfirm={importer.confirm}
       />
 
-      {/* The mark-impact pass an import earns, identical to a recorded take's — nothing uploads
-          until the golfer has seen the window and said save. Its own Modal window ABOVE the
-          camera surface, so this screen's own chrome cannot float over the Save button. */}
-      <Modal
-        visible={importer.reviewing !== null}
-        // NOT "fade": Android animates the WINDOW's alpha and the camera shows straight through.
-        animationType="none"
-        statusBarTranslucent
-        navigationBarTranslucent
-        onRequestClose={importer.discardReview}
-      >
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }]}>
-          <FixedDarkTheme>
-            {importer.reviewing ? (
-              <SwingReview
-                take={importer.reviewing.take}
-                saving={importer.savingReview}
-                onSave={importer.saveReview}
-                onDelete={importer.discardReview}
-                importMode
-              />
-            ) : null}
-          </FixedDarkTheme>
-        </View>
-      </Modal>
-      <SwingExitSheet
-        visible={exitOpen}
-        onClose={() => setExitOpen(false)}
-        onRecordAnother={() => {
-          setExitOpen(false);
-          dispatch({ type: "back-to-capture" });
-        }}
-        onEndSession={() => {
-          setExitOpen(false);
-          endSession();
-        }}
-      />
+      {/* The confirm-first review pass an import earns — nothing uploads until the golfer has
+          seen the auto-cut window and said save (or edited it first). One shared flow for both
+          hosts; see ImportReviewFlow. */}
+      <ImportReviewFlow importer={importer} />
       {/* The clip library, opened from the debug menu. Never mounted in a release build. */}
       {__DEV__ ? <DevClipsSheet drawer={devClips} /> : null}
       <DualSyncSheet
@@ -823,6 +791,7 @@ const styles = StyleSheet.create({
   /** Right edge, vertically placed by the screen (the header's height is an inset away). The
    *  dropdown grows DOWN from here over the footage, which box-none keeps tappable around it. */
   uploadSlot: { position: "absolute", right: 14, alignItems: "flex-end" },
+  statusSlot: { position: "absolute", left: 14, alignItems: "flex-start" },
   // Each rail exists in both positions — the profile's handedness picks which (see above).
   controlsRailLeft: { position: "absolute", left: 16, alignItems: "flex-start", gap: 14 },
   controlsRailRight: { position: "absolute", right: 16, alignItems: "flex-end", gap: 14 },

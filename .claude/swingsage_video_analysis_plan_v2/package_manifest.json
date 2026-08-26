@@ -1,0 +1,28 @@
+{
+  "package": "swingsage_video_analysis_plan_v2",
+  "date": "2026-08-26",
+  "entrypoint": "README.md",
+  "documents": [
+    "00_product_requirements_and_decisions.md",
+    "01_pre_upload_capture_trim_ingest.md",
+    "02_target_architecture_pipeline.md",
+    "03_video_timeline_frame_policy_playback.md",
+    "04_pose_body_tracking_scoring.md",
+    "05_club_tracking.md",
+    "06_events_impact_detection.md",
+    "07_performance_gpu_cost.md",
+    "08_ground_truth_benchmark_evaluation.md",
+    "09_data_contracts_versioning.md",
+    "10_infrastructure_jobs_observability.md",
+    "11_experiment_plan.md",
+    "12_migration_rollout.md",
+    "13_implementation_backlog.md",
+    "14_sources_and_evidence.md",
+    "CHANGES_FROM_PRIOR_PLAN.md",
+    "README.md",
+    "reference/cross_research_review.md",
+    "reference/current_problem_brief_2026-08-26.md",
+    "reference/original_deep_research_report.md"
+  ],
+  "supersedes": "prior SwingSage video-analysis research pack"
+}

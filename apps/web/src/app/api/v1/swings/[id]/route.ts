@@ -1,11 +1,12 @@
 import { sql } from "drizzle-orm";
-import type { SwingDeletion } from "@swingsage/schema/contract";
+import type { SwingDeletion, SwingPatchRequest } from "@swingsage/schema/contract";
 
 import { withUser } from "@/db/session";
 import { isUuid } from "@/db/views";
 import { requireUserIdOrNull } from "@/lib/auth";
 import { ARTIFACT_BUCKET, SOURCE_BUCKET, swingPrefix } from "@/lib/media/keys";
 import { getMediaStore } from "@/lib/media/store";
+import { listSwings, setSwingFavourite } from "@/lib/swings";
 
 /**
  * DELETE /api/v1/swings/:id — remove one swing: its views, artifacts, scores, markers, stages,
@@ -92,4 +93,58 @@ export async function DELETE(
       { status: 500 },
     );
   }
+}
+
+const noStore = { "Cache-Control": "no-store" };
+
+/**
+ * `PATCH /api/v1/swings/:id` — today, one field: whether the golfer starred this swing (§7.3).
+ *
+ * Partial like the session and profile patches, and for the same reason: a screen sends only
+ * what it edits, so an older build cannot erase a field it was never told about. An empty patch
+ * is a no-op answered with the current row, not a 400 — there is nothing wrong with it.
+ *
+ * **Owner only, never a coach** — the same line `DELETE` above draws. A coach reads a golfer's
+ * swing through the relationship boundary and may not restyle their log, so this route does not
+ * reuse the owner-or-approved-coach check that the read routes share.
+ *
+ * Answers the whole updated `SwingSummary` rather than 204, so the client writes its cache from
+ * the CONFIRMED row instead of from what it hoped it sent — the same discipline the swing list
+ * and the deletion response follow.
+ */
+export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const userId = await requireUserIdOrNull();
+  if (!userId) return new Response("unauthorized", { status: 401 });
+  if (!isUuid(id)) return new Response("not found", { status: 404 });
+
+  let body: SwingPatchRequest;
+  try {
+    body = (await req.json()) as SwingPatchRequest;
+  } catch {
+    return Response.json({ error: "invalid_json" }, { status: 400, headers: noStore });
+  }
+  if (typeof body !== "object" || body === null) {
+    return Response.json({ error: "invalid_body" }, { status: 400, headers: noStore });
+  }
+  if (body.favourite !== undefined && typeof body.favourite !== "boolean") {
+    return Response.json(
+      { error: "invalid_favourite", message: "favourite must be a boolean" },
+      { status: 400, headers: noStore },
+    );
+  }
+
+  const swing = await withUser(userId, async (tx) => {
+    if (body.favourite !== undefined) {
+      const updated = await setSwingFavourite(tx, userId, id, body.favourite);
+      // Null means no such swing, or not this caller's — 404 for both, as DELETE does.
+      if (updated === null) return null;
+    }
+    // Re-read through the same helper the log uses, so the answer cannot drift from what a
+    // refresh would show. One extra query on an action a golfer takes by hand.
+    return (await listSwings(tx, userId)).find((s) => s.id === id) ?? null;
+  });
+
+  if (!swing) return Response.json({ error: "not_found" }, { status: 404, headers: noStore });
+  return Response.json({ swing }, { headers: noStore });
 }

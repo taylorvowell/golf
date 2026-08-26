@@ -1,75 +1,65 @@
-import { useCallback, useEffect, useState } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useCallback, useState } from "react";
+import { Star } from "lucide-react-native";
+
+import { useToast } from "../toast/ToastProvider";
+import { setSwingFavourite, useCachedSwing } from "./useSwings";
 
 /**
- * Which swings this golfer has starred — **device-local, deliberately**.
+ * Whether this golfer has starred a swing (§7.3) — **the server's `favourite` field**.
  *
- * The contract has no `starred` field yet, so this persists on the phone alone and does not
- * pretend otherwise: a star set here survives an app restart but not a reinstall, and never
- * reaches another device. When the contract grows the field (an additive change, D41), this
- * module is the one seam to rewire — screens only ever see `{ starred, toggle }`.
+ * It used to be one JSON array in AsyncStorage, because the contract had no such field. That
+ * meant a star survived an app restart but not a reinstall, and never reached a second device —
+ * for a flag whose entire purpose is "find this swing again later", which is a thing a golfer
+ * does across time and phones. The column existed server-side the whole time; this is the
+ * rewiring that file's own comment promised, and screens still see only `{ starred, toggle }`.
  *
- * Storage is one JSON array under one key rather than a key per swing, because the natural
- * question is "which swings are starred", and answering it from per-swing keys means
- * `getAllKeys` over everything the app has ever stored.
+ * **A swing that does not exist server-side yet cannot be starred**, and this says so by
+ * answering `pending: true` rather than by accepting a tap it would have to forget. That is the
+ * live case in session mode: the after-swing screen is up while the clip is still uploading, so
+ * the swing has a local id and no row. The control renders disabled for that moment.
  */
-
-const STORAGE_KEY = "swingsage.starred-swings.v1";
-
-/** The loaded set, shared by every mount. Null until the first read finishes. */
-let starred: Set<string> | null = null;
-let loading: Promise<Set<string>> | null = null;
-const listeners = new Set<() => void>();
-
-async function ensureLoaded(): Promise<Set<string>> {
-  if (starred) return starred;
-  loading ??= AsyncStorage.getItem(STORAGE_KEY)
-    .then((raw) => {
-      const parsed: unknown = raw ? JSON.parse(raw) : [];
-      return new Set(Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === "string") : []);
-    })
-    // A corrupt store must not make starring permanently impossible — start empty and move on.
-    .catch(() => new Set<string>());
-  starred = await loading;
-  return starred;
+export interface StarredHook {
+  starred: boolean;
+  toggle: () => void;
+  /** True while there is nothing to star yet — no server row, or the log has not loaded. */
+  pending: boolean;
 }
 
-function persist(set: Set<string>): void {
-  // Fire and forget: the in-memory set is already the truth every screen reads, and a failed
-  // write costs a star across a restart, not a wrong answer now.
-  void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify([...set])).catch(() => undefined);
-}
+export function useStarred(swingId: string | null | undefined): StarredHook {
+  /**
+   * The cache READER, never `useSwings()` — that one revalidates on mount, and this hook renders
+   * once per row in the session's swing list. Ten rows would have been ten identical list
+   * requests. Every screen that hosts a star already mounts the fetching hook itself.
+   */
+  const swing = useCachedSwing(swingId);
+  const toast = useToast();
+  /**
+   * In-flight guard, NOT a copy of the value. The star itself is read from the shared swing
+   * cache, which `setSwingFavourite` flips optimistically and then overwrites from the confirmed
+   * row — so a second render always draws the truth. This only stops a double tap from firing
+   * two writes whose answers could land out of order.
+   */
+  const [busy, setBusy] = useState(false);
 
-/** The tests' reset seam. */
-export function clearStarredCache(): void {
-  starred = null;
-  loading = null;
-}
-
-export function useStarred(swingId: string): { starred: boolean; toggle: () => void } {
-  const [on, setOn] = useState(() => starred?.has(swingId) ?? false);
-
-  useEffect(() => {
-    let live = true;
-    const update = () => {
-      if (live) setOn(starred?.has(swingId) ?? false);
-    };
-    listeners.add(update);
-    void ensureLoaded().then(update);
-    return () => {
-      live = false;
-      listeners.delete(update);
-    };
-  }, [swingId]);
+  const starred = swing?.favourite ?? false;
+  const pending = !swing;
 
   const toggle = useCallback(() => {
-    void ensureLoaded().then((set) => {
-      if (set.has(swingId)) set.delete(swingId);
-      else set.add(swingId);
-      persist(set);
-      for (const listener of listeners) listener();
-    });
-  }, [swingId]);
+    if (!swing || busy) return;
+    setBusy(true);
+    setSwingFavourite(swing.id, !swing.favourite)
+      .catch(() => {
+        // The cache has already been restored to what it was, so the star on screen is correct
+        // again by the time this runs. What the golfer needs is to know the tap did not take.
+        toast({
+          id: `favourite-failed-${swing.id}-${Date.now()}`,
+          title: "Couldn't save that",
+          detail: "Your star didn't reach SwingSage. Try again in a moment.",
+          icon: Star,
+        });
+      })
+      .finally(() => setBusy(false));
+  }, [busy, swing, toast]);
 
-  return { starred: on, toggle };
+  return { starred, toggle, pending };
 }

@@ -14,8 +14,7 @@ import {
  * — the only copy of that swing — can never be recorded over or destroyed by a stray press.
  */
 
-const base = (): SessionState =>
-  initialSessionState(3, new Date(2026, 7, 18), DEFAULT_SESSION_SETTINGS);
+const base = (): SessionState => initialSessionState(DEFAULT_SESSION_SETTINGS);
 
 const TAKE: SwingClipRef = { path: "/cache/take.mp4", fps: 240, durationMs: 20_000 };
 const CLIP: SwingClipRef = { path: "/cache/clip.mp4", fps: 240, durationMs: 6_000 };
@@ -28,11 +27,6 @@ function recordSwing(s: SessionState, id: string, at = 1): SessionState {
   s = sessionReducer(s, { type: "save-take", swingId: id, clip: CLIP, at });
   return s;
 }
-
-it("names the session from its number", () => {
-  const s = base();
-  expect(s.title).toBe("Session 3");
-});
 
 it("changes type while empty and locks it after the first swing", () => {
   let s = sessionReducer(base(), { type: "set-type", sessionType: "video_only" });
@@ -294,24 +288,27 @@ it("shutter press within 3s of a stop is the double click on Stop — ignored", 
   expect(s.mode).toBe("countdown");
 });
 
-describe("the name the server stores", () => {
-  it("keeps the app's own numbering off the record", () => {
-    // Numbering is not a name: the server would store it and every session in the log would look
-    // named, which is exactly what keeps the date title from ever printing. `createSession` sends
-    // null; the number is only ever the arrival card's label.
-    let s = base();
-    expect(s.title).toBe("Session 3");
-
-    s = sessionReducer(s, { type: "set-default-title", title: "Session 7" });
-    expect(s.title).toBe("Session 7");
+describe("a session is a state, not an object", () => {
+  it("carries no name and no number anywhere in its state", () => {
+    // Taylor, 2026-08-26: a session is the thing that makes the SECOND swing easy to record, not
+    // something the golfer names, numbers, manages or ends. The app used to hold "Session 4" for
+    // the arrival card to say out loud; that card is gone and so is the label. This asserts on
+    // the KEYS rather than a value, because the failure being guarded against is someone adding
+    // `title` back for a screen that wants something to print.
+    const keys = Object.keys(base());
+    expect(keys).not.toContain("title");
+    expect(keys).not.toContain("dateLabel");
+    expect(keys).not.toContain("name");
   });
 
-  it("never lets late numbering overwrite a minted session", () => {
-    // The count arrives from the network, so it can land after the session is real.
+  it("still mints exactly one row, and never repoints it", () => {
+    // The row survives the concept's removal: it is the invisible grouping layer the swing log
+    // reads (D29), and `createSession` sends `name: null` so the log keeps printing a date.
     const minted = sessionReducer(base(), { type: "session-minted", sessionId: "s1" });
-    expect(sessionReducer(minted, { type: "set-default-title", title: "Session 9" }).title).toBe(
-      "Session 3",
-    );
+    expect(minted.sessionId).toBe("s1");
+    expect(
+      sessionReducer(minted, { type: "session-minted", sessionId: "s2" }).sessionId,
+    ).toBe("s1");
   });
 });
 

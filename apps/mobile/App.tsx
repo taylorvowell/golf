@@ -34,6 +34,13 @@ import { InstructorBubble } from "./src/features/instructor/InstructorBubble";
 import { InstructorChatScreen } from "./src/screens/InstructorChatScreen";
 import { InstructorScreen } from "./src/screens/InstructorScreen";
 import { InstructorTabs } from "./src/features/instructor/shell/InstructorTabs";
+import { InstructorMockDebug } from "./src/features/instructor/mock/InstructorMockDebug";
+import { BecomeInstructorScreen } from "./src/screens/BecomeInstructorScreen";
+import { DrillLibraryScreen } from "./src/screens/DrillLibraryScreen";
+import { InstructorThreadScreen } from "./src/screens/InstructorThreadScreen";
+import { ListingEditorScreen } from "./src/screens/ListingEditorScreen";
+import { MembershipScreen } from "./src/screens/MembershipScreen";
+import { StudentDetailScreen } from "./src/screens/StudentDetailScreen";
 import { ModeDebug } from "./src/features/mode/ModeDebug";
 import { ModeGuard } from "./src/features/mode/ModeGuard";
 import { useAppMode } from "./src/features/mode/appMode";
@@ -49,6 +56,7 @@ import { RecordScreen } from "./src/screens/RecordScreen";
 import { SettingsScreen } from "./src/screens/SettingsScreen";
 import { SubscriptionScreen } from "./src/screens/SubscriptionScreen";
 import { UpgradeScreen } from "./src/screens/UpgradeScreen";
+import { PendingSwingRoute } from "./src/screens/PendingSwingRoute";
 import { SwingDetailRoute } from "./src/screens/SwingDetailRoute";
 import { SwingLogScreen } from "./src/screens/SwingLogScreen";
 import { SystemGalleryScreen } from "./src/screens/SystemGalleryScreen";
@@ -218,6 +226,18 @@ function Root() {
                       contentStyle: { backgroundColor: COLORS.bg },
                     }}
                   />
+                  {/* A just-saved import, before its analysis exists: the trimmed clip looping
+                      with the live status, replaced by SwingDetail when the report is real.
+                      Same dark fade as SwingDetail — it is the same page a beat earlier. */}
+                  <Stack.Screen
+                    name="PendingSwing"
+                    component={PendingSwingRoute}
+                    options={{
+                      headerShown: false,
+                      animation: "fade",
+                      contentStyle: { backgroundColor: COLORS.bg },
+                    }}
+                  />
                   {/* Capture comes up over everything, like a camera should. A TRANSPARENT
                       modal with no stack animation (the Profile drawer's pattern): the
                       session surface runs its own slide-up, so the screen underneath — and
@@ -300,6 +320,38 @@ function Root() {
                     component={InstructorChatScreen}
                     options={{ title: "Instructor chat" }}
                   />
+                  {/* Instructor-mode's stacked pages (architecture §4a) — headerless, they
+                      draw their own back control like the player does. */}
+                  <Stack.Screen
+                    name="StudentDetail"
+                    component={StudentDetailScreen}
+                    options={{ headerShown: false }}
+                  />
+                  <Stack.Screen
+                    name="InstructorThread"
+                    component={InstructorThreadScreen}
+                    options={{ headerShown: false }}
+                  />
+                  <Stack.Screen
+                    name="DrillLibrary"
+                    component={DrillLibraryScreen}
+                    options={{ headerShown: false }}
+                  />
+                  <Stack.Screen
+                    name="ListingEditor"
+                    component={ListingEditorScreen}
+                    options={{ headerShown: false }}
+                  />
+                  <Stack.Screen
+                    name="Membership"
+                    component={MembershipScreen}
+                    options={{ headerShown: false }}
+                  />
+                  <Stack.Screen
+                    name="BecomeInstructor"
+                    component={BecomeInstructorScreen}
+                    options={{ headerShown: false }}
+                  />
                   {/* Full-bleed guided walkthroughs — each draws its own close control. */}
                   <Stack.Screen
                     name="StanceAnalysis"
@@ -369,6 +421,7 @@ export default function App() {
           <InstructorDebug />
           <CoachDebug />
           <ModeDebug />
+          <InstructorMockDebug />
           {/* The toaster is the app-wide surface (celebrations, notification alerts — one
               queue); it renders above the navigator so a toast lands on whatever screen is
               up. CelebrationProvider is a client of it and sits below the debug registry

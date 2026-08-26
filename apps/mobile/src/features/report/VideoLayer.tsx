@@ -87,6 +87,15 @@ export interface ReportVideoLayerProps {
    * player onto the normalized copy the overlay's frame math is exact against.
    */
   videoReady?: boolean;
+  /**
+   * Play THIS local file instead of the server stream — the just-saved import, whose upload may
+   * still be in flight: the media route 404s until the bytes land and the player never retries,
+   * so the standard page opened at save time would sit on its error scrim for the whole
+   * analysis. The trimmed file on disk IS the same clip. `speed` is its slow-mo factor (8 for a
+   * phone slow-mo, whose timeline runs 8× slower than the world), applied once the player is
+   * ready so the swing plays at real speed.
+   */
+  localSource?: { path: string; speed?: number } | null;
   /** The analysed frame's shape from the swing LIST — the stage is right-sized at first paint. */
   aspectRatio?: number | null;
   /** Overall score for the `.report-full-score` pill. Null hides the pill, never a dash. */
@@ -291,6 +300,7 @@ export function ReportVideoLayer({
   frameCount,
   fps,
   videoReady = true,
+  localSource = null,
   aspectRatio,
   score,
   tempoRatio,
@@ -329,8 +339,16 @@ export function ReportVideoLayer({
    * makes the player RE-PREPARE onto `normalized.mp4` when the swing turns ready, instead of
    * looping the raw clip under an overlay whose frame math assumes the normalized one.
    */
-  const source = useAuthenticatedImage(
-    videoReady ? `swings/${swingId}/video` : `swings/${swingId}/video?src=upload`,
+  const remoteSource = useAuthenticatedImage(
+    localSource
+      ? null
+      : videoReady
+        ? `swings/${swingId}/video`
+        : `swings/${swingId}/video?src=upload`,
+  );
+  const source = useMemo(
+    () => (localSource ? { uri: `file://${localSource.path}`, headers: {} } : remoteSource),
+    [localSource, remoteSource],
   );
   /** The exact first frame, full resolution — the placeholder and the video are one picture. */
   const poster = useAuthenticatedImage(`swings/${swingId}/frame?f=0`);
@@ -366,7 +384,17 @@ export function ReportVideoLayer({
     [player.handlers],
   );
   const { ready, error, painted } = player.state;
-  const { seekTo, play, pause, toggle } = player.actions;
+  const { seekTo, play, pause, toggle, setSpeed } = player.actions;
+
+  /**
+   * A local slow-mo file plays at real speed — one native retime once the player is ready.
+   * Server streams never take this path: the analyzer's normalized copy is already real-time.
+   */
+  const localSpeed = localSource?.speed ?? 1;
+  useEffect(() => {
+    if (localSpeed === 1 || !ready) return;
+    setSpeed(localSpeed);
+  }, [localSpeed, ready, setSpeed]);
 
   /** What was already earned when this layer mounted — those orbs render settled, no entrance
    *  (see `OrbIn`). `useState` initializers, not render-body ref writes, which the hot-path

@@ -1,9 +1,9 @@
+import { useEffect, useState } from "react";
 import { Image } from "expo-image";
-import { View } from "react-native";
 
 import { useAuthenticatedImage } from "../../platform/useAuthenticatedImage";
-import { useTheme } from "../../theme";
 import type { SwingSession } from "./sessions";
+import { PoseTile } from "./SwingThumb";
 
 /**
  * A session's face on the log — the FIRST swing of the visit, in the header beside the date
@@ -34,22 +34,21 @@ export function SessionThumb({
    */
   pendingThumb?: string | null;
 }) {
-  const t = useTheme();
   /**
-   * The first swing that actually HAS a picture — not simply the first swing.
+   * The first swing that actually HAS a picture — preferring an analysed one.
    *
-   * `swings[0]` alone left a session blank whenever its earliest swing was unanalysed or failed,
-   * which is the common case while a visit is still being recorded: the session's whole reason
-   * for a thumbnail is being recognisable at a glance, and it was showing an empty box for a
-   * visit that had four analysed swings in it. Ready ones only, because only they have an
-   * artifact behind the route; falling back to the first swing keeps the old behaviour when
-   * none are.
+   * A ready swing carries the analyzer's contact frame; any other swing now carries the poster
+   * its own upload sent (thumb route falls back to it), so the request is made for the first
+   * swing regardless of status — an analysing visit gets its face from the first second rather
+   * than minutes later.
    */
   const first = session.swings.find((s) => s.status === "ready") ?? session.swings[0];
-  const analysed = first?.status === "ready" ? first : null;
-  const source = useAuthenticatedImage(analysed ? `swings/${analysed.id}/thumb?poster=1` : null);
+  const source = useAuthenticatedImage(first ? `swings/${first.id}/thumb?poster=1` : null);
+  /** The route said 404 — nothing at all behind this swing yet. */
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [first?.id]);
   const box = { width: size, height: size, borderRadius: 10 };
-  if (!source && pendingThumb) {
+  if ((!source || failed) && pendingThumb) {
     return (
       <Image
         source={{ uri: pendingThumb.startsWith("file://") ? pendingThumb : `file://${pendingThumb}` }}
@@ -59,15 +58,18 @@ export function SessionThumb({
       />
     );
   }
-  if (!source) return <View style={[box, { backgroundColor: t.surface2 }]} />;
+  if (!source || failed || !first) {
+    return <PoseTile view={first?.view} size={size} radius={10} />;
+  }
   return (
     <Image
       source={source}
       style={box}
       contentFit="cover"
       cachePolicy="disk"
+      onError={() => setFailed(true)}
       // Recycled image views keep their last bitmap — key by swing so a reused view clears.
-      recyclingKey={analysed?.id}
+      recyclingKey={first.id}
     />
   );
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Modal, Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
+import { Pressable, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { Plus, Trash2, Upload, X, type LucideIcon } from "lucide-react-native";
 import type { SwingSummary } from "@swingsage/schema/contract";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -8,8 +8,6 @@ import { Avatar } from "../features/profile/Avatar";
 import { CountUp } from "../features/session/CountUp";
 import { useDebugGroups } from "../features/debug/DebugOverlay";
 import { ChoiceSheet } from "../features/session/sheets/ChoiceSheet";
-import { SessionArrivalCard } from "../features/session/SessionArrivalCard";
-import { takeSessionArrival } from "../features/session/sessionArrival";
 
 import { APP_HEADER_BAR, AppHeader, HERO_PARALLAX, HERO_SHEET_GAP, HeroBackdrop, ScoreRing, SheetOverBackdrop, SwingLoader, useChromeScroll, WAVE_NAV_CLEARANCE } from "../design/system";
 import { displayLine, FONT_DISPLAY } from "../design/system/typography";
@@ -22,13 +20,13 @@ import { cancelImportForSwing, dismissImport, usePendingImports } from "../featu
 import { useSessions } from "../features/swings/useSessions";
 import { FirstSwingCta } from "../features/swings/FirstSwingCta";
 import { ImportSheet } from "../features/swings/ImportSheet";
+import { ImportReviewFlow } from "../features/swings/ImportReviewFlow";
 import { useImportSwing } from "../features/swings/useImportSwing";
 import { deleteSwing, useSwings } from "../features/swings/useSwings";
-import { SwingReview } from "../features/session/SwingReview";
 import { useToast } from "../features/toast/ToastProvider";
 import { ModeSwitch } from "../features/mode/ModeSwitch";
 import { useAppNavigation } from "../navigation";
-import { FixedDarkTheme, themedStyles, useTheme } from "../theme";
+import { themedStyles, useTheme } from "../theme";
 
 /**
  * §21's swing log, built on the Ideal Swing hero-screen scaffold (`log-v2-*`): the
@@ -116,7 +114,12 @@ export function SwingLogScreen() {
     }
     if (extra.length === 0) return real;
     // Merged again so a brand-new session lands INSIDE today's card rather than beside it.
-    return mergeByDay([...extra, ...real]);
+    // And nothing empty survives the merge: a card with no swings and no pending run inside it
+    // is a date over nothing — the exact artifact deleting a session's last swing left behind
+    // (Taylor, 2026-08-26) — so it is dropped here by construction, whatever produced it.
+    return mergeByDay([...extra, ...real]).filter(
+      (s) => s.swings.length > 0 || pending.some((run) => s.parts.includes(run.sessionId)),
+    );
   }, [pending, real, sessionRows]);
 
   // Debug: the first-run empty state, forceable over a log holding real swings — deleting them
@@ -246,49 +249,36 @@ export function SwingLogScreen() {
    * The import door. Past the picker an imported clip takes the exact path a recorded swing
    * takes — same ingest, same analyzer, same session — so there is no second kind of swing.
    */
-  const importer = useImportSwing(sessionRows);
+  // Saving lands on the pending-swing page — the trimmed clip, watchable and scrubbable while
+  // it analyses — rather than back on this list to wait (Taylor, 2026-08-26).
+  const importer = useImportSwing(sessionRows, (saved) =>
+    navigation.navigate("PendingSwing", saved),
+  );
   // Counted from the CONFIRMED log, never the pending one: a swing that is still uploading has
   // no score, no duration and no guarantee of arriving, and a count that moved before it landed
   // would have to move back if it failed.
   const log = useMemo(() => logStats(real), [real]);
 
-  // A session just ended (D61): play the arrival — a saving beat, then the card springs in
-  // and the counts roll up. Consumed once from the staging seam; an ordinary visit has none.
-  // UI phase: the counts and card are the arrival's own numbers layered over the real stats
-  // until the session rows persist (session-mode step 05).
-  const [arrival] = useState(takeSessionArrival);
   /**
-   * The mode of the session just ended, onto the newest row.
+   * The newest session — the featured card's row.
    *
-   * It is the ONE session whose mode is known — the golfer picked it minutes ago and it came
-   * through the arrival seam. Every older session stays null rather than being assigned a
-   * plausible default, which would be a made-up claim about their own practice.
+   * There is no longer an "a session just ended" moment to layer over this (Taylor,
+   * 2026-08-26): nothing ends, so the log draws the confirmed rows and only those. The staged
+   * arrival card, its saving beat and the counts that rolled up over the real ones are gone
+   * with it — a golfer who leaves the camera arrives at a log that is simply already correct,
+   * and the swing they just recorded is on it as a live processing row (`pendingImports`),
+   * which is a truer thing to show than a celebration of a session boundary that does not exist.
    */
-  const latest = useMemo(
-    () =>
-      sessions[0] && arrival
-        ? { ...sessions[0], sessionType: arrival.sessionType }
-        : sessions[0],
-    [arrival, sessions],
-  );
-  const [arrivalPhase, setArrivalPhase] = useState<"saving" | "landed" | null>(
-    arrival ? "saving" : null,
-  );
-  useEffect(() => {
-    if (arrivalPhase !== "saving") return;
-    const settle = setTimeout(() => setArrivalPhase("landed"), 1100);
-    return () => clearTimeout(settle);
-  }, [arrivalPhase]);
-  const landed = arrivalPhase === "landed";
-  const shownSessions = log.sessions + (landed ? 1 : 0);
-  const shownSwings = log.swings + (landed && arrival ? arrival.swings : 0);
+  const latest = sessions[0];
+  const shownSessions = log.sessions;
+  const shownSwings = log.swings;
 
   /**
    * The first-run moment: the server said zero and nothing is arriving. The hero's small
    * Record/Upload pills hide and `FirstSwingCta`'s two large doors take over — one obvious
    * next step instead of two 31-px pills competing with an empty sheet.
    */
-  const firstRun = state.kind === "ok" && sessions.length === 0 && arrivalPhase == null;
+  const firstRun = state.kind === "ok" && sessions.length === 0;
 
   /**
    * The hero's CONTENT, handed to `backdropChrome` rather than to the backdrop itself.
@@ -431,14 +421,6 @@ export function SwingLogScreen() {
           />
         ) : null}
 
-        {state.kind === "ok" && arrivalPhase != null && arrival ? (
-          <SessionArrivalCard
-            phase={arrivalPhase}
-            title={arrival.title}
-            swings={arrival.swings}
-          />
-        ) : null}
-
         {firstRun ? (
           <FirstSwingCta
             onRecord={() => navigation.navigate("Record")}
@@ -492,45 +474,20 @@ export function SwingLogScreen() {
     />
 
     {/* Asked once per import, over the log rather than on a screen of its own — picking a clip
-        and saying which way the camera pointed is one action, not a flow. */}
+        and saying which way the camera pointed is one action, not a flow. Open from the moment
+        the picker hands back (loading) so the delivery gap never reads as nothing happening. */}
     <ImportSheet
-      visible={importer.pending !== null}
+      visible={importer.pending !== null || importer.picking}
       clip={importer.pending}
+      loading={importer.picking}
       onClose={importer.cancel}
       onConfirm={importer.confirm}
     />
 
-    {/* The mark-impact pass, identical to a recorded take's: an import is a recording that
-        happened somewhere else, and nothing uploads until the golfer has seen the window and
-        said save. A full-screen Modal, deliberately: it is its own window ABOVE the tab shell,
-        so the wave nav cannot float over the Save button — the in-tree overlay version lost
-        that fight to the scroll-driven chrome (Taylor, 2026-08-23). Pinned dark like every
-        video-facing surface. */}
-    <Modal
-      visible={importer.reviewing !== null}
-      // NOT "fade": Android animates the WINDOW's alpha, so every pixel of the review —
-      // filmstrip, picture, controls — goes semi-transparent together and the swing log
-      // shows straight through it (Taylor, 2026-08-23). An instant swap also matches how
-      // session mode enters its own review, which is in-tree and has no window to fade.
-      animationType="none"
-      statusBarTranslucent
-      navigationBarTranslucent
-      onRequestClose={importer.discardReview}
-    >
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: "#000" }]}>
-        <FixedDarkTheme>
-          {importer.reviewing ? (
-            <SwingReview
-              take={importer.reviewing.take}
-              saving={importer.savingReview}
-              onSave={importer.saveReview}
-              onDelete={importer.discardReview}
-              importMode
-            />
-          ) : null}
-        </FixedDarkTheme>
-      </View>
-    </Modal>
+    {/* The confirm-first review pass an import earns — nothing uploads until the golfer has
+        seen the auto-cut window and said save (or edited it first). One shared flow for both
+        hosts; see ImportReviewFlow. */}
+    <ImportReviewFlow importer={importer} />
 
     <ChoiceSheet
       visible={pendingSwing !== null}

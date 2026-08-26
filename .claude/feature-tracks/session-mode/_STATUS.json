@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "featureName": "session-mode",
-  "currentStep": "07",
-  "phase": "Session Mode \u2014 Wiring",
-  "lastUpdated": "2026-08-22T00:00:00Z",
+  "currentStep": "03",
+  "phase": "Session Mode — Wiring",
+  "lastUpdated": "2026-08-26T21:20:00Z",
   "steps": {
     "01": {
       "status": "complete",
@@ -16,8 +16,8 @@
     "03": {
       "status": "in-progress",
       "startedAt": "2026-08-18T00:00:00Z",
-      "note": "RECONCILE 2026-08-20: the UX iteration half shipped across b426ce9/90dfe56/331f976/1420ab3/38b7854 (capture chrome, post-swing dock, sheets, dual-sync stubs, controls rails). What keeps it in-progress is the step's actual gate: Taylor's walk-and-sign-off, an OPEN HANDOFF row. Not blocking the wiring steps \u2014 04 built on it and completed.",
-      "humanReview": "Waiting on Taylor's sign-off walk (HANDOFF row 'Walk the session-mode UI'). His D61 gate \u2014 do not self-complete."
+      "note": "RECONCILE 2026-08-20: the UX iteration half shipped across b426ce9/90dfe56/331f976/1420ab3/38b7854 (capture chrome, post-swing dock, sheets, dual-sync stubs, controls rails). What keeps it in-progress is the step's actual gate: Taylor's walk-and-sign-off, an OPEN HANDOFF row. Not blocking the wiring steps — 04 through 07 all built on it and completed. As of 2026-08-26 this is the ONLY step in the track that is not complete, and it cannot be self-completed.",
+      "humanReview": "Waiting on Taylor's sign-off walk (HANDOFF row 'Walk the session-mode UI'). His D61 gate — do not self-complete."
     },
     "04": {
       "status": "complete",
@@ -25,27 +25,34 @@
       "partial": true,
       "pendingEnvActions": [
         "Outdoor pass: audio-seed accuracy against a real strike, back-to-back take reliability over a bucket of balls, thermal behaviour across a full session",
-        "Bitrate sweep \u2014 the BPP_AT_30 constants are still provisional (compare_analysis.py, watching club coverage)"
+        "Bitrate sweep — the BPP_AT_30 constants are still provisional (compare_analysis.py, watching club coverage)"
       ],
-      "note": "RECONCILE 2026-08-21 (corrected after audit): capture WORKS on the S25+ \u2014 1080p240 with a live preview (`take RUNNING on rung 0 (240-240 +preview)`). Native half from 66a3479; the joining wiring + the fixed-vs-variable fps-range fix + a configuration LADDER shipped 2026-08-20/21 under the capture spec (.claude/golf_swing_capture_spec/). Final shape: 30s hard cap with a 5s on-screen countdown, review = MARK THE STRIKE on a filmstrip (paused frame, no loop), Save cuts 5s around the mark (+100ms hidden pad each side), no FPS pill anywhere, back lens only. Audited 2026-08-21 (.claude/audits/session-capture-2026-08-21/) and the findings fixed in the same pass: camera-state thread safety, double-open device leak, recorder leak on a failed rung, orphaned-file paths, a cache sweep (a real phone had reached 1.8GB), AppState pause, screen-reader access to the scrub. Oracles: mobile tsc clean, 416 jest tests, compileDebugKotlin BUILD SUCCESSFUL."
+      "note": "RECONCILE 2026-08-21 (corrected after audit): capture WORKS on the S25+ — 1080p240 with a live preview (`take RUNNING on rung 0 (240-240 +preview)`). Native half from 66a3479; the joining wiring + the fixed-vs-variable fps-range fix + a configuration LADDER shipped 2026-08-20/21 under the capture spec (.claude/golf_swing_capture_spec/). Final shape: 30s hard cap with a 5s on-screen countdown, review = MARK THE STRIKE on a filmstrip (paused frame, no loop), Save cuts 5s around the mark (+100ms hidden pad each side), no FPS pill anywhere, back lens only. Audited 2026-08-21 (.claude/audits/session-capture-2026-08-21/) and the findings fixed in the same pass: camera-state thread safety, double-open device leak, recorder leak on a failed rung, orphaned-file paths, a cache sweep (a real phone had reached 1.8GB), AppState pause, screen-reader access to the scrub. Oracles: mobile tsc clean, 416 jest tests, compileDebugKotlin BUILD SUCCESSFUL."
     },
     "05": {
       "status": "complete",
       "completedAt": "2026-08-22T00:00:00Z",
-      "note": "Sessions become real: migration 0016 (sessions.name nullable + session_type CHECK-constrained, default swing_analysis), GET/POST /api/v1/sessions + PATCH /api/v1/sessions/:id, SwingSummary.sessionId (additive, shape-lock re-locked with no removals), mint-on-first-swing in SessionScreen, rename PATCH, default numbering from the server session count, sessionize() grouping by real id with time-inference fallback, and drills/video-only quarantined from every durable average. Oracles: web tsc + eslint clean, 245 web vitest (8 new session RLS/type-lock), mobile tsc clean, 471 jest."
+      "note": "Sessions become real: migration 0016 (sessions.name nullable + session_type CHECK-constrained, default swing_analysis), GET/POST /api/v1/sessions + PATCH /api/v1/sessions/:id, SwingSummary.sessionId (additive, shape-lock re-locked with no removals), mint-on-first-swing in SessionScreen, rename PATCH, default numbering from the server session count, sessionize() grouping by real id with time-inference fallback, and drills/video-only quarantined from every durable average. Oracles: web tsc + eslint clean, 245 web vitest (8 new session RLS/type-lock), mobile tsc clean, 471 jest. NOTE 2026-08-26: the golfer-facing half of this step (session naming/numbering, rename, the arrival card) was REMOVED by step 07 — the row, the API and the grouping all stand."
     },
     "06": {
       "status": "complete",
       "completedAt": "2026-08-22T00:00:00Z",
       "partial": true,
       "pendingEnvActions": [
-        "Device pass on the S25+: record \u2192 the analyzing bar walks real job stages \u2192 the report replaces the local clip with markers and a score",
+        "Device pass on the S25+: record → the analyzing bar walks real job stages → the report replaces the local clip with markers and a score",
         "media-pipeline closes the named transport shortfalls: no resumability, no background survival, no wifi policy, no offline queue"
       ],
-      "note": "The capture loop is real end to end. Client: module-level `processing.ts` (upload \u2192 complete \u2192 poll, survives every screen), `useSessionPipeline` folding terminal answers into the reducer, AnalyzingBar driven by the JOB's own stages (no fake percentage), AnalysisFailedNotice + retry that never costs the video, and the served artifact-backed report replacing the local clip on completion. Server: `startCaptureAnalysis` routes queue-vs-spawn, a shared `spawnAnalysis` gives the local loop a FIRST analysis (startReanalysis could only re-run an existing artifact), `MediaStore.localPath` answers where a clip is on this machine, and `analyze:false` stores a video-only clip with no job. Oracles: web tsc + eslint + 245 vitest, mobile tsc + 476 jest (5 new pipeline tests), and `pnpm --filter web capture:e2e` PASSED on a real clip \u2014 view ready at r2, 322 frames @ 60fps, score 61.6."
+      "note": "The capture loop is real end to end. Client: module-level `processing.ts` (upload → complete → poll, survives every screen), `useSessionPipeline` folding terminal answers into the reducer, AnalyzingBar driven by the JOB's own stages (no fake percentage), AnalysisFailedNotice + retry that never costs the video, and the served artifact-backed report replacing the local clip on completion. Server: `startCaptureAnalysis` routes queue-vs-spawn, a shared `spawnAnalysis` gives the local loop a FIRST analysis (startReanalysis could only re-run an existing artifact), `MediaStore.localPath` answers where a clip is on this machine, and `analyze:false` stores a video-only clip with no job. Oracles: web tsc + eslint + 245 vitest, mobile tsc + 476 jest (5 new pipeline tests), and `pnpm --filter web capture:e2e` PASSED on a real clip — view ready at r2, 322 frames @ 60fps, score 61.6."
     },
     "07": {
-      "status": "not-started"
+      "status": "complete",
+      "completedAt": "2026-08-26T21:20:00Z",
+      "startedAt": "2026-08-26T21:16:00Z",
+      "partial": true,
+      "pendingEnvActions": [
+        "Device pass on the S25+ — the whole loop end to end, including the two paths only a phone can exercise: revoke camera permission in Settings mid-session and come back (CameraStage re-checks on foreground), and a save with the phone nearly full (the trim fails, the untrimmed take is kept, and a toast says so)"
+      ],
+      "note": "Loop completion, plus the session-as-object removal that landed with it (Taylor, 2026-08-26). REMOVED: End Session (→ Done, which navigates and commits nothing), the staged arrival card + sessionArrival seam, SwingExitSheet, the reducer's title/dateLabel/set-default-title, and the locked-in-a-session state (back means back; the profile door stays open). ADDED: swings.favourite served on SwingSummary (additive, shape-lock re-locked with zero removals) + owner-only PATCH /api/v1/swings/:id, so a star is a row's field rather than one AsyncStorage array — useStarred keeps its shape and reads through a new non-fetching useCachedSwing (ten list rows would otherwise have been ten list requests); CaptureStatusChip, the replay-off path's only report (stages and counts, never a percentage, failure ahead of progress and tappable); CameraStage re-checks the camera/mic grant on every foreground with check() not request(); and a trim failure now toasts instead of silently handing back a 30s clip. NOT DONE, deliberately: drills stay in `session_type` untouched — the separation is notated in .claude/architecture/guided-drills-architecture-2026-08-17.md (addendum) and Taylor said do not build it yet. Oracles: web tsc + eslint clean, 264 web vitest, 153 schema vitest, mobile tsc clean, 60 suites / 550 jest."
     }
   },
   "blockers": [],

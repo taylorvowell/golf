@@ -320,6 +320,10 @@
             "null"
           ],
           "description": "The practice session this swing belongs to, once a capture flow minted one (D41 additive). Null on every swing recorded before session mode, and on any swing whose session was deleted — the log falls back to inferring a session from time, so the golfer never sees a gap."
+        },
+        "favourite": {
+          "type": "boolean",
+          "description": "Whether the golfer starred this swing (§7.3). Additive (D41) — absent on a response from a build older than the field, which a client reads as false. Set through PATCH /api/v1/swings/:id; it is a property of the SWING and not of a device, so a star survives a reinstall and reaches every phone the golfer signs in on."
         }
       }
     },
@@ -335,6 +339,29 @@
           "items": {
             "$ref": "#/definitions/swingSummary"
           }
+        }
+      }
+    },
+    "swingPatchRequest": {
+      "title": "SwingPatchRequest",
+      "type": "object",
+      "description": "PATCH /api/v1/swings/:id. Partial, like the session and profile patches — a screen sends only what it edits, so a build written before a field existed cannot erase it. Owner only: a coach may read a swing and may never restyle the golfer's own log.",
+      "properties": {
+        "favourite": {
+          "type": "boolean"
+        }
+      }
+    },
+    "swingPatchResponse": {
+      "title": "SwingPatchResponse",
+      "type": "object",
+      "description": "The swing as it now stands. Answered in full rather than with 204 so the client writes its cache from the CONFIRMED row instead of from what it hoped it sent.",
+      "required": [
+        "swing"
+      ],
+      "properties": {
+        "swing": {
+          "$ref": "#/definitions/swingSummary"
         }
       }
     },
@@ -1214,7 +1241,7 @@
     },
     "syncProfile": {
       "title": "SyncProfile",
-      "description": "Everything needed to line one swing up against another, and nothing else.\n\n`analysis.json` already carries all of this, and reading it for the purpose costs 5.9 MB on `6iron-1` and 22 MB on `pro_3` — for ten integers and a frame rate. That download is not a detail on a phone: it is the difference between a comparison that appears when the golfer taps and one that arrives long enough after the tap to read as broken. This is the same facts at about two kilobytes.\n\nIt is a projection of a stored artifact, never a second source of truth: nothing here is computed that `analysis.json` does not already state, and a client that already holds the artifact must get the same answer from either.",
+      "description": "Everything needed to line one swing up against another, and nothing else.\n\n`analysis.json` already carries all of this, and reading it for the purpose costs 5.9 MB on `6iron-1` and 22 MB on `pro_3` — for ten integers and a frame rate. That download is not a detail on a phone: it is the difference between a comparison that appears when the golfer taps and one that arrives long enough after the tap to read as broken. This is the same facts in under a kilobyte — measured 564–584 bytes across the ten fixtures, against artifacts of 4.5–22 MB.\n\nIt is a projection of a stored artifact, never a second source of truth: nothing here is computed that `analysis.json` does not already state, and a client that already holds the artifact must get the same answer from either.",
       "type": "object",
       "required": [
         "swingId",

@@ -1,9 +1,10 @@
+import { useEffect, useState } from "react";
 import { Image } from "expo-image";
 import { View } from "react-native";
 import { AlertTriangle } from "lucide-react-native";
 import type { SwingSummary } from "@swingsage/schema/contract";
 
-import { Skeleton } from "../../design/system";
+import { PoseOutline, Skeleton } from "../../design/system";
 import { useAuthenticatedImage } from "../../platform/useAuthenticatedImage";
 import { useTheme } from "../../theme";
 
@@ -14,12 +15,48 @@ import { useTheme } from "../../theme";
  * which swing, and ten rows of the same date differ only in the picture. `?poster=1` is one
  * frame rather than the contact sheet: at this size a sheet is noise.
  *
- * A swing with no artifact yet draws the empty tile rather than nothing, so the row's layout
- * does not shift when the image lands.
+ * The route serves the analyzer's contact frame once it exists and the client-uploaded poster
+ * before that, so a swing normally has a picture from its first second. When neither exists —
+ * an old swing from before posters, a poster that failed to land — the tile shows the view's
+ * POSE OUTLINE (the record screen's own figure, Taylor 2026-08-26): still says "a golfer,
+ * from this angle" rather than an empty square.
  */
 /** The row's picture box. Shared with the arriving row's ghost, so nothing shifts when the real
  *  thumbnail replaces it. */
 export const SWING_THUMB = 34;
+
+/** The no-picture tile: the capture pose for this angle, quiet, on the surface ramp. */
+export function PoseTile({
+  view,
+  size,
+  radius = 8,
+}: {
+  view: string | null | undefined;
+  size: number;
+  radius?: number;
+}) {
+  const t = useTheme();
+  return (
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: radius,
+        backgroundColor: t.surface3,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <PoseOutline
+        pose={view === "face_on" ? "face_on" : "dtl"}
+        width={size * 0.55}
+        height={size * 0.66}
+        color={t.muted}
+        fill
+      />
+    </View>
+  );
+}
 
 export function SwingThumb({
   swing,
@@ -28,16 +65,19 @@ export function SwingThumb({
   swing: SwingSummary;
   size?: number;
 }) {
-  const t = useTheme();
   const source = useAuthenticatedImage(`swings/${swing.id}/thumb?poster=1`);
+  /** The route said 404 — nothing to show for THIS swing. Reset when the row is recycled. */
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [swing.id]);
   const box = { width: size, height: size, borderRadius: 8 };
-  if (!source) return <View style={[box, { backgroundColor: t.surface3 }]} />;
+  if (!source || failed) return <PoseTile view={swing.view} size={size} />;
   return (
     <Image
       source={source}
       style={box}
       contentFit="cover"
       cachePolicy="disk"
+      onError={() => setFailed(true)}
       // List rows recycle image views — without the key a row can flash another swing's frame.
       recyclingKey={swing.id}
     />

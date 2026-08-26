@@ -82,9 +82,9 @@ export function AppHeader({
    *  screen's header over its own content. */
   chromePx: Animated.Value;
   /**
-   * The profile door. OMIT it to seal the header — session mode does that while a session is
-   * running, because leaving mid-session is what "End session" is for and a door that silently
-   * does nothing is worse than no door.
+   * The profile door. OMIT it to seal the header, on a surface where wandering off would cost
+   * the golfer something — a door that silently does nothing is worse than no door. (Session
+   * mode used to seal it and no longer does: nothing there is unsaved to wander away from.)
    */
   onProfile?: () => void;
   /**

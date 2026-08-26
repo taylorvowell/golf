@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { SwingDeletion, SwingListResponse, SwingSummary } from "@swingsage/schema/contract";
+import type {
+  SwingDeletion,
+  SwingListResponse,
+  SwingPatchResponse,
+  SwingSummary,
+} from "@swingsage/schema/contract";
 
 import { ApiClientError } from "../../platform/api";
 import { api } from "../../platform/client";
@@ -8,7 +13,7 @@ import { supabase } from "../auth/supabase";
 import { setOrphanCleanup } from "./pendingImports";
 import { clearAnalysisCache } from "../player/useAnalysis";
 import { clearSyncProfileCache } from "../player/useSyncProfile";
-import { clearPendingImports } from "./pendingImports";
+import { cancelImportsForSession, clearPendingImports } from "./pendingImports";
 import { dropSessionFromCache } from "./useSessions";
 
 /**
@@ -92,8 +97,52 @@ export async function deleteSwing(id: string): Promise<void> {
   }
   // Emptying a session deletes it, server-side — the id comes back so the cached log drops the
   // row rather than drawing a session with nothing in it (Taylor, 2026-08-22). There is no
-  // session delete of its own; this is the only way one goes.
-  if (result.sessionDeleted) dropSessionFromCache(result.sessionDeleted);
+  // session delete of its own; this is the only way one goes. Import placeholders bound to the
+  // dead session go with it, or they keep synthesizing an empty day card over nothing.
+  if (result.sessionDeleted) {
+    dropSessionFromCache(result.sessionDeleted);
+    cancelImportsForSession(result.sessionDeleted);
+  }
+}
+
+/**
+ * Star or unstar a swing (§7.3) — `PATCH /api/v1/swings/:id`, and the only writer of that field.
+ *
+ * **Optimistic, unlike `deleteSwing` above, and the difference is deliberate.** A delete that
+ * vanished from the log and then failed reads as data loss; a star is a toggle whose whole job
+ * is instant feedback, and whose worst failure is a filled star that empties again a moment
+ * later. So the cache flips first, the confirmed row overwrites it, and a failure restores
+ * exactly the value that was there before — never a blind flip back, which would clobber a
+ * second tap that landed while this one was in flight.
+ *
+ * Throws on failure so the caller can say so. The star is a property of the SWING, not of a
+ * device: it survives a reinstall and reaches every phone the golfer signs in on, which the
+ * AsyncStorage version this replaced did neither of.
+ */
+export async function setSwingFavourite(id: string, favourite: boolean): Promise<void> {
+  const before = lastGood?.find((s) => s.id === id)?.favourite;
+  const write = (value: boolean | undefined) => {
+    if (!lastGood) return;
+    lastGood = lastGood.map((s) => (s.id === id ? { ...s, favourite: value } : s));
+    notifyCacheChanged();
+  };
+
+  write(favourite);
+  try {
+    const body = await api.request<SwingPatchResponse>(`swings/${encodeURIComponent(id)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ favourite }),
+    });
+    // The confirmed row, not the value we sent — the same rule the list and the deletion follow.
+    if (lastGood) {
+      lastGood = lastGood.map((s) => (s.id === id ? body.swing : s));
+      notifyCacheChanged();
+    }
+  } catch (err) {
+    write(before);
+    throw err;
+  }
 }
 
 /**
@@ -212,6 +261,34 @@ export function useSwings(): SwingsHook {
     refreshing,
     refresh: useCallback(() => void load(true), [load]),
   };
+}
+
+/**
+ * One swing read straight from the shared cache, with **no fetch of its own**.
+ *
+ * `useSwings()` revalidates on every mount, which is right for a screen and wrong for a control
+ * that appears once per row: a ten-swing sheet mounting the starring hook would have fired ten
+ * identical list requests. This subscribes to the same cache and nothing else, so it is free to
+ * use anywhere — and it answers null until some screen has confirmed a list, which callers must
+ * treat as "not known yet" rather than "not starred".
+ */
+export function useCachedSwing(id: string | null | undefined): SwingSummary | null {
+  const [swing, setSwing] = useState<SwingSummary | null>(
+    () => (id ? (lastGood?.find((s) => s.id === id) ?? null) : null),
+  );
+  useEffect(() => {
+    let live = true;
+    const read = () => {
+      if (live) setSwing(id ? (lastGood?.find((s) => s.id === id) ?? null) : null);
+    };
+    read();
+    cacheListeners.add(read);
+    return () => {
+      live = false;
+      cacheListeners.delete(read);
+    };
+  }, [id]);
+  return swing;
 }
 
 /**
