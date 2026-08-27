@@ -35,6 +35,18 @@ import { createClient } from "@/lib/supabase/server";
  */
 const DEV_USER_EMAIL = process.env.DEV_USER_EMAIL?.trim();
 
+/**
+ * The users.id the fallback stands in for, when that person's row already exists.
+ *
+ * Without this the fallback resolves to the synthetic `dev@swingsage.invalid` row, which owns
+ * nothing — so a desktop browser (no bearer) sees an empty swing log while the same person's
+ * phone (bearer) sees their real swings. Setting `DEV_USER_DB_ID` to the real row's id makes the
+ * browser BE that person. Safe with `app.ensure_profile`: it is insert-only (`on conflict do
+ * nothing`), so resolving an existing id never rewrites the row. A wrong id fails empty, not
+ * loud — RLS simply returns nothing.
+ */
+const DEV_USER_DB_ID = process.env.DEV_USER_DB_ID?.trim();
+
 if (DEV_USER_EMAIL && process.env.NODE_ENV === "production") {
   throw new Error(
     "DEV_USER_EMAIL is set in a production build. It bypasses authentication entirely and every " +
@@ -52,6 +64,9 @@ export async function getCurrentUser() {
   // because the thing under test was never on the path.
   if (DEV_USER_EMAIL && !bearer) {
     console.warn(`[auth] DEV_USER_EMAIL active — this request is ${DEV_USER_EMAIL}`);
+    if (DEV_USER_DB_ID && isUuid(DEV_USER_DB_ID)) {
+      return { id: DEV_USER_DB_ID, email: DEV_USER_EMAIL } as { id: string; email: string };
+    }
     return { id: DEV_USER_ID, email: DEV_USER_STORED_EMAIL } as { id: string; email: string };
   }
 
