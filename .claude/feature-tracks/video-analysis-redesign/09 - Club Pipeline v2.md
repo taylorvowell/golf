@@ -123,3 +123,22 @@ Policy flip back to classical path (kept until step 14's sweep confirms rollout 
 ## Cleanup
 
 Item 9 list above; step 14 verifies nothing lingers.
+
+## Note appended 2026-08-26 — owner requirements from the first position measurement
+
+Taylor's stated requirements after hand-labeling 6iron2 (85 frames) and seeing every variant
+fail (dense solves median 250–315 px, parked on the body through the fast phases, confident
+heads on all 22 human-invisible frames):
+
+1. **Lean on the shaft.** The stick class already out-detects the head (~2:1) and the shaft
+   stays legible long after the head smears; v2 should treat the shaft line (+ hands anchor)
+   as the primary evidence and the head as a point ON that line, not an independent blob.
+2. **A physical-plausibility gate against hallucination.** Not a raw pixel-jump limit (real
+   inter-frame motion near impact is huge at 60 fps) but: fixed-ish club length from the
+   tracked hands, smooth angular sweep around the grip, jump tolerance scaled by swing phase.
+3. **Failing the gate means ABSTAIN, never reconstruct** — the dashed-gap contract stands;
+   smoothing into gaps has already been measured preferring wrong answers.
+
+Acceptance is via the evaluator, not judgment: catastrophic-jump rate, false-positive rate on
+human-hidden frames, and confidence calibration against `fixtures/labels/*.club.json` — the
+6iron2 set today, plus the 240 fps clip when labeled (sharp-truth anchor).
