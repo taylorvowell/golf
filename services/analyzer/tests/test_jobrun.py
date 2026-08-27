@@ -429,9 +429,11 @@ class TestWorkloadGuard:
             probe_capture=lambda p: 0.0,
         )
         # The refusal's evidence is the telemetry that sizes step 02's manifest thresholds.
+        # est_frames = 41.6s × 30 (native-rate CFR since the frame-identity step — a 30fps
+        # source normalizes AT 30, no longer doubled to 60).
         lines = [e.get("logLine", "") for e in rec.events() if e["kind"] == "progress"]
         guard = [ln for ln in lines if ln.startswith("workload guard:")]
-        assert guard and "est_frames=2496" in guard[0] and "real_duration_s=41.6" in guard[0]
+        assert guard and "est_frames=1248" in guard[0] and "real_duration_s=41.6" in guard[0]
 
     def test_a_stamped_slow_mo_of_the_same_container_length_is_admitted(self, tmp_path):
         # The SAME 41.6s/30fps container with its capture stamp is 5.2 REAL seconds of swing —
@@ -514,12 +516,16 @@ class TestWorkloadGuard:
         assert v.refusal is not None
 
     def test_budgets_are_env_overridable_in_one_place(self, monkeypatch):
+        # 60fps so the frame estimate (41.6 × 60 = 2496) sits between the override (4000)
+        # and the built-in fallback (2000) — a 30fps clip stopped tripping the fallback when
+        # native-rate CFR halved its honest frame count.
+        long_60 = _info(duration=41.6, fps=60.0, nominal_fps=60.0)
         monkeypatch.setenv("SWINGSAGE_GUARD_MAX_REAL_S", "60")
         monkeypatch.setenv("SWINGSAGE_GUARD_MAX_FRAMES", "4000")
-        v = jobrun.guard_workload(_info(duration=41.6), 0.0)
+        v = jobrun.guard_workload(long_60, 0.0)
         assert v.refusal is None
         monkeypatch.setenv("SWINGSAGE_GUARD_MAX_FRAMES", "junk")  # bad values fall back
-        v = jobrun.guard_workload(_info(duration=41.6), 0.0)
+        v = jobrun.guard_workload(long_60, 0.0)
         assert v.refusal is not None
 
 

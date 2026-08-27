@@ -317,8 +317,6 @@ export const swingViews = pgTable("swing_views", {
   }).notNull().default("uploaded"),
   failureReason: text("failure_reason"),
 
-  /** Which analyzer produced this view's artifact, distinct from `scoringModelVersion`. */
-  analysisVersion: text("analysis_version"),
   scoringModelVersion: text("scoring_model_version"),
   overallScore: real("overall_score"),
   band: text("band"),
@@ -425,6 +423,17 @@ export const headMarkers = pgTable("head_markers", {
   frame: integer("frame").notNull(),
   x: real("x").notNull(),
   y: real("y").notNull(),
+  /**
+   * The frame-identity provenance (C10): which artifact clock `frame` counts on. A frame
+   * number is only meaningful against the fps + revision it was placed at — a re-analysis
+   * that changes `cfr_target_fps` (a 30fps import re-run under native-rate CFR) renumbers
+   * every frame, and a correction read against the new clock is confidently wrong. Rows
+   * whose `fps` disagrees with the view's current fps are served flagged `stale`, never
+   * merged as truth. Nullable for pre-provenance rows; the migration backfilled from the
+   * view's then-current values.
+   */
+  fps: real("fps"),
+  artifactRevision: integer("artifact_revision"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex("head_markers_view_frame").on(t.viewId, t.frame)]);
@@ -450,6 +459,9 @@ export const swingStages = pgTable("swing_stages", {
    * lands on the same vocabulary the analyzer and the scorecard already use. */
   stage: text("stage").notNull(),
   frame: integer("frame").notNull(),
+  /** Same provenance pair as `headMarkers` — see the comment there. */
+  fps: real("fps"),
+  artifactRevision: integer("artifact_revision"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [uniqueIndex("swing_stages_view_stage").on(t.viewId, t.stage)]);

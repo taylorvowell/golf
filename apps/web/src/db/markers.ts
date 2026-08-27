@@ -9,6 +9,13 @@ export interface HeadMarker {
   frame: number;
   x: number;
   y: number;
+  /**
+   * The row was placed against a DIFFERENT artifact clock than the view currently shows
+   * (its stamped fps disagrees with the view's fps — C10). A stale frame number names the
+   * wrong instant, so clients dim or hide these and never merge them as truth. Absent
+   * (never `false`) on live rows, so old clients that don't know the field see no change.
+   */
+  stale?: true;
 }
 
 /**
@@ -18,14 +25,29 @@ export interface HeadMarker {
  * Keyed on the view rather than the swing since migration 0006: a marker is "the club head is
  * here on frame N", and frame N is a different instant in a face-on clip than in the
  * down-the-line one shot beside it.
+ *
+ * Staleness is DERIVED here, not stored: the truth is "row fps ≠ view fps right now", and a
+ * stored flag would be one more thing a re-analysis could forget to update. A row with no
+ * stamped fps (pre-provenance, view never analysed) is served live — flagging it would hide
+ * corrections that were valid for the whole life of this feature.
  */
 export async function listMarkers(tx: DbTx, viewId: string): Promise<HeadMarker[]> {
   const rows = await tx
-    .select({ frame: headMarkers.frame, x: headMarkers.x, y: headMarkers.y })
+    .select({
+      frame: headMarkers.frame,
+      x: headMarkers.x,
+      y: headMarkers.y,
+      fps: headMarkers.fps,
+      viewFps: swingViews.fps,
+    })
     .from(headMarkers)
+    .innerJoin(swingViews, eq(swingViews.id, headMarkers.viewId))
     .where(eq(headMarkers.viewId, viewId))
     .orderBy(headMarkers.frame);
-  return rows;
+  return rows.map(({ frame, x, y, fps, viewFps }) => {
+    const stale = fps != null && viewFps != null && Math.abs(fps - viewFps) > 0.5;
+    return stale ? { frame, x, y, stale: true as const } : { frame, x, y };
+  });
 }
 
 /**
@@ -49,11 +71,14 @@ export async function saveMarkers(
   deletes: number[],
 ): Promise<{ saved: number; deleted: number }> {
   const owned = await tx
-    .select({ id: swingViews.id })
+    .select({ id: swingViews.id, fps: swingViews.fps, revision: swingViews.artifactRevision })
     .from(swingViews)
     .innerJoin(swings, eq(swings.id, swingViews.swingId))
     .where(and(eq(swingViews.id, viewId), eq(swings.userId, userId)));
   if (!owned[0]) throw new Error(`no such swing view for this user: ${viewId}`);
+  // The clock this editing session was performed against — stamped on every row it touches,
+  // so a later re-analysis at a different fps can flag rather than relocate them (C10).
+  const { fps, revision } = owned[0];
 
   const clean = upserts
     .filter((m) => Number.isFinite(m.frame) && m.frame >= 0
@@ -65,6 +90,8 @@ export async function saveMarkers(
       frame: Math.round(m.frame),
       x: Math.min(1, Math.max(0, m.x)),
       y: Math.min(1, Math.max(0, m.y)),
+      fps,
+      artifactRevision: revision,
     }));
 
   // No nested transaction: `tx` already is one. Every caller reaches this through `withUser`,
@@ -76,6 +103,9 @@ export async function saveMarkers(
       set: {
         x: sql`excluded.x`,
         y: sql`excluded.y`,
+        // Re-placing a marker is a NEW observation against the CURRENT clock — un-stales it.
+        fps: sql`excluded.fps`,
+        artifactRevision: sql`excluded.artifact_revision`,
         updatedAt: new Date(),
       },
     });

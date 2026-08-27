@@ -40,10 +40,10 @@ export interface Corrections {
 const EMPTY: Corrections = { phases: {}, marks: new Map() };
 
 interface StagesResponse {
-  stages?: { stage?: unknown; frame?: unknown }[];
+  stages?: { stage?: unknown; frame?: unknown; stale?: unknown }[];
 }
 interface MarkersResponse {
-  markers?: { frame?: unknown; x?: unknown; y?: unknown }[];
+  markers?: { frame?: unknown; x?: unknown; y?: unknown; stale?: unknown }[];
 }
 
 const isMark = (s: unknown): s is PhaseMark =>
@@ -73,12 +73,19 @@ export function useCorrections(swingId: string | undefined, view?: string | null
       // five-mark model and still say `address` / `top` / `toe_up`; the web player ignores them by
       // only ever asking for the names it knows, and dropping them here rather than mapping them
       // keeps the two clients agreeing about which corrections are live.
+      //
+      // `stale` rows are dropped for a different reason (C10): they were placed against a
+      // DIFFERENT artifact clock — a re-analysis changed the fps and renumbered every frame —
+      // so their frame numbers name the wrong instant on this clip. The analyzer's own answer
+      // is the honest fallback; the row survives server-side for whoever re-pins it.
       for (const row of s?.stages ?? []) {
+        if (row.stale === true) continue;
         if (isMark(row.stage) && typeof row.frame === "number") phases[row.stage] = row.frame;
       }
 
       const marks: HeadMarks = new Map();
       for (const row of m?.markers ?? []) {
+        if (row.stale === true) continue;
         if (typeof row.frame === "number" && typeof row.x === "number" && typeof row.y === "number") {
           marks.set(row.frame, [row.x, row.y]);
         }

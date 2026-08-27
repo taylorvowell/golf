@@ -1,15 +1,19 @@
 """Source timing — what the camera actually observed, preserved before CFR conversion.
 
-Stage 0 resamples every upload to CFR at its capture rate (`video.cfr_target_fps` — 60 for
-ordinary uploads, 120/240 for high-speed takes), which rewrites the source's real
-presentation timestamps: a 30 fps upload becomes 60 fps with every frame shown twice, and
-none of those duplicates is a new observation of the club. Club tracking needs the
-distinction back: a normalized output sample is not a genuine camera observation.
+Stage 0 resamples every upload to CFR at its capture rate (`video.cfr_target_fps`), which
+rewrites the source's real presentation timestamps. Club tracking and any future frame-mining
+need the distinction back: a normalized output sample is not a genuine camera observation.
 
 This module reads per-packet PTS from the ORIGINAL upload (demux only — no decode), maps each
 source frame to the normalized CFR frames that display it, and persists the result as a
-sidecar artifact `out/<stem>/source_timing.json`. `analysis.json` is untouched: the player is
-not required to consume source timing at all, so this stays out of the contract.
+sidecar artifact `out/<stem>/source_timing.json`.
+
+v2 (the frame-identity step): the sidecar is IN the contract. It runs on every path including
+the slow-motion retime — the mapping is built on the RETIMED clock (source PTS × the same
+`-itsscale` multiplier ffmpeg applied before the CFR resample), so the map and the normalized
+clip always describe one timeline. It is schema-validated on write
+(`packages/schema/schemas/source-timing.schema.json` via `contract.write_json`), and
+`analysis.json` names it (`video.source_map`) instead of pretending it does not exist.
 
 PTS-from-packets is the primary method by design; duplicate-image detection is a fallback for
 containers that lie about their timestamps, and is deliberately not built here.
@@ -17,27 +21,33 @@ containers that lie about their timestamps, and is deliberately not built here.
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from swingsage import contract
 from swingsage.video import FFPROBE
 
 SIDECAR_NAME = "source_timing.json"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 @dataclass
 class SourceObservation:
     """One genuine camera observation (plan §5.1).
 
-    `normalized_frames` are the CFR-60 indices that display this source frame; empty when a
-    high-fps source frame was dropped by the resample (still a real observation — Tests 9/11
-    can mine it), and longer than 1 when a slow source was duplicated up to 60.
+    `normalized_frames` are the normalized CFR indices that display this source frame; empty
+    when a high-fps source frame was dropped by the resample (still a real observation —
+    Tests 9/11 can mine it), and longer than 1 when a slow source was duplicated up.
+
+    `source_pts_s` stays on the SOURCE clock exactly as demuxed; `real_capture_time_us` is the
+    same instant on the WORLD clock, rebased to the clip's first frame — directly comparable
+    with `normalized_frame / video.fps`. Two fields rather than one scaled value because a
+    debugging session against the original file needs the container's own number, unmodified.
     """
     source_frame: int
     source_pts_s: float
+    real_capture_time_us: int = 0
     normalized_frames: list[int] = field(default_factory=list)
     is_duplicate_group: bool = False
 
@@ -45,6 +55,7 @@ class SourceObservation:
         return {
             "source_frame": self.source_frame,
             "source_pts_s": self.source_pts_s,
+            "real_capture_time_us": self.real_capture_time_us,
             "normalized_frames": list(self.normalized_frames),
             "is_duplicate_group": self.is_duplicate_group,
         }
@@ -60,6 +71,11 @@ class SourceTiming:
     has_audio: bool
     audio_sample_rate: int | None
     audio_codec: str | None
+    # v2: the retime multiplier the mapping was built on (1.0 = real-time), and where the
+    # capture rate behind it came from — the derivation every real_capture_time_us inherits.
+    pts_scale: float = 1.0
+    capture_fps: float = 0.0
+    capture_fps_source: str = "none"
     observations: list[SourceObservation] = field(default_factory=list)
 
     @property
@@ -77,6 +93,9 @@ class SourceTiming:
             "has_audio": self.has_audio,
             "audio_sample_rate": self.audio_sample_rate,
             "audio_codec": self.audio_codec,
+            "pts_scale": self.pts_scale,
+            "capture_fps": self.capture_fps,
+            "capture_fps_source": self.capture_fps_source,
             "distinct_observation_count": self.distinct_observation_count,
             "observations": [o.to_dict() for o in self.observations],
         }
@@ -92,10 +111,15 @@ class SourceTiming:
             has_audio=d["has_audio"],
             audio_sample_rate=d["audio_sample_rate"],
             audio_codec=d["audio_codec"],
+            # v1 sidecars predate these three and never described a retimed clip.
+            pts_scale=d.get("pts_scale", 1.0),
+            capture_fps=d.get("capture_fps", 0.0),
+            capture_fps_source=d.get("capture_fps_source", "none"),
             observations=[
                 SourceObservation(
                     source_frame=o["source_frame"],
                     source_pts_s=o["source_pts_s"],
+                    real_capture_time_us=o.get("real_capture_time_us", 0),
                     normalized_frames=list(o["normalized_frames"]),
                     is_duplicate_group=o["is_duplicate_group"],
                 )
@@ -175,6 +199,11 @@ def map_observations(pts: list[float], out_fps: float,
     philosophy as the player's `(frame + 0.5) / fps` seek. PTS are re-based to the first
     packet so container start offsets don't shift the mapping.
 
+    The caller hands PTS on the clock the normalized clip was BUILT on — for a retimed
+    slow-mo that means already multiplied by the itsscale factor (see `build`), because that
+    is exactly what ffmpeg saw. `real_capture_time_us` is derived from the same rebased
+    values, so the two can never disagree.
+
     Invariant: the union of `normalized_frames` over the result is exactly
     [0, out_frame_count), each index appearing once, in order. Source frames the resample
     dropped (high-fps sources) keep an empty `normalized_frames`.
@@ -185,8 +214,9 @@ def map_observations(pts: list[float], out_fps: float,
     rel = [p - base for p in pts]
     eps = 0.5 / out_fps
 
-    obs = [SourceObservation(source_frame=i, source_pts_s=p)
-           for i, p in enumerate(pts)]
+    obs = [SourceObservation(source_frame=i, source_pts_s=p,
+                             real_capture_time_us=max(0, round(r * 1_000_000)))
+           for i, (p, r) in enumerate(zip(pts, rel))]
     j = 0
     for n in range(out_frame_count):
         t = n / out_fps + eps
@@ -198,19 +228,34 @@ def map_observations(pts: list[float], out_fps: float,
     return obs
 
 
-def build(src: str | Path, out_fps: float, out_frame_count: int) -> SourceTiming:
-    """Probe the original upload and assemble the full SourceTiming artifact."""
+def build(src: str | Path, out_fps: float, out_frame_count: int, *,
+          pts_scale: float = 1.0, capture_fps: float = 0.0,
+          capture_fps_source: str = "none") -> SourceTiming:
+    """Probe the original upload and assemble the full SourceTiming artifact.
+
+    `pts_scale` is the retime multiplier the pipeline applied via `-itsscale` (None → pass
+    1.0): the mapping is built on scaled PTS because that is the clock the normalized clip
+    lives on, while each observation keeps its UNSCALED `source_pts_s` for anyone holding the
+    original file.
+    """
     pts, meta = probe_source(src)
+    scaled = [p * pts_scale for p in pts]
+    obs = map_observations(scaled, out_fps, out_frame_count)
+    for o, p in zip(obs, pts):
+        o.source_pts_s = p
     return SourceTiming(
-        observations=map_observations(pts, out_fps, out_frame_count), **meta,
+        observations=obs, pts_scale=pts_scale, capture_fps=capture_fps,
+        capture_fps_source=capture_fps_source, **meta,
     )
 
 
 def write_sidecar(timing: SourceTiming, out_dir: str | Path) -> Path:
-    """Atomic tmp + os.replace, same pattern as silhouette.json."""
-    out_dir = Path(out_dir)
-    dst = out_dir / SIDECAR_NAME
-    tmp = out_dir / (SIDECAR_NAME + ".tmp")
-    tmp.write_text(json.dumps(timing.to_dict()), encoding="utf-8")
-    os.replace(tmp, dst)
+    """Schema-validated + atomic — the same `contract.write_json` gate as analysis.json.
+
+    v1 hand-rolled the tmp+replace; going through the contract module is what puts the
+    sidecar IN the contract: a malformed map fails the run here rather than shipping a file
+    two clients would misread.
+    """
+    dst = Path(out_dir) / SIDECAR_NAME
+    contract.write_json("source-timing", timing.to_dict(), dst)
     return dst

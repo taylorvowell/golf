@@ -33,7 +33,7 @@ import { ComparePanel } from "../player/ComparePanel";
 import { ReferencePane, type CompareStatus } from "../player/ReferencePane";
 import { paneCrop } from "../player/paneCrop";
 import { useSyncProfile } from "../player/useSyncProfile";
-import { fitBox, isSeekable, msToFrame, windowBounds, type Bounds } from "../player/frames";
+import { fitBox, fpsDisagrees, isSeekable, msToFrame, windowBounds, type Bounds } from "../player/frames";
 import { bandsConfirmed, phaseBands, scrubMap } from "../player/phaseBands";
 import { OverlayControls } from "../player/overlay/OverlayControls";
 import { SwingOverlay } from "../player/overlay/SwingOverlay";
@@ -43,7 +43,7 @@ import {
   type ToggleKey,
   type Toggles,
 } from "../player/overlay/overlays";
-import { playbackWindow } from "../player/overlay/playbackWindow";
+import { playbackPad, playbackWindow } from "../player/overlay/playbackWindow";
 import { type SmoothingKey } from "../player/overlay/traceSmoothing";
 import { useAnalysis } from "../player/useAnalysis";
 import { useCorrections } from "../player/useCorrections";
@@ -372,12 +372,34 @@ export function ReportVideoLayer({
     () => windowBounds(effFrameCount, analysis ? playbackWindow(analysis) : null),
     [effFrameCount, analysis],
   );
-  const player = useFramePlayer(bounds);
+  /**
+   * The freeze-hold `playback_pad` asks for, converted here — the one place that holds both
+   * the artifact and a clock — to milliseconds at 1×, so the transport hook still never owns
+   * an fps (D40's one-copy rule). The artifact's own fps, not effFps: the pad counts frames
+   * of the analysed clip.
+   */
+  const padMs = useMemo<readonly [number, number]>(() => {
+    if (!analysis) return [0, 0];
+    const [before, after] = playbackPad(analysis);
+    return [(before / analysis.video.fps) * 1000, (after / analysis.video.fps) * 1000];
+  }, [analysis]);
+  const player = useFramePlayer(bounds, padMs);
   const seekable = isSeekable(bounds, effFps);
   /** Wraps the transport's own handler — identity as stable as `player.handlers`, so the native
    *  callback registration survives (hot-path rule). */
+  const declaredFpsRef = useRef(fps);
+  useEffect(() => { declaredFpsRef.current = fps; }, [fps]);
   const onReadyWithContainer = useCallback(
     (e: { nativeEvent: ReadyEvent }) => {
+      // The silent failure mode frames.ts documents: a container whose real rate disagrees
+      // with the declared one makes every frame index wrong while everything LOOKS right.
+      // An instrument, not a product surface — dev builds only (the clutter rule).
+      if (__DEV__ && fpsDisagrees(e.nativeEvent.containerFps, declaredFpsRef.current)) {
+        console.warn(
+          `[frame-sync] container fps ${e.nativeEvent.containerFps.toFixed(3)} disagrees ` +
+          `with declared fps ${declaredFpsRef.current} — every frame index on this clip is suspect`,
+        );
+      }
       setContainer(e.nativeEvent);
       player.handlers.onReady(e);
     },

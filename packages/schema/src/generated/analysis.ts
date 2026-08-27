@@ -156,6 +156,18 @@ export interface VideoInfo {
   handedness: "right" | "left";
   source: VideoSource;
   analysis_res: Resolution;
+  /**
+   * THE public frame identity: every frame index in this artifact, in corrections, and in a client seek names a frame of the normalized native-rate CFR clip. 1:1 with the source for in-app takes; source_timing.json maps back to the source clock elsewhere. Declared, not implied, so a second id namespace can never creep in unnoticed.
+   */
+  frame_id_space?: "normalized";
+  /**
+   * The sidecar mapping normalized frame ids to genuine camera observations, or null when it could not be built — see source_map_reason. Additive (absent on artifacts older than schema 03 of the video-analysis redesign).
+   */
+  source_map?: "source_timing.json" | null;
+  /**
+   * Why source_map is null — a user-readable sentence, never a stack trace. Null when source_map is present.
+   */
+  source_map_reason?: string | null;
 }
 /**
  * The clip this artifact was produced from, as it arrived — before CFR normalization.

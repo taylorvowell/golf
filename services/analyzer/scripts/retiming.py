@@ -1,8 +1,8 @@
 """Adds the source-timing sidecar to an already-analysed swing.
 
 Writes `source_timing.json` beside the existing `analysis.json`: per-source-frame PTS
-from the ORIGINAL upload, the mapping onto the normalized CFR-60 timeline, and audio
-metadata. Nothing else is touched — `analysis.json` is read for the source path and never
+from the ORIGINAL upload, the mapping onto the normalized native-rate CFR timeline, and
+audio metadata. Nothing else is touched — `analysis.json` is read for the source path and never
 rewritten, so this is safe on fixtures with a good club solve (same reasoning as
 `resegment.py` / `rescore.py`: never re-run burnin.py just to gain one artifact).
 
@@ -50,7 +50,19 @@ def retime_one(out_dir: Path, dry_run: bool = False) -> bool:
     else:
         out_fps, out_frames = doc["video"]["fps"], doc["video"]["frame_count"]
 
-    timing = source_timing.build(src, out_fps=out_fps, out_frame_count=out_frames)
+    # The same retime decision the pipeline made, so the map lands on the clock the
+    # normalized clip was actually built on (v2 maps retimed clips too). The artifact's
+    # capture facts are authoritative — post-retime its source.fps already IS the capture
+    # rate — with the container tag as the same fallback the pipeline uses.
+    src_info = video.probe(src)
+    source_doc = doc["video"]["source"]
+    capture_fps = float(source_doc.get("capture_fps") or 0.0) or video.probe_capture_fps(src)
+    capture_fps_source = source_doc.get("capture_fps_source") or (
+        "container_tag" if capture_fps else "none")
+    retime = video.retime_factor(src_info, capture_fps)
+    timing = source_timing.build(src, out_fps=out_fps, out_frame_count=out_frames,
+                                 pts_scale=retime or 1.0, capture_fps=capture_fps,
+                                 capture_fps_source=capture_fps_source)
     dups = sum(1 for o in timing.observations if o.is_duplicate_group)
     dropped = sum(1 for o in timing.observations if not o.normalized_frames)
     print(f"  {out_dir.name}: {timing.distinct_observation_count} source observations "

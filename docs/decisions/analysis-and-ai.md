@@ -190,18 +190,44 @@ as the golfer's.
 ### Stage 0 normalizes to CFR at the capture rate, never a hardcoded 60
 
 **Decision:** `video.cfr_target_fps` picks the normalization rate per source — the capture rate
-snapped to {240, 120, 60} (5fps tolerance for real-world cadences like a healthy take's ~237.6
-avg), 60 for everything slower. Both derivatives (`normalized.mp4`, `analysis.mp4`) use it, and
-`analysis.json`'s `fps` carries whatever was chosen, so the player's `frame = round(t × fps)`
-contract is unchanged. The in-app recorder writes real sensor frames on a REAL-TIME timeline
-(240fps timeline, no retime — unlike a phone camera app's slow-mo export, which retimes to a slow
-timeline); slow motion is a playback concern: the player presents the same CFR file slower, and at
-¼x or less every sensor frame reaches the screen.
+snapped to {240, 120, 60, 30}: the smallest step that keeps every observation (5fps tolerance for
+real-world cadences like a healthy take's ~237.6 avg; 50fps snaps UP to 60, never down), capped
+at 240, with 60 for a source whose rate cannot be probed at all. A ~30fps import normalizes AT
+30 — no duplicated frames, so every public frame id is one camera observation. Both derivatives
+(`normalized.mp4`, `analysis.mp4`) use it, and `analysis.json`'s `fps` carries whatever was
+chosen, so the player's `frame = round(t × fps)` contract is unchanged. The in-app recorder
+writes real sensor frames on a REAL-TIME timeline (240fps timeline, no retime — unlike a phone
+camera app's slow-mo export, which retimes to a slow timeline); slow motion is a playback
+concern: the player presents the same CFR file slower, and at ¼x or less every sensor frame
+reaches the screen.
 **Gotchas:** Resampling a real-time 240fps take to CFR 60 silently discards 3 of every 4 sensor
 frames — exactly the footage the ≥60fps capture constraint exists to keep, and how a 240fps
 recording surfaced in a report saying 60 (2026-08-23). Compute is not an argument for a cap:
 takes are short, so 2s at 240 is the same frame count as an 8s fixture at 60. Every stored
-artifact analysed before this change still says 60 until re-analysed.
+artifact analysed before this change keeps its old rate until re-analysed — and a 30fps import
+re-analysed after the change halves its frame count, which is exactly the case the corrections
+stale flag exists for (see "Frame identity" below).
+
+### Frame identity: the normalized index is THE public frame id, and source_timing maps it back
+
+**Decision:** The normalized native-rate CFR index is the one public frame identity — declared in
+the artifact (`video.frame_id_space: "normalized"`) rather than implied. `source_timing.json` (v2,
+schema-validated in `packages/schema`, named by `video.source_map`) is the authoritative map from
+those ids to genuine camera observations, built on EVERY path including the slow-motion retime by
+mapping on the retimed clock (source PTS × the itsscale factor); each observation carries
+`real_capture_time_us` on the world clock plus its unscaled container PTS. When the map cannot be
+built, `video.source_map` is null and `video.source_map_reason` says why.
+**Corrections provenance (C10):** `head_markers` / `swing_stages` rows stamp `{fps,
+artifact_revision}` at write time. Staleness is DERIVED at read time (row fps ≠ view fps) — never
+stored — and stale rows are served flagged, rendered hidden by both clients, and never merged as
+truth; re-placing a correction re-stamps it against the current clock. A re-analysis that changes
+the fps flags (never deletes) — those rows are the project's only hand-labelled club truth.
+`markViewReady` logs the newly-stale count per view, the telemetry that decides whether a
+re-stamp tool is ever worth building.
+**Gotchas:** Client seek rules are untouched and stay per-platform (`frame/fps` Android,
+`(frame+0.5)/fps` web — D40). `playback_pad`'s freeze-hold now runs on mobile too
+(`useFramePlayer` takes `padMs`), so the equal lead-in property side-by-side depends on holds on
+both clients.
 
 ### The pipeline has one programmatic entry point
 

@@ -371,6 +371,31 @@
         },
         "analysis_res": {
           "$ref": "#/definitions/resolution"
+        },
+        "frame_id_space": {
+          "type": "string",
+          "enum": [
+            "normalized"
+          ],
+          "description": "THE public frame identity: every frame index in this artifact, in corrections, and in a client seek names a frame of the normalized native-rate CFR clip. 1:1 with the source for in-app takes; source_timing.json maps back to the source clock elsewhere. Declared, not implied, so a second id namespace can never creep in unnoticed."
+        },
+        "source_map": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "source_timing.json",
+            null
+          ],
+          "description": "The sidecar mapping normalized frame ids to genuine camera observations, or null when it could not be built — see source_map_reason. Additive (absent on artifacts older than schema 03 of the video-analysis redesign)."
+        },
+        "source_map_reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Why source_map is null — a user-readable sentence, never a stack trace. Null when source_map is present."
         }
       }
     },

@@ -2,6 +2,41 @@
 
 Append-only.
 
+## 03 - Frame Identity & Timeline Correctness
+**Completed:** 2026-08-26 19:45 UTC
+**Phase:** Foundations
+**Summary:** One authoritative frame-identity story, declared instead of implied. The artifact
+now says so (`video.frame_id_space: "normalized"`, additive); `source_timing.json` is v2 and IN
+the contract (`schemas/source-timing.schema.json`, validated via `contract.write_json`, named by
+`video.source_map` / `source_map_reason`) and runs on EVERY path including retime — mapping on
+the retimed clock, each observation carrying `real_capture_time_us` (world clock) beside its
+unscaled container PTS; `scripts/retiming.py` makes the same retime decision. `cfr_target_fps`
+snaps to {240,120,60,30}: a ~30fps import normalizes AT 30 (no duplicated frames — every public
+id is one observation), odd rates snap UP (50→60, never drop), unknown stays 60. Corrections
+provenance (C10): migration 0022 adds `{fps, artifact_revision}` to `head_markers`/`swing_stages`
+(backfilled from each view's current values) + drops dead `swing_views.analysis_version`; write
+paths stamp both, staleness is DERIVED at read (row fps ≠ view fps → flagged `stale`, additive),
+all three clients (web hooks, mobile `useCorrections`) hide stale rows rather than merge them,
+and `markViewReady` logs newly-stale counts (flag-never-delete — these rows are the only
+hand-labelled club truth). `fpsDisagrees` wired: `VideoLayer.onReady` dev-warns when container
+fps disagrees with declared. `playback_pad` now holds on mobile too: `useFramePlayer(bounds,
+padMs)` freezes the shortfall at the wrap (rate-scaled, `playing` stays true, any takeover
+cancels), fed by the artifact in `VideoLayer` — the equal lead-in property side-by-side needs.
+Timeline fixture suite `test_timeline.py`: ten frozen classes (in-app 60/120/240, 30 import,
+VFR, 240/30 slow-mo, non-keyframe remux start, missing capture fps, bad metadata, dual-view
+clocks) + both platform seek rules at every snapped rate.
+**Notes:** Geometry-drift oracle ran for real: 6iron2 re-analysed with the club detector into a
+scratch dir, `compare_analysis.py` vs stored — zero numeric drift; only additive fields,
+schema 9→10 (audio_impact), and the stored artifact's old experimental `club.variants.model_*`
+(older burnin defaults, club code untouched). Workload-guard tests updated: a 30fps clip's
+honest est_frames halved (1248, was 2496). All suites green: analyzer pytest (10 timeline + 3
+timing tests new), web tsc+lint+vitest 267, mobile tsc+jest 581 (freeze-hold + stale-row tests
+new), schema 153 + 6 contracts, shape-lock re-locked additive-only, migration applied clean to
+local Postgres. Matrix #19 honored: seek math untouched. Device pass of the mobile freeze-hold
+rides the existing OPEN Swing Report device-pass handoff row.
+
+---
+
 ## 02 - Source & Trim Manifest End to End
 **Completed:** 2026-08-26 18:00 UTC
 **Phase:** Foundations

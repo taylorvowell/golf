@@ -1058,6 +1058,12 @@
   "analysis#/definitions/video/properties/frame_count": {
     "type": "integer"
   },
+  "analysis#/definitions/video/properties/frame_id_space": {
+    "type": "string",
+    "enum": [
+      "\"normalized\""
+    ]
+  },
   "analysis#/definitions/video/properties/handedness": {
     "type": "string",
     "enum": [
@@ -1070,6 +1076,16 @@
   },
   "analysis#/definitions/video/properties/source": {
     "ref": "#/definitions/videoSource"
+  },
+  "analysis#/definitions/video/properties/source_map": {
+    "type": "null|string",
+    "enum": [
+      "\"source_timing.json\"",
+      "null"
+    ]
+  },
+  "analysis#/definitions/video/properties/source_map_reason": {
+    "type": "null|string"
   },
   "analysis#/definitions/video/properties/view": {
     "type": "string",
@@ -2828,5 +2844,98 @@
   },
   "source-manifest#/properties/trim": {
     "ref": "#/definitions/trimFacts"
+  },
+  "source-timing#": {
+    "type": "object",
+    "required": [
+      "audio_codec",
+      "audio_sample_rate",
+      "avg_fps",
+      "distinct_observation_count",
+      "duration_s",
+      "has_audio",
+      "nominal_fps",
+      "observations",
+      "schema_version",
+      "start_time_s",
+      "time_base"
+    ]
+  },
+  "source-timing#/definitions/observation": {
+    "type": "object",
+    "required": [
+      "is_duplicate_group",
+      "normalized_frames",
+      "source_frame",
+      "source_pts_s"
+    ]
+  },
+  "source-timing#/definitions/observation/properties/is_duplicate_group": {
+    "type": "boolean"
+  },
+  "source-timing#/definitions/observation/properties/normalized_frames": {
+    "type": "array"
+  },
+  "source-timing#/definitions/observation/properties/normalized_frames/items": {
+    "type": "integer"
+  },
+  "source-timing#/definitions/observation/properties/real_capture_time_us": {
+    "type": "integer"
+  },
+  "source-timing#/definitions/observation/properties/source_frame": {
+    "type": "integer"
+  },
+  "source-timing#/definitions/observation/properties/source_pts_s": {
+    "type": "number"
+  },
+  "source-timing#/properties/audio_codec": {
+    "type": "null|string"
+  },
+  "source-timing#/properties/audio_sample_rate": {
+    "type": "integer|null"
+  },
+  "source-timing#/properties/avg_fps": {
+    "type": "number"
+  },
+  "source-timing#/properties/capture_fps": {
+    "type": "number"
+  },
+  "source-timing#/properties/capture_fps_source": {
+    "type": "string",
+    "enum": [
+      "\"container_tag\"",
+      "\"manifest\"",
+      "\"none\""
+    ]
+  },
+  "source-timing#/properties/distinct_observation_count": {
+    "type": "integer"
+  },
+  "source-timing#/properties/duration_s": {
+    "type": "number"
+  },
+  "source-timing#/properties/has_audio": {
+    "type": "boolean"
+  },
+  "source-timing#/properties/nominal_fps": {
+    "type": "number"
+  },
+  "source-timing#/properties/observations": {
+    "type": "array"
+  },
+  "source-timing#/properties/observations/items": {
+    "ref": "#/definitions/observation"
+  },
+  "source-timing#/properties/pts_scale": {
+    "type": "number"
+  },
+  "source-timing#/properties/schema_version": {
+    "type": "integer"
+  },
+  "source-timing#/properties/start_time_s": {
+    "type": "number"
+  },
+  "source-timing#/properties/time_base": {
+    "type": "string"
   }
 }

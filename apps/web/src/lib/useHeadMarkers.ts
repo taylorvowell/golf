@@ -68,9 +68,17 @@ export function useHeadMarkers(swingId: string): HeadMarkers {
     const ac = new AbortController();
     fetch(`/api/v1/swings/${swingId}/markers`, { cache: "no-store", signal: ac.signal })
       .then((r) => r.json())
-      .then((d: { markers?: HeadMarker[] }) => {
+      .then((d: { markers?: (HeadMarker & { stale?: true })[] }) => {
         setByFrame((cur) => {
-          const next = new Map((d.markers ?? []).map((m) => [m.frame, m] as const));
+          // Stale rows (placed against a different artifact clock — a re-analysis changed
+          // the fps, C10) are hidden, never merged: their frame numbers name the wrong
+          // instant on this clip. They survive on the server; re-placing a head on the
+          // frame re-stamps it against the current clock.
+          const next = new Map(
+            (d.markers ?? [])
+              .filter((m) => !m.stale)
+              .map((m) => [m.frame, { frame: m.frame, x: m.x, y: m.y }] as const),
+          );
           for (const [f, m] of cur) next.set(f, m);
           for (const f of removedRef.current) next.delete(f);
           return next;

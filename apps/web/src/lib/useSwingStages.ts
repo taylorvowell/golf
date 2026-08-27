@@ -39,15 +39,20 @@ export function useSwingStages(swingId: string): SwingStages {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const apply = useCallback((rows: { stage: string; frame: number }[]) => {
-    setByStage(new Map(rows.map((r) => [r.stage as Stage, r.frame])));
+  const apply = useCallback((rows: { stage: string; frame: number; stale?: true }[]) => {
+    // A stale row was pinned against a different artifact clock (a re-analysis changed the
+    // fps — C10), so its frame number names the wrong instant here. Hidden rather than
+    // merged: a boundary drawn one clock off is worse than the analyzer's own answer. The
+    // row survives on the server; re-pinning the stage re-stamps it against this clock.
+    setByStage(new Map(rows.filter((r) => !r.stale).map((r) => [r.stage as Stage, r.frame])));
   }, []);
 
   useEffect(() => {
     const ac = new AbortController();
     fetch(`/api/v1/swings/${swingId}/stages`, { cache: "no-store", signal: ac.signal })
       .then((r) => r.json())
-      .then((d: { stages?: { stage: string; frame: number }[] }) => apply(d.stages ?? []))
+      .then((d: { stages?: { stage: string; frame: number; stale?: true }[] }) =>
+        apply(d.stages ?? []))
       .catch((e: Error) => { if (e.name !== "AbortError") setError("could not load swing stages"); });
     return () => ac.abort();
   }, [swingId, apply]);

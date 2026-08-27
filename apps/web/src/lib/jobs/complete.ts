@@ -1,6 +1,11 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNotNull, sql } from "drizzle-orm";
 import { withUser } from "@/db/session";
-import { swings as swingsTable, swingViews as viewsTable } from "@/db/schema";
+import {
+  headMarkers,
+  swingStages,
+  swings as swingsTable,
+  swingViews as viewsTable,
+} from "@/db/schema";
 import { syncSwingScore } from "@/db/scores";
 import { mediaAddress, type ResolvedView } from "@/db/views";
 import { getAnalysis } from "@/lib/swings";
@@ -35,6 +40,36 @@ export async function markViewReady(
     width: fresh?.video.width,
     height: fresh?.video.height,
   }).where(eq(viewsTable.id, view.viewId))).catch(() => {});
+
+  // Correction consistency (C10): a re-analysis that changed the view's fps has renumbered
+  // every frame, so corrections stamped against the old clock are now STALE — flagged, never
+  // deleted. The flag itself is derived at read time (row fps ≠ view fps, db/markers.ts);
+  // what belongs here is the observability count, because this is the one moment staleness
+  // is CREATED and the count is what says whether a migration/re-stamp tool is ever worth
+  // building. Deleting instead would destroy the project's only hand-labelled club truth.
+  if (fresh?.video.fps != null) {
+    await withUser(actorId, async (t) => {
+      const [m] = await t.select({ n: sql<number>`count(*)::int` }).from(headMarkers)
+        .where(and(
+          eq(headMarkers.viewId, view.viewId),
+          isNotNull(headMarkers.fps),
+          sql`abs(${headMarkers.fps} - ${fresh.video.fps}) > 0.5`,
+        ));
+      const [s] = await t.select({ n: sql<number>`count(*)::int` }).from(swingStages)
+        .where(and(
+          eq(swingStages.viewId, view.viewId),
+          isNotNull(swingStages.fps),
+          sql`abs(${swingStages.fps} - ${fresh.video.fps}) > 0.5`,
+        ));
+      if ((m?.n ?? 0) + (s?.n ?? 0) > 0) {
+        console.warn(
+          `[corrections] view ${view.viewId} re-analysed at ${fresh.video.fps}fps: ` +
+          `${m?.n ?? 0} head markers + ${s?.n ?? 0} stage marks now stale (flagged, kept)`,
+        );
+      }
+    }).catch(() => {});
+  }
+
   await withUser(actorId, (t) => syncSwingScore(t, { ...view, revision })).catch(() => {});
 }
 

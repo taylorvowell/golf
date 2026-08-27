@@ -30,9 +30,9 @@ function rendered(frame: number): { nativeEvent: FrameRenderedEvent } {
   return { nativeEvent: { frame, presentationTimeUs: 0, releaseTimeNs: 0 } };
 }
 
-async function setup(frameCount = 240) {
+async function setup(frameCount = 240, padMs: readonly [number, number] = [0, 0]) {
   const handle = fakeHandle();
-  const view = await renderHook(() => useFramePlayer(frameCount));
+  const view = await renderHook(() => useFramePlayer(frameCount, padMs));
   await act(async () => {
     view.result.current.ref.current = handle;
   });
@@ -301,5 +301,82 @@ describe("looping", () => {
 
     expect(handle.pause).toHaveBeenCalled();
     expect(view.result.current.state.playing).toBe(false);
+  });
+});
+
+describe("the freeze-hold (playback_pad)", () => {
+  /**
+   * The hold is what keeps every swing's lead-in and run-out the same LENGTH however short the
+   * footage — the equal-timeline property side-by-side comparison depends on, and the web
+   * player's exact behaviour (`usePlayer.ts`). What matters here: the decoder pauses for the
+   * shortfall, the transport still reads as playing (the hold is part of the loop, not a
+   * pause), and any viewer takeover cancels it.
+   */
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
+  it("holds the end frame, wraps, holds the start, then plays — still reading as playing", async () => {
+    const { handle, view } = await setup(240, [500, 1000]);
+    await act(async () => view.result.current.actions.play());
+    handle.seekToFrame.mockClear();
+    handle.play.mockClear();
+
+    await act(async () => view.result.current.handlers.onFrameRendered(rendered(239)));
+
+    // The decoder is held at the finish, but the LOOP is still running: a play button that
+    // flips to "paused" twice per cycle reads as a broken transport.
+    expect(handle.pause).toHaveBeenCalled();
+    expect(view.result.current.state.playing).toBe(true);
+    expect(handle.seekToFrame).not.toHaveBeenCalled();
+
+    await act(async () => { jest.advanceTimersByTime(1000); });
+    expect(handle.seekToFrame).toHaveBeenCalledWith(0); // run-out held, now wrap
+
+    expect(handle.play).not.toHaveBeenCalled();
+    await act(async () => { jest.advanceTimersByTime(500); });
+    expect(handle.play).toHaveBeenCalled(); // lead-in held, loop resumes
+  });
+
+  it("scales the hold with playback rate — 1s of pad stays 1s of swing at quarter speed", async () => {
+    const { handle, view } = await setup(240, [0, 1000]);
+    await act(async () => {
+      view.result.current.actions.setSpeed(0.25);
+      view.result.current.actions.play();
+    });
+    handle.play.mockClear();
+
+    await act(async () => view.result.current.handlers.onFrameRendered(rendered(239)));
+    await act(async () => { jest.advanceTimersByTime(3999); });
+    expect(handle.play).not.toHaveBeenCalled();
+    await act(async () => { jest.advanceTimersByTime(2); });
+    expect(handle.play).toHaveBeenCalled();
+  });
+
+  it("a viewer takeover cancels the hold instead of fighting it", async () => {
+    const { handle, view } = await setup(240, [0, 1000]);
+    await act(async () => view.result.current.actions.play());
+    await act(async () => view.result.current.handlers.onFrameRendered(rendered(239)));
+    handle.play.mockClear();
+    handle.seekToFrame.mockClear();
+
+    // The golfer grabs a frame mid-hold. The frozen loop must not come back to life later
+    // and yank the picture off the frame they chose.
+    await act(async () => view.result.current.actions.seekTo(100));
+    await act(async () => { jest.advanceTimersByTime(5000); });
+
+    expect(handle.play).not.toHaveBeenCalled();
+    expect(handle.seekToFrame).toHaveBeenCalledWith(100);
+    expect(handle.seekToFrame).not.toHaveBeenCalledWith(0);
+  });
+
+  it("a zero pad keeps the seamless wrap — no pause, no timers", async () => {
+    const { handle, view } = await setup(240, [0, 0]);
+    await act(async () => view.result.current.actions.play());
+    handle.pause.mockClear();
+
+    await act(async () => view.result.current.handlers.onFrameRendered(rendered(239)));
+
+    expect(handle.pause).not.toHaveBeenCalled();
+    expect(handle.seekToFrame).toHaveBeenCalledWith(0);
   });
 });

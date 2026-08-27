@@ -1,0 +1,132 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://swingsage.dev/schemas/source-timing.schema.json",
+  "title": "SourceTiming",
+  "description": "The authoritative map between the artifact's public frame identity (normalized native-rate CFR indices — `video.frame_id_space`) and what the camera actually observed. One sidecar per analysed video, `out/<stem>/source_timing.json`, referenced from `analysis.json` as `video.source_map`.\n\nv2 runs on EVERY path including the slow-motion retime: PTS are mapped against the clip's REAL clock (source PTS × pts_scale, the same -itsscale multiplier ffmpeg applied before the CFR resample), so the mapping and the normalized clip always describe the same timeline. v1 skipped retimed clips entirely.\n\nSame additive-only discipline as analysis.schema.json: nothing here may be removed, retyped, or newly required.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "nominal_fps",
+    "avg_fps",
+    "time_base",
+    "start_time_s",
+    "duration_s",
+    "has_audio",
+    "audio_sample_rate",
+    "audio_codec",
+    "distinct_observation_count",
+    "observations"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "2 since the retime-aware rewrite. Clients must tolerate a higher value by ignoring unknown fields."
+    },
+    "nominal_fps": {
+      "type": "number",
+      "minimum": 0,
+      "description": "The container's claimed rate (r_frame_rate), on the SOURCE clock — 30 for a phone slow-mo written at 30, whatever the sensor did."
+    },
+    "avg_fps": {
+      "type": "number",
+      "minimum": 0,
+      "description": "The realised average rate (avg_frame_rate), on the SOURCE clock."
+    },
+    "time_base": {
+      "type": "string"
+    },
+    "start_time_s": {
+      "type": "number"
+    },
+    "duration_s": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Container duration on the SOURCE clock — the slowed length for a slow-mo. Multiply by pts_scale for the real duration."
+    },
+    "has_audio": {
+      "type": "boolean"
+    },
+    "audio_sample_rate": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "audio_codec": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "pts_scale": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "The multiplier that puts source timestamps on the world's clock — ffmpeg's -itsscale factor for a retimed slow-mo (30/240 = 0.125 for the classic 8×), 1.0 for a real-time clip. Observations are mapped on the SCALED clock, which is the normalized clip's clock. Absent in v1 (implies 1.0 — v1 never wrote a retimed sidecar)."
+    },
+    "capture_fps": {
+      "type": "number",
+      "minimum": 0,
+      "description": "What the sensor did, when known — the retime decision's input, mirrored from analysis.json video.source. 0 = unknown / real-time."
+    },
+    "capture_fps_source": {
+      "type": "string",
+      "enum": [
+        "manifest",
+        "container_tag",
+        "none"
+      ],
+      "description": "Where capture_fps came from — the derivation behind every real_capture_time_us below. The manifest is the authority (D10); the container tag is the fallback the phone-side remux is known to drop."
+    },
+    "distinct_observation_count": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "How many GENUINE camera observations exist — len(observations), never the normalized frame count."
+    },
+    "observations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/observation"
+      }
+    }
+  },
+  "definitions": {
+    "observation": {
+      "title": "SourceObservation",
+      "type": "object",
+      "required": [
+        "source_frame",
+        "source_pts_s",
+        "normalized_frames",
+        "is_duplicate_group"
+      ],
+      "properties": {
+        "source_frame": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Index in the ORIGINAL upload's presentation order."
+        },
+        "source_pts_s": {
+          "type": "number",
+          "description": "The container's own timestamp for this frame, UNSCALED — the source clock, exactly as demuxed."
+        },
+        "real_capture_time_us": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "When the sensor observed this frame, microseconds from the clip's first frame, on the WORLD clock: (source_pts − first_pts) × pts_scale. For a real-time clip this is simply the rebased PTS; for a retimed slow-mo it is the honest instant — comparable directly with normalized_frame / video.fps. Derivation is capture_fps_source. Absent in v1."
+        },
+        "normalized_frames": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "description": "The normalized CFR frames that display this observation. Empty when the resample dropped it (still a real observation); longer than 1 when a slow source frame was duplicated up. The union over all observations is exactly [0, frame_count), each index once, in order."
+        },
+        "is_duplicate_group": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

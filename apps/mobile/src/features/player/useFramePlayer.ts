@@ -150,8 +150,20 @@ export interface FramePlayer {
  * — the span the analyzer says is worth playing. Widening or narrowing it mid-clip is normal (the
  * artifact loads after the video does), and the current frame is re-clamped when it happens rather
  * than being left outside the bar that is drawing it.
+ *
+ * `padMs` is the freeze-hold `playback_pad` asks for, as [before, after] MILLISECONDS at 1× —
+ * time rather than frames so this hook still never holds an fps (the caller, which has the
+ * artifact, does that one conversion). The window is pinned to `address − 1s … finish + 1s` so
+ * every swing's lead-in and run-out last the same; a clip too short to supply its second holds
+ * the end frame for the shortfall instead of quietly looping early — which is what lets two
+ * swings sit side by side with the same playhead meaning the same thing in both (the equal
+ * lead-in property the web player already keeps, `usePlayer.ts`). Holds scale with playback
+ * rate: a 1s approach stays 1s OF SWING at 0.25×.
  */
-export function useFramePlayer(bounds: Extent): FramePlayer {
+export function useFramePlayer(
+  bounds: Extent,
+  padMs: readonly [number, number] = [0, 0],
+): FramePlayer {
   const ref = useRef<FrameClockHandle | null>(null);
 
   const [presented, setPresented] = useState(0);
@@ -210,6 +222,27 @@ export function useFramePlayer(bounds: Extent): FramePlayer {
   const targetRef = useRef<number | null>(null);
   /** The UI's chosen speed, for the chase to restore after driving its own rates. */
   const speedRef = useRef(1);
+  /**
+   * The freeze-hold, as a chained timer: hold the end frame, seek to the start, hold again,
+   * play. A ref (not state) because it is armed from the frame callback and cancelled from
+   * event handlers, and none of that may cost a render. Cancelled by ANY viewer takeover —
+   * pause, play, a seek, a scrub — because the freeze is a real pause and a control that
+   * stays frozen after the golfer acted reads as a dead transport.
+   */
+  const padMsRef = useRef<readonly [number, number]>(padMs);
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearHold = useCallback(() => {
+    if (holdTimer.current !== null) {
+      clearTimeout(holdTimer.current);
+      holdTimer.current = null;
+    }
+  }, []);
+  useEffect(() => {
+    padMsRef.current = padMs;
+  }, [padMs]);
+  // The chain must not outlive the surface: an unmounted player's timer would call into a
+  // nulled native ref (harmless) and hold this closure alive for up to 2s (not harmless).
+  useEffect(() => clearHold, [clearHold]);
   useEffect(() => {
     boundsRef.current = typeof bounds === "number" ? fileBounds(bounds) : bounds;
   }, [bounds]);
@@ -229,10 +262,11 @@ export function useFramePlayer(bounds: Extent): FramePlayer {
   }, []);
 
   const pause = useCallback(() => {
+    clearHold();
     playingRef.current = false;
     setPlaying(false);
     void ref.current?.pause();
-  }, []);
+  }, [clearHold]);
 
   const seekTo = useCallback(
     (frame: number) => {
@@ -280,6 +314,7 @@ export function useFramePlayer(bounds: Extent): FramePlayer {
   );
 
   const play = useCallback(() => {
+    clearHold();
     // Play from the start of the window when the playhead is already at its end. Without this,
     // "play" at the finish does nothing at all, because the frame the picture would advance to is
     // outside the span — a control that visibly does nothing reads as broken.
@@ -296,7 +331,7 @@ export function useFramePlayer(bounds: Extent): FramePlayer {
     targetRef.current = null;
     setTarget(null);
     void ref.current?.play();
-  }, []);
+  }, [clearHold]);
 
   const toggle = useCallback(() => {
     if (playingRef.current) pause();
@@ -345,6 +380,7 @@ export function useFramePlayer(bounds: Extent): FramePlayer {
   const lastScrubSeekAt = useRef(0);
 
   const beginScrub = useCallback(() => {
+    clearHold();
     scrubbingRef.current = true;
     setScrubbing(true);
     lastScrubSeekAt.current = 0;
@@ -353,7 +389,7 @@ export function useFramePlayer(bounds: Extent): FramePlayer {
     inFlight.current = null;
     queued.current = null;
     void ref.current?.setScrubbing(true);
-  }, []);
+  }, [clearHold]);
 
   const endScrub = useCallback(() => {
     scrubbingRef.current = false;
@@ -393,6 +429,25 @@ export function useFramePlayer(bounds: Extent): FramePlayer {
         const b = boundsRef.current;
         if (playingRef.current && b.last > b.first && arrived >= b.last) {
           if (loopingRef.current) {
+            // Freeze out the second the clip could not supply (`playback_pad`) before the
+            // wrap, exactly as the web player does: the hold is what keeps every swing's
+            // run-out the same length however short the footage, which side-by-side depends
+            // on. `playing` stays true — the hold IS part of the loop, and a play button
+            // flipping to "paused" twice per cycle reads as a broken transport. Holds are in
+            // video time, so they divide by rate and a 1s approach stays 1s of swing at ¼×.
+            const [beforeMs, afterMs] = padMsRef.current;
+            if ((beforeMs > 0 || afterMs > 0) && holdTimer.current === null) {
+              const rate = speedRef.current || 1;
+              void ref.current?.pause();
+              holdTimer.current = setTimeout(() => {
+                void ref.current?.seekToFrame(b.first);
+                holdTimer.current = setTimeout(() => {
+                  holdTimer.current = null;
+                  if (playingRef.current) void ref.current?.play();
+                }, beforeMs / rate);
+              }, afterMs / rate);
+              return;
+            }
             // Seek without pausing. Pausing first and playing again on the landing produces a
             // visible hitch at the finish of every single loop, which is the frame a golfer is
             // most often looking at.

@@ -138,16 +138,28 @@ def cfr_target_fps(info: VideoInfo) -> int:
     cap was not protecting compute either). Slow-motion playback needs no retime: the player
     presents the same CFR file slower, and at ≤¼x every sensor frame reaches the screen.
 
-    Snapped to {240, 120, 60}, never the raw probe: a healthy 240 take probes ~237.6 avg
+    Snapped to {240, 120, 60, 30}, never the raw probe: a healthy 240 take probes ~237.6 avg
     (the HAL's real cadence), and frame = round(t * fps) needs the container's honest nominal
     rate, not that measurement. The 5fps tolerance accepts those real-world rates without
-    ever promoting a 60fps source.
+    ever promoting a source to a step above itself.
+
+    30 joined the set in the frame-identity step: a 30fps gallery import used to be upsampled
+    to 60 by showing every frame twice, which made half the public frame ids duplicates of
+    the other half — the normalized index is THE frame identity (`video.frame_id_space`), and
+    an identity space where adjacent ids name one observation is the rule violation this
+    removes. The snap is to the smallest step that keeps every observation (50fps → 60, never
+    30: dropping real frames is the one forbidden direction), capped at 240.
+
+    An unknown rate (both probes 0) stays 60 — the historical default, and the honest "we
+    cannot say" middle rather than a confident 30 derived from nothing.
     """
     rate = max(info.nominal_fps or 0.0, info.fps or 0.0)
-    for step in (240, 120):
-        if rate >= step - 5:
+    if rate <= 0:
+        return 60
+    for step in (30, 60, 120):
+        if rate <= step + 5:
             return step
-    return 60
+    return 240
 
 
 def normalize(

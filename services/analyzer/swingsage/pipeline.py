@@ -347,14 +347,18 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
 
         # Source timing sidecar: what the camera actually observed, before the CFR
         # resample rewrote it. Degrades to a warning — the pipeline never fails over metadata.
-        # A RETIMED clip skips it: the sidecar maps SOURCE timestamps onto output frames, and
-        # after itsscale those live on different clocks — a map built across them would be
-        # confidently wrong rather than absent.
+        # v2 runs on EVERY path including the retime: the map is built on the retimed clock
+        # (source PTS × the same itsscale factor the normalize applied), so the map and the
+        # normalized clip describe one timeline. v1 skipped retimed clips entirely, which left
+        # exactly the clips whose timeline is least obvious with no map at all.
+        # `source_map_reason` carries the failure into the artifact — a null map with no
+        # reason is indistinguishable from a map nobody attempted.
+        source_map_reason = None
         try:
-            if retime:
-                raise RuntimeError("slow-motion retime applied; source timestamps are on the slowed clock")
-            timing = source_timing.build(src, out_fps=norm.fps,
-                                         out_frame_count=norm.frame_count)
+            timing = source_timing.build(
+                src, out_fps=norm.fps, out_frame_count=norm.frame_count,
+                pts_scale=retime or 1.0, capture_fps=capture_fps,
+                capture_fps_source=capture_fps_source)
             source_timing.write_sidecar(timing, out)
             artifacts.append(out / source_timing.SIDECAR_NAME)
             dups = sum(1 for o in timing.observations if o.is_duplicate_group)
@@ -363,6 +367,7 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
                   + (f"{timing.audio_sample_rate}Hz {timing.audio_codec}"
                      if timing.has_audio else "none"))
         except Exception as e:  # noqa: BLE001 — sidecar is advisory, never fatal
+            source_map_reason = f"source timing failed ({e})"
             print(f"           ! source timing failed ({e}); "
                   f"{source_timing.SIDECAR_NAME} skipped")
             warn("timing", f"source timing failed ({e}); {source_timing.SIDECAR_NAME} skipped")
@@ -978,6 +983,15 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
                     "capture_fps": capture_fps, "capture_fps_source": capture_fps_source,
                 },
                 "analysis_res": {"width": anal.width, "height": anal.height},
+                # THE public frame identity, declared rather than implied (frame-identity
+                # step): every frame index in this artifact, in a correction row, and in a
+                # client seek names a frame of the normalized native-rate CFR clip above.
+                # source_timing.json maps those ids back to genuine camera observations;
+                # when it could not be built, the reason travels instead of a bare null.
+                "frame_id_space": "normalized",
+                "source_map": (source_timing.SIDECAR_NAME
+                               if source_map_reason is None else None),
+                "source_map_reason": source_map_reason,
             },
             "pose": {
                 "model": series.model,

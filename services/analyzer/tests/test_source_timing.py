@@ -140,9 +140,36 @@ class TestSourceTimingRoundTrip:
             nominal_fps=30.0, avg_fps=30.02, time_base="1/30000",
             start_time_s=0.0, duration_s=13.8, has_audio=True,
             audio_sample_rate=48000, audio_codec="aac",
+            pts_scale=0.125, capture_fps=240.0, capture_fps_source="manifest",
             observations=map_observations(_pts(30.0, 40), 60.0, 80),
         )
         d = t.to_dict()
-        assert d["schema_version"] == 1
+        assert d["schema_version"] == 2
         assert d["distinct_observation_count"] == 40
+        assert d["pts_scale"] == 0.125
+        assert d["capture_fps_source"] == "manifest"
         assert SourceTiming.from_dict(d) == t
+
+    def test_v1_sidecar_still_loads(self):
+        # A v1 file predates pts_scale/capture facts/real_capture_time_us; loading one must
+        # default them rather than KeyError — old out/ dirs are read by debug scripts.
+        t = SourceTiming(
+            nominal_fps=60.0, avg_fps=60.0, time_base="1/600",
+            start_time_s=0.0, duration_s=5.0, has_audio=False,
+            audio_sample_rate=None, audio_codec=None,
+            observations=map_observations(_pts(60.0, 10), 60.0, 10),
+        )
+        d = t.to_dict()
+        for k in ("pts_scale", "capture_fps", "capture_fps_source"):
+            del d[k]
+        for o in d["observations"]:
+            del o["real_capture_time_us"]
+        loaded = SourceTiming.from_dict(d)
+        assert loaded.pts_scale == 1.0
+        assert loaded.capture_fps_source == "none"
+        assert all(o.real_capture_time_us == 0 for o in loaded.observations)
+
+    def test_real_capture_time_is_rebased_pts(self):
+        obs = map_observations(_pts(60.0, 10, start=2.0), 60.0, 10)
+        assert obs[0].real_capture_time_us == 0
+        assert obs[6].real_capture_time_us == pytest.approx(100_000, abs=1)

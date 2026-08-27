@@ -8,6 +8,12 @@ import { swingStages, swings, swingViews } from "./schema";
 export interface StageMark {
   stage: string;
   frame: number;
+  /**
+   * The row was placed against a DIFFERENT artifact clock than the view currently shows
+   * (stamped fps ≠ view fps — C10). Clients dim or hide it, never merge it as truth.
+   * Absent (never `false`) on live rows — additive for old clients.
+   */
+  stale?: true;
 }
 
 /**
@@ -37,11 +43,24 @@ export function isStage(s: string): s is Stage {
  * differently.
  */
 export async function listStages(tx: DbTx, viewId: string): Promise<StageMark[]> {
+  // Staleness is derived at read time from "row fps ≠ view fps", same as db/markers.ts —
+  // a stored flag would be one more thing a re-analysis could forget to update.
   const rows = await tx
-    .select({ stage: swingStages.stage, frame: swingStages.frame })
+    .select({
+      stage: swingStages.stage,
+      frame: swingStages.frame,
+      fps: swingStages.fps,
+      viewFps: swingViews.fps,
+    })
     .from(swingStages)
+    .innerJoin(swingViews, eq(swingViews.id, swingStages.viewId))
     .where(eq(swingStages.viewId, viewId));
-  return rows.sort((a, b) => STAGES.indexOf(a.stage as Stage) - STAGES.indexOf(b.stage as Stage));
+  return rows
+    .map(({ stage, frame, fps, viewFps }): StageMark => {
+      const stale = fps != null && viewFps != null && Math.abs(fps - viewFps) > 0.5;
+      return stale ? { stage, frame, stale: true as const } : { stage, frame };
+    })
+    .sort((a, b) => STAGES.indexOf(a.stage as Stage) - STAGES.indexOf(b.stage as Stage));
 }
 
 /**
@@ -63,11 +82,14 @@ export async function setStage(
   frame: number | null,
 ): Promise<void> {
   const owned = await tx
-    .select({ id: swingViews.id })
+    .select({ id: swingViews.id, fps: swingViews.fps, revision: swingViews.artifactRevision })
     .from(swingViews)
     .innerJoin(swings, eq(swings.id, swingViews.swingId))
     .where(and(eq(swingViews.id, viewId), eq(swings.userId, userId)));
   if (!owned[0]) throw new Error(`no such swing view for this user: ${viewId}`);
+  // The clock the mark was placed against — see db/markers.ts (C10). Re-pinning a stage is a
+  // new observation on the current clock, which is what un-stales it after a re-analysis.
+  const { fps, revision } = owned[0];
 
   if (frame === null) {
     await tx.delete(swingStages)
@@ -77,9 +99,14 @@ export async function setStage(
   if (!Number.isFinite(frame) || frame < 0) throw new Error(`bad frame: ${frame}`);
 
   await tx.insert(swingStages)
-    .values({ viewId, stage, frame: Math.round(frame) })
+    .values({ viewId, stage, frame: Math.round(frame), fps, artifactRevision: revision })
     .onConflictDoUpdate({
       target: [swingStages.viewId, swingStages.stage],
-      set: { frame: Math.round(frame), updatedAt: new Date() },
+      set: {
+        frame: Math.round(frame),
+        fps,
+        artifactRevision: revision,
+        updatedAt: new Date(),
+      },
     });
 }
