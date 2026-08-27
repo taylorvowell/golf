@@ -53,8 +53,10 @@ def build_parser() -> argparse.ArgumentParser:
                          "address butt line derived from it. It rides along on the MediaPipe "
                          "pass that always runs, so it costs ~2s on a 400-frame clip; skip it "
                          "only when isolating that.")
-    # ROI cropping was removed from this pipeline — it measurably hurt on both fixtures
-    #. video.crop_scale / pose.swing_bbox remain if it needs redoing.
+    # ROI cropping was removed from this pipeline — it measurably hurt on both fixtures, and
+    # its three helpers (video.crop_scale, pose.swing_bbox, pose.remap_to_full) went with it.
+    # Redoing it means writing them again against the shared FrameProvider, which is a
+    # different shape from what they assumed anyway.
     ap.add_argument("--analysis-short-side", type=int, default=720,
                     help="resolution the CV pipeline consumes")
     ap.add_argument("--no-stage3", action="store_true",

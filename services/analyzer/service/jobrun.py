@@ -50,7 +50,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from swingsage import stages, video
+from swingsage import frames, stages, video
 from swingsage.pipeline import PipelineError, PipelineEvent, run
 
 from .worker import SPEC_SCHEMA, SpecError, request_from_spec
@@ -311,6 +311,12 @@ def guard_budgets() -> dict[str, float]:
         "max_frames": _env_num("SWINGSAGE_GUARD_MAX_FRAMES", 2000.0),
         "max_real_s": _env_num("SWINGSAGE_GUARD_MAX_REAL_S", 15.0),
         "max_dim": _env_num("SWINGSAGE_GUARD_MAX_DIM", 4320.0),
+        # The shared frame provider's plane residency (`frames.estimate_bytes`), which the
+        # worker must hold for the whole club stage. Its own ceiling would raise mid-job after
+        # the download and the normalize have already been paid for; checked HERE it is a
+        # refusal before the GPU is touched. Sized under the 16 GB worker with room for the
+        # models and the decoder alongside.
+        "max_plane_mb": _env_num("SWINGSAGE_GUARD_MAX_PLANE_MB", 6144.0),
     }
 
 
@@ -328,6 +334,7 @@ def guard_workload(
     info: video.VideoInfo,
     capture_fps: float,
     budgets: Optional[dict[str, float]] = None,
+    analysis_short_side: int = 720,
 ) -> WorkloadVerdict:
     """Decide whether a downloaded source is worth a GPU, before any pipeline stage runs.
 
@@ -344,6 +351,16 @@ def guard_workload(
     effective = replace(info, fps=capture_fps, nominal_fps=capture_fps) if retime else info
     target_fps = video.cfr_target_fps(effective)
     est_frames = int(round(real_duration * target_fps))
+    # What the CV stages will actually hold: the analysis tier, not the source. `normalize`
+    # scales the SHORT side to `analysis_short_side` and keeps the aspect ratio, so the long
+    # side follows from the source's shape.
+    short, long_ = sorted((max(info.width, 0), max(info.height, 0)))
+    if short > 0:
+        a_short = min(short, analysis_short_side)
+        a_long = int(round(long_ * a_short / short))
+    else:
+        a_short = a_long = 0
+    plane_mb = frames.estimate_bytes(est_frames, a_short, a_long) / 1024 / 1024
     facts: dict[str, Any] = {
         "codec": info.codec,
         "size": f"{info.width}x{info.height}",
@@ -353,6 +370,8 @@ def guard_workload(
         "real_duration_s": round(real_duration, 2),
         "target_fps": target_fps,
         "est_frames": est_frames,
+        "analysis_size": f"{a_short}x{a_long}",
+        "plane_mb": round(plane_mb),
     }
 
     def refuse(sentence: str) -> WorkloadVerdict:
@@ -376,6 +395,13 @@ def guard_workload(
             "swing of a few seconds. Trim the video down to just the swing and try again."
         )
     if est_frames > b["max_frames"]:
+        return refuse(
+            f"This clip is too much video to analyze ({est_frames} frames at {target_fps}fps) "
+            "— trim it down to just the swing and try again."
+        )
+    if plane_mb > b["max_plane_mb"]:
+        # Deliberately the same sentence as the frame budget: to a golfer both are "too much
+        # video", and the distinguishing numbers are already in `facts` on the job row.
         return refuse(
             f"This clip is too much video to analyze ({est_frames} frames at {target_fps}fps) "
             "— trim it down to just the swing and try again."
@@ -443,7 +469,7 @@ class _EventForwarder:
             print(f"progress post failed (continuing): {e}", file=sys.stderr)
 
     def record(self, job_t0: float, job: QueueJob, info: Any = None,
-               pipeline_elapsed_s: float = None) -> dict:
+               pipeline_elapsed_s: float = None, result: Any = None) -> dict:
         """The per-job telemetry record posted with the terminal event.
 
         Wrapped in a blanket try: this is measurement ABOUT a job, and a bug in it must never
@@ -461,6 +487,14 @@ class _EventForwarder:
                 "captureFps": job.analysis.get("capture_fps") or None,
                 "sourceFps": job.analysis.get("source_fps") or None,
             }
+            if result is not None:
+                # Decode passes and peak plane residency: the two numbers the shared-decode
+                # restructure exists to move, carried per job so a regression is visible in
+                # the same table as the seconds it costs.
+                facts.update({
+                    "decodePasses": getattr(result, "decode_passes", None) or None,
+                    "memHighWaterMb": getattr(result, "mem_high_water_mb", None) or None,
+                })
             if info is not None:
                 facts.update({
                     "sourceFrames": getattr(info, "frame_count", None),
@@ -571,7 +605,9 @@ def run_queue_job(
                           "reason": "This upload does not match its own recording facts — "
                                     "try uploading the swing again."})
             return False
-        verdict = guard_workload(info, spec_capture or tag_capture)
+        verdict = guard_workload(
+            info, spec_capture or tag_capture,
+            analysis_short_side=int(job.analysis.get("analysis_short_side") or 720))
         facts = " ".join(f"{k}={v}" for k, v in verdict.facts.items())
         facts += f" manifest_capture_fps={spec_capture} tag_capture_fps={round(tag_capture, 1)}"
         forward.post_soft({"kind": "progress", "logLine": f"workload guard: {facts}"})
@@ -607,7 +643,8 @@ def run_queue_job(
         # hidden, so a later optimization step argues from measurements.
         forward.post({"kind": "done", "elapsedS": result.elapsed_s,
                       "stageMetrics": forward.record(job_t0, job, info,
-                                                     pipeline_elapsed_s=result.elapsed_s)})
+                                                     pipeline_elapsed_s=result.elapsed_s,
+                                                     result=result)})
         return True
     except BaseException:
         keep_scratch = True  # leave the evidence for a human

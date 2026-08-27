@@ -15,7 +15,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from swingsage import video  # noqa: E402
+from swingsage import frames, video  # noqa: E402
 from swingsage.pipeline import PipelineError, PipelineEvent, PipelineResult  # noqa: E402
 from service import jobrun  # noqa: E402
 from service.worker import SpecError  # noqa: E402
@@ -502,6 +502,21 @@ class TestWorkloadGuard:
             _info(duration=14.0, fps=240.0, nominal_fps=240.0, frame_count=3360), 0.0)
         assert v.refusal is not None
         assert "frames" in v.refusal
+
+    def test_the_plane_budget_is_measured_from_the_analysis_tier(self):
+        """The guard's memory input is `frames.estimate_bytes` over the frames the pipeline
+        would normalize, at the size it would normalize them TO — not the source resolution."""
+        v = jobrun.guard_workload(_info(width=1080, height=1920, duration=10.0), 0.0)
+        assert v.facts["analysis_size"] == "720x1280"
+        assert v.facts["plane_mb"] == round(
+            frames.estimate_bytes(v.facts["est_frames"], 720, 1280) / 1024 / 1024)
+
+    def test_the_plane_budget_refuses_before_the_gpu_rather_than_ooming_mid_job(self,
+                                                                               monkeypatch):
+        monkeypatch.setenv("SWINGSAGE_GUARD_MAX_PLANE_MB", "64")
+        v = jobrun.guard_workload(_info(), 0.0)
+        assert v.refusal is not None
+        assert v.facts["plane_mb"] > 64
 
     def test_an_unsupported_codec_is_refused_by_name(self):
         v = jobrun.guard_workload(_info(codec="wmv3"), 0.0)

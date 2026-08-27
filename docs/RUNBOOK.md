@@ -470,6 +470,32 @@ pnpm --filter @swingsage/schema lock              # re-lock shape-lock.json, the
 pnpm --filter web test:e2e                        # playwright, 1 path, headless
 ```
 
+**Proving a pipeline refactor moved no numbers.** Any change to `swingsage/` that claims to be
+behaviour-preserving is checked by running the same fixtures on both sides and diffing the
+artifacts — a green test suite says the code still runs, not that the swing came out the same.
+
+```bash
+# from the repo root: pin a baseline worktree at the last good commit
+git worktree add /tmp/golf-base <ref> --detach
+cd /tmp/golf-base/services/analyzer
+# models/ and runs/ are gitignored, so junction them in or every run there uses a different model
+cmd //c "mklink /J models C:\Users\taylo\development\golf\services\analyzer\models"
+cmd //c "mklink /J runs   C:\Users\taylo\development\golf\services\analyzer\runs"
+
+# from services/analyzer, using THIS venv against BOTH trees (~5-10 min per fixture per side)
+.venv/Scripts/python.exe scripts/parity06.py \
+    --base "C:/Users/taylo/AppData/Local/Temp/golf-base" \
+    --out  "<scratch>/p06" --variants both
+```
+
+Windows note: `/tmp/...` is a git-bash path that Python cannot use as a working directory —
+pass the `C:/Users/.../AppData/Local/Temp/...` form (`pwd -W` prints it). The harness writes
+`parity06.json` with per-run seconds and a `compare_analysis.py` verdict per fixture;
+`--stage before|after|compare` splits the two long halves so a re-diff costs nothing. Always
+leave `--club-detector` on (the harness does): omitting it silently regenerates the trace on the
+weaker classical path and the comparison means nothing. Tear the worktree down with
+`git worktree remove /tmp/golf-base --force` when done.
+
 **Editing a contract is four steps, and CI fails if you skip one.** Edit
 `packages/schema/schemas/*.schema.json`, run `pnpm schema:generate`, run `pnpm --filter
 @swingsage/schema lock` and read the `shape-lock.json` diff, then commit all of it. The lock

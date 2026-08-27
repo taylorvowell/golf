@@ -34,8 +34,25 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass, field
 
-import cv2
 import numpy as np
+
+from .frames import provider_for
+
+#: YOLO weights, loaded once per process and keyed by resolved path. On a warm Modal container
+#: every job used to pay the full load again; the weights are immutable on disk and the model
+#: is used read-only, so one instance serves every job the container sees.
+_YOLO_CACHE: dict[str, object] = {}
+
+
+def _load_yolo(weights):
+    from pathlib import Path as _Path
+    from ultralytics import YOLO
+    key = str(_Path(weights).resolve())
+    got = _YOLO_CACHE.get(key)
+    if got is None:
+        got = _YOLO_CACHE[key] = YOLO(weights)
+    return got
+
 
 # Class ids as exported by the training set (datasets/Golf-Swing-9/data.yaml:
 # names: ['clubhead', 'stick']). Asserted against the loaded weights at runtime rather than
@@ -103,17 +120,17 @@ class ClubDetector:
     def _load(self):
         if self._model is not None:
             return self._model
-        from ultralytics import YOLO
         if self.device is None:
             try:
                 import torch
                 self.device = 0 if torch.cuda.is_available() else "cpu"
             except Exception:
                 self.device = "cpu"
-        self._model = YOLO(self.weights)
+        self._model = _load_yolo(self.weights)
         return self._model
 
-    def run(self, video_path, n_frames=None, progress=None) -> DetectorResult:
+    def run(self, video_path, n_frames=None, progress=None,
+            provider=None) -> DetectorResult:
         model = self._load()
         res = DetectorResult(model={**_weights_id(self.weights),
                                    "imgsz": self.imgsz, "conf": self.conf,
@@ -126,48 +143,44 @@ class ClubDetector:
                              "class ids may be swapped — check the training data.yaml")
         res.model["names"] = got
 
-        cap = cv2.VideoCapture(str(video_path))
-        if not cap.isOpened():
-            raise RuntimeError(f"cannot open {video_path}")
-        frames = []
-        while True:
-            ok, img = cap.read()
-            if not ok:
-                break
-            frames.append(img)
-        cap.release()
-        if n_frames is not None:
-            frames = frames[:n_frames]
-
-        per_frame = [[] for _ in frames]
-        # Batched so the GPU is not stalled per frame; 16 keeps peak memory small enough to
-        # coexist with other work on an 8 GB card.
+        # Streamed in batches rather than decoded into a list first. Holding every BGR frame
+        # cost ~2.8 MB/frame at 720p — 3.3 GB on a 1,200-frame 240 fps take, for pixels the
+        # model consumes sixteen at a time and never looks at again.
         BATCH = 16
-        for i in range(0, len(frames), BATCH):
-            chunk = frames[i:i + BATCH]
-            out = model.predict(chunk, conf=self.conf, iou=self.iou, imgsz=self.imgsz,
-                                device=self.device, verbose=False)
-            for j, r in enumerate(out):
-                boxes = getattr(r, "boxes", None)
-                if boxes is None or len(boxes) == 0:
-                    continue
-                xyxy = boxes.xyxy.cpu().numpy()
-                cf = boxes.conf.cpu().numpy()
-                cl = boxes.cls.cpu().numpy().astype(int)
-                for (x0, y0, x1, y1), c, k in zip(xyxy, cf, cl):
-                    per_frame[i + j].append(Detection(
-                        f=i + j,
-                        xy=(float((x0 + x1) / 2), float((y0 + y1) / 2)),
-                        conf=float(c), cls=int(k),
-                        wh=(float(x1 - x0), float(y1 - y0)),
-                    ))
-            if progress:
-                progress(min(i + BATCH, len(frames)), len(frames))
+        fp, owned = provider_for(video_path, provider)
+        try:
+            total = min(fp.frame_count, n_frames) if n_frames is not None else fp.frame_count
+            per_frame: list[list] = []
+            done = 0
+            for i, chunk in fp.batches_bgr(BATCH, limit=n_frames):
+                per_frame.extend([] for _ in chunk)
+                out = model.predict(chunk, conf=self.conf, iou=self.iou, imgsz=self.imgsz,
+                                    device=self.device, verbose=False)
+                for j, r in enumerate(out):
+                    boxes = getattr(r, "boxes", None)
+                    if boxes is None or len(boxes) == 0:
+                        continue
+                    xyxy = boxes.xyxy.cpu().numpy()
+                    cf = boxes.conf.cpu().numpy()
+                    cl = boxes.cls.cpu().numpy().astype(int)
+                    for (x0, y0, x1, y1), c, k in zip(xyxy, cf, cl):
+                        per_frame[i + j].append(Detection(
+                            f=i + j,
+                            xy=(float((x0 + x1) / 2), float((y0 + y1) / 2)),
+                            conf=float(c), cls=int(k),
+                            wh=(float(x1 - x0), float(y1 - y0)),
+                        ))
+                done = i + len(chunk)
+                if progress:
+                    progress(done, total or done)
+        finally:
+            if owned:
+                fp.close()
 
         res.per_frame = per_frame
         n_head = sum(1 for fr in per_frame for d in fr if d.cls == CLUBHEAD)
         hit = sum(1 for fr in per_frame if any(d.cls == CLUBHEAD for d in fr))
-        res.model["frames"] = len(frames)
+        res.model["frames"] = len(per_frame)
         res.model["head_detections"] = n_head
         res.model["frames_with_head"] = hit
         return res

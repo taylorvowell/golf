@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from . import (audio_impact, checkpoints, club, club_detect, clubpath, contract, events,
+               frames as frames_mod,
                face, metrics, pose, pose_rtm, postprocess, render, scoring, silhouette,
                source_timing, stages, video)
 from .skeleton import KEYPOINT_NAMES, strip_derived
@@ -177,6 +178,14 @@ class PipelineResult:
     schema_version: int
     elapsed_s: float
     warnings: tuple[str, ...] = field(default_factory=tuple)
+    #: Sequential reads of `analysis.mp4` this run took. Reported rather than asserted: the
+    #: shared-decode restructure is only worth what it measures, and a stage that quietly opens
+    #: its own capture again surfaces here rather than as a wall-clock regression somebody has
+    #: to bisect.
+    decode_passes: int = 0
+    #: Peak MB of decoded planes held by the shared provider — the quantity the memory budget
+    #: is asserted against.
+    mem_high_water_mb: float = 0.0
 
 
 OnEvent = Callable[[PipelineEvent], None]
@@ -366,6 +375,15 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
         artifacts += [out / "normalized.mp4", out / "analysis.mp4"]
         stage_end("normalize")
 
+        # ONE decode of analysis.mp4, shared by every stage that reads its pixels — the two
+        # pose passes, the club detector, every club solve (thirteen of them with variants on)
+        # and the face pass. It also owns the derived planes those stages used to each build
+        # for themselves: the gray store, the on-demand Sobel gradients and the MOG2
+        # background model. `assert_budget` refuses a clip whose planes would not fit with a
+        # number, in place of the OOM kill that had no attribution at all.
+        fp = frames_mod.FrameProvider(anal.path)
+        fp.assert_budget()
+
         # Source timing sidecar: what the camera actually observed, before the CFR
         # resample rewrote it. Degrades to a warning — the pipeline never fails over metadata.
         # v2 runs on EVERY path including the retime: the map is built on the retimed clock
@@ -438,7 +456,7 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
         stage_begin("pose_localiser")
         t = time.time()
         mp_series = pose.estimate(anal.path, progress=prog,
-                                  silhouette=req.silhouette)
+                                  silhouette=req.silhouette, provider=fp)
         print(f"\r  mediapipe          {len(mp_series.frames)} frames in {time.time() - t:.1f}s"
               + (f" · silhouette on {len(mp_series.silhouette)}/{len(mp_series.frames)}"
                  if mp_series.silhouette else ""))
@@ -455,7 +473,7 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
             boxes = pose_rtm.bboxes_from_series(mp_series)
             t = time.time()
             series = pose_rtm.estimate(anal.path, boxes, mode=req.rtm_mode, progress=prog,
-                                       wholebody=req.wholebody)
+                                       wholebody=req.wholebody, provider=fp)
             dt = max(time.time() - t, 1e-6)
             print(f"\r  rtmpose            {len(series.frames)} frames in {dt:.1f}s "
                   f"({len(series.frames) / dt:.1f} fps)")
@@ -560,7 +578,8 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
                 d = club_detect.ClubDetector(req.club_detector,
                                              conf=req.club_detector_conf,
                                              device=req.club_detector_device)
-                det = d.run(anal.path, n_frames=len(series.frames), progress=prog)
+                det = d.run(anal.path, n_frames=len(series.frames), progress=prog,
+                            provider=fp)
                 m = det.model
                 n_stick = sum(1 for fr in det.per_frame
                               for x in fr if x.cls == club_detect.STICK)
@@ -577,7 +596,7 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
             prog.stage = "club"
             t = time.time()
             cl = club.track(anal.path, series.frames, ev, req.handedness, cfg=cfg_club,
-                            progress=prog, detector=det)
+                            progress=prog, detector=det, provider=fp)
             cov = cl.coverage
             print(f"\r  club       coverage back {cov.get('backswing', 0) * 100:.0f}% / "
                   f"down {cov.get('downswing', 0) * 100:.0f}% / "
@@ -749,7 +768,8 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
                 for key, label, over in VARIANTS:
                     t = time.time()
                     v = club.track(anal.path, series.frames, ev, req.handedness,
-                                   cfg=replace(cfg_club, **over), detector=det)
+                                   cfg=replace(cfg_club, **over), detector=det,
+                                   provider=fp)
                     solves[key] = (v, replace(cfg_club, **over))
                     club_variants[key] = {
                         "label": label,
@@ -877,7 +897,7 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
             # --- club head orientation through the swing (the club-tracking spec tier 2) --------------
             stage_begin("face")
             t = time.time()
-            fc = face.analyse(anal.path, cl.frames, cl.club_len or 0.25, ev)
+            fc = face.analyse(anal.path, cl.frames, cl.club_len or 0.25, ev, provider=fp)
             got = sum(1 for x in fc.frames if x.to_shaft_deg is not None)
             print(f"  face       head orientation on {got}/{len(fc.frames)} frames "
                   f"({time.time() - t:.1f}s)")
@@ -1256,7 +1276,13 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
                     print(f"{name:<18}{s['coverage'] * 100:>9.1f}%{s['mean_conf']:>12.3f}{flag}")
 
         elapsed = time.time() - t_all
+        ftel = fp.telemetry()
+        fp.close()
+        print(f"frames     {ftel['decode_passes']} decode passes of analysis.mp4 · "
+              f"{ftel['mem_high_water_mb']:.0f} MB peak planes")
         print(f"\ntotal {elapsed:.1f}s -> {out}")
         return PipelineResult(out_dir=out, artifacts=tuple(artifacts),
                               schema_version=SCHEMA_VERSION, elapsed_s=elapsed,
-                              warnings=tuple(warnings))
+                              warnings=tuple(warnings),
+                              decode_passes=ftel["decode_passes"],
+                              mem_high_water_mb=ftel["mem_high_water_mb"])

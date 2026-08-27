@@ -52,13 +52,17 @@ def main(argv=None) -> int:
     result = run(req, on_event=acc.on_event)
     wall = time.time() - t0
 
-    rec = acc.record(wall, pipelineElapsedS=round(result.elapsed_s, 3))
+    rec = acc.record(wall, pipelineElapsedS=round(result.elapsed_s, 3),
+                     decodePasses=result.decode_passes,
+                     memHighWaterMb=result.mem_high_water_mb)
     print(f"\nwall {rec['totalS']}s   attributed {rec['attributedS']}s   "
           f"unattributed {rec['unattributedS']}s   ->  {rec['attributedPct']}%\n")
     for s in rec["stages"]:
         share = 100.0 * s["seconds"] / rec["totalS"] if rec["totalS"] else 0.0
         tag = "  (nested)" if s.get("nested") else ""
         print(f"  {stages.label(s['stage']):18s} {s['seconds']:8.2f}s  {share:5.1f}%{tag}")
+    print(f"\n  {rec['decodePasses']} decode passes of analysis.mp4 - "
+          f"{rec['memHighWaterMb']:.0f} MB peak frame planes")
     if rec.get("unknownStages"):
         print(f"\n  UNNAMED stages emitted: {rec['unknownStages']}")
 

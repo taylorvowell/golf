@@ -73,6 +73,17 @@ Stages, in execution order, all in `services/analyzer/swingsage/`:
 | 6 metrics | `metrics.py` | Full angle catalogue (`metrics.angle_fields`) + per-checkpoint deltas, lead/trail resolved by handedness, drawing geometry (`geom`) per angle |
 | 8 scoring | `scoring.py` | Deterministic scorecard + coach narrative against `scoring_config/v2.json`; writes `coach_report.json`. `scripts/rescore.py` re-runs *only* this stage over existing artifacts |
 
+Pixel access is shared, not per stage: `frames.FrameProvider` (`frames.py`) decodes
+`analysis.mp4` once, holds the clip as one contiguous gray array, computes Sobel gradients on
+demand and runs MOG2 once per video with bit-packed masks. `pipeline.run` builds one provider
+after normalize and hands it to the pose localiser, RTMPose, the club detector, all thirteen
+club solves and the face pass. Measured over the ten fixtures: **3 decodes** of `analysis.mp4`
+(was 16 with variants on, 5 off), 225–876 MB peak frame planes, artifacts byte-identical. The
+wall-clock gain is almost entirely the variants sweep (1.54x with variants on, ~2% with them
+off — a production job spends its time in pose, not decode); what this buys production is the
+removed ~12 GB OOM risk and a measured, budgeted residency. `render.burn_in` reads
+`normalized.mp4` — a different resolution tier — and streams it directly.
+
 Per-swing output in `out/<stem>/`: `analysis.json`, `coach_report.json`, `silhouette.json`,
 `isolation.json`, `source_timing.json`, `club_only.json`, `normalized.mp4`, `analysis.mp4`,
 `overlay.mp4` (skeleton burned into pixels — the reference render), `contact.jpg` (a 6x4 grid with

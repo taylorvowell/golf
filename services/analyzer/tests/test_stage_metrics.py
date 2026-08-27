@@ -168,3 +168,39 @@ def test_out_of_pipeline_stages_are_named():
     put them in the unattributed remainder."""
     for name in ("download", "guard", "upload"):
         assert stages.is_known(name)
+
+
+def test_frame_telemetry_reaches_the_job_record():
+    """`decodePasses` and `memHighWaterMb` are the two numbers the shared-decode restructure
+    exists to move, so they ride the same per-job record as the seconds they buy."""
+    from service import jobrun
+
+    class _Job:
+        id = "j1"
+        analysis: dict = {}
+
+    class _Result:
+        decode_passes = 3
+        mem_high_water_mb = 1240.5
+        elapsed_s = 100.0
+
+    fwd = jobrun._EventForwarder.__new__(jobrun._EventForwarder)
+    fwd.metrics = stages.StageAccumulator()
+    fwd.metrics.add("pose", 40.0)
+    rec = jobrun._EventForwarder.record(fwd, 0.0, _Job(), result=_Result())
+    assert rec["decodePasses"] == 3
+    assert rec["memHighWaterMb"] == 1240.5
+
+
+def test_frame_telemetry_is_omitted_when_the_run_never_reported_it():
+    """A failed job has no result; the record must not invent a zero that reads as measured."""
+    from service import jobrun
+
+    class _Job:
+        id = "j1"
+        analysis: dict = {}
+
+    fwd = jobrun._EventForwarder.__new__(jobrun._EventForwarder)
+    fwd.metrics = stages.StageAccumulator()
+    rec = jobrun._EventForwarder.record(fwd, 0.0, _Job())
+    assert "decodePasses" not in rec and "memHighWaterMb" not in rec

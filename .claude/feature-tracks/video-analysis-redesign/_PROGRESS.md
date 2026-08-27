@@ -2,6 +2,67 @@
 
 Append-only.
 
+## 06 - Shared Decode & Pipeline Restructure
+**Completed:** 2026-08-27 04:05 UTC
+**Phase:** Analysis Core
+**Summary:** Every CV stage used to open its own `cv2.VideoCapture` over the same
+`analysis.mp4` — 16 sequential decodes with variants on, zero sharing, and four of them
+materialised the whole clip in RAM first. New `swingsage/frames.py:FrameProvider` owns pixel
+access: one sequential decode, the clip held as a single contiguous `(n, h, w)` uint8 gray
+array, Sobel gradients computed on demand behind a 6-frame LRU (they were precomputed for the
+WHOLE clip even though `club.track` reads them only between Top and Impact+4), and MOG2 run
+once per video with masks bit-packed (`detectShadows=False` makes the masks binary, so packing
+is exact at 1/8 the residency). `pipeline.run` builds one provider after normalize and passes
+it to the pose localiser, RTMPose, the club detector, all thirteen club solves and the face
+pass; the first UNBOUNDED `stream_bgr` fills the gray store on its way past, which is what
+takes a full run from four decodes to three. `club_detect.run` no longer decodes every BGR
+frame into a list before predicting (~2.8 MB/frame; 3.3 GB on a 1,200-frame 240 fps take) — it
+streams batches of 16. Model sessions are cached at module level: RTMPose ONNX by
+(weights, input size, device), YOLO by resolved weights path, the MediaPipe `.task` BYTES by
+path — deliberately not the landmarker, which is single-use per clip because
+`detect_for_video` demands monotonic timestamps and has no reset. Residency is now arithmetic
+rather than a surprise: `frames.estimate_bytes()` is the one definition, the workload guard
+multiplies its estimated frame count through it at the ANALYSIS tier (not the source
+resolution) and refuses before the GPU is touched, and the provider asserts the same budget
+again at decode time so a caller bypassing the guard still gets a named error instead of an
+OOM kill. Every job now reports `decodePasses` and `memHighWaterMb` beside its step-05 spans.
+Dead code deleted in passing: `video.crop_scale`, `pose.swing_bbox`, `pose.remap_to_full`,
+`club.background_masks`.
+
+**ACCEPTANCE — artifact parity on 13/13 runs (10 fixtures variants ON, 3 variants OFF): every
+`analysis.json` BYTE-IDENTICAL** (`compare_analysis.py`, tol 1e-6) against a git worktree
+pinned at 5c499c5. Decode passes **3 on every run** (target ≤3; was 16 with variants on, 5
+off). Peak frame planes 225–876 MB measured, against the ~12 GB a 1,200-frame 240 fps clip
+would have held inside one `club.track` call. Analyzer pytest green (322 passed, 3 xfailed),
+goldens unchanged, `python -m groundtruth.goldenset diff` clean.
+
+**Where the time actually went, stated plainly, because the headline number misleads.**
+Variants ON: 4,942.7 s → 3,206.0 s across the ten, **1.54x** (1.42x–1.77x per fixture).
+Variants OFF — the PRODUCTION shape — barely moved: swing1 100.9 s → 98.6 s, 7wood-1
+111.2 s → 108.2 s, perfect 90.8 s → 88.3 s, about **2%**. That is the honest reading: nearly
+all of the 1.54x is the twelve redundant decode-and-MOG2 cycles the variants sweep was paying,
+and a production job was never spending its wall clock in decode — it spends it in pose. So
+this step's value to a real job is NOT speed; it is the ~12 GB latent OOM removed, the
+residency made measurable and budgeted, and the single frame-access seam that steps 07
+(adaptive planner), 09 (club v2) and 12 (NVDEC/GPU) all need before they can change WHICH
+frames get processed at all. Do not quote 1.54x as a production improvement.
+
+**Notes:** The parity harness is `scripts/parity06.py` and the procedure is written up in
+RUNBOOK §5 — it is reusable for any later `swingsage/` refactor that claims to be
+behaviour-preserving, and the point it exists to make is that a green test suite says the code
+still runs, not that the swing came out the same. Two things deliberately NOT done. (1)
+`ClubFrame.cands` was on the audit's housekeeping list but is not dead — it is read in four
+places in the Viterbi solver (always `None` today, so those branches never fire). Removing it
+means changing control flow inside the club solver that step 09 replaces wholesale, which is
+the wrong risk to take inside a parity-gated refactor; it goes with 09. (2) `pose` and
+`detector` were not fused into a single pass. It would reach 2 decodes, but it collapses two
+step-05 spans into one and costs the per-stage attribution that step exists to provide — the
+target was ≤3 and it is met without that trade. `pose.retry_gaps` and `render.contact_sheet`
+keep direct random-access captures by design; `render.burn_in` reads `normalized.mp4`, a
+different resolution tier, and streams it.
+
+---
+
 ## 05 - Stage Telemetry & Cost Attribution
 **Completed:** 2026-08-27 00:45 UTC
 **Phase:** Foundations

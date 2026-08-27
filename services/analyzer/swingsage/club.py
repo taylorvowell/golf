@@ -24,6 +24,7 @@ import numpy as np
 from scipy.signal import savgol_filter
 
 from . import club_detect, events
+from .frames import provider_for
 from .skeleton import IDX
 
 
@@ -347,29 +348,6 @@ def _motion(prev, cur, nxt, cfg, bg=None):
         m = cv2.bitwise_and(m, bg)
     k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
     return cv2.morphologyEx(m, cv2.MORPH_CLOSE, k)
-
-
-def background_masks(grays, history=None):
-    """Per-frame foreground via a learned background model (MOG2).
-
-    The camera is static, so every pixel has a stable distribution over the clip. MOG2 models
-    each pixel as a mixture, which is what makes it handle *repetitive* motion — leaves
-    oscillating in wind settle into the background model, whereas frame differencing flags
-    them every frame because they genuinely moved.
-
-    Run twice over the clip: the first pass trains the model, the second reads it back, so
-    early frames get the same quality as late ones.
-    """
-    n = len(grays)
-    sub = cv2.createBackgroundSubtractorMOG2(
-        history=history or n, varThreshold=24, detectShadows=False)
-    for g in grays:
-        sub.apply(g, learningRate=-1)
-    out = []
-    for g in grays:
-        fg = sub.apply(g, learningRate=0.0)
-        out.append(fg)
-    return out
 
 
 def _score_candidate(p0, p1, grip_px, club_px, prev_angle, cfg):
@@ -1116,26 +1094,31 @@ def calibrate(gray_frames, pose_frames, addr_f, body_h, cfg):
 
 
 def track(video_path, pose_frames, ev, handedness="right", cfg: ClubConfig | None = None,
-          progress=None, detector=None) -> ClubResult:
+          progress=None, detector=None, provider=None) -> ClubResult:
     """`detector` is an optional pre-computed club_detect.DetectorResult over this same video.
 
     It contributes evidence into the per-frame angular profile and nothing else, so passing
     None reproduces the classical path exactly (the club-tracking spec — never detector-only).
+
+    `provider` is a `frames.FrameProvider` already open on this same video. It is what makes
+    the variants sweep affordable: thirteen solves over one clip used to decode it thirteen
+    times and re-derive identical gray, Sobel and MOG2 planes for each. Pass None and this
+    call opens and closes its own — the standalone behaviour every script and test relies on.
     """
-    cfg = cfg or ClubConfig()
+    fp, owned = provider_for(video_path, provider)
+    try:
+        return _track(fp, pose_frames, ev, handedness, cfg or ClubConfig(), progress, detector)
+    finally:
+        if owned:
+            fp.close()
+
+
+def _track(fp, pose_frames, ev, handedness, cfg, progress, detector):
+    """The solve itself, given an open provider — split out only so `track` can own the
+    provider's lifetime in one place regardless of which branch below returns."""
     res = ClubResult()
     det_frames = 0
-
-    cap = cv2.VideoCapture(str(video_path))
-    if not cap.isOpened():
-        raise RuntimeError(f"cannot open {video_path}")
-    grays = []
-    while True:
-        ok, img = cap.read()
-        if not ok:
-            break
-        grays.append(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))
-    cap.release()
+    grays = fp.grays
     n = min(len(grays), len(pose_frames))
     if n < 3:
         res.notes.append("too few frames for club tracking")
@@ -1159,17 +1142,14 @@ def track(video_path, pose_frames, ev, handedness="right", cfg: ClubConfig | Non
         res.club_len = float(club_px / h)
     club_px = float(np.clip(club_px, body_h * h * 0.55, body_h * h * 1.35))
 
-    # Gradients once per clip — the shaft-line detector reads them for every ray.
-    gxs = gys = None
-    if cfg.use_shaft_lines:
-        blur = [cv2.GaussianBlur(g, (3, 3), 0) for g in grays]
-        gxs = [cv2.Sobel(g, cv2.CV_32F, 1, 0, ksize=3) for g in blur]
-        gys = [cv2.Sobel(g, cv2.CV_32F, 0, 1, ksize=3) for g in blur]
-
+    # Gradients are NOT precomputed for the clip: the shaft-line detector reads them only
+    # between Top and Impact+4 (see `fast` below), so materialising every frame's blur and two
+    # float32 Sobel planes spent ~8 MB/frame to produce a few dozen frames' worth of answer.
+    # The provider computes them where they are read, behind a small LRU.
     bgm = None
     if cfg.use_background_model:
         try:
-            bgm = background_masks(grays)
+            bgm = fp.bg_masks()
         except cv2.error as e:
             res.notes.append(f"background model unavailable ({e}); using frame differencing")
 
@@ -1225,7 +1205,8 @@ def track(video_path, pose_frames, ev, handedness="right", cfg: ClubConfig | Non
             cfg_f = replace(cfg, static_line_weight=1.0)   # blur: do not gate on motion
             sup = arm_suppression(pose_frames, f, gp, N_BINS, w, h,
                                   lead_side="left" if handedness == "right" else "right")
-            cf.profile = shaft_profile(gxs[f], gys[f], gp, club_px, cfg_f,
+            gx, gy = fp.sobel(f)
+            cf.profile = shaft_profile(gx, gy, gp, club_px, cfg_f,
                                        motion=gate, n_bins=N_BINS, suppress=sup)
         else:
             cf.profile = angular_profile(motion, gp, club_px, cfg,

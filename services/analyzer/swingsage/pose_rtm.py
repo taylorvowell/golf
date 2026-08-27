@@ -19,9 +19,9 @@ from __future__ import annotations
 
 import os
 
-import cv2
 import numpy as np
 
+from .frames import provider_for
 from .pose import RawPoseSeries
 from .skeleton import N_NATIVE, N_TRACKED, TRACKED_NAMES
 
@@ -235,21 +235,31 @@ def pose_device() -> str:
         return "cpu"
 
 
-def estimate(video_path, boxes, mode: str = "performance", progress=None,
-             wholebody: bool = False) -> RawPoseSeries:
-    from rtmlib import RTMPose
+#: ONNX sessions, built once per process and keyed by (weights, input size, device). Session
+#: creation is the expensive part — graph load, provider init, CUDA context — and it was paid
+#: again on every job even on a warm container. The session is used read-only and rtmlib holds
+#: no per-clip state on it, so one instance serves every job the container sees.
+_RTM_CACHE: dict[tuple, object] = {}
 
+
+def _rtmpose(url, input_size, device):
+    from rtmlib import RTMPose
+    key = (url, tuple(input_size), device)
+    got = _RTM_CACHE.get(key)
+    if got is None:
+        got = _RTM_CACHE[key] = RTMPose(url, model_input_size=input_size,
+                                        backend="onnxruntime", device=device)
+    return got
+
+
+def estimate(video_path, boxes, mode: str = "performance", progress=None,
+             wholebody: bool = False, provider=None) -> RawPoseSeries:
     url, input_size = (WHOLEBODY_MODELS if wholebody else POSE_MODELS)[mode]
     mapping = WHOLEBODY_TO_NATIVE if wholebody else HALPE26_TO_NATIVE
-    model = RTMPose(url, model_input_size=input_size,
-                    backend="onnxruntime", device=pose_device())
+    model = _rtmpose(url, input_size, pose_device())
 
-    cap = cv2.VideoCapture(str(video_path))
-    if not cap.isOpened():
-        raise RuntimeError(f"could not open {video_path}")
-    fps = cap.get(cv2.CAP_PROP_FPS) or 60.0
-    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fp, owned = provider_for(video_path, provider)
+    fps, w, h = fp.fps, fp.width, fp.height
     total = len(boxes)
 
     kind = "rtmw-wholebody133" if wholebody else "rtmpose-halpe26"
@@ -266,10 +276,7 @@ def estimate(video_path, boxes, mode: str = "performance", progress=None,
 
     f = 0
     try:
-        while f < total:
-            ok, img = cap.read()
-            if not ok:
-                break
+        for _f, img in fp.stream_bgr(limit=total):
             kp = [[0.0, 0.0, 0.0] for _ in range(N_TRACKED)]
             try:
                 kps, scores = model(img, bboxes=[boxes[f]])
@@ -303,6 +310,7 @@ def estimate(video_path, boxes, mode: str = "performance", progress=None,
             if progress and (f % 30 == 0 or f == total):
                 progress(f, total)
     finally:
-        cap.release()
+        if owned:
+            fp.close()
 
     return series

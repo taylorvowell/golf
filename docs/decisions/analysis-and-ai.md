@@ -243,6 +243,39 @@ replacement for those lines. `AnalysisRequest` defaults and the CLI flags are ke
 `tests/test_pipeline.py` — add a flag by adding the field first. The club detector still has **no
 default weights** in either surface.
 
+### One decode per video, shared by every CV stage
+
+**Decision:** `swingsage.frames.FrameProvider` owns pixel access for `analysis.mp4`. Stages
+never open their own `cv2.VideoCapture` over it — `pipeline.run` constructs one provider after
+normalize and passes it to the pose localiser, RTMPose, the club detector, every club solve and
+the face pass. The provider decodes sequentially, holds the clip as one contiguous `(n, h, w)`
+uint8 gray array, computes Sobel gradients on demand behind a small LRU, and runs MOG2 once per
+video with its masks bit-packed. Model sessions are cached at module level (RTMPose ONNX by
+weights+size+device, YOLO by resolved weights path, the MediaPipe `.task` bytes by path) so a
+warm container does not reload them per job. Every stage still accepts `provider=None` and opens
+its own — scripts and tests keep working unchanged.
+**Scope:** `services/analyzer/swingsage/frames.py` and its five consumers. `render.burn_in`
+reads `normalized.mp4`, a different resolution tier, and streams it directly.
+**Gotchas:** a VIDEO-mode MediaPipe landmarker is **single-use per clip** (`detect_for_video`
+demands monotonic timestamps and has no reset), so the landmarker is deliberately NOT cached —
+only the model bytes are. The gray store is filled opportunistically by the first UNBOUNDED
+`stream_bgr`, which is what takes a full run from four decodes to three; a bounded stream must
+never fill it or every downstream consumer silently shortens. Sharing one MOG2 result across
+thirteen club solves is parity-preserving rather than an approximation because MOG2 is
+deterministic on the same planes and parameters — verified byte-identical, not assumed.
+
+### Frame-plane residency is budgeted, and refused before the GPU
+
+**Decision:** the memory the CV stages will hold is arithmetic, not a surprise:
+`frames.estimate_bytes(frames, w, h)` is the one definition, the workload guard multiplies its
+estimated frame count through it at the ANALYSIS tier (not the source resolution) and refuses
+over `SWINGSAGE_GUARD_MAX_PLANE_MB`, and the provider asserts the same budget again at decode
+time (`SWINGSAGE_FRAME_MEM_MB`) so a caller that bypasses the guard still gets a named error.
+Every job reports `decodePasses` and `memHighWaterMb` alongside its stage spans.
+**Gotchas:** the guard's check is the load-bearing one — the provider's fires only after the
+download and normalize have already been paid for. Both refuse with the same golfer-facing
+sentence as the frame-count budget; the distinguishing numbers live in the job row's `facts`.
+
 ### The analyzer environment is pinned to the measured configuration
 
 **Decision:** Runtime deps are exact-pinned in `services/analyzer/requirements.txt` — the

@@ -23,6 +23,8 @@ from dataclasses import dataclass, field
 import cv2
 import numpy as np
 
+from .frames import provider_for
+
 
 @dataclass
 class FaceConfig:
@@ -79,21 +81,21 @@ def _wrap180(a):
     return (a + 90.0) % 180.0 - 90.0
 
 
-def analyse(video_path, club_frames, club_len_norm, ev, cfg: FaceConfig | None = None):
+def analyse(video_path, club_frames, club_len_norm, ev, cfg: FaceConfig | None = None,
+            provider=None):
     cfg = cfg or FaceConfig()
     res = FaceResult()
 
-    cap = cv2.VideoCapture(str(video_path))
-    if not cap.isOpened():
-        raise RuntimeError(f"cannot open {video_path}")
-    frames = []
-    while True:
-        ok, img = cap.read()
-        if not ok:
-            break
-        frames.append(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))
-    cap.release()
-    if not frames:
+    fp, owned = provider_for(video_path, provider)
+    try:
+        return _analyse(fp.grays, club_frames, club_len_norm, ev, cfg, res)
+    finally:
+        if owned:
+            fp.close()
+
+
+def _analyse(frames, club_frames, club_len_norm, ev, cfg, res):
+    if not len(frames):
         return res
 
     h, w = frames[0].shape

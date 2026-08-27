@@ -21,6 +21,7 @@ from mediapipe.tasks.python import BaseOptions
 from mediapipe.tasks.python import vision
 
 from . import silhouette as sil
+from .frames import provider_for
 from .skeleton import (NATIVE_NAMES, KEYPOINT_NAMES, TRACKED_NAMES, N_TRACKED,
                        add_derived)
 
@@ -46,9 +47,29 @@ class RawPoseSeries:
         return (sum(self.detected) / len(self.detected)) if self.detected else 0.0
 
 
+#: The .task bundle, read once per process and keyed by path. A VIDEO-mode landmarker cannot
+#: be reused across clips (`detect_for_video` demands monotonic timestamps and exposes no
+#: reset), so the LANDMARKER is deliberately not cached — the model BYTES are, which is the
+#: part a warm container was re-reading off disk for every job and every retry pass.
+_MODEL_BYTES: dict[str, bytes] = {}
+
+
+def _base_options(model_path):
+    key = str(model_path)
+    buf = _MODEL_BYTES.get(key)
+    if buf is None:
+        try:
+            buf = _MODEL_BYTES[key] = Path(key).read_bytes()
+        except OSError:
+            # Unreadable here means unreadable for MediaPipe too, but let IT produce the
+            # error — its message names the task bundle and the expected format.
+            return BaseOptions(model_asset_path=key)
+    return BaseOptions(model_asset_buffer=buf)
+
+
 def _make_options(running_mode, model_path=None, segmentation=False):
     return vision.PoseLandmarkerOptions(
-        base_options=BaseOptions(model_asset_path=str(model_path or MODEL_PATH)),
+        base_options=_base_options(model_path or MODEL_PATH),
         running_mode=running_mode,
         num_poses=1,
         min_pose_detection_confidence=0.5,
@@ -85,7 +106,8 @@ def _landmarks_to_kp(landmarks):
     return kp
 
 
-def estimate(video_path: str | Path, progress=None, silhouette: bool = False) -> RawPoseSeries:
+def estimate(video_path: str | Path, progress=None, silhouette: bool = False,
+             provider=None) -> RawPoseSeries:
     """Run pose frame-sequentially over a normalized CFR video.
 
     `silhouette` additionally asks the landmarker for its person segmentation mask and reduces
@@ -93,14 +115,8 @@ def estimate(video_path: str | Path, progress=None, silhouette: bool = False) ->
     a stage of its own precisely because this pass always happens — MediaPipe is the fallback
     estimator and RTMPose's localiser either way.
     """
-    cap = cv2.VideoCapture(str(video_path))
-    if not cap.isOpened():
-        raise RuntimeError(f"could not open {video_path}")
-
-    fps = cap.get(cv2.CAP_PROP_FPS) or 60.0
-    total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
-    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fp, owned = provider_for(video_path, provider)
+    fps, total, w, h = fp.fps, fp.frame_count, fp.width, fp.height
 
     series = RawPoseSeries(model="mediapipe-tasks-pose-heavy-1.0.0",
                            width=w, height=h, fps=fps)
@@ -109,10 +125,7 @@ def estimate(video_path: str | Path, progress=None, silhouette: bool = False) ->
         _make_options(vision.RunningMode.VIDEO, segmentation=silhouette))
     try:
         f = 0
-        while True:
-            ok, frame_bgr = cap.read()
-            if not ok:
-                break
+        for _f, frame_bgr in fp.stream_bgr():
             rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
             image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
 
@@ -147,7 +160,8 @@ def estimate(video_path: str | Path, progress=None, silhouette: bool = False) ->
                 progress(f, total)
     finally:
         landmarker.close()
-        cap.release()
+        if owned:
+            fp.close()
 
     return series
 
@@ -195,46 +209,6 @@ def retry_gaps(video_path: str | Path, series: RawPoseSeries, min_run: int = 3) 
         landmarker.close()
         cap.release()
     return fixed
-
-
-def swing_bbox(series: RawPoseSeries, pad: float = 0.12, lo: float = 0.5,
-               hi: float = 99.5) -> tuple[float, float, float, float]:
-    """Union bounding box of the golfer across the clip, in normalized coords.
-
-    Uses percentiles rather than absolute min/max so a single wild misdetection can't
-    inflate the box and undo the resolution gain. One fixed box for the whole clip (rather
-    than per-frame tracking) is deliberate: the golfer stays roughly stationary, and a
-    stable crop keeps MediaPipe's VIDEO-mode tracker from seeing the scene jump every frame.
-    """
-    xs, ys = [], []
-    for fr in series.frames:
-        for x, y, c in fr["kp"]:
-            if c > 0.3:
-                xs.append(x); ys.append(y)
-    if not xs:
-        return (0.0, 0.0, 1.0, 1.0)
-
-    x0, x1 = np.percentile(xs, lo), np.percentile(xs, hi)
-    y0, y1 = np.percentile(ys, lo), np.percentile(ys, hi)
-
-    # Pad relative to the larger dimension so a narrow standing pose still gets lateral
-    # room for the arms and club to swing into.
-    span = max(x1 - x0, y1 - y0)
-    px = py = span * pad
-    return (max(0.0, x0 - px), max(0.0, y0 - py),
-            min(1.0, x1 + px), min(1.0, y1 + py))
-
-
-def remap_to_full(series: RawPoseSeries, applied_bbox) -> RawPoseSeries:
-    """Convert crop-space normalized coords back to full-frame normalized coords."""
-    bx0, by0, bx1, by1 = applied_bbox
-    sx, sy = bx1 - bx0, by1 - by0
-    for fr in series.frames:
-        for p in fr["kp"]:
-            if p[2] > 0.0:
-                p[0] = bx0 + p[0] * sx
-                p[1] = by0 + p[1] * sy
-    return series
 
 
 def finalize(series: RawPoseSeries) -> RawPoseSeries:
