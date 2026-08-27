@@ -2,6 +2,46 @@
 
 Append-only.
 
+## 04 - Ground Truth & Evaluation Infrastructure
+**Completed:** 2026-08-26 22:20 UTC
+**Phase:** Foundations
+**Summary:** Accuracy is falsifiable for the first time. New `services/analyzer/groundtruth/`
+package: frozen annotation schemas (club 5-pt / events / trim / body, draft-07, semantic checks
+in `labels.py`), an annotation manual whose definitions are versioned and binding, evaluators
+for the plan's full metric families (`evaluate_events` — exact/±1/±2/±4, ms percentiles,
+catastrophic + high-conf-catastrophic, abstention, calibration, per fps; `evaluate_club` — PCK@
+2/5/10px, head-center median/p95, club-length-normalized error, shaft angle, visible P/R, FP
+rate, gaps, impossible jumps, impact-window, and it scores every `club.variants` entry with the
+same core — the ranking metric five modules had TODOs waiting on; `evaluate_body` — per-joint px
+error, event-frame error, line-angle MAE, wrong-high-confidence rate), CVAT + head-markers
+import paths, and the golden-set CI: committed tier manifest (`goldenset.json`, split by golfer
+AND recording), `report|diff|accept` with a byte-stable machine-readable report and three
+RATCHETED hard gates (frame-identity mismatch / propagated-as-direct / high-conf catastrophic
+impact — accepted baseline all 0). Labels key on the NORMALIZED clock with the corrections'
+fps-staleness rule (decision logged in `docs/decisions/analysis-and-ai.md`). **All ten fixtures'
+events are hand-labeled** (first pass: 10 parallel vision agents over frame-indexed
+`labelstrip.py` contact sheets; ball-departure witnesses recorded; Taylor's verification is a
+HANDOFF row). Measured for the first time: impact 80% within ±2 (median 8 ms) with the 7wood-1
+miss CONFIRMED at 32 frames late by ball departure; **address catastrophic on 9/10 (8 high-
+conf)** — it fires at motion onset, not the settle; finish 0% within ±2; top soft. Frozen test
+data + goldens refreshed from schema-10 re-runs of swing1/swing2 (compare_analysis: zero
+numeric drift, additive fields only; the single golden diff was ±0.1° pose jitter in 12 metric
+leaves); `hand_labeled` filled (test now xfails honestly against the measured detector gap);
+the fixture-count xfail tracks the golden manifest. 25 new synthetic-pair unit tests; suite 303
+passed + 3 xfailed; `-m goldenset` 2 passed; `pnpm db:backfill` synced the re-analyzed scores.
+**Notes:** pro_3 exposed as a speed-ramped, echo-looped social edit — kept golden as a
+doctored-import robustness case, top/finish flagged diagnostic-only in the manifest. Two clips'
+address is left-censored (clip starts settled) — rule added to the manual mid-pass. The audio
+witness's 7wood-1 onset (~5.08s) sits ~8 frames EARLY of the visually unambiguous ball
+departure (5.23s) — noted in the label file, audio_truth.json left untouched. Hosel error is a
+null slot (current artifact predicts no hosel point; club v2's). Club/body labels are the named
+outstanding halves: evaluators built + unit-tested, zero labels — HANDOFF rows carry the
+labeling and the holdout footage (face-on / left-handed / outdoor). Reconciliation honored:
+`analysis-ground-truth` RECONCILEs against this step instead of duplicating (C12; its native
+remainder is the rotation estimate + un-deferring the ten scoring checks).
+
+---
+
 ## 03 - Frame Identity & Timeline Correctness
 **Completed:** 2026-08-26 19:45 UTC
 **Phase:** Foundations

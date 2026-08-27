@@ -1,0 +1,725 @@
+{
+  "aggregate_events": {
+    "60": {
+      "address": {
+        "abstention_rate": 0.0,
+        "calibration": {
+          "0-0.5": {
+            "n": 0,
+            "within_2": 0,
+            "within_2_rate": null
+          },
+          "0.5-0.8": {
+            "n": 2,
+            "within_2": 0,
+            "within_2_rate": 0.0
+          },
+          "0.8-1": {
+            "n": 8,
+            "within_2": 0,
+            "within_2_rate": 0.0
+          }
+        },
+        "catastrophic": 9,
+        "catastrophic_rate": 0.9,
+        "exact_rate": 0.0,
+        "high_confidence_catastrophic": 8,
+        "label_abstained": 0,
+        "max_ms": 3650.0,
+        "median_ms": 850.0,
+        "n": 10,
+        "not_pipeline_scope": 0,
+        "p90_ms": 1616.667,
+        "p95_ms": 3650.0,
+        "prediction_abstained": 0,
+        "scored": 10,
+        "within_1_rate": 0.0,
+        "within_2_rate": 0.0,
+        "within_4_rate": 0.0
+      },
+      "finish": {
+        "abstention_rate": 0.0,
+        "calibration": {
+          "0-0.5": {
+            "n": 1,
+            "within_2": 0,
+            "within_2_rate": 0.0
+          },
+          "0.5-0.8": {
+            "n": 9,
+            "within_2": 0,
+            "within_2_rate": 0.0
+          },
+          "0.8-1": {
+            "n": 0,
+            "within_2": 0,
+            "within_2_rate": null
+          }
+        },
+        "catastrophic": 4,
+        "catastrophic_rate": 0.4,
+        "exact_rate": 0.0,
+        "high_confidence_catastrophic": 0,
+        "label_abstained": 0,
+        "max_ms": 3183.333,
+        "median_ms": 191.666,
+        "n": 10,
+        "not_pipeline_scope": 0,
+        "p90_ms": 283.333,
+        "p95_ms": 3183.333,
+        "prediction_abstained": 0,
+        "scored": 10,
+        "within_1_rate": 0.0,
+        "within_2_rate": 0.0,
+        "within_4_rate": 0.1
+      },
+      "impact": {
+        "abstention_rate": 0.0,
+        "calibration": {
+          "0-0.5": {
+            "n": 1,
+            "within_2": 0,
+            "within_2_rate": 0.0
+          },
+          "0.5-0.8": {
+            "n": 2,
+            "within_2": 1,
+            "within_2_rate": 0.5
+          },
+          "0.8-1": {
+            "n": 7,
+            "within_2": 7,
+            "within_2_rate": 1.0
+          }
+        },
+        "catastrophic": 1,
+        "catastrophic_rate": 0.1,
+        "exact_rate": 0.5,
+        "high_confidence_catastrophic": 0,
+        "label_abstained": 0,
+        "max_ms": 533.333,
+        "median_ms": 8.334,
+        "n": 10,
+        "not_pipeline_scope": 0,
+        "p90_ms": 66.667,
+        "p95_ms": 533.333,
+        "prediction_abstained": 0,
+        "scored": 10,
+        "within_1_rate": 0.7,
+        "within_2_rate": 0.8,
+        "within_4_rate": 0.9
+      },
+      "top": {
+        "abstention_rate": 0.0,
+        "calibration": {
+          "0-0.5": {
+            "n": 9,
+            "within_2": 3,
+            "within_2_rate": 0.3333
+          },
+          "0.5-0.8": {
+            "n": 1,
+            "within_2": 0,
+            "within_2_rate": 0.0
+          },
+          "0.8-1": {
+            "n": 0,
+            "within_2": 0,
+            "within_2_rate": null
+          }
+        },
+        "catastrophic": 3,
+        "catastrophic_rate": 0.3,
+        "exact_rate": 0.1,
+        "high_confidence_catastrophic": 0,
+        "label_abstained": 0,
+        "max_ms": 3166.667,
+        "median_ms": 66.667,
+        "n": 10,
+        "not_pipeline_scope": 0,
+        "p90_ms": 1083.333,
+        "p95_ms": 3166.667,
+        "prediction_abstained": 0,
+        "scored": 10,
+        "within_1_rate": 0.2,
+        "within_2_rate": 0.3,
+        "within_4_rate": 0.6
+      }
+    }
+  },
+  "clips": {
+    "6iron-1": {
+      "club": "no_labels",
+      "events": {
+        "address": {
+          "catastrophic": true,
+          "confidence": 0.9,
+          "error_frames": 63,
+          "error_ms": 1050.0,
+          "high_confidence_catastrophic": true,
+          "label_confidence": 0.5,
+          "labeled_frame": 208,
+          "predicted_frame": 271,
+          "status": "scored"
+        },
+        "finish": {
+          "catastrophic": true,
+          "confidence": 0.75,
+          "error_frames": -15,
+          "error_ms": -250.0,
+          "high_confidence_catastrophic": false,
+          "label_confidence": 0.5,
+          "labeled_frame": 385,
+          "predicted_frame": 370,
+          "status": "scored"
+        },
+        "impact": {
+          "catastrophic": false,
+          "confidence": 0.98,
+          "error_frames": 1,
+          "error_ms": 16.667,
+          "high_confidence_catastrophic": false,
+          "label_confidence": 0.7,
+          "labeled_frame": 347,
+          "predicted_frame": 348,
+          "status": "scored"
+        },
+        "top": {
+          "catastrophic": false,
+          "confidence": 0.35,
+          "error_frames": -2,
+          "error_ms": -33.333,
+          "high_confidence_catastrophic": false,
+          "label_confidence": 0.5,
+          "labeled_frame": 330,
+          "predicted_frame": 328,
+          "status": "scored"
+        }
+      },
+      "labels": {
+        "events": "087f9f9f8d314f350b15eb76a936a4e5c81f2ee26e961a235d77e2ccf728ab0c"
+      },
+      "propagated_as_direct": 0,
+      "schema_version": 9,
+      "scoring_model_version": null,
+      "tier": "golden"
+    },
+    "6iron2": {
+      "club": "no_labels",
+      "events": {
+        "address": {
+          "catastrophic": true,
+          "confidence": 0.9,
+          "error_frames": -20,
+          "error_ms": -333.333,
+          "high_confidence_catastrophic": true,
+          "label_confidence": 0.5,
+          "labeled_frame": 275,
+          "predicted_frame": 255,
+          "status": "scored"
+        },
+        "finish": {
+          "catastrophic": true,
+          "confidence": 0.75,
+          "error_frames": -17,
+          "error_ms": -283.333,
+          "high_confidence_catastrophic": false,
+          "label_confidence": 0.5,
+          "labeled_frame": 371,
+          "predicted_frame": 354,
+          "status": "scored"
+        },
+        "impact": {
+          "catastrophic": false,
+          "confidence": 0.98,
+          "error_frames": 0,
+          "error_ms": 0.0,
+          "high_confidence_catastrophic": false,
+          "label_confidence": 1.0,
+          "labeled_frame": 335,
+          "predicted_frame": 335,
+          "status": "scored"
+        },
+        "top": {
+          "catastrophic": false,
+          "confidence": 0.35,
+          "error_frames": 0,
+          "error_ms": 0.0,
+          "high_confidence_catastrophic": false,
+          "label_confidence": 0.5,
+          "labeled_frame": 316,
+          "predicted_frame": 316,
+          "status": "scored"
+        }
+      },
+      "labels": {
+        "events": "7a5e7e8e94f3a246bcc5d20cfd3eabb60f5729856edc38945a97119edc78075b"
+      },
+      "propagated_as_direct": 0,
+      "schema_version": 9,
+      "scoring_model_version": null,
+      "tier": "golden"
+    },
+    "6iron3": {
+      "club": "no_labels",
+      "events": {
+        "address": {
+          "catastrophic": true,
+          "confidence": 0.9,
+          "error_frames": 50,
+          "error_ms": 833.333,
+          "high_confidence_catastrophic": true,
+          "label_confidence": 0.5,
+          "labeled_frame": 233,
+          "predicted_frame": 283,
+          "status": "scored"
+        },
+        "finish": {
+          "catastrophic": false,
+          "confidence": 0.75,
+          "error_frames": -3,
+          "error_ms": -50.0,
+          "high_confidence_catastrophic": false,
+          "label_confidence": 0.5,
+          "labeled_frame": 387,
+          "predicted_frame": 384,
+          "status": "scored"
+        },
+        "impact": {
+          "catastrophic": false,
+          "confidence": 0.98,
+          "error_frames": 0,
+          "error_ms": 0.0,
+          "high_confidence_catastrophic": false,
+          "label_confidence": 1.0,
+          "labeled_frame": 363,
+          "predicted_frame": 363,
+          "status": "scored"
+        },
+        "top": {
+          "catastrophic": false,
+          "confidence": 0.35,
+          "error_frames": -1,
+          "error_ms": -16.667,
+          "high_confidence_catastrophic": false,
+          "label_confidence": 0.7,
+          "labeled_frame": 346,
+          "predicted_frame": 345,
+          "status": "scored"
+        }
+      },
+      "labels": {
+        "events": "62f011f41197b38b79433f99e15f75f0461227c7b5f51fb7a2f59dd05bb299ba"
+      },
+      "propagated_as_direct": 0,
+      "schema_version": 9,
+      "scoring_model_version": null,
+      "tier": "golden"
+    },
+    "7wood-1": {
+      "club": "no_labels",
+      "events": {
+        "address": {
+          "catastrophic": true,
+          "confidence": 0.9,
+          "error_frames": 97,
+          "error_ms": 1616.667,
+          "high_confidence_catastrophic": true,
+          "label_confidence": 0.5,
+          "labeled_frame": 139,
+          "predicted_frame": 236,
+          "status": "scored"
+        },
+        "finish": {
+          "catastrophic": false,
+          "confidence": 0.35,
+          "error_frames": -12,
+          "error_ms": -200.0,
+          "high_confidence_catastrophic": false,
+          "label_confidence": 0.5,
+          "labeled_frame": 359,
+          "predicted_frame": 347,
+          "status": "scored"
+        },
+        "impact": {
+          "catastrophic": true,
+          "confidence": 0.35,
+          "error_frames": 32,
+          "error_ms": 533.333,
+          "high_confidence_catastrophic": false,
+          "label_confidence": 0.7,
+          "labeled_frame": 313,
+          "predicted_frame": 345,
+          "status": "scored"
+        },
+        "top": {
+          "catastrophic": true,
+          "confidence": 0.35,
+          "error_frames": 45,
+          "error_ms": 750.0,
+          "high_confidence_catastrophic": false,
+          "label_confidence": 0.7,
+          "labeled_frame": 298,
+          "predicted_frame": 343,
+          "status": "scored"
+        }
+      },
+      "labels": {
+        "events": "7d36db0cbbd8a0830b931dcdd21a65804c0d44ad95ac496b9da78b3c50d2a608"
+      },
+      "propagated_as_direct": 0,
+      "schema_version": 9,
+      "scoring_model_version": null,
+      "tier": "golden"
+    },
+    "7wood-2": {
+      "club": "no_labels",
+      "events": {
+        "address": {
+          "catastrophic": true,
+          "confidence": 0.9,
+          "error_frames": 50,
+          "error_ms": 833.333,
+          "high_confidence_catastrophic": true,
+          "label_confidence": 0.5,
+          "labeled_frame": 191,
+          "predicted_frame": 241,
+          "status": "scored"
+        },
+        "finish": {
+          "catastrophic": false,
+          "confidence": 0.75,
+          "error_frames": -11,
+          "error_ms": -183.333,
+          "high_confidence_catastrophic": false,
+          "label_confidence": 0.7,
+          "labeled_frame": 359,
+          "predicted_frame": 348,
+          "status": "scored"
+        },
+        "impact": {
+          "catastrophic": false,
+          "confidence": 0.98,
+          "error_frames": 0,
+          "error_ms": 0.0,
+          "high_confidence_catastrophic": false,
+          "label_confidence": 1.0,
+          "labeled_frame": 320,
+          "predicted_frame": 320,
+          "status": "scored"
+        },
+        "top": {
+          "catastrophic": false,
+          "confidence": 0.35,
+          "error_frames": -4,
+          "error_ms": -66.667,
+          "high_confidence_catastrophic": false,
+          "label_confidence": 0.7,
+          "labeled_frame": 304,
+          "predicted_frame": 300,
+          "status": "scored"
+        }
+      },
+      "labels": {
+        "events": "45b445527f54431deb320b411f247884ad8b0e0930227e28b3570c616ff606d1"
+      },
+      "propagated_as_direct": 0,
+      "schema_version": 9,
+      "scoring_model_version": null,
+      "tier": "golden"
+    },
+    "perfect": {
+      "club": "no_labels",
+      "events": {
+        "address": {
+          "catastrophic": true,
+          "confidence": 0.9,
+          "error_frames": 219,
+          "error_ms": 3650.0,
+          "high_confidence_catastrophic": true,
+          "label_confidence": 0.7,
+          "labeled_frame": 0,
+          "predicted_frame": 219,
+          "status": "scored"
+        },
+        "finish": {
+          "catastrophic": false,
+          "confidence": 0.6,
+          "error_frames": -8,
+          "error_ms": -133.333,
+          "high_confidence_catastrophic": false,
+          "label_confidence": 0.5,
+          "labeled_frame": 672,
+          "predicted_frame": 664,
+          "status": "scored"
+        },
+        "impact": {
+          "catastrophic": false,
+          "confidence": 0.7,
+          "error_frames": 2,
+          "error_ms": 33.333,
+          "high_confidence_catastrophic": false,
+          "label_confidence": 0.7,
+          "labeled_frame": 538,
+          "predicted_frame": 540,
+          "status": "scored"
+        },
+        "top": {
+          "catastrophic": true,
+          "confidence": 0.35,
+          "error_frames": -65,
+          "error_ms": -1083.333,
+          "high_confidence_catastrophic": false,
+          "label_confidence": 0.7,
+          "labeled_frame": 480,
+          "predicted_frame": 415,
+          "status": "scored"
+        }
+      },
+      "labels": {
+        "events": "934c2b7099446d7a0cb096c863395d20c54ebe48590ed4d12bcc801c74569bbb"
+      },
+      "propagated_as_direct": 0,
+      "schema_version": 9,
+      "scoring_model_version": null,
+      "tier": "golden"
+    },
+    "pro_2": {
+      "club": "no_labels",
+      "events": {
+        "address": {
+          "catastrophic": true,
+          "confidence": 0.9,
+          "error_frames": 88,
+          "error_ms": 1466.667,
+          "high_confidence_catastrophic": true,
+          "label_confidence": 0.5,
+          "labeled_frame": 0,
+          "predicted_frame": 88,
+          "status": "scored"
+        },
+        "finish": {
+          "catastrophic": true,
+          "confidence": 0.75,
+          "error_frames": 13,
+          "error_ms": 216.667,
+          "high_confidence_catastrophic": false,
+          "label_confidence": 0.5,
+          "labeled_frame": 164,
+          "predicted_frame": 177,
+          "status": "scored"
+        },
+        "impact": {
+          "catastrophic": false,
+          "confidence": 0.98,
+          "error_frames": 0,
+          "error_ms": 0.0,
+          "high_confidence_catastrophic": false,
+          "label_confidence": 0.5,
+          "labeled_frame": 140,
+          "predicted_frame": 140,
+          "status": "scored"
+        },
+        "top": {
+          "catastrophic": false,
+          "confidence": 0.43,
+          "error_frames": -3,
+          "error_ms": -50.0,
+          "high_confidence_catastrophic": false,
+          "label_confidence": 0.7,
+          "labeled_frame": 128,
+          "predicted_frame": 125,
+          "status": "scored"
+        }
+      },
+      "labels": {
+        "events": "f49039c4f2cb5bee9fe667c6b6642780910bd3ee77a47eabed2fef745d50301e"
+      },
+      "propagated_as_direct": 0,
+      "schema_version": 9,
+      "scoring_model_version": null,
+      "tier": "golden"
+    },
+    "pro_3": {
+      "club": "no_labels",
+      "events": {
+        "address": {
+          "catastrophic": true,
+          "confidence": 0.75,
+          "error_frames": -52,
+          "error_ms": -866.667,
+          "high_confidence_catastrophic": false,
+          "label_confidence": 0.5,
+          "labeled_frame": 262,
+          "predicted_frame": 210,
+          "status": "scored"
+        },
+        "finish": {
+          "catastrophic": true,
+          "confidence": 0.6,
+          "error_frames": 191,
+          "error_ms": 3183.333,
+          "high_confidence_catastrophic": false,
+          "label_confidence": 0.5,
+          "labeled_frame": 1286,
+          "predicted_frame": 1477,
+          "status": "scored"
+        },
+        "impact": {
+          "catastrophic": false,
+          "confidence": 0.7,
+          "error_frames": -4,
+          "error_ms": -66.667,
+          "high_confidence_catastrophic": false,
+          "label_confidence": 0.7,
+          "labeled_frame": 1064,
+          "predicted_frame": 1060,
+          "status": "scored"
+        },
+        "top": {
+          "catastrophic": true,
+          "confidence": 0.6,
+          "error_frames": -190,
+          "error_ms": -3166.667,
+          "high_confidence_catastrophic": false,
+          "label_confidence": 0.5,
+          "labeled_frame": 950,
+          "predicted_frame": 760,
+          "status": "scored"
+        }
+      },
+      "labels": {
+        "events": "8c3ddf71483c7add1a68779107598c44c320192023017b2c075d582bdb6a5d6f"
+      },
+      "propagated_as_direct": 0,
+      "schema_version": 9,
+      "scoring_model_version": null,
+      "tier": "golden"
+    },
+    "swing1": {
+      "club": "no_labels",
+      "events": {
+        "address": {
+          "catastrophic": false,
+          "confidence": 0.6,
+          "error_frames": 8,
+          "error_ms": 133.333,
+          "high_confidence_catastrophic": false,
+          "label_confidence": 0.7,
+          "labeled_frame": 142,
+          "predicted_frame": 150,
+          "status": "scored"
+        },
+        "finish": {
+          "catastrophic": false,
+          "confidence": 0.75,
+          "error_frames": -9,
+          "error_ms": -150.0,
+          "high_confidence_catastrophic": false,
+          "label_confidence": 0.5,
+          "labeled_frame": 252,
+          "predicted_frame": 243,
+          "status": "scored"
+        },
+        "impact": {
+          "catastrophic": false,
+          "confidence": 0.98,
+          "error_frames": 0,
+          "error_ms": 0.0,
+          "high_confidence_catastrophic": false,
+          "label_confidence": 0.7,
+          "labeled_frame": 221,
+          "predicted_frame": 221,
+          "status": "scored"
+        },
+        "top": {
+          "catastrophic": false,
+          "confidence": 0.35,
+          "error_frames": -4,
+          "error_ms": -66.667,
+          "high_confidence_catastrophic": false,
+          "label_confidence": 0.5,
+          "labeled_frame": 202,
+          "predicted_frame": 198,
+          "status": "scored"
+        }
+      },
+      "labels": {
+        "events": "a635f0ddb1ba3e73b3ff2219fdb4e56a8d47267b80dc3da3bfb70725fd9673cc"
+      },
+      "propagated_as_direct": 0,
+      "schema_version": 10,
+      "scoring_model_version": null,
+      "tier": "golden"
+    },
+    "swing2": {
+      "club": "no_labels",
+      "events": {
+        "address": {
+          "catastrophic": true,
+          "confidence": 0.9,
+          "error_frames": 39,
+          "error_ms": 650.0,
+          "high_confidence_catastrophic": true,
+          "label_confidence": 0.5,
+          "labeled_frame": 0,
+          "predicted_frame": 39,
+          "status": "scored"
+        },
+        "finish": {
+          "catastrophic": false,
+          "confidence": 0.75,
+          "error_frames": 11,
+          "error_ms": 183.333,
+          "high_confidence_catastrophic": false,
+          "label_confidence": 0.5,
+          "labeled_frame": 137,
+          "predicted_frame": 148,
+          "status": "scored"
+        },
+        "impact": {
+          "catastrophic": false,
+          "confidence": 0.9,
+          "error_frames": 1,
+          "error_ms": 16.667,
+          "high_confidence_catastrophic": false,
+          "label_confidence": 0.7,
+          "labeled_frame": 114,
+          "predicted_frame": 115,
+          "status": "scored"
+        },
+        "top": {
+          "catastrophic": false,
+          "confidence": 0.35,
+          "error_frames": -7,
+          "error_ms": -116.667,
+          "high_confidence_catastrophic": false,
+          "label_confidence": 0.5,
+          "labeled_frame": 93,
+          "predicted_frame": 86,
+          "status": "scored"
+        }
+      },
+      "labels": {
+        "events": "06159a2c3d4dc4c0ad9ef7579da5c8449c7312fe4bcefbd0d43b415cd3829f20"
+      },
+      "propagated_as_direct": 0,
+      "schema_version": 10,
+      "scoring_model_version": null,
+      "tier": "golden"
+    }
+  },
+  "gate_definitions": {
+    "catastrophic_ms": 200.0,
+    "high_confidence": 0.8,
+    "propagated_direct_conf": 0.3
+  },
+  "hard_gates": {
+    "frame_identity_mismatch": 0,
+    "high_conf_catastrophic_impact": 0,
+    "propagated_as_direct": 0
+  },
+  "manifest_version": 1,
+  "schema": "goldenset-report",
+  "schema_version": 1
+}

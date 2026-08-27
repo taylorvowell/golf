@@ -4,15 +4,17 @@
     "  python scripts/make_test_data.py <stem>",
     "and add an entry here. The golden tests pick it up automatically.",
     "",
-    "`hand_labeled` is event truth read off the video BY A HUMAN, frame by frame. It is the",
-    "only thing that can satisfy doc 08 Phase 3's acceptance criterion (8 events within +-3",
-    "frames on >=80% of fixtures) — a golden snapshot proves the detector has not CHANGED,",
-    "never that it is RIGHT. Entries left null are skipped with a message rather than passing",
-    "vacuously. Do not fill these in from the detector's own output; that would make the",
-    "criterion self-satisfying.",
+    "`hand_labeled` is event truth read off the video BY A HUMAN (or a verified first pass),",
+    "frame by frame - filled 2026-08-26 from the step-04 labeling pass (full label files with",
+    "confidences + witnesses live in fixtures/labels/<stem>.events.json; definitions frozen in",
+    "groundtruth/ANNOTATION-MANUAL.md). Anchor events only (address/top/impact/finish). swing2's",
+    "address is omitted: the clip begins already settled (left-censored), so a +-3 criterion",
+    "cannot be applied to it. Do not fill these from the detector's own output; that would make",
+    "the criterion self-satisfying.",
     "",
     "doc 08 Phase 0 wants >=10 fixtures spanning both views, both handedness, sim + range.",
-    "There are 2. Every acceptance percentage below N=10 is anecdote."
+    "The golden manifest (groundtruth/goldenset.json) tracks that set; the two clips here are",
+    "the frozen hermetic inputs. Every acceptance percentage below N=10 is anecdote."
   ],
   "fixtures": [
     {
@@ -20,16 +22,25 @@
       "source": "fixtures/swing1.mp4",
       "view": "dtl",
       "handedness": "right",
-      "notes": "oblique/adult. Detector is weak here — contributes on 114/396 frames (29%). Address sits behind two decoy still-holds, which is what caught the D37 tempo bug.",
-      "hand_labeled": null
+      "notes": "oblique/adult. Detector is weak here \u2014 contributes on 114/396 frames (29%). Address sits behind two decoy still-holds, which is what caught the D37 tempo bug.",
+      "hand_labeled": {
+        "address": 142,
+        "top": 202,
+        "impact": 221,
+        "finish": 252
+      }
     },
     {
       "stem": "swing2",
       "source": "fixtures/swing2.mp4",
       "view": "dtl",
       "handedness": "right",
-      "notes": "DTL/junior. Detector strong — 298/341 frames (87%). Tempo legitimately reads 1.55:1; its Impact frame is independently confirmed by the club-head low point, so the D37 flag here is expected and is NOT a defect.",
-      "hand_labeled": null
+      "notes": "DTL/junior. Detector strong \u2014 298/341 frames (87%). Tempo legitimately reads 1.55:1; its Impact frame is independently confirmed by the club-head low point, so the D37 flag here is expected and is NOT a defect.",
+      "hand_labeled": {
+        "top": 93,
+        "impact": 114,
+        "finish": 137
+      }
     }
   ]
 }

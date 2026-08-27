@@ -1,0 +1,3 @@
+# latest.json is a local evaluation product; only the accepted baseline is committed.
+latest.json
+*.tmp

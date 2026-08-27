@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "swingsage://groundtruth/trim-labels/v1",
+  "title": "trim-labels",
+  "description": "Ground truth about one RAW (pre-trim) clip, on the raw clip's own clock, all times in ms. Lets trim performance be measured independently of server impact detection. Definitions in ANNOTATION-MANUAL.md §3.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "schema_version", "raw_clip", "annotator", "strikes_ms", "audio_quality"],
+  "properties": {
+    "schema": { "const": "trim-labels" },
+    "schema_version": { "const": 1 },
+    "raw_clip": { "type": "string", "minLength": 1, "description": "Path relative to fixtures/ (e.g. raw/PXL_....mp4)." },
+    "trimmed_clip": { "type": ["string", "null"], "description": "The fixture stem this raw clip was trimmed into, when one exists." },
+    "annotator": { "type": "string", "minLength": 1 },
+    "annotated_at": { "type": "string" },
+    "manual_version": { "type": "string" },
+    "notes": { "type": "string" },
+    "strikes_ms": {
+      "type": "array",
+      "items": { "type": "number", "minimum": 0 },
+      "description": "Every actual ball strike, in order. Empty array = no strike in the clip."
+    },
+    "practice_swing_intervals_ms": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/interval" }
+    },
+    "chosen_swing_ms": {
+      "type": ["number", "null"],
+      "description": "Which member of strikes_ms the trimmed fixture is built around; null when strikes_ms has exactly one entry."
+    },
+    "true_interval_ms": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["address", "finish"],
+      "properties": {
+        "address": { "type": "number", "minimum": 0 },
+        "finish": { "type": "number", "minimum": 0 }
+      },
+      "description": "Address-to-finish interval of the chosen swing (event definitions from ANNOTATION-MANUAL.md §2)."
+    },
+    "walking_intervals_ms": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/interval" },
+      "description": "Walking in/out, phone handling."
+    },
+    "audio_quality": { "type": "string", "enum": ["good", "noisy", "unusable"] },
+    "slowmo": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "is_slowmo": { "type": "boolean" },
+        "capture_fps": { "type": ["number", "null"] },
+        "container_fps": { "type": ["number", "null"] }
+      }
+    }
+  },
+  "definitions": {
+    "interval": {
+      "type": "array",
+      "items": { "type": "number", "minimum": 0 },
+      "minItems": 2,
+      "maxItems": 2,
+      "description": "[start_ms, end_ms]"
+    }
+  }
+}

@@ -346,3 +346,34 @@ swing get the same numbers in different words — a persona that changes an asse
 same class of bug. The persona renders each guidance object's source (`ai | coach | self`) so human-coach guidance stays visibly
 distinct when it arrives (§26.3); the AI coach never presents as human.
 **See:** ARCHIVE D58; `PROJECT_MAIN.md` §17; `.claude/architecture/coach-and-focus-2026-08-14.md`.
+
+### Ground-truth labels key on the normalized frame clock, with the corrections' staleness rule
+
+**Decision:** Every hand label (events, club pose, body pose) is keyed on the **normalized frame
+id** — the artifact's declared public frame identity — and records the `fps` it was made
+against. An evaluator seeing a different artifact fps flags the labels **stale and refuses to
+score**; it never renumbers on the fly. This is the same guard `head_markers`/`swing_stages`
+carry. Trim labels are the one exception (raw pre-trim clips have no artifact; they use the raw
+clip's own ms clock). Label definitions are frozen in
+`services/analyzer/groundtruth/ANNOTATION-MANUAL.md`; changing one bumps the label schema
+version and invalidates old labels, never silently reinterprets them.
+**Scope:** `services/analyzer/groundtruth/` owns the schemas (club/event/trim/body), the
+evaluators, and the golden-set CI. Labels live in `fixtures/labels/` (gitignored with the
+footage); the tier manifest (`groundtruth/goldenset.json`) and the accepted report
+(`groundtruth/reports/accepted.json`) are committed.
+**Gotchas:** The annotation tool is replaceable (CVAT today); the schema is not. Detector output
+is never pasted into labels — priors for where to look only.
+
+### Dataset tiers are assigned by golfer and recording; hard gates ratchet
+
+**Decision:** `groundtruth/goldenset.json` is the single authority on dataset tiers: **golden**
+(release gate, never tuned on), **dev** (tuning/training), **holdout** (untouched, golfer- AND
+recording-disjoint). Assignment is by golfer and source recording, never frame- or swing-level.
+The golden-set CI (`python -m groundtruth.goldenset report|diff|accept`) evaluates stored
+artifacts against labels and produces a byte-stable machine-readable report; `diff` **fails on
+any hard-gate count exceeding the accepted baseline** (frame-identity mismatches,
+propagated-frames-carrying-direct-confidence, high-confidence catastrophic impact misses —
+target zero for all three). Golden evaluation runs locally via `pytest -m goldenset` (footage-
+bound; excluded from the default suite).
+**Gotchas:** A clip absent from the manifest has no tier and must not be used for anything.
+Accepting a worse report is a deliberate act (`accept`), never something a green run implies.

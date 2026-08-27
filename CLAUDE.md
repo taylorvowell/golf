@@ -140,18 +140,21 @@ usual reason a pipeline change "doesn't show up".
   number moves the way the band assumes.
 - **Coverage percentages have overstated club quality three separate times.** Always run
   `scripts/checkclub.py` and look at the club drawn over the real frame before believing them.
-- **Almost no accuracy number in this project is independently verifiable.** There is still no
-  club-head position-error metric and no hand-labelled *event* frames, so anything tuned on
-  smoothness remains unfalsifiable. Event accuracy was once claimed "verified ±2 frames" while
-  Address was 48 frames early. **The one exception is the audio strike:**
-  `services/analyzer/scripts/audio_truth.json` holds hand-labelled strike times for the five raw
-  takes, and `checkaudio.py --truth` scores against them — five clips, one golfer, one indoor
-  bay, enough to reject a method and not enough to trust a figure from.
-- **The stored Impact event is wrong on at least one fixture, by 40 frames.** On `7wood-1` the
-  ball leaves the mat at 5.08 s while `out/7wood-1/analysis.json` says Impact at 5.75 s. The
-  audio witness (`audio_impact.agrees`) is what caught it, and every band boundary downstream of
-  Impact is wrong on that swing. Ground truth for all ten fixtures' event frames does not exist
-  yet; build it with `checkstrip.py` before trusting — or "fixing" — any event.
+- **Event accuracy is now measurable; club position accuracy still is not.** Since 2026-08-26
+  every fixture has hand-labelled event frames (`fixtures/labels/<stem>.events.json`, first-pass
+  Claude, Taylor's verification is an open HANDOFF row) and `groundtruth/evaluate_events.py`
+  scores against them; the measured state: impact is decent (80% within ±2 at 60 fps, one
+  catastrophic), **address is catastrophically wrong on 9 of 10 fixtures** (it fires at motion
+  onset or mid-waggle, usually with high confidence), top and finish are soft. Club-head
+  position error still has **zero** labels — `evaluate_club.py` is built and waiting (HANDOFF
+  row), so anything club tuned on smoothness remains unfalsifiable. The audio strike truth
+  (`scripts/audio_truth.json`, `checkaudio.py --truth`) stands, with one caveat: on `7wood-1`
+  its onset estimate sits ~8 frames earlier than the visually unambiguous ball departure.
+- **The stored Impact event is wrong on `7wood-1` by a measured 32 frames.** The ball leaves
+  the mat between frames 313/314 (5.23 s) while the artifact says 345 (5.75 s), and the whole
+  post-backswing event chain there is bunched at f343–347 (conf 0.35) — every band boundary
+  downstream of Impact is wrong on that swing. The golden gate
+  (`python -m groundtruth.goldenset diff`) now keys on exactly this class of miss.
 - **Golden snapshots prove nothing has *changed*, not that anything is *right*.** A snapshot
   taken while Address was wrong would have locked that in.
 - **Always pass `--club-detector runs/clubhead/weights/best.pt`** when re-running `burnin.py`
@@ -216,9 +219,13 @@ python scripts/checkball.py out/<stem>    ball, Address club head, disappearance
 python scripts/checkbutt.py out/<stem>    stored silhouette + butt line over real frames
 
 # tests
-python -m pytest tests                    80 passed, 2 skipped, 1 xfailed, ~4s
+python -m pytest tests                    303 passed, 3 xfailed, ~2.5min (goldenset marks excluded)
+python -m pytest tests -m goldenset       golden-set evaluation over real out/ + fixture labels
 python -m pytest tests --update-golden    rewrite snapshots, then FAIL the run on purpose
 python scripts/make_test_data.py --all    re-freeze test input from out/<stem>/analysis.json
+python -m groundtruth.goldenset report|diff|accept   golden-set CI: evaluate, gate, promote
+python -m groundtruth.evaluate_events out/<stem> ...  detected events vs hand labels
+python scripts/labelstrip.py <stem> <frame> --span 6 --step 1   frame-id contact sheet for labeling
 
 # web app — from the REPO ROOT
 pnpm i

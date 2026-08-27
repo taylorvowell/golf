@@ -1,0 +1,41 @@
+{
+  "schema": "goldenset-manifest",
+  "schema_version": 1,
+  "_readme": [
+    "The authority on which clips exist and which dataset tier each belongs to.",
+    "golden = release gate, never trained or tuned on. dev = tuning/training/",
+    "threshold selection. holdout = untouched final check, golfer- AND",
+    "recording-disjoint from both other tiers. Assignment is by golfer and",
+    "source recording (plan 08 SS12) - a golfer or recording appearing in two",
+    "tiers is a manifest bug. A clip absent from this file has no tier and",
+    "must not be used for either purpose.",
+    "",
+    "The golden tier starts as the ten fixtures - every one DTL and",
+    "right-handed, so every acceptance percentage over this set is single-view,",
+    "single-handedness until the holdout footage (HANDOFF rows: face-on set,",
+    "left-handed golfer, outdoor, other clubs) exists. Grow deliberately;",
+    "prefer at least dozens of swings across strata before trusting a release",
+    "gate (plan 08 SS2)."
+  ],
+  "clips": [
+    { "stem": "swing1", "tier": "golden", "view": "dtl", "handedness": "right", "golfer": "adult-1", "recording": "swing1", "club_type": "unknown", "fps_class": "60", "notes": "oblique/adult; address behind two decoy still-holds (caught the D37 tempo bug); detector weak (29% of frames)" },
+    { "stem": "swing2", "tier": "golden", "view": "dtl", "handedness": "right", "golfer": "junior-1", "recording": "swing2", "club_type": "unknown", "fps_class": "60", "notes": "junior; detector strong (87%); tempo legitimately 1.55:1" },
+    { "stem": "6iron-1", "tier": "golden", "view": "dtl", "handedness": "right", "golfer": "taylor", "recording": "raw/6iron-1", "club_type": "iron", "fps_class": "60", "notes": "trimmed from the raw take audio_truth.json labels" },
+    { "stem": "6iron2", "tier": "golden", "view": "dtl", "handedness": "right", "golfer": "taylor", "recording": "raw/6iron2", "club_type": "iron", "fps_class": "60", "notes": "trimmed from the raw take audio_truth.json labels" },
+    { "stem": "6iron3", "tier": "golden", "view": "dtl", "handedness": "right", "golfer": "taylor", "recording": "raw/6iron3", "club_type": "iron", "fps_class": "60", "notes": "trimmed from the raw take audio_truth.json labels" },
+    { "stem": "7wood-1", "tier": "golden", "view": "dtl", "handedness": "right", "golfer": "taylor", "recording": "raw/7wood-1", "club_type": "wood", "fps_class": "60", "notes": "DEFECT CLASS: stored Impact is ~40 frames late (ball leaves at ~5.08s, artifact says 5.75s); audio witness caught it" },
+    { "stem": "7wood-2", "tier": "golden", "view": "dtl", "handedness": "right", "golfer": "taylor", "recording": "raw/7wood-2", "club_type": "wood", "fps_class": "60", "notes": "trimmed from the raw take audio_truth.json labels" },
+    { "stem": "perfect", "tier": "golden", "view": "dtl", "handedness": "right", "golfer": "pro-1", "recording": "perfect", "club_type": "unknown", "fps_class": "30", "notes": "30 fps source; current artifact is the OLD duplicated-frame 60; re-analysis under native-rate CFR renumbers every frame (labels then flag stale, remap = frame//2)" },
+    { "stem": "pro_2", "tier": "golden", "view": "dtl", "handedness": "right", "golfer": "pro-2", "recording": "pro_2", "club_type": "unknown", "fps_class": "30", "notes": "30 fps source, same renumbering caveat as perfect" },
+    { "stem": "pro_3", "tier": "golden", "view": "dtl", "handedness": "right", "golfer": "pro-3", "recording": "pro_3", "club_type": "unknown", "fps_class": "30", "notes": "DEFECT CLASS: speed-ramped, echo-looped social edit (labeling pass 2026-08-26) - transition looped ~5x, delivery an 8-frame freeze, duplicate runs up to ~10 frames. Kept golden as a doctored-import robustness case; its top/finish event labels are judgment calls on an edited timeline (conf 0.5) - treat top/finish timing on this clip as diagnostic, never as a detector verdict. Also the 30fps renumbering caveat; 1889-frame outlier length" },
+    { "stem": "20260820_095337-2", "tier": "dev", "view": "dtl", "handedness": "right", "golfer": "taylor", "recording": "session-today/20260820_095337-2", "club_type": "unknown", "fps_class": "240", "notes": "in-app 240 fps capture" },
+    { "stem": "20260821_104719", "tier": "dev", "view": "dtl", "handedness": "right", "golfer": "taylor", "recording": "session-today/20260821_104719", "club_type": "unknown", "fps_class": "240", "notes": "in-app 240 fps capture" },
+    { "stem": "20260821_105528", "tier": "dev", "view": "dtl", "handedness": "right", "golfer": "taylor", "recording": "session-today/20260821_105528", "club_type": "unknown", "fps_class": "240", "notes": "in-app 240 fps capture" },
+    { "stem": "20260821_111217", "tier": "dev", "view": "dtl", "handedness": "right", "golfer": "taylor", "recording": "session-today/20260821_111217", "club_type": "unknown", "fps_class": "240", "notes": "in-app 240 fps capture" }
+  ],
+  "holdout_requirements": [
+    "golfer-disjoint AND recording-disjoint from golden and dev",
+    "needs footage that does not exist yet: a face-on set, a left-handed golfer, outdoor lighting, other club types (HANDOFF rows)",
+    "prefer a different device model and location than the golden set"
+  ]
+}

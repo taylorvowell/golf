@@ -394,15 +394,22 @@ Measured pipeline quality on the two original fixtures:
 
 ### Honesty caveats — these are part of the current state
 
-- **No hand-labelled event frames exist.** `tests/fixtures.json:hand_labeled` is null for both
-  frozen clips, so event accuracy is internally consistent but *unverified*. An earlier status
-  doc claimed "verified ±2 frames" while Address was in fact 48 frames early on swing1,
-  reporting a 1600 ms backswing against a real 800 ms. Nothing caught it; it surfaced only
-  because the tempo ratio happened to look wrong. **No accuracy percentage anywhere in this
-  project is independently verifiable yet.**
-- **No club-head position-error metric exists.** Every club change so far has been tuned on
-  proxies (smoothness, off-plane deviation), and smoothness has actively preferred wrong
-  answers at least once. Any club change tuned on smoothness is unfalsifiable.
+- **Hand-labelled event frames exist for all ten fixtures** (2026-08-26, first-pass Claude
+  against frame-indexed contact sheets; Taylor's verification is an open HANDOFF row). Labels:
+  `fixtures/labels/<stem>.events.json` (address/top/impact/finish + ball witnesses, definitions
+  frozen in `services/analyzer/groundtruth/ANNOTATION-MANUAL.md`); evaluator:
+  `groundtruth/evaluate_events.py`. **The measured state at 60 fps:** impact 50% exact / 80%
+  within ±2 / median 8 ms with one catastrophic miss (`7wood-1`, 32 frames late by ball
+  departure); **address catastrophic on 9 of 10, 8 of them at high confidence** — it fires at
+  motion onset or mid-waggle, not the settle; top 30% within ±2 (3 catastrophic); finish 0%
+  within ±2 (4 catastrophic). Two clips' address is left-censored (clip starts settled);
+  `pro_3` is a speed-ramped social edit whose top/finish labels are judgment calls.
+- **No club-head position labels exist yet** — `groundtruth/evaluate_club.py` (PCK, position
+  error, P/R, gaps, jumps, calibration; can rank all 35 stored club variants) is built and
+  unit-tested but has nothing to run on until the club labeling HANDOFF row lands. Every club
+  change so far was tuned on proxies (smoothness, off-plane deviation), and smoothness has
+  actively preferred wrong answers at least once; club changes tuned on smoothness remain
+  unfalsifiable.
 - **Coverage percentages have overstated club quality three separate times.** Always run
   `scripts/checkclub.py` and look at the club drawn over the real frame before believing them.
 - **Top of backswing is a hand landmark, not a club one.** The club keeps working at the top
@@ -428,8 +435,10 @@ Measured pipeline quality on the two original fixtures:
 
 ## 9. Tests
 
-`python -m pytest tests` from `services/analyzer` — **80 passed, 2 skipped, 1 xfailed, ~4 s**
-on this snapshot date. No video, GPU or `out/` needed. Hermetic: the suite replays the
+`python -m pytest tests` from `services/analyzer` — **303 passed, 3 xfailed, ~2.5 min**
+(2026-08-26; two `goldenset`-marked tests are excluded from the default run and pass locally
+via `-m goldenset`). No video, GPU or `out/` needed for the default run. Hermetic: the suite
+replays the
 deterministic stages over *frozen* pose and club output committed in `tests/data/*.input.json.gz`
 (~130 KB/clip), so a change to pose inference shows up as a golden diff on every downstream
 number rather than hiding inside one. Regenerate frozen input deliberately with
@@ -445,9 +454,15 @@ Three kinds of check, and the distinction matters:
   fixtures are added: 49 keypoints in append-only order, normalized coordinates, truncated
   confidence, strict event ordering, playback-window containment, tempo self-consistency.
   Plus `test_mirrored.py`, `test_source_timing.py`, `test_isolation.py`, `test_takeaway.py`.
-- **Hand labels** (`test_hand_labeled.py`) are the only thing that would prove correctness, and
-  they are **unfilled** — the label slots are null, so those tests skip rather than pass
-  vacuously. The fixture-count check xfails at 2 frozen clips against a wanted 10.
+- **Hand labels** (`test_hand_labeled.py`) are the only kind that proves correctness. The
+  slots are **filled** for both frozen clips (from the 2026-08-26 labeling pass) and the test
+  **xfails**: the detector's address/finish (and swing1's top) sit outside the ±3-frame
+  criterion — a real, measured, unmet requirement kept visible in every run. The fixture-count
+  check now tracks the golden manifest (`groundtruth/goldenset.json`) and still xfails: ten
+  golden clips, all DTL, all right-handed. A fourth kind exists since step 04: the
+  **golden-set gate** (`groundtruth/goldenset.py` + `pytest -m goldenset`) evaluates real
+  artifacts against labels and ratchets three hard gates (frame-identity mismatch,
+  propagated-as-direct, high-confidence catastrophic impact — all currently 0).
 
 ---
 
@@ -707,7 +722,8 @@ Stated as fact, with no implied ordering or plan. See
   views — that is `mobile-player`'s. The capability is proven by `src/db/multiView.test.ts`, not
   by a swing anyone has looked at.
 - **No analytics, observability, or error reporting.**
-- **No hand-labelled ground truth** for events or club-head position, beyond whatever
-  `head_markers` rows have been placed by hand in the player.
+- **No hand-labelled ground truth for club-head position** beyond whatever `head_markers` rows
+  have been placed by hand in the player (event-frame labels DO exist for all ten fixtures
+  since 2026-08-26 — see §8's honesty caveats).
 - **No second camera view per swing** — all angles are single-view 2D projections.
 - **No face-on or left-handed fixture.**
