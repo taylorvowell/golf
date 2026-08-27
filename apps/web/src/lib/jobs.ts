@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { and, desc, eq, inArray } from "drizzle-orm";
+import { STAGE_PCT } from "@swingsage/schema/stages";
 import { withUser, type DbTx } from "@/db/session";
 import { jobs as jobsTable, swings as swingsTable, swingViews as viewsTable } from "@/db/schema";
 import { envInt, queueAdmission, queueOrphanVerdict } from "@/lib/jobs/policy";
@@ -83,24 +84,34 @@ const PYTHON =
             process.platform === "win32" ? "python.exe" : "python");
 
 /**
- * Stage weights for the progress bar, from measured wall-clock on the fixtures (~80-95s
- * total). Deliberately not evenly spaced: normalize and the two pose passes are most of the
- * run, and a bar that implies otherwise reads as a hang. Each entry is the percentage
- * *reached* when that stage's line appears in burnin's output.
+ * Which burnin stdout line means which stage. The NAMES and percentages come from the one
+ * vocabulary (`@swingsage/schema/stages`, mirrored from `swingsage/stages.py`) — this table
+ * only owns the regexes, because scraping stdout is the spawn path's problem and nobody
+ * else's.
+ *
+ * It used to own the names too, and spelled four of them differently from the worker
+ * (`pose (localiser)` vs `pose_localiser`, `pose-post` vs `stage3`, `coach` vs `scoring`),
+ * so the same stage produced two different `jobs.stage` values depending on which runner ran
+ * it. Grouping job rows by stage was therefore wrong in a way nothing surfaced.
+ *
+ * The scraper still cannot see six of the worker's stages (detector, variants, checkpoints,
+ * silhouette, contract, and the job-level download/guard/upload) — it only knows what burnin
+ * prints. That is a limitation of stdout scraping, not a second vocabulary; the queue path
+ * reports all of them. The scraper's removal is step 14's.
  */
-const STAGES: [RegExp, string, number][] = [
-  [/^source /, "probe", 3],
-  [/^normalized /, "normalize", 22],
-  [/mediapipe\s+\d+ frames/, "pose (localiser)", 42],
-  [/rtmpose\s+\d+ frames/, "pose", 66],
-  [/^stage3 /, "pose-post", 72],
-  [/^events /, "events", 76],
-  [/^ *club /, "club", 88],
-  [/^ *face /, "face", 90],
-  [/^metrics /, "metrics", 93],
-  [/^coach /, "coach", 97],
-  [/^rendered /, "render", 99],
-];
+const STAGES: [RegExp, string, number][] = ([
+  [/^source /, "probe"],
+  [/^normalized /, "normalize"],
+  [/mediapipe\s+\d+ frames/, "pose_localiser"],
+  [/rtmpose\s+\d+ frames/, "pose"],
+  [/^stage3 /, "stage3"],
+  [/^events /, "events"],
+  [/^ *club /, "club"],
+  [/^ *face /, "face"],
+  [/^metrics /, "metrics"],
+  [/^coach /, "scoring"],
+  [/^rendered /, "render"],
+] as [RegExp, string][]).map(([re, stage]) => [re, stage, STAGE_PCT[stage]]);
 
 /**
  * Persist a job's state.

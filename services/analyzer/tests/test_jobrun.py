@@ -610,3 +610,114 @@ class TestManifestCaptureFacts:
         guard = [ln for ln in lines if ln.startswith("workload guard:")]
         assert guard and "manifest_capture_fps=240.0" in guard[0]
         assert "tag_capture_fps=0.0" in guard[0]
+
+
+class TestStageTelemetry:
+    """The per-stage record that rides on the terminal event (step 05).
+
+    Before it, the only structured duration that survived a job was `elapsed_s`; per-stage
+    wall clock was printed to stdout and discarded, so "which stage is the p95 spent in" could
+    only be answered by string-scanning a log ring — and only for the stages one runner's
+    regexes happened to cover.
+    """
+
+    def _run(self, tmp_path, rec, stage_events=(), fail=False):
+        job = jobrun.job_from_spec(_spec())
+
+        def fake_run(req, on_event=None):
+            for ev in stage_events:
+                on_event(ev)
+            if fail:
+                from swingsage.pipeline import PipelineError
+                raise PipelineError("refused")
+            return _result(Path(req.out_dir))
+
+        return jobrun.run_queue_job(job, send=rec, fetch=_fake_fetch(tmp_path),
+                                    pipeline_run=fake_run, scratch_root=tmp_path, **_PROBE_OK)
+
+    def test_done_carries_measured_spans(self, tmp_path):
+        rec = _Recorder()
+        self._run(tmp_path, rec, [
+            PipelineEvent(kind="stage_done", stage="pose", elapsed_s=4.0, frames=300),
+            PipelineEvent(kind="stage_done", stage="club", elapsed_s=2.0),
+        ])
+        m = rec.events()[-1]["stageMetrics"]
+        by_stage = {s["stage"]: s for s in m["stages"]}
+        assert by_stage["pose"]["seconds"] == 4.0 and by_stage["pose"]["frames"] == 300
+        assert by_stage["club"]["seconds"] == 2.0
+        assert m["attributedS"] >= 6.0
+
+    def test_the_job_level_stages_are_measured_too(self, tmp_path):
+        """download/guard/upload happen outside pipeline.run. Unnamed, they would silently
+        become the unattributed remainder."""
+        rec = _Recorder()
+        self._run(tmp_path, rec)
+        named = {s["stage"] for s in rec.events()[-1]["stageMetrics"]["stages"]}
+        assert {"download", "guard", "upload"} <= named
+
+    def test_a_nested_stage_is_not_double_counted(self, tmp_path):
+        rec = _Recorder()
+        self._run(tmp_path, rec, [
+            PipelineEvent(kind="stage_done", stage="variants", elapsed_s=7.0, depth=1),
+            PipelineEvent(kind="stage_done", stage="club", elapsed_s=10.0),
+        ])
+        m = rec.events()[-1]["stageMetrics"]
+        variants = next(s for s in m["stages"] if s["stage"] == "variants")
+        assert variants["nested"] is True
+        # club's 10s already contains variants' 7s.
+        assert m["attributedS"] < 17.0
+
+    def test_the_record_states_its_own_remainder(self, tmp_path):
+        """The remainder is reported rather than hidden — a record that always looked fully
+        accounted-for could not show attribution improving, which is the point of measuring.
+
+        Asserted on the accumulator directly: a faked pipeline returns instantly, so a job's
+        real wall clock here is milliseconds and any span the fake claims would swamp it.
+        """
+        acc = jobrun.stages.StageAccumulator()
+        acc.add("pose", 30.0)
+        acc.add("club", 20.0)
+        m = acc.record(total_s=100.0)
+        assert m["attributedS"] == 50.0
+        assert m["unattributedS"] == 50.0
+        assert m["attributedPct"] == 50.0
+        assert m["unattributedS"] == round(m["totalS"] - m["attributedS"], 3)
+
+    def test_the_remainder_never_goes_negative(self, tmp_path):
+        """Clock skew or a span measured across a boundary must not produce a negative
+        remainder, which would read as time appearing from nowhere."""
+        acc = jobrun.stages.StageAccumulator()
+        acc.add("pose", 10.0)
+        assert acc.record(total_s=9.0)["unattributedS"] == 0.0
+
+    def test_a_failed_job_still_reports_where_it_died(self, tmp_path):
+        rec = _Recorder()
+        ok = self._run(tmp_path, rec, [
+            PipelineEvent(kind="stage_done", stage="pose", elapsed_s=3.0),
+        ], fail=True)
+        assert ok is False
+        last = rec.events()[-1]
+        assert last["kind"] == "failed"
+        assert any(s["stage"] == "pose" for s in last["stageMetrics"]["stages"])
+
+    def test_facts_needed_to_compare_two_jobs_travel_with_them(self, tmp_path):
+        rec = _Recorder()
+        self._run(tmp_path, rec)
+        m = rec.events()[-1]["stageMetrics"]
+        # A percentile that mixed fps classes or cold and warm containers would describe no
+        # real request, so the record carries what separates them.
+        assert "coldStart" in m and "sourceFrames" in m
+        assert m["pipelineElapsedS"] == 1.0
+
+    def test_telemetry_never_fails_a_job(self, tmp_path):
+        """A bug in measurement ABOUT a job must not be why a finished analysis is lost."""
+        rec = _Recorder()
+        job = jobrun.job_from_spec(_spec())
+        forward = jobrun._EventForwarder(job, rec)
+
+        class Boom:
+            def record(self, *a, **k):
+                raise RuntimeError("telemetry bug")
+        forward.metrics = Boom()
+        out = forward.record(0.0, job)
+        assert out["schema"] == "stage-metrics" and "error" in out

@@ -1,6 +1,7 @@
 "use client";
 
 import type { Reanalyze } from "@/lib/useReanalyze";
+import { stageLabel } from "@swingsage/schema/stages";
 
 /**
  * Starts a re-analysis. Presentational only: the job is owned by the page (`useReanalyze`) and
@@ -25,7 +26,7 @@ export default function ReanalyzeButton({ r }: { r: Reanalyze }) {
         <path d="M21 12a9 9 0 1 1-2.6-6.3" /><path d="M21 3v6h-6" />
       </svg>
       <span className="tabular-nums">
-        {busy ? `${job.stage ?? "working"} ${pct.toFixed(0)}%` : "Re-analyze"}
+        {busy ? `${stageLabel(job.stage) || "working"} ${pct.toFixed(0)}%` : "Re-analyze"}
       </span>
       {busy && (
         <span className="absolute inset-x-0 bottom-0 h-[3px] bg-acid/60 transition-[width] duration-500"

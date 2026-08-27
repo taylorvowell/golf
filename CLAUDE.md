@@ -225,6 +225,8 @@ python -m pytest tests -m goldenset       golden-set evaluation over real out/ +
 python -m pytest tests --update-golden    rewrite snapshots, then FAIL the run on purpose
 python scripts/make_test_data.py --all    re-freeze test input from out/<stem>/analysis.json
 python -m groundtruth.goldenset report|diff|accept   golden-set CI: evaluate, gate, promote
+python scripts/checkattribution.py <video>  does the sum of named stages account for the job (>=95%)
+python scripts/build_stage_mirror.py       regenerate packages/schema/stages.json from stages.py
 python -m groundtruth.evaluate_events out/<stem> ...  detected events vs hand labels
 python scripts/labelstrip.py <stem> <frame> --span 6 --step 1   frame-id contact sheet for labeling
 

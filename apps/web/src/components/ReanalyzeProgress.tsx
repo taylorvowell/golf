@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Reanalyze } from "@/lib/useReanalyze";
+import { stageLabel } from "@swingsage/schema/stages";
 
 /**
  * What a running re-analysis looks like from the page.
@@ -65,7 +66,7 @@ export default function ReanalyzeProgress({ r }: { r: Reanalyze }) {
         </svg>
         <p className="min-w-0 flex-1 truncate text-xs text-neutral-200">
           <span className="font-semibold uppercase tracking-[.08em] text-acid">
-            {job.stage ?? "working"}
+            {stageLabel(job.stage) || "working"}
           </span>
           {job.message && <span className="ml-2 text-neutral-400">{job.message}</span>}
         </p>

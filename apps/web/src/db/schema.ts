@@ -367,7 +367,45 @@ export const jobs = pgTable("jobs", {
    * Null for spawn jobs, whose liveness probe is the working-directory lock on this machine.
    */
   lastEventAt: timestamp("last_event_at", { withTimezone: true }),
+  /**
+   * Per-stage timing and the facts needed to interpret it, posted by the worker with its
+   * terminal event (migration 0024). Before this, per-stage wall clock was printed to stdout
+   * and discarded, so "which stage is the p95 spent in" meant string-scanning the log ring —
+   * and only for stages the spawn scraper had a regex for.
+   *
+   * The document carries its own `schemaVersion` so the shape can evolve without a migration.
+   * `unattributedS` is deliberately part of it: a record that only ever showed accounted-for
+   * time could not show attribution improving, which is the point of measuring at all.
+   * Null for every job written before 0024, and for any job whose worker failed to report.
+   */
+  jobMetrics: jsonb("job_metrics").$type<JobStageMetrics>(),
 });
+
+/** Per-stage telemetry for one job — the shape `StageAccumulator.record()` posts. */
+export interface JobStageMetrics {
+  schema: "stage-metrics";
+  schemaVersion: number;
+  totalS?: number;
+  attributedS?: number;
+  unattributedS?: number;
+  attributedPct?: number | null;
+  stages?: { stage: string; seconds: number; frames?: number; nested?: true; count?: number }[];
+  unknownStages?: string[];
+  /** Facts that make one job's numbers comparable to another's. */
+  jobId?: string;
+  runner?: string;
+  coldStart?: boolean;
+  variants?: boolean;
+  pipelineElapsedS?: number;
+  captureFps?: number;
+  sourceFps?: number;
+  sourceFrames?: number;
+  sourceWidth?: number;
+  sourceHeight?: number;
+  probedFps?: number;
+  /** Set instead of the rest when the worker's own telemetry threw — never fails a job. */
+  error?: string;
+}
 
 /**
  * The real scorecard (the scoring spec's Part C1), one row per swing's latest scoring run. `categories` /

@@ -169,6 +169,13 @@
       "when": 1788220800000,
       "tag": "0023_hidden_head_markers",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1788307200000,
+      "tag": "0024_job_stage_metrics",
+      "breakpoints": true
     }
   ]
 }

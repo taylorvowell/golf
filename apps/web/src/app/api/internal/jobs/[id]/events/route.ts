@@ -5,6 +5,7 @@ import { mediaAddress } from "@/db/views";
 import { isPublished } from "@/lib/media/publish";
 import { markViewFailed, markViewReady } from "@/lib/jobs/complete";
 import { noStore, requireJobAccess } from "@/lib/jobs/internal";
+import { parseEvent, type WorkerEvent } from "@/lib/jobs/events";
 
 /**
  * The worker reports progress and the terminal state. Job state lives in Postgres (D9) and is
@@ -14,44 +15,6 @@ import { noStore, requireJobAccess } from "@/lib/jobs/internal";
  * present in the store at the job's target revision. A worker that says "done" without having
  * uploaded the one artifact every successful run produces has failed, whatever it thinks.
  */
-
-interface ProgressEvent {
-  kind: "progress";
-  stage?: string;
-  progressPct?: number;
-  message?: string;
-  logLine?: string;
-}
-interface DoneEvent {
-  kind: "done";
-  /** The pipeline's own wall-clock seconds — recorded in the job log, never shown to a golfer. */
-  elapsedS?: number;
-}
-interface FailedEvent { kind: "failed"; reason: string }
-type WorkerEvent = ProgressEvent | DoneEvent | FailedEvent;
-
-function parseEvent(body: unknown): WorkerEvent | null {
-  if (typeof body !== "object" || body === null) return null;
-  const b = body as Record<string, unknown>;
-  if (b.kind === "progress") {
-    const ok = (v: unknown) => v === undefined || typeof v === "string";
-    if (!ok(b.stage) || !ok(b.message) || !ok(b.logLine)) return null;
-    if (b.progressPct !== undefined && typeof b.progressPct !== "number") return null;
-    return {
-      kind: "progress",
-      stage: b.stage as string | undefined,
-      progressPct: b.progressPct as number | undefined,
-      message: b.message as string | undefined,
-      logLine: b.logLine as string | undefined,
-    };
-  }
-  if (b.kind === "done") {
-    if (b.elapsedS !== undefined && typeof b.elapsedS !== "number") return null;
-    return { kind: "done", elapsedS: b.elapsedS as number | undefined };
-  }
-  if (b.kind === "failed" && typeof b.reason === "string") return { kind: "failed", reason: b.reason };
-  return null;
-}
 
 export async function POST(
   req: Request,
@@ -102,6 +65,9 @@ export async function POST(
     return Response.json({ ok: true }, { headers: noStore });
   }
 
+  // Telemetry rides along with whatever terminal state is being written, so a job can never
+  // end up with an outcome recorded and its metrics lost to a second failed write.
+  const metrics = event.stageMetrics;
   const finishRow = (
     status: "done" | "failed", stage: string, pct: number, message: string, log?: string[],
   ) =>
@@ -109,6 +75,7 @@ export async function POST(
       status, stage, progressPct: pct, message, finishedAt: new Date(),
       lastEventAt: new Date(),
       ...(log ? { log } : {}),
+      ...(metrics ? { jobMetrics: metrics } : {}),
     }).where(eq(jobsTable.id, job.id)));
 
   if (event.kind === "failed") {

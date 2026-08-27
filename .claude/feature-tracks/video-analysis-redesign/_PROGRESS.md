@@ -2,6 +2,51 @@
 
 Append-only.
 
+## 05 - Stage Telemetry & Cost Attribution
+**Completed:** 2026-08-27 00:45 UTC
+**Phase:** Foundations
+**Summary:** Per-stage wall clock stopped being printed and discarded. New
+`swingsage/stages.py` is the ONE vocabulary (19 stages: the 16 pipeline stages plus the three
+that happen outside it — `download`, `guard`, `upload`), carrying pct, human labels and the
+nesting rule; `scripts/build_stage_mirror.py` generates `packages/schema/stages.json` from it,
+the web app imports `@swingsage/schema/stages`, and a parity test fails on drift. This kills
+the two-disagreeing-lists problem: `jobrun.STAGE_PCT` is now a re-export and `jobs.ts STAGES`
+owns only its regexes, where before the same stage produced `pose (localiser)` or
+`pose_localiser` depending on which runner ran it (also `pose-post`/`stage3`,
+`coach`/`scoring`) — so grouping job rows by stage was wrong and nothing surfaced it. Machine
+ids are separated from display wording (`stageLabel`), so the two UI sites that render
+`job.stage` raw keep reading properly. Durations are MEASURED at the boundary: `SpanTracker`
+emits `stage_done` with its own `elapsed_s` + `depth`, replacing the ~14 ad-hoc `time.time()`
+deltas (four stages — probe/checkpoints/silhouette/contract — were never timed at all) and
+fixing the nesting bug the old `modal_app.bench` accumulator had, where closing a span when
+the next opened charged `club` only the time before `variants` began. jobrun accumulates the
+spans, times download/guard/upload itself, and posts a `stageMetrics` record with the terminal
+event — on `failed` too, since which stage a job died in is most of the value. Persisted to
+`jobs.job_metrics` (migration 0024) in the same write as the outcome; the events route takes
+it as an opaque 16 KB-capped document (the worker owns the shape and it is schema-versioned —
+strict parsing would only add a way to lose a finished analysis). Reader:
+`pnpm --filter web job-stats` — p50/p95 by capture-fps class, per-stage share, cost/view from
+a configured $/s rate (`WORKER_GPU_USD_PER_SECOND`, never a literal), cold/warm split.
+**ACCEPTANCE: 99.6% attribution** on a real 6iron2 run in production shape (bar 95%), via the
+new repeatable oracle `scripts/checkattribution.py`, which exits non-zero below the bar.
+**Notes:** The first thing the measurement found: the **localiser pose pass costs MORE than
+the real pose pass** (29.4s vs 18.8s of a 120.6s run) and `club` is the single biggest stage
+at 27.8% — both are step 06/07/09's problem and both were invisible before today. Full
+breakdown: normalize 14.6%, pose_localiser 24.4%, pose 15.6%, detector 5.8%, club 27.8%,
+contract 2.1%, render 7.6%; everything else under 1.5%. DEVIATION from the step's sketch:
+`download` was added to the vocabulary beyond the specified `guard`+`upload` — on a slow link
+it is a double-digit share of wall time, and leaving it unnamed would have guaranteed it
+landed in the remainder the step exists to shrink. The event parser moved out of the route
+into `lib/jobs/events.ts` so it is testable without a request, token and database. Suites:
+analyzer 330 passed + 3 xfailed (14 new stage-metrics + 8 new jobrun telemetry tests), web
+284 passed (17 new), tsc + lint clean, mirror drift check green, golden gate still 0/0/0.
+NAMED SHORTFALL: the acceptance run is LOCAL (real pipeline, real clip, all 16 pipeline
+stages). The step also asks for one queue job on the deployed Modal worker to exercise
+download/guard/upload/coldStart end to end — that needs a production deploy, which is
+Taylor's call, so it rides the existing hosted-stack HANDOFF row rather than being claimed.
+
+---
+
 ## 04 - Ground Truth & Evaluation Infrastructure
 **Completed:** 2026-08-26 22:20 UTC
 **Phase:** Foundations

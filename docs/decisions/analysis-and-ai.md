@@ -391,3 +391,41 @@ never pollute the sharp position-error numbers. The markers GET serves hidden ro
 **Scope:** editor buttons + `B`/`H` keys in the web player's marker strip;
 `groundtruth/import_head_markers.py` maps placed/blurred/hidden →
 visible / occluded+head_streak / `head_hidden` label rows.
+
+### One stage vocabulary, owned by Python and mirrored into TypeScript
+
+**Decision:** `services/analyzer/swingsage/stages.py` is the single list of analysis stage
+names, their progress percentages, their human labels, and which stages nest inside another.
+`scripts/build_stage_mirror.py` generates `packages/schema/stages.json` from it; the web app
+imports `@swingsage/schema/stages`; `test_stage_metrics.py` fails if the two drift. Stage ids
+are **machine names** (snake_case) and everything a person reads goes through `stageLabel`, so
+renaming a screen never moves a telemetry key. `jobrun.STAGE_PCT` is a re-export, and
+`jobs.ts STAGES` owns only its stdout regexes, not the names.
+**Scope:** the vocabulary also names the three stages that happen outside `pipeline.run` —
+`download`, `guard`, `upload` — because an unnamed stage becomes the unattributed remainder.
+**Gotchas:** the spawn path's scraper still cannot see six worker stages; that is a limit of
+reading stdout, not a second vocabulary, and it dies with the scraper in step 14.
+
+### Stage durations are measured at the boundary, never reconstructed
+
+**Decision:** every `stage_done` event carries its own measured `elapsed_s` and a `depth`.
+Consumers accumulate those; they never infer a duration from the gap between consecutive
+`stage_started` events. Reconstruction cannot express nesting (`variants` runs inside `club`,
+so the earlier `modal_app.bench` accumulator charged `club` only the time before `variants`
+began), silently mis-attributes a re-entered stage, and charges inter-stage gaps to whichever
+stage happened to run first. A job's telemetry record states its own `unattributedS`
+remainder — a record that always looked fully accounted-for could not show attribution
+improving, which is the only reason to measure.
+**Scope:** `jobs.job_metrics` (migration 0024), posted with the terminal event so an outcome
+and its metrics can never be written apart. Read with `pnpm --filter web job-stats`; the GPU
+$/s rate is configuration (`WORKER_GPU_USD_PER_SECOND`), never a literal.
+**Gotchas:** telemetry is wrapped so a bug in it can never fail a job — a job with no metrics
+is a gap in a dashboard, a job that 500s on its own measurement is a lost swing. The events
+route accepts the record as an opaque size-capped document for the same reason.
+
+### Pipeline telemetry vs product observability
+
+**Decision:** this analyzer-side telemetry (per-stage spans, job metrics, the attribution
+oracle) belongs to the analysis pipeline and is the raw data behind the analysis-latency SLO.
+The `observability-and-slos` track owns product analytics, error tracking, alerting and
+dashboards at large, and consumes these rows rather than re-deriving them.

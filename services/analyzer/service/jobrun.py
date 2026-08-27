@@ -50,7 +50,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from swingsage import video
+from swingsage import stages, video
 from swingsage.pipeline import PipelineError, PipelineEvent, run
 
 from .worker import SPEC_SCHEMA, SpecError, request_from_spec
@@ -59,18 +59,29 @@ SPEC2_SCHEMA = 2
 
 _JOB_FIELDS = {"id", "token", "source_url", "artifact_base_url", "events_url"}
 
-#: Progress-bar percentage reached when each stage BEGINS, from measured wall-clock on the
-#: fixtures — the same deliberately uneven spacing as jobs.ts's STAGES table (normalize and
-#: the two pose passes are most of the run; an evenly spaced bar reads as a hang).
-STAGE_PCT = {
-    "probe": 3, "normalize": 22, "pose_localiser": 42, "pose": 66, "stage3": 72,
-    "events": 76, "detector": 80, "club": 88, "variants": 89, "face": 90,
-    "checkpoints": 91, "metrics": 93, "silhouette": 95, "contract": 96,
-    "scoring": 97, "render": 99,
-}
+#: Progress-bar percentage reached when each stage BEGINS. Re-exported from the ONE stage
+#: vocabulary (`swingsage.stages`) rather than restated here — this table and jobs.ts's used to
+#: be separate hand-maintained lists that spelled four stages differently and disagreed about
+#: six more, which made "the p95 of the pose stage" unanswerable without knowing which runner
+#: wrote the row. The name is kept for the callers and tests that already import it.
+STAGE_PCT = stages.STAGE_PCT
 
 #: Seconds between forwarded per-frame progress events. Stage transitions always post.
 PROGRESS_THROTTLE_S = 2.0
+
+#: Flipped by the first job this process runs. A cold container pays model-load and CUDA-init
+#: costs a warm one does not, so a p95 mixing the two describes no real request — the flag is
+#: what lets the reader separate them. Process-global on purpose: "cold" is a property of the
+#: CONTAINER, and Modal reuses one container for many jobs (scaledown_window=300).
+_CONTAINER_USED = False
+
+
+def container_is_cold() -> bool:
+    """True for the first job in this process, False for every job after it."""
+    global _CONTAINER_USED
+    cold = not _CONTAINER_USED
+    _CONTAINER_USED = True
+    return cold
 
 
 @dataclass(frozen=True)
@@ -386,6 +397,28 @@ class _EventForwarder:
         self.send = send
         self.clock = clock
         self._last_progress = float("-inf")
+        #: Per-stage spans for this job, accumulated from the pipeline's own measurements and
+        #: posted with the terminal event. Also collects the stages that happen OUTSIDE the
+        #: pipeline (guard, upload) — leaving those nameless is what would put them in the
+        #: unattributed remainder.
+        self.metrics = stages.StageAccumulator()
+        self.tracker = stages.SpanTracker(self._emit_local)
+
+    def _emit_local(self, kind: str, stage: str, **fields: Any) -> None:
+        """Span sink for the job's own stages, which have no PipelineEvent behind them.
+
+        Routed through the same accumulator so `guard` and `upload` are measured exactly like
+        a pipeline stage; `stage_started` also posts progress so the bar moves during an
+        upload, which on a slow link is otherwise a silent minute at 99%.
+        """
+        if kind == "stage_done" and fields.get("elapsed_s") is not None:
+            self.metrics.add(stage, fields["elapsed_s"], fields.get("frames"),
+                             nested=bool(fields.get("depth")))
+        elif kind == "stage_started":
+            body: dict[str, Any] = {"kind": "progress", "stage": stage}
+            if stage in STAGE_PCT:
+                body["progressPct"] = STAGE_PCT[stage]
+            self.post_soft(body)
 
     def post(self, body: dict[str, Any]) -> None:
         """A TERMINAL post — `done` or `failed`. This one is the answer's delivery, so it
@@ -409,7 +442,43 @@ class _EventForwarder:
         except (OSError, RuntimeError) as e:
             print(f"progress post failed (continuing): {e}", file=sys.stderr)
 
+    def record(self, job_t0: float, job: QueueJob, info: Any = None,
+               pipeline_elapsed_s: float = None) -> dict:
+        """The per-job telemetry record posted with the terminal event.
+
+        Wrapped in a blanket try: this is measurement ABOUT a job, and a bug in it must never
+        be the reason a finished analysis fails to report. A job with no metrics is a gap in a
+        dashboard; a job that 500s on its own telemetry is a lost swing.
+        """
+        try:
+            facts: dict[str, Any] = {
+                "jobId": job.id,
+                "runner": "queue",
+                "coldStart": container_is_cold(),
+                "variants": bool(job.analysis.get("variants")),
+                "pipelineElapsedS": (round(pipeline_elapsed_s, 3)
+                                     if pipeline_elapsed_s is not None else None),
+                "captureFps": job.analysis.get("capture_fps") or None,
+                "sourceFps": job.analysis.get("source_fps") or None,
+            }
+            if info is not None:
+                facts.update({
+                    "sourceFrames": getattr(info, "frame_count", None),
+                    "sourceWidth": getattr(info, "width", None),
+                    "sourceHeight": getattr(info, "height", None),
+                    "probedFps": (round(info.fps, 3)
+                                  if getattr(info, "fps", None) else None),
+                })
+            return self.metrics.record(time.time() - job_t0, **facts)
+        except Exception as e:  # noqa: BLE001 — telemetry never fails a job
+            print(f"stage metrics unavailable: {e}", file=sys.stderr)
+            return {"schema": "stage-metrics", "schemaVersion": 1, "error": str(e)}
+
     def __call__(self, ev: PipelineEvent) -> None:
+        # Every stage_done carries its own measured duration; collecting them here is what
+        # turns "printed and discarded" into a queryable per-stage record. Done first and
+        # unconditionally so a stage that also posts progress still contributes its span.
+        self.metrics.on_event(ev)
         if ev.kind == "stage_progress":
             now = self.clock()
             if now - self._last_progress < PROGRESS_THROTTLE_S:
@@ -451,15 +520,19 @@ def run_queue_job(
     forward = _EventForwarder(job, send)
     scratch = Path(tempfile.mkdtemp(prefix=f"swingsage-job-{job.id[:8]}-", dir=scratch_root))
     keep_scratch = False
+    # Job wall clock, not pipeline wall clock: the difference between the two IS the download,
+    # guard and upload, and measuring only the pipeline is what made those three invisible.
+    job_t0 = time.time()
     try:
         source = scratch / "source.mp4"
         try:
-            with_retries(
-                lambda: fetch(job.source_url, job.token, source),
-                on_retry=lambda n, e: forward.post_soft(
-                    {"kind": "progress", "logLine": f"source download attempt {n} failed ({e}); retrying"}
-                ),
-            )
+            with forward.tracker.span("download"):
+                with_retries(
+                    lambda: fetch(job.source_url, job.token, source),
+                    on_retry=lambda n, e: forward.post_soft(
+                        {"kind": "progress", "logLine": f"source download attempt {n} failed ({e}); retrying"}
+                    ),
+                )
         except TransferError as e:
             if e.retryable:
                 raise
@@ -472,6 +545,7 @@ def run_queue_job(
         # The workload guard: refuse deterministically-oversized or unreadable work while it
         # has cost nothing but a download. Runs before request validation touches the file and
         # long before any model loads.
+        forward.tracker.begin("guard")
         try:
             info = probe_source(source)
         except OSError:
@@ -501,9 +575,11 @@ def run_queue_job(
         facts = " ".join(f"{k}={v}" for k, v in verdict.facts.items())
         facts += f" manifest_capture_fps={spec_capture} tag_capture_fps={round(tag_capture, 1)}"
         forward.post_soft({"kind": "progress", "logLine": f"workload guard: {facts}"})
+        forward.tracker.end("guard")
         if verdict.refusal:
             print(f"job {job.id}: workload refused — {facts}", file=sys.stderr)
-            forward.post({"kind": "failed", "reason": verdict.refusal})
+            forward.post({"kind": "failed", "reason": verdict.refusal,
+                          "stageMetrics": forward.record(job_t0, job, info)})
             return False
 
         out_dir = scratch / "out"
@@ -516,14 +592,22 @@ def run_queue_job(
             result = pipeline_run(req, on_event=forward)
         except PipelineError as e:
             # A refusal is an answer. Terminal post must land — it IS the answer's delivery.
-            forward.post({"kind": "failed", "reason": str(e)})
+            # Partial spans go with it: knowing WHICH stage a job died in, and how long it had
+            # been running, is most of the value of telemetry on a failure.
+            forward.post({"kind": "failed", "reason": str(e),
+                          "stageMetrics": forward.record(job_t0, job, info)})
             return False
 
-        uploaded = _upload_artifacts(job, result.artifacts, send)
+        with forward.tracker.span("upload"):
+            uploaded = _upload_artifacts(job, result.artifacts, send)
         forward.post_soft({"kind": "progress", "logLine": f"uploaded {len(uploaded)} artifacts"})
         # elapsedS is capacity-model telemetry: every job self-reports its true pipeline
-        # duration into the web app's job log (never a golfer-facing surface).
-        forward.post({"kind": "done", "elapsedS": result.elapsed_s})
+        # duration into the web app's job log (never a golfer-facing surface). stageMetrics is
+        # the same idea made queryable — per stage, with the remainder stated rather than
+        # hidden, so a later optimization step argues from measurements.
+        forward.post({"kind": "done", "elapsedS": result.elapsed_s,
+                      "stageMetrics": forward.record(job_t0, job, info,
+                                                     pipeline_elapsed_s=result.elapsed_s)})
         return True
     except BaseException:
         keep_scratch = True  # leave the evidence for a human

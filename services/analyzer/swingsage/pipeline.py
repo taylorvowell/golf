@@ -29,7 +29,7 @@ from typing import Callable, Optional
 
 from . import (audio_impact, checkpoints, club, club_detect, clubpath, contract, events,
                face, metrics, pose, pose_rtm, postprocess, render, scoring, silhouette,
-               source_timing, video)
+               source_timing, stages, video)
 from .skeleton import KEYPOINT_NAMES, strip_derived
 
 # Bump whenever a field is ADDED to analysis.json, not only on breaking changes.
@@ -150,16 +150,24 @@ class PipelineEvent:
     """A structured stage boundary or progress tick, for in-process consumers.
 
     kind: "stage_started" | "stage_progress" | "stage_done" | "warning"
-    stage: short id ("normalize", "pose_localiser", "pose", "stage3", "events", "detector",
-           "club", "variants", "face", "checkpoints", "metrics", "silhouette", "contract",
-           "scoring", "render")
+    stage: a machine id from `swingsage.stages.STAGE_PCT` — that module is the one vocabulary.
     done/total: frame counts, on stage_progress only.
+    elapsed_s: MEASURED span duration, on stage_done only. Measured here rather than
+        reconstructed by a consumer from consecutive stage_started events: reconstruction
+        cannot express nesting (`variants` runs inside `club`) and charges inter-stage gaps to
+        whichever stage ran before them.
+    frames: how many frames the stage touched, where it knows.
+    depth: 0 for a top-level stage, 1+ for one nested inside another. A consumer sums only
+        depth-0 spans; nested seconds are already inside their parent.
     """
     kind: str
     stage: str
     message: Optional[str] = None
     done: Optional[int] = None
     total: Optional[int] = None
+    elapsed_s: Optional[float] = None
+    frames: Optional[int] = None
+    depth: int = 0
 
 
 @dataclass(frozen=True)
@@ -274,10 +282,23 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
     docstring before changing any printed line.
     """
     def emit(kind: str, stage: str, message: str = None,
-             done: int = None, total: int = None):
+             done: int = None, total: int = None,
+             elapsed_s: float = None, frames: int = None, depth: int = 0):
         if on_event is not None:
             on_event(PipelineEvent(kind=kind, stage=stage, message=message,
-                                   done=done, total=total))
+                                   done=done, total=total, elapsed_s=elapsed_s,
+                                   frames=frames, depth=depth))
+
+    # Stage spans are measured HERE, at the boundary, rather than reconstructed downstream
+    # from consecutive stage_started events: reconstruction cannot express nesting (`variants`
+    # runs inside `club`) and charges any gap between stages to whichever stage ran before it.
+    #
+    # A begin/end PAIR rather than a `with` block throughout, because the pair drops into the
+    # 16 existing `emit("stage_started"/"stage_done", X)` call sites exactly where they already
+    # are; a context manager would mean re-indenting ~600 lines of working pipeline body (the
+    # `club` stage alone spans ~300). `tracker.span()` wraps the pair for new code.
+    tracker = stages.SpanTracker(emit)
+    stage_begin, stage_end = tracker.begin, tracker.end
 
     warnings: list[str] = []
 
@@ -299,7 +320,7 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
         t_all = time.time()
 
         # --- Stage 0: probe + normalize -------------------------------------------------
-        emit("stage_started", "probe")
+        stage_begin("probe")
         src_info = video.probe(src)
         print(f"source     {src_info.width}x{src_info.height} {src_info.codec} "
               f"rot={src_info.rotation} fps={src_info.fps:.3f} "
@@ -307,9 +328,9 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
               f"{'VFR' if src_info.is_vfr else 'CFR'}")
         if src_info.is_vfr:
             print("           -> VFR detected; CFR normalization is mandatory for frame sync")
-        emit("stage_done", "probe")
+        stage_end("probe")
 
-        emit("stage_started", "normalize")
+        stage_begin("normalize")
         t = time.time()
         # A phone slow-mo (captured 240, WRITTEN 30) is put back on the world's clock here —
         # the com.android.capture.fps stamp is the only record of what the sensor did, and
@@ -343,7 +364,7 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
               f"frames={norm.frame_count} | analysis {anal.width}x{anal.height} "
               f"({time.time() - t:.1f}s)")
         artifacts += [out / "normalized.mp4", out / "analysis.mp4"]
-        emit("stage_done", "normalize")
+        stage_end("normalize")
 
         # Source timing sidecar: what the camera actually observed, before the CFR
         # resample rewrote it. Degrades to a warning — the pipeline never fails over metadata.
@@ -414,7 +435,7 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
 
         # MediaPipe always runs. It is the fallback estimator, and when RTMPose is selected it
         # is also the person localiser that supplies RTMPose's per-frame box (see pose_rtm.py).
-        emit("stage_started", "pose_localiser")
+        stage_begin("pose_localiser")
         t = time.time()
         mp_series = pose.estimate(anal.path, progress=prog,
                                   silhouette=req.silhouette)
@@ -426,10 +447,10 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
             if fixed:
                 print(f"  retry recovered {fixed} frames via IMAGE-mode re-detection")
         quality_mp = snapshot(mp_series)
-        emit("stage_done", "pose_localiser")
+        stage_end("pose_localiser")
 
         if req.pose_model == "rtmpose":
-            emit("stage_started", "pose")
+            stage_begin("pose")
             prog.stage = "pose"
             boxes = pose_rtm.bboxes_from_series(mp_series)
             t = time.time()
@@ -441,7 +462,7 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
             n = min(len(mp_series.frames), len(series.frames))
             series.frames = series.frames[:n]
             series.detected = series.detected[:n]
-            emit("stage_done", "pose")
+            stage_end("pose")
         else:
             series = mp_series
 
@@ -451,7 +472,7 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
 
         rep = None
         if req.stage3:
-            emit("stage_started", "stage3")
+            stage_begin("stage3")
             # A rough swing window from the raw pose gates the grip prior; the definitive
             # events are detected afterwards on the cleaned series.
             pose.finalize(pose.RawPoseSeries(model=series.model, frames=series.frames,
@@ -477,13 +498,13 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
             for n in rep.notes:
                 print(f"           ! {n}")
                 warn("stage3", n)
-            emit("stage_done", "stage3")
+            stage_end("stage3")
 
         pose.finalize(series)
         q = pose.quality(series)
 
         # --- Stage 5: swing events (the scoring spec) -------------------------------------------
-        emit("stage_started", "events")
+        stage_begin("events")
         t = time.time()
         ev, sg = events.detect(series.frames, req.handedness, norm.fps)
         print(f"events     " + "  ".join(
@@ -500,7 +521,7 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
         for n_ in ev["notes"]:
             print(f"           ! {n_}")
             warn("events", n_)
-        emit("stage_done", "events")
+        stage_end("events")
 
         # --- Stage 4: club tracking (the club-tracking spec) --------------------------------------------
         cl = None
@@ -533,7 +554,7 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
                 if req.club_detector_stick_gain is not None:
                     cfg_club = replace(cfg_club,
                                        detector_stick_gain=req.club_detector_stick_gain)
-                emit("stage_started", "detector")
+                stage_begin("detector")
                 prog.stage = "detector"
                 t = time.time()
                 d = club_detect.ClubDetector(req.club_detector,
@@ -550,9 +571,9 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
                 for n_ in det.notes:
                     print(f"           ! {n_}")
                     warn("detector", n_)
-                emit("stage_done", "detector")
+                stage_end("detector")
 
-            emit("stage_started", "club")
+            stage_begin("club")
             prog.stage = "club"
             t = time.time()
             cl = club.track(anal.path, series.frames, ev, req.handedness, cfg=cfg_club,
@@ -576,7 +597,7 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
             # Only the render-relevant fields are kept per variant; `club` above remains the
             # single input to metrics, face and event refinement, so nothing downstream forks.
             if det is not None and req.club_variants:
-                emit("stage_started", "variants")
+                stage_begin("variants")
                 VARIANTS = [
                     ("classical", "Classical only (no detector)",
                      dict(detector_inject="none", detector_head_primary=False, use_rigid=False)),
@@ -820,7 +841,7 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
                     print(f"\r  variant    {key:<20} trace pts back {pts.get('backswing', 0)} / "
                           f"down {pts.get('downswing', 0)} / "
                           f"through {pts.get('followthrough', 0)}  ({time.time()-t:.1f}s)")
-                emit("stage_done", "variants")
+                stage_end("variants")
             # The architecture spec quality gate: below 50% across the swing the trace is disabled rather
             # than shown as a fabricated path.
             if cov.get("swing", 0) < 0.5:
@@ -851,10 +872,10 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
             for n_ in cl.notes[seen_notes:]:
                 print(f"           ! {n_}")
                 warn("club", n_)
-            emit("stage_done", "club")
+            stage_end("club")
 
             # --- club head orientation through the swing (the club-tracking spec tier 2) --------------
-            emit("stage_started", "face")
+            stage_begin("face")
             t = time.time()
             fc = face.analyse(anal.path, cl.frames, cl.club_len or 0.25, ev)
             got = sum(1 for x in fc.frames if x.to_shaft_deg is not None)
@@ -866,12 +887,12 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
                     print(f"           {k:<8} {c['class']:<20} "
                           f"{('rel ' + str(c.get('head_to_shaft_deg')) + 'deg') if 'head_to_shaft_deg' in c else ''}"
                           f"  conf {c['conf']}")
-            emit("stage_done", "face")
+            stage_end("face")
 
         # --- Stage 5b: the ten coaching checkpoints (P1-P10) ----------------------------
         # After club refinement, because P2/P6/P8 are shaft-defined and only resolve properly
         # once the shaft exists. Falls back to pose proxies with --no-club, at lower confidence.
-        emit("stage_started", "checkpoints")
+        stage_begin("checkpoints")
         cps = checkpoints.build(ev, sg, series.frames, req.handedness, club=cl,
                                 n_frames=len(series.frames))
         print("checkpoints " + "  ".join(
@@ -879,11 +900,11 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
         for n_ in cps["notes"]:
             print(f"           ! {n_}")
             warn("checkpoints", n_)
-        emit("stage_done", "checkpoints")
+        stage_end("checkpoints")
 
         # --- Stage 6: metrics (the scoring spec's Part B) -------------------------------------------
         # After Stage 4: wrist hinge is lead-forearm vs club shaft, so it needs club data.
-        emit("stage_started", "metrics")
+        stage_begin("metrics")
         t = time.time()
         club_frames = [{"f": c.f, "head": c.head, "conf": c.conf}
                        for c in cl.frames] if cl else None
@@ -905,7 +926,7 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
         print(f"           ball direction {('+' if bd['sign'] > 0 else '-') + 'x' if bd else 'n/a'}"
               f"  (hands {bd['offset_bh']:+.3f} bh off the hip line, conf {bd['conf']})"
               if bd else "           ball direction n/a — stack angles stay unsigned")
-        emit("stage_done", "metrics")
+        stage_end("metrics")
 
         # --- the angle table, one column per checkpoint ---------------------------------
         # The single most useful thing to eyeball after a run: every angle across the whole
@@ -944,7 +965,7 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
         # height known, which is what the butt line needs. Nothing here re-reads the video.
         sil_doc, butt, butt_notes = None, None, []
         if mp_series.silhouette:
-            emit("stage_started", "silhouette")
+            stage_begin("silhouette")
             butt, butt_notes = silhouette.butt_line(
                 mp_series.silhouette, series.frames, KEYPOINT_NAMES,
                 ev.get("address_span"), mt["body_height_norm"], req.view)
@@ -959,10 +980,10 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
             for n_ in sil_doc["notes"] + butt_notes:
                 print(f"           ! {n_}")
                 warn("silhouette", n_)
-            emit("stage_done", "silhouette")
+            stage_end("silhouette")
 
         # --- analysis.json (pose portion of the architecture spec contract) ------------------------
-        emit("stage_started", "contract")
+        stage_begin("contract")
         doc = {
             "schema_version": SCHEMA_VERSION,
             "video": {
@@ -1157,7 +1178,7 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
         if sil_doc:
             contract.write_json("silhouette", sil_doc, out / "silhouette.json")
             artifacts.append(out / "silhouette.json")
-        emit("stage_done", "contract")
+        stage_end("contract")
 
         # --- Stage 8: deterministic scoring (the scoring spec's Part C1) -----------------------------
         # After analysis.json, not before: coach_report.json is a separate artifact (the architecture spec's data
@@ -1167,7 +1188,7 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
         # a real AIProvider narrative (the AI-provider spec) is a later, separate phase that replaces the
         # `_narrative()` half of scoring.py without changing this file's shape.
         if req.scoring:
-            emit("stage_started", "scoring")
+            stage_begin("scoring")
             t = time.time()
             cfg = scoring.load_config(req.scoring_config)
             report = scoring.write_coach_report(
@@ -1180,17 +1201,17 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
                     print(f"           {cat:<24} {c['score']:>5.1f}  "
                           f"({c['n_measurable']}/{c['n_total']} checks measurable)")
             artifacts.append(out / "coach_report.json")
-            emit("stage_done", "scoring")
+            stage_end("scoring")
 
         # --- Gate 1 renders -------------------------------------------------------------
-        emit("stage_started", "render")
+        stage_begin("render")
         t = time.time()
         render.burn_in(norm.path, series.frames, out / "overlay.mp4",
                        detected=series.detected, fps=norm.fps)
         render.contact_sheet(norm.path, series.frames, out / "contact.jpg")
         print(f"rendered   overlay.mp4 + contact.jpg ({time.time() - t:.1f}s)")
         artifacts += [out / "overlay.mp4", out / "contact.jpg"]
-        emit("stage_done", "render")
+        stage_end("render")
 
         # --- Quality report -------------------------------------------------------------
         print(f"\ndetection coverage {q['detection_coverage'] * 100:.1f}%  "
