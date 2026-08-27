@@ -382,6 +382,43 @@ def test_head_marker_import_refuses_null_fps():
         build_docs([{"clip": "swing1", "frame": 200, "x": 0.5, "y": 0.6, "fps": None}])
 
 
+def test_head_marker_import_hidden_and_blurred_states():
+    rows = [
+        {"clip": "swing1", "frame": 200, "x": 0.5, "y": 0.6, "fps": 60.0},
+        {"clip": "swing1", "frame": 201, "x": 0.52, "y": 0.61, "blurred": True, "fps": 60.0},
+        {"clip": "swing1", "frame": 202, "x": None, "y": None, "hidden": True, "fps": 60.0},
+    ]
+    doc = build_docs(rows)["swing1"]
+    sharp, blurry, hidden = doc["frames"]
+    assert sharp["points"]["head_center"]["v"] == "visible" and sharp["blur"] == "none"
+    assert blurry["points"]["head_center"]["v"] == "occluded"
+    assert blurry["blur"] == "head_streak" and blurry["annotator_confidence"] == 0.6
+    assert hidden["head_hidden"] is True and hidden["points"] == {}
+
+    # The hidden frame is truth the FP metric keys on: a confident direct claim there is a
+    # false positive; sharp and blurry frames still score positionally.
+    club = {"frames": [
+        club_pred_frame(200, (0.5, 0.6)),
+        club_pred_frame(201, (0.52, 0.61)),
+        club_pred_frame(202, (0.4, 0.4)),  # claims to see a head a human could not
+    ]}
+    rep = evaluate_club.evaluate_clip(doc, club, VIDEO)
+    # The sharp frame drives the headline pool; the streak-estimate lands in its own block
+    # so a lower-precision label can never pollute the sharp position metrics.
+    assert rep["scored_frames"] == 1
+    assert rep["blurred"]["n"] == 1 and rep["blurred"]["median_px"] == pytest.approx(0.0)
+    assert rep["false_positive_rate"] == 1.0
+
+
+def test_club_labels_head_hidden_excludes_points():
+    frames = [{"frame": 5, "head_hidden": True, "blur": "none",
+               "annotator_confidence": 1.0,
+               "points": {"head_center": {"x": 0.5, "y": 0.5, "v": "visible"}}}]
+    with pytest.raises(jsonschema.ValidationError):
+        gt_labels.validate(club_doc(frames, [{"start_frame": 5, "end_frame": 5}],
+                                    provenance="player_correction", annotator="player"))
+
+
 # ---------------------------------------------------------------- goldenset
 
 def _mini_setup(tmp_path, impact_conf):

@@ -12,10 +12,18 @@ against the local Postgres (apps/web docker, :5433):
 
   psql "$APP_DATABASE_URL" -At -c "
     select json_agg(json_build_object(
-      'clip', sv.video_stem, 'frame', hm.frame, 'x', hm.x, 'y', hm.y,
+      'clip', sv.media_key, 'frame', hm.frame, 'x', hm.x, 'y', hm.y,
+      'hidden', hm.hidden, 'blurred', hm.blurred,
       'fps', hm.fps, 'artifact_revision', hm.artifact_revision))
     from head_markers hm join swing_views sv on sv.id = hm.view_id
   " > markers.json
+
+Marker states map to label semantics (migration 0023):
+  placed          -> head_center, v='visible', annotator_confidence 1.0
+  placed+blurred  -> head_center, v='occluded', blur='head_streak', confidence 0.6
+                     (the position is the streak's midpoint - an estimate, ANNOTATION-MANUAL SS1)
+  hidden          -> head_hidden frame row with NO points: a human looked and the head is not
+                     visible; a confident direct detection there scores as a false positive.
 
 (Adjust the clip expression to whatever column names the view's artifact stem -
 the point is: one row per marker, keyed by the out/<stem> name.)
@@ -49,14 +57,32 @@ def build_docs(rows: list[dict]) -> dict[str, dict]:
     for (clip, fps), markers in sorted(grouped.items()):
         by_frame = {}
         for m in sorted(markers, key=lambda r: r["frame"]):
-            by_frame[m["frame"]] = {
-                "frame": m["frame"],
-                "blur": "none",
-                "annotator_confidence": 1.0,
-                "points": {
-                    "head_center": {"x": m["x"], "y": m["y"], "v": "visible"},
-                },
-            }
+            if m.get("hidden"):
+                by_frame[m["frame"]] = {
+                    "frame": m["frame"],
+                    "head_hidden": True,
+                    "blur": "none",
+                    "annotator_confidence": 1.0,
+                    "points": {},
+                }
+            elif m.get("blurred"):
+                by_frame[m["frame"]] = {
+                    "frame": m["frame"],
+                    "blur": "head_streak",
+                    "annotator_confidence": 0.6,
+                    "points": {
+                        "head_center": {"x": m["x"], "y": m["y"], "v": "occluded"},
+                    },
+                }
+            else:
+                by_frame[m["frame"]] = {
+                    "frame": m["frame"],
+                    "blur": "none",
+                    "annotator_confidence": 1.0,
+                    "points": {
+                        "head_center": {"x": m["x"], "y": m["y"], "v": "visible"},
+                    },
+                }
         doc = {
             "schema": "club-pose-labels",
             "schema_version": 1,

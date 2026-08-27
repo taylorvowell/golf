@@ -2,8 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-/** A hand-placed club head, normalized 0–1 against the video frame. */
-export interface HeadMarker { frame: number; x: number; y: number }
+/** A hand-placed club head, normalized 0–1 against the video frame — or a hand-asserted
+ * "no visible head on this frame" (`hidden: true`, which carries no coordinates). */
+export type HeadMarker =
+  | { frame: number; x: number; y: number; hidden?: undefined; blurred?: true }
+  | { frame: number; x?: undefined; y?: undefined; hidden: true; blurred?: undefined };
 
 export interface HeadMarkers {
   /** Every saved-or-pending marker, by frame. */
@@ -11,8 +14,13 @@ export interface HeadMarkers {
   /** Editing mode is on. Clicking the picture places the head for the current frame. */
   editing: boolean;
   setEditing: (v: boolean) => void;
-  /** Place (or move) the head on `frame`. */
-  place: (frame: number, x: number, y: number) => void;
+  /** Place (or move) the head on `frame`. `blurred` marks the position as a motion-streak
+   * midpoint (an estimate); omitted, a nudge PRESERVES the frame's existing blur flag —
+   * dragging a blurry point does not silently promote it to sharp. */
+  place: (frame: number, x: number, y: number, blurred?: boolean) => void;
+  /** Assert that no club head is visible on `frame` (occluded/out of shot). Replaces any
+   * placed position — the two are mutually exclusive statements about the same frame. */
+  markHidden: (frame: number) => void;
   /** Drop the manual position on `frame`, falling back to whatever the analyzer produced. */
   clear: (frame: number) => void;
   /** Drop every manual position on the swing. */
@@ -66,18 +74,27 @@ export function useHeadMarkers(swingId: string): HeadMarkers {
   // already in flight when they made it.
   useEffect(() => {
     const ac = new AbortController();
-    fetch(`/api/v1/swings/${swingId}/markers`, { cache: "no-store", signal: ac.signal })
+    // ?hidden=1: the editor is the one consumer that wants the "no visible head here" rows.
+    fetch(`/api/v1/swings/${swingId}/markers?hidden=1`, { cache: "no-store", signal: ac.signal })
       .then((r) => r.json())
       .then((d: { markers?: (HeadMarker & { stale?: true })[] }) => {
         setByFrame((cur) => {
           // Stale rows (placed against a different artifact clock — a re-analysis changed
-          // the fps, C10) are hidden, never merged: their frame numbers name the wrong
+          // the fps, C10) are dropped, never merged: their frame numbers name the wrong
           // instant on this clip. They survive on the server; re-placing a head on the
           // frame re-stamps it against the current clock.
           const next = new Map(
             (d.markers ?? [])
               .filter((m) => !m.stale)
-              .map((m) => [m.frame, { frame: m.frame, x: m.x, y: m.y }] as const),
+              .map((m) => [
+                m.frame,
+                (m.hidden
+                  ? { frame: m.frame, hidden: true as const }
+                  : {
+                      frame: m.frame, x: m.x as number, y: m.y as number,
+                      ...(m.blurred ? { blurred: true as const } : {}),
+                    }),
+              ] as const),
           );
           for (const [f, m] of cur) next.set(f, m);
           for (const f of removedRef.current) next.delete(f);
@@ -88,7 +105,7 @@ export function useHeadMarkers(swingId: string): HeadMarkers {
     return () => ac.abort();
   }, [swingId]);
 
-  const place = useCallback((frame: number, x: number, y: number) => {
+  const place = useCallback((frame: number, x: number, y: number, blurred?: boolean) => {
     // Clamped to the picture. Pointer capture keeps delivering moves after the cursor leaves
     // the frame, so a drag that overshoots would otherwise store a head at x = 1.14 — outside
     // the video, and outside `analysis.json`'s normalized 0–1 contract that every consumer of
@@ -98,7 +115,26 @@ export function useHeadMarkers(swingId: string): HeadMarkers {
     const cy = Math.min(1, Math.max(0, y));
     setByFrame((cur) => {
       const next = new Map(cur);
-      next.set(frame, { frame, x: cx, y: cy });
+      const prev = cur.get(frame);
+      // Undefined preserves the existing flag; a hidden mark being re-placed starts sharp.
+      const flag = blurred ?? (prev && !prev.hidden ? prev.blurred : undefined);
+      next.set(frame, flag ? { frame, x: cx, y: cy, blurred: true } : { frame, x: cx, y: cy });
+      return next;
+    });
+    setDirty((cur) => (cur.has(frame) ? cur : new Set(cur).add(frame)));
+    setRemoved((cur) => {
+      if (!cur.has(frame)) return cur;
+      const next = new Set(cur);
+      next.delete(frame);
+      return next;
+    });
+  }, []);
+
+  // Same bookkeeping as `place` — a hidden mark is an observation on the frame, not a deletion.
+  const markHidden = useCallback((frame: number) => {
+    setByFrame((cur) => {
+      const next = new Map(cur);
+      next.set(frame, { frame, hidden: true });
       return next;
     });
     setDirty((cur) => (cur.has(frame) ? cur : new Set(cur).add(frame)));
@@ -181,7 +217,8 @@ export function useHeadMarkers(swingId: string): HeadMarkers {
   }, [byFrame, dirty, removed, swingId]);
 
   return useMemo(() => ({
-    byFrame, editing, setEditing, place, clear, clearAll,
+    byFrame, editing, setEditing, place, markHidden, clear, clearAll,
     dirty, removedFrames: removed, pending, save, saving, error,
-  }), [byFrame, editing, place, clear, clearAll, dirty, removed, pending, save, saving, error]);
+  }), [byFrame, editing, place, markHidden, clear, clearAll, dirty, removed, pending, save,
+    saving, error]);
 }

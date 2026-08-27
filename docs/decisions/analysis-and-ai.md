@@ -377,3 +377,17 @@ target zero for all three). Golden evaluation runs locally via `pytest -m golden
 bound; excluded from the default suite).
 **Gotchas:** A clip absent from the manifest has no tier and must not be used for anything.
 Accepting a worse report is a deliberate act (`accept`), never something a green run implies.
+
+### Head markers carry three honest states: placed, blurry, hidden
+
+**Decision:** A `head_markers` row is one of three statements (migration 0023): **placed** — a
+sharp club head at (x,y); **blurred** — (x,y) is the midpoint of a motion streak, an estimate
+(always the midpoint, never the streak's end — an end point is systematically late); **hidden**
+— a human looked and the head is not visible (no coordinates exist). Hidden and blurred rows
+are truth in their own right: the club evaluator scores a confident direct detection on a
+hidden frame as a false positive, and streak-estimates land in their own metric pool so they
+never pollute the sharp position-error numbers. The markers GET serves hidden rows only on
+`?hidden=1` (opt-in) so clients that predate the field never see a marker without coordinates.
+**Scope:** editor buttons + `B`/`H` keys in the web player's marker strip;
+`groundtruth/import_head_markers.py` maps placed/blurred/hidden →
+visible / occluded+head_streak / `head_hidden` label rows.

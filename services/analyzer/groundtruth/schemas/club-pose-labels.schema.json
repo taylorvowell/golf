@@ -40,6 +40,7 @@
         "required": ["frame", "blur", "annotator_confidence", "points"],
         "properties": {
           "frame": { "type": "integer", "minimum": 0 },
+          "head_hidden": { "type": "boolean", "description": "A human looked at this frame and the club head is NOT visible (occluded by the golfer / out of shot). Distinct from blur=unusable (image quality): the picture may be sharp. When true, points must be empty; the evaluator scores a confident direct detection here as a false positive." },
           "blur": { "type": "string", "enum": ["none", "mild", "heavy", "shaft_streak", "head_streak", "unusable"] },
           "annotator_confidence": { "type": "number", "minimum": 0, "maximum": 1 },
           "notes": { "type": "string" },

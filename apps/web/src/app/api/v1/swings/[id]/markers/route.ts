@@ -6,7 +6,11 @@ import { requireViewAccess, viewParam } from "@/lib/auth";
  * Hand-placed club-head positions for one swing VIEW (the player's "modify head markers" mode).
  *
  *   GET  -> { markers: [{frame, x, y}, ...] } ordered by frame
- *   PUT  { markers: [{frame, x, y}], deleted: [frame] } -> { saved, deleted }
+ *   GET ?hidden=1 -> also includes {frame, hidden: true} rows ("a human looked, no visible
+ *        head here" — 0023). Opt-in because a hidden marker has no coordinates, and a client
+ *        that predates the field would render it as a head at nowhere; the editor asks for
+ *        them, everything else keeps seeing exactly what it saw before.
+ *   PUT  { markers: [{frame, x, y} | {frame, hidden: true}], deleted: [frame] } -> { saved, deleted }
  *
  * `?view=dtl|face_on` selects the camera, defaulting to the swing's primary view. A marker is a
  * frame number, and two cameras number the same swing differently, so these are per-view rows —
@@ -23,7 +27,9 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
   const { id } = await ctx.params;
   const access = await requireViewAccess(id, viewParam(req));
   if ("error" in access) return access.error;
-  const markers = await withUser(access.userId, (tx) => listMarkers(tx, access.viewId));
+  const includeHidden = new URL(req.url).searchParams.get("hidden") === "1";
+  const markers = await withUser(access.userId, (tx) =>
+    listMarkers(tx, access.viewId, { includeHidden }));
   return Response.json({ markers }, { headers: { "Cache-Control": "no-store" } });
 }
 

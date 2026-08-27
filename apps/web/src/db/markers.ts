@@ -4,19 +4,34 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import type { DbTx } from "./session";
 import { headMarkers, swings, swingViews } from "./schema";
 
-/** A hand-placed club head, normalized 0–1 against the video frame. */
-export interface HeadMarker {
-  frame: number;
-  x: number;
-  y: number;
-  /**
-   * The row was placed against a DIFFERENT artifact clock than the view currently shows
-   * (its stamped fps disagrees with the view's fps — C10). A stale frame number names the
-   * wrong instant, so clients dim or hide these and never merge them as truth. Absent
-   * (never `false`) on live rows, so old clients that don't know the field see no change.
-   */
-  stale?: true;
-}
+/** A hand-placed club head, normalized 0–1 against the video frame — or a hand-asserted
+ * "no visible head on this frame" (`hidden`, which carries no coordinates). */
+export type HeadMarker =
+  | {
+      frame: number;
+      x: number;
+      y: number;
+      hidden?: undefined;
+      /** The position is a motion-streak midpoint, not a sharp head — an estimate. Absent
+       * (never `false`) on sharp rows. */
+      blurred?: true;
+      /**
+       * The row was placed against a DIFFERENT artifact clock than the view currently shows
+       * (its stamped fps disagrees with the view's fps — C10). A stale frame number names the
+       * wrong instant, so clients dim or hide these and never merge them as truth. Absent
+       * (never `false`) on live rows, so old clients that don't know the field see no change.
+       */
+      stale?: true;
+    }
+  | {
+      frame: number;
+      x?: undefined;
+      y?: undefined;
+      /** A human looked at this frame and the club head is NOT visible. No position exists. */
+      hidden: true;
+      blurred?: undefined;
+      stale?: true;
+    };
 
 /**
  * Every hand-placed head for one VIEW, ordered by frame — which is the order the trace needs
@@ -30,13 +45,24 @@ export interface HeadMarker {
  * stored flag would be one more thing a re-analysis could forget to update. A row with no
  * stamped fps (pre-provenance, view never analysed) is served live — flagging it would hide
  * corrections that were valid for the whole life of this feature.
+ *
+ * `includeHidden` is OPT-IN (the editor asks for it): a hidden marker is a row with no
+ * coordinates, and a consumer that predates the field would render it as a head at nowhere.
+ * Excluding by default means every existing client keeps seeing exactly what it saw before
+ * 0023.
  */
-export async function listMarkers(tx: DbTx, viewId: string): Promise<HeadMarker[]> {
+export async function listMarkers(
+  tx: DbTx,
+  viewId: string,
+  opts: { includeHidden?: boolean } = {},
+): Promise<HeadMarker[]> {
   const rows = await tx
     .select({
       frame: headMarkers.frame,
       x: headMarkers.x,
       y: headMarkers.y,
+      hidden: headMarkers.hidden,
+      blurred: headMarkers.blurred,
       fps: headMarkers.fps,
       viewFps: swingViews.fps,
     })
@@ -44,14 +70,26 @@ export async function listMarkers(tx: DbTx, viewId: string): Promise<HeadMarker[
     .innerJoin(swingViews, eq(swingViews.id, headMarkers.viewId))
     .where(eq(headMarkers.viewId, viewId))
     .orderBy(headMarkers.frame);
-  return rows.map(({ frame, x, y, fps, viewFps }) => {
+  const out: HeadMarker[] = [];
+  for (const { frame, x, y, hidden, blurred, fps, viewFps } of rows) {
     const stale = fps != null && viewFps != null && Math.abs(fps - viewFps) > 0.5;
-    return stale ? { frame, x, y, stale: true as const } : { frame, x, y };
-  });
+    if (hidden) {
+      if (opts.includeHidden) out.push(stale ? { frame, hidden: true, stale: true } : { frame, hidden: true });
+      continue;
+    }
+    // The CHECK constraint guarantees coordinates on non-hidden rows; the guard keeps a
+    // malformed row from becoming a NaN head rather than trusting the constraint blindly.
+    if (x == null || y == null) continue;
+    const m: HeadMarker = { frame, x, y };
+    if (blurred) m.blurred = true;
+    if (stale) m.stale = true;
+    out.push(m);
+  }
+  return out;
 }
 
 /**
- * Apply one editing session: upsert the placed markers, delete the cleared frames.
+ * Apply one editing session: upsert the placed (or hidden) markers, delete the cleared frames.
  *
  * Batched rather than a request per frame. Correcting a swing by hand means touching tens of
  * frames in a couple of minutes, and a save per click would make the editor's behaviour depend
@@ -82,17 +120,23 @@ export async function saveMarkers(
 
   const clean = upserts
     .filter((m) => Number.isFinite(m.frame) && m.frame >= 0
-      && Number.isFinite(m.x) && Number.isFinite(m.y))
+      && (m.hidden === true || (Number.isFinite(m.x) && Number.isFinite(m.y))))
     // Normalized coordinates, like everything else in the artifact. A marker outside the frame
-    // is a bug in the caller, not a position, so clamp rather than store it.
-    .map((m) => ({
-      viewId,
-      frame: Math.round(m.frame),
-      x: Math.min(1, Math.max(0, m.x)),
-      y: Math.min(1, Math.max(0, m.y)),
-      fps,
-      artifactRevision: revision,
-    }));
+    // is a bug in the caller, not a position, so clamp rather than store it. A hidden marker
+    // stores NULL coordinates — the CHECK constraint's shape.
+    .map((m) => m.hidden === true
+      ? { viewId, frame: Math.round(m.frame), x: null, y: null, hidden: true, blurred: false,
+          fps, artifactRevision: revision }
+      : {
+          viewId,
+          frame: Math.round(m.frame),
+          x: Math.min(1, Math.max(0, m.x)),
+          y: Math.min(1, Math.max(0, m.y)),
+          hidden: false,
+          blurred: m.blurred === true,
+          fps,
+          artifactRevision: revision,
+        });
 
   // No nested transaction: `tx` already is one. Every caller reaches this through `withUser`,
   // which wraps the whole request in a single transaction, so "a half-applied correction is not a
@@ -103,6 +147,8 @@ export async function saveMarkers(
       set: {
         x: sql`excluded.x`,
         y: sql`excluded.y`,
+        hidden: sql`excluded.hidden`,
+        blurred: sql`excluded.blurred`,
         // Re-placing a marker is a NEW observation against the CURRENT clock — un-stales it.
         fps: sql`excluded.fps`,
         artifactRevision: sql`excluded.artifact_revision`,

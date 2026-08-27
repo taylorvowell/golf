@@ -421,8 +421,24 @@ export const headMarkers = pgTable("head_markers", {
   /** Frame-indexed, so it belongs to the VIEW — two cameras number the same swing differently. */
   viewId: uuid("view_id").notNull().references(() => swingViews.id, { onDelete: "cascade" }),
   frame: integer("frame").notNull(),
-  x: real("x").notNull(),
-  y: real("y").notNull(),
+  /**
+   * NULL exactly when `hidden` — a hidden marker asserts "no visible head here", which has no
+   * position. The `head_markers_hidden_xy` CHECK (0023) ties the two shapes together.
+   */
+  x: real("x"),
+  y: real("y"),
+  /**
+   * A human looked at this frame and the club head is NOT visible (occluded by the golfer,
+   * out of shot). Truth in its own right: the ground-truth false-positive metric keys on it —
+   * a solver confidently placing a head a human cannot see is hallucinating (0023).
+   */
+  hidden: boolean("hidden").notNull().default(false),
+  /**
+   * The position is the midpoint of a motion streak, not a sharp head — an honest estimate
+   * rather than pixel truth. Coordinates are still present; evaluators score blurred frames
+   * separately so streak-midpoints never poison the sharp position-error metrics (0023).
+   */
+  blurred: boolean("blurred").notNull().default(false),
   /**
    * The frame-identity provenance (C10): which artifact clock `frame` counts on. A frame
    * number is only meaningful against the fps + revision it was placed at — a re-analysis

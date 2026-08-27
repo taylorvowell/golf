@@ -11,8 +11,12 @@ export interface HeadPoint {
   frame: number;
   x: number | null;
   y: number | null;
-  /** A head you placed by hand. */
+  /** A head you placed by hand (including a hidden or blurry assertion). */
   manual: boolean;
+  /** You asserted no club head is visible on this frame — truth with no position. */
+  hidden: boolean;
+  /** Your position is a motion-streak midpoint (an estimate), not a sharp head. */
+  blurred: boolean;
   /** The analyzer solved a head here. */
   tracked: boolean;
   /** Placed, moved or cleared since the last save — the edit only exists in this browser. */
@@ -40,7 +44,7 @@ export interface HeadPoint {
  * for.
  */
 export default function HeadMarkerBar({
-  markers, stages, frame, seek, points, hasMark, unsaved,
+  markers, stages, frame, seek, points, hasMark, hiddenHere, blurredHere, onBlurry, unsaved,
 }: {
   markers: HeadMarkers;
   /** Hand-corrected swing-stage keyframes — the list's per-row stage picker writes to these. */
@@ -50,12 +54,19 @@ export default function HeadMarkerBar({
   /** Every correctable frame, in frame order — the analyzer's tracked head per frame, with any
    * hand-placed head replacing it. Built in `SwingStage`; see `headPoints` there. */
   points: HeadPoint[];
-  /** Whether this frame already carries a hand-placed head. */
+  /** Whether this frame already carries a hand-placed head (any of the three states). */
   hasMark: boolean;
+  /** This frame is marked "no visible head". */
+  hiddenHere: boolean;
+  /** This frame's placed head is flagged as a streak-midpoint estimate. */
+  blurredHere: boolean;
+  /** Toggle the blur flag on this frame's current position (the placed head, or the analyzer's
+   * as a starting point). Null when there is no position at all to flag. */
+  onBlurry: (() => void) | null;
   /** Frames edited since the last save. */
   unsaved: number;
 }) {
-  const { editing, setEditing, clear, save, saving, error } = markers;
+  const { editing, setEditing, markHidden, clear, save, saving, error } = markers;
 
   // Arrow keys step one frame while editing. Deliberately not shift-for-ten like the transport:
   // this mode exists to work one frame at a time, and a ten-frame jump from the same key is a
@@ -68,11 +79,16 @@ export default function HeadMarkerBar({
       if (e.key === "ArrowLeft") { e.preventDefault(); seek(frame - 1); }
       else if (e.key === "ArrowRight") { e.preventDefault(); seek(frame + 1); }
       else if (e.key === "Backspace" || e.key === "Delete") { e.preventDefault(); clear(frame); }
+      else if (e.key === "h") {
+        e.preventDefault();
+        if (hiddenHere) clear(frame); else markHidden(frame);
+      }
+      else if (e.key === "b" && onBlurry) { e.preventDefault(); onBlurry(); }
       else if (e.key === "s" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); save(); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [editing, frame, seek, clear, save]);
+  }, [editing, frame, seek, clear, save, markHidden, hiddenHere, onBlurry]);
 
   // Leaving with edits in hand is the one way to lose work here, so say so.
   useEffect(() => {
@@ -91,7 +107,7 @@ export default function HeadMarkerBar({
         Editing heads
       </span>
       <span className="text-neutral-500">
-        drag the marker to move it · click elsewhere to place · ←/→ step a frame · del clears
+        drag to move · click to place · ←/→ step · B blurry · H hidden · del clears
       </span>
 
       <div className="ml-auto flex items-center gap-1.5">
@@ -99,6 +115,29 @@ export default function HeadMarkerBar({
         <span className="w-16 text-center font-mono text-neutral-400">f{frame}</span>
         <Step label="▶" onClick={() => seek(frame + 1)} title="Next frame" />
 
+        {/* The two honest non-sharp answers. Blurry: "the head is a streak; this position is
+            my best estimate of its midpoint" — one press flags the current position (placing
+            it from the analyzer's if you haven't). Hidden: "I looked and cannot see it" —
+            which is truth in its own right (the false-positive metric keys on it), not a skip. */}
+        <button type="button" onClick={onBlurry ?? undefined} disabled={!onBlurry}
+          title={blurredHere ? "Unflag: treat this position as a sharp head"
+            : "This position is a streak-midpoint estimate (B)"}
+          className={`rounded-lg border px-2.5 py-1 disabled:cursor-not-allowed disabled:opacity-35
+                     ${blurredHere
+                       ? "border-amber-400/50 bg-amber-400/15 font-semibold text-amber-200"
+                       : "border-white/10 hover:border-amber-400/40 hover:text-amber-200"}`}>
+          Blurry
+        </button>
+        <button type="button"
+          onClick={() => (hiddenHere ? clear(frame) : markHidden(frame))}
+          title={hiddenHere ? "Unmark: the head IS visible on this frame"
+            : "No visible club head on this frame — behind the golfer or out of shot (H)"}
+          className={`rounded-lg border px-2.5 py-1
+                     ${hiddenHere
+                       ? "border-slate-300/50 bg-slate-300/15 font-semibold text-slate-200"
+                       : "border-white/10 hover:border-slate-300/40 hover:text-slate-200"}`}>
+          Hidden
+        </button>
         <button type="button" onClick={() => clear(frame)} disabled={!hasMark}
           className="rounded-lg border border-white/10 px-2.5 py-1 hover:border-white/25
                      disabled:cursor-not-allowed disabled:opacity-35">
@@ -147,6 +186,8 @@ function MarkerList({ markers, stages, frame, seek, points }: {
 }) {
   const edited = points.reduce((n, p) => n + (p.manual ? 1 : 0), 0);
   const withHead = points.reduce((n, p) => n + (p.x !== null ? 1 : 0), 0);
+  const hiddenCount = points.reduce((n, p) => n + (p.hidden ? 1 : 0), 0);
+  const blurredCount = points.reduce((n, p) => n + (p.blurred ? 1 : 0), 0);
   const unsavedCount = points.reduce((n, p) => n + (p.unsaved ? 1 : 0), 0);
 
   if (!points.length) return null;
@@ -161,6 +202,18 @@ function MarkerList({ markers, stages, frame, seek, points }: {
           <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
           {withHead} with head
         </span>
+        {blurredCount > 0 && (
+          <span className="flex items-center gap-1 text-amber-300/80">
+            <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+            {blurredCount} blurry
+          </span>
+        )}
+        {hiddenCount > 0 && (
+          <span className="flex items-center gap-1 text-slate-300/80">
+            <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+            {hiddenCount} hidden
+          </span>
+        )}
         {unsavedCount > 0 && (
           <span className="flex items-center gap-1 text-acid">
             <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-acid" />
@@ -216,14 +269,18 @@ const Row = memo(function Row({ p, here, seek, clear, setStage }: {
         title={`Jump to frame ${p.frame}`}
         className={`flex min-w-0 flex-1 items-baseline gap-2.5 px-2.5 py-1.5 text-left
                     ${here ? "text-emerald-200" : "text-neutral-300 hover:text-white"}`}>
-        {/* Three states, and the question each answers is different.
+        {/* The states, and the question each answers is different.
             GREEN — there is a head on this frame, whoever put it there. That is the one that
             matters when you are scanning for gaps in the track.
-            BLUE — you placed, moved or cleared it and it is not saved yet. It overrides green,
-            because "will this survive a reload" is the more urgent thing to know about a row.
+            AMBER — your head, flagged as a streak-midpoint estimate.
+            SLATE — you asserted no visible head here.
+            BLUE — you placed, moved or cleared it and it is not saved yet. It overrides the
+            rest, because "will this survive a reload" is the more urgent thing to know.
             HOLLOW GREY — no head here at all. */}
         <span aria-hidden className={`h-2 w-2 shrink-0 rounded-full border
                                      ${p.unsaved ? "border-acid bg-acid"
+                                     : p.hidden ? "border-slate-300 bg-slate-400/70"
+                                     : p.blurred ? "border-amber-400 bg-amber-400"
                                      : p.x !== null ? "border-emerald-400 bg-emerald-400"
                                      : "border-white/15"}`} />
         <span className={`font-mono tabular-nums ${p.inWindow ? "" : "text-neutral-500"}`}>
@@ -233,7 +290,10 @@ const Row = memo(function Row({ p, here, seek, clear, setStage }: {
             changed by dragging it over the picture, where the club head is visible. It earns its
             place by making an outlier obvious in the list. */}
         <span className="truncate font-mono text-[10px] tabular-nums text-neutral-600">
-          {p.x !== null && p.y !== null ? `${p.x.toFixed(3)}, ${p.y.toFixed(3)}` : "no head"}
+          {p.hidden ? "hidden"
+            : p.x !== null && p.y !== null
+              ? `${p.x.toFixed(3)}, ${p.y.toFixed(3)}${p.blurred ? " ~" : ""}`
+              : "no head"}
         </span>
         {/* The named moments, so the list can be navigated by the swing rather than by counting
             frames — "the one at the top" is how anyone actually thinks about where to look.

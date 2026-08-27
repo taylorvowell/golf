@@ -40,13 +40,18 @@ def _dist_px(a, b, w, h):
     return math.hypot((a[0] - b[0]) * w, (a[1] - b[1]) * h)
 
 
+ESTIMATE_BLURS = ("heavy", "shaft_streak", "head_streak")
+
+
 def _gt_head_center(points):
+    """(x, y, occluded) for the labeled head center, or None when there is none."""
     hc = points.get("head_center")
     if hc is not None and hc["v"] != "out_of_frame":
-        return (hc["x"], hc["y"])
+        return (hc["x"], hc["y"], hc["v"] == "occluded")
     ha, hb = points.get("head_a"), points.get("head_b")
     if ha and hb and ha["v"] != "out_of_frame" and hb["v"] != "out_of_frame":
-        return ((ha["x"] + hb["x"]) / 2.0, (ha["y"] + hb["y"]) / 2.0)
+        occ = ha["v"] == "occluded" or hb["v"] == "occluded"
+        return ((ha["x"] + hb["x"]) / 2.0, (ha["y"] + hb["y"]) / 2.0, occ)
     return None
 
 
@@ -74,8 +79,14 @@ def evaluate_clip(label_doc: dict, club: dict, video: dict,
     diag = math.hypot(w, h)
     pred_by_frame = {fr["f"]: fr for fr in club.get("frames", [])}
 
-    head_errors: list[float] = []          # px, GT-visible + direct prediction
-    impact_errors: list[float] = []
+    # Two pools by GT quality: SHARP truth drives every headline metric; ESTIMATE truth
+    # (streak-midpoints - heavy/streak blur, or an occluded head point) is real but
+    # lower-precision, so it gets its own block rather than polluting the sharp numbers.
+    # The frames that matter most (near impact) are the blurriest, so throwing estimates
+    # away would grade methods only on the easy frames - both pools are reported.
+    head_errors: list[float] = []          # px, sharp GT + direct prediction
+    blurred_errors: list[float] = []       # px, estimate GT + direct prediction
+    impact_errors: list[float] = []        # px, both pools - impact IS the blurry region
     angle_errors: list[float] = []
     club_lengths: list[float] = []         # px, GT grip-to-head-center
     calibration = {
@@ -89,25 +100,28 @@ def evaluate_clip(label_doc: dict, club: dict, video: dict,
     for row in label_doc["frames"]:
         f = row["frame"]
         pred = pred_by_frame.get(f)
-        gt_head = None if row["blur"] == "unusable" else _gt_head_center(row["points"])
+        gt = None if (row["blur"] == "unusable" or row.get("head_hidden")) \
+            else _gt_head_center(row["points"])
         direct = bool(pred) and not pred.get("interp") and not pred.get("from_ball")
         per_frame_direct[f] = direct
 
-        if gt_head is None:
+        if gt is None:
             gt_negative += 1
             if direct:
                 fp += 1
             continue
+        gt_head = (gt[0], gt[1])
+        estimate = gt[2] or row["blur"] in ESTIMATE_BLURS
         if not direct:
             fn += 1
             continue
         tp += 1
         err = _dist_px(gt_head, pred["head"], w, h)
-        head_errors.append(err)
+        (blurred_errors if estimate else head_errors).append(err)
         if impact_frame is not None and abs(f - impact_frame) <= IMPACT_WINDOW_FRAMES:
             impact_errors.append(err)
         conf = pred.get("conf")
-        if conf is not None:
+        if conf is not None and not estimate:
             for lo, hi in CALIBRATION_BUCKETS:
                 if lo <= conf < hi:
                     cal = calibration[f"{lo:g}-{min(hi, 1.0):g}"]
@@ -118,7 +132,7 @@ def evaluate_clip(label_doc: dict, club: dict, video: dict,
         if gt_angle is not None and pred.get("shaft_angle_deg") is not None:
             angle_errors.append(_angle_diff_deg(gt_angle, pred["shaft_angle_deg"]))
         g = row["points"].get("grip")
-        if g and g["v"] != "out_of_frame":
+        if g and g["v"] != "out_of_frame" and not estimate:
             club_lengths.append(_dist_px((g["x"], g["y"]), gt_head, w, h))
 
     # Gaps: runs of non-direct frames inside the committed labeled intervals.
@@ -156,6 +170,12 @@ def evaluate_clip(label_doc: dict, club: dict, video: dict,
         "fps": fps,
         "labeled_frames": len(label_doc["frames"]),
         "scored_frames": len(head_errors),
+        "blurred": {
+            "n": len(blurred_errors),
+            "median_px": _round(statistics.median(blurred_errors)) if blurred_errors else None,
+            "p95_px": _round(_pctl(sorted(blurred_errors), 0.95)),
+            "max_px": _round(max(blurred_errors)) if blurred_errors else None,
+        },
         "pck_px": {
             f"{t:g}": _rate(sum(e <= t for e in head_sorted), len(head_sorted))
             for t in PCK_THRESHOLDS_PX

@@ -89,6 +89,11 @@ def _check_semantics(name: str, doc: dict) -> None:
                 raise jsonschema.ValidationError(
                     f"frame {row['frame']}: blur='unusable' must carry no points"
                 )
+            if row.get("head_hidden") and row["points"]:
+                raise jsonschema.ValidationError(
+                    f"frame {row['frame']}: head_hidden must carry no points - "
+                    "'not visible' and 'at (x,y)' are mutually exclusive statements"
+                )
             if "head_center" in row["points"] and not direct_head_ok:
                 raise jsonschema.ValidationError(
                     f"frame {row['frame']}: head_center is direct-labeled only for "

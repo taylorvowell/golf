@@ -238,9 +238,12 @@ export default function SwingStage({
    */
   const spans = useMemo(() => modelTraceSpans(analysis, phases ?? undefined), [analysis, phases]);
 
-  /** Hand-placed heads in the shared model's shape — frame to normalized point. */
+  /** Hand-placed heads in the shared model's shape — frame to normalized point. Hidden marks
+   * carry no position, so they contribute nothing to the trace. */
   const headMarks = useMemo<HeadMarks>(
-    () => new Map([...marks.values()].map((m) => [m.frame, [m.x, m.y] as [number, number]])),
+    () => new Map([...marks.values()]
+      .filter((m) => !m.hidden)
+      .map((m) => [m.frame, [m.x as number, m.y as number] as [number, number]])),
     [marks],
   );
 
@@ -286,10 +289,29 @@ export default function SwingStage({
    */
   const handle = useMemo(() => {
     const mk = marks.get(frame);
-    if (mk) return { x: mk.x, y: mk.y, manual: true };
+    // A hidden mark has no position to grab — clicking the picture places a fresh head,
+    // which REPLACES the hidden assertion (they are mutually exclusive statements).
+    if (mk && !mk.hidden) return { x: mk.x, y: mk.y, manual: true };
+    if (mk?.hidden) return null;
     const auto = club?.frames[frame]?.head;
     return auto ? { x: auto[0], y: auto[1], manual: false } : null;
   }, [marks, frame, club]);
+
+  /**
+   * Toggle the blur flag on this frame's current position. With no placed mark it ADOPTS the
+   * analyzer's head as the starting estimate — "the streak's about there" is one press instead
+   * of a pixel-hunt — and the point is then nudgeable like any placed one. Null when neither a
+   * mark nor a tracked head exists (nothing to flag; place first).
+   */
+  const onBlurry = useMemo(() => {
+    const mk = marks.get(frame);
+    if (mk && !mk.hidden) {
+      return () => markers.place(frame, mk.x as number, mk.y as number, !mk.blurred);
+    }
+    const auto = club?.frames[frame]?.head;
+    if (auto) return () => markers.place(frame, auto[0], auto[1], true);
+    return null;
+  }, [marks, frame, club, markers]);
 
   /** Frame → event name, for the eight frames the list should call by name rather than number. */
   const eventAt = useMemo(() => {
@@ -318,9 +340,11 @@ export default function SwingStage({
       const h = club?.frames[f]?.head;
       out.push({
         frame: f,
-        x: mk ? mk.x : h?.[0] ?? null,
-        y: mk ? mk.y : h?.[1] ?? null,
+        x: mk ? mk.x ?? null : h?.[0] ?? null,
+        y: mk ? mk.y ?? null : h?.[1] ?? null,
         manual: !!mk,
+        hidden: !!mk?.hidden,
+        blurred: !!(mk && !mk.hidden && mk.blurred),
         tracked: !!h,
         // A cleared frame counts too — the clear is itself an unsaved change, even though what
         // is left on the row is the analyzer's head again.
@@ -551,7 +575,10 @@ export default function SwingStage({
 
     if (club && t.club) {
       const cf = club.frames[at];
-      const mk = marks.get(at);
+      // Only a POSITIONED mark redraws the club — a hidden mark has no coordinates, so the
+      // overlay keeps showing the analyzer's own answer (its product meaning is deferred).
+      const mkAt = marks.get(at);
+      const mk = mkAt && !mkAt.hidden ? mkAt : undefined;
       // A hand-placed head replaces the solved one, and the shaft is re-drawn to it from the
       // hands so the club stays one rigid body attached to the grip rather than a line pointing
       // at where the detector used to think the head was.
@@ -602,15 +629,39 @@ export default function SwingStage({
       // state — the memo stays for hit-testing, where the pointer event and the state agree.
       const mk = marks.get(at);
       const auto = club?.frames[at]?.head;
-      const handleAt = mk ? { x: mk.x, y: mk.y, manual: true }
-        : auto ? { x: auto[0], y: auto[1], manual: false } : null;
+      // A hidden mark: the human said "no visible head here". Drawn as a slashed grey circle
+      // at the analyzer's position (when it has one) — "the pipeline thinks here; you said
+      // not visible" — rather than a crosshair inviting a nudge.
+      if (mk?.hidden) {
+        if (auto) {
+          const R = Math.max(9, w / 70);
+          const cx = auto[0] * w, cy = auto[1] * h;
+          ctx.strokeStyle = "rgba(148,163,184,.9)";
+          ctx.lineWidth = 2;
+          ctx.setLineDash([4, 3]);
+          ctx.beginPath();
+          ctx.arc(cx, cy, R, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.beginPath();
+          ctx.moveTo(cx - R, cy + R); ctx.lineTo(cx + R, cy - R);
+          ctx.stroke();
+        }
+      }
+      const handleAt = mk
+        ? (mk.hidden ? null
+          : { x: mk.x as number, y: mk.y as number, manual: true, blurred: !!mk.blurred })
+        : auto ? { x: auto[0], y: auto[1], manual: false, blurred: false } : null;
       if (handleAt) {
         const cx = handleAt.x * w, cy = handleAt.y * h;
-        // Rose while the point is still the analyzer's, green once it is yours — rose is the
-        // same colour the club overlay draws its head in, so "what the pipeline currently
-        // thinks" reads the same in both places. Dashed until you own it: an unconfirmed
-        // suggestion you are being shown so you can judge it, not a correction you made.
-        ctx.strokeStyle = handleAt.manual ? "#34D399" : "#FB7185";
+        // Rose while the point is still the analyzer's, green once it is yours, amber when
+        // yours is flagged as a streak-midpoint estimate — rose is the same colour the club
+        // overlay draws its head in, so "what the pipeline currently thinks" reads the same
+        // in both places. Dashed until you own it: an unconfirmed suggestion you are being
+        // shown so you can judge it, not a correction you made.
+        ctx.strokeStyle = handleAt.manual
+          ? (handleAt.blurred ? "#FBBF24" : "#34D399")
+          : "#FB7185";
         ctx.lineWidth = 2;
         ctx.setLineDash(handleAt.manual ? [] : [4, 3]);
         ctx.beginPath();
@@ -630,7 +681,7 @@ export default function SwingStage({
       // forming rather than one isolated point at a time.
       ctx.fillStyle = "rgba(52,211,153,.55)";
       for (const m of marks.values()) {
-        if (m.frame === at || Math.abs(m.frame - at) > 30) continue;
+        if (m.hidden || m.frame === at || Math.abs(m.frame - at) > 30) continue;
         ctx.beginPath();
         ctx.arc(m.x * w, m.y * h, Math.max(2, w / 300), 0, Math.PI * 2);
         ctx.fill();
@@ -1117,7 +1168,11 @@ export default function SwingStage({
           <div className="mt-2">
             <HeadMarkerBar
               markers={markers} stages={stages} frame={frame} seek={seekFile} points={headPoints}
-              hasMark={marks.has(frame)} unsaved={markers.pending} />
+              hasMark={marks.has(frame)}
+              hiddenHere={!!marks.get(frame)?.hidden}
+              blurredHere={!!marks.get(frame)?.blurred}
+              onBlurry={onBlurry}
+              unsaved={markers.pending} />
           </div>
         )}
       </div>
