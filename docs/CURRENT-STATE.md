@@ -395,7 +395,8 @@ Measured pipeline quality on the two original fixtures:
 ### Honesty caveats — these are part of the current state
 
 - **Hand-labelled event frames exist for all ten fixtures** (2026-08-26, first-pass Claude
-  against frame-indexed contact sheets; Taylor's verification is an open HANDOFF row). Labels:
+  against frame-indexed contact sheets; verified by Taylor the same day on the interactive
+  review page, with per-frame fine-tuning deferred to live testing). Labels:
   `fixtures/labels/<stem>.events.json` (address/top/impact/finish + ball witnesses, definitions
   frozen in `services/analyzer/groundtruth/ANNOTATION-MANUAL.md`); evaluator:
   `groundtruth/evaluate_events.py`. **The measured state at 60 fps:** impact 50% exact / 80%

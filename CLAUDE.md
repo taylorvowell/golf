@@ -142,7 +142,8 @@ usual reason a pipeline change "doesn't show up".
   `scripts/checkclub.py` and look at the club drawn over the real frame before believing them.
 - **Event accuracy is now measurable; club position accuracy still is not.** Since 2026-08-26
   every fixture has hand-labelled event frames (`fixtures/labels/<stem>.events.json`, first-pass
-  Claude, Taylor's verification is an open HANDOFF row) and `groundtruth/evaluate_events.py`
+  Claude, verified by Taylor 2026-08-26 with fine-tuning deferred to live testing) and
+  `groundtruth/evaluate_events.py`
   scores against them; the measured state: impact is decent (80% within ±2 at 60 fps, one
   catastrophic), **address is catastrophically wrong on 9 of 10 fixtures** (it fires at motion
   onset or mid-waggle, usually with high confidence), top and finish are soft. Club-head
