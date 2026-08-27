@@ -145,7 +145,70 @@ def bboxes_from_series(series: RawPoseSeries, pad=0.22, min_conf=0.3):
         last = box
     # Backfill any leading frames that had no usable skeleton.
     first = next((b for b in boxes if b is not None), [0, 0, w, h])
-    return [b if b is not None else first for b in boxes]
+    boxes = [b if b is not None else first for b in boxes]
+    if series.observed is not None:
+        boxes = _bridge_boxes(boxes, series.observed, pad, w, h)
+    return boxes
+
+
+def _bridge_boxes(boxes, observed, pad, w, h):
+    """Boxes for frames the localiser was never run on — interpolated, and widened by the gap.
+
+    Only reachable when a frame plan ran the localiser sparsely. Carrying the previous box
+    forward (what the un-planned path does for a frame with no usable skeleton) is fine across
+    one or two frames of a golfer at address and wrong across eight frames of a downswing, which
+    is exactly the span a 30 Hz localiser leaves on a 240 fps clip. So the box is interpolated
+    between its bracketing observations and then widened in proportion to how far it had to
+    reach — a box that is too big costs the top-down model a little resolution, a box that
+    misses a limb costs the limb.
+    """
+    n = len(boxes)
+    obs = sorted(f for f in observed if 0 <= f < n)
+    if not obs or len(obs) == n:
+        return boxes
+    out = list(boxes)
+    lo_of = _nearest_below(obs, n)
+    hi_of = _nearest_above(obs, n)
+    for f in range(n):
+        if f in observed:
+            continue
+        lo, hi = lo_of[f], hi_of[f]
+        if lo is None and hi is None:
+            continue
+        if lo is None:
+            base, reach = list(boxes[hi]), hi - f
+        elif hi is None:
+            base, reach = list(boxes[lo]), f - lo
+        else:
+            t = 0.0 if hi == lo else (f - lo) / (hi - lo)
+            base = [a + (b - a) * t for a, b in zip(boxes[lo], boxes[hi])]
+            reach = min(f - lo, hi - f)
+        # One extra `pad` of the box span per bracketing frame reached across: a one-frame gap
+        # is essentially unchanged, a long one is generously loose.
+        grow = pad * reach * max(base[2] - base[0], base[3] - base[1])
+        out[f] = [max(0.0, base[0] - grow), max(0.0, base[1] - grow),
+                  min(float(w), base[2] + grow), min(float(h), base[3] + grow)]
+    return out
+
+
+def _nearest_below(obs, n):
+    out, cur, i = [None] * n, None, 0
+    for f in range(n):
+        while i < len(obs) and obs[i] <= f:
+            cur = obs[i]
+            i += 1
+        out[f] = cur
+    return out
+
+
+def _nearest_above(obs, n):
+    out, cur, i = [None] * n, None, len(obs) - 1
+    for f in range(n - 1, -1, -1):
+        while i >= 0 and obs[i] >= f:
+            cur = obs[i]
+            i -= 1
+        out[f] = cur
+    return out
 
 
 def _hand_grip(pts, sc, w, h, conf_of, min_conf=0.25):
@@ -252,10 +315,86 @@ def _rtmpose(url, input_size, device):
     return got
 
 
-def estimate(video_path, boxes, mode: str = "performance", progress=None,
-             wholebody: bool = False, provider=None) -> RawPoseSeries:
+def estimate_at(video_path, boxes, frames, mode: str = "performance",
+                wholebody: bool = False, provider=None) -> dict:
+    """Measure a SPARSE set of frames and return `{frame_index: frame_dict}`.
+
+    The forced top-up's engine: once the refined series has produced the real event frames,
+    any of them the plan did not select gets measured here and merged back. Same model, same
+    boxes, same arithmetic as `estimate` — it differs only in reaching its frames by seeking
+    instead of by streaming, which is what keeps two dozen scattered frames from costing a
+    fourth full decode of the clip.
+    """
     url, input_size = (WHOLEBODY_MODELS if wholebody else POSE_MODELS)[mode]
+    model = _rtmpose(url, input_size, pose_device())
+    fp, owned = provider_for(video_path, provider)
+    w, h = fp.width, fp.height
+    out: dict[int, dict] = {}
+    try:
+        for f, img in fp.bgr_at(frames):
+            if f >= len(boxes):
+                continue
+            try:
+                kps, scores = model(img, bboxes=[boxes[f]])
+            except Exception:
+                continue
+            if not len(kps):
+                continue
+            out[f] = _frame_from(kps[0], scores[0], w, h, wholebody)
+    finally:
+        if owned:
+            fp.close()
+    return out
+
+
+def _empty_frame() -> dict:
+    """A frame nothing was measured on. A comprehension, not `[[0.0, 0.0, 0.0]] * N` — the
+    latter shares one list across every slot, so writing one keypoint writes all of them."""
+    return {"kp": [[0.0, 0.0, 0.0] for _ in range(N_TRACKED)], "grip": None, "hands": {}}
+
+
+def _frame_from(kps, scores, w, h, wholebody) -> dict:
+    """One model output -> one series frame.
+
+    The single home for the mapping arithmetic: the streaming pass and the sparse top-up both
+    go through it, so "how a 133-point array becomes a 41-slot skeleton" cannot exist twice and
+    drift. Deliberately takes ONE frame's arrays rather than the series, which is what makes it
+    reusable from a path that has no series yet.
+    """
     mapping = WHOLEBODY_TO_NATIVE if wholebody else HALPE26_TO_NATIVE
+    slot = {name: i for i, name in enumerate(TRACKED_NAMES)}
+
+    def conf_of(raw):
+        if not wholebody:
+            return float(min(max(raw, 0.0), 1.0))
+        span = WHOLEBODY_CONF_HI - WHOLEBODY_CONF_LO
+        return float(min(max((raw - WHOLEBODY_CONF_LO) / span, 0.0), 1.0))
+
+    kp = [[0.0, 0.0, 0.0] for _ in range(N_TRACKED)]
+    pts, sc = np.asarray(kps, float), np.asarray(scores, float)
+    for hi, name in mapping.items():
+        if hi < len(pts):
+            kp[slot[name]] = [float(pts[hi][0]) / w, float(pts[hi][1]) / h, conf_of(sc[hi])]
+    grip, hands = None, {}
+    if wholebody:
+        for hi, name in WHOLEBODY_TO_MEASURED.items():
+            if hi < len(pts):
+                kp[slot[name]] = [float(pts[hi][0]) / w, float(pts[hi][1]) / h, conf_of(sc[hi])]
+        grip, hands = _hand_grip(pts, sc, w, h, conf_of)
+    return {"kp": kp, "grip": grip, "hands": hands}
+
+
+def estimate(video_path, boxes, mode: str = "performance", progress=None,
+             wholebody: bool = False, provider=None, frames=None) -> RawPoseSeries:
+    """`frames` restricts inference to a frame plan's direct set (None = every frame).
+
+    This is the pass the planner exists for. RTMPose is top-down and stateless — one crop in,
+    one skeleton out, no tracker and no dependence on the previous frame — so running it on a
+    subset produces exactly the results a dense run produced on those same frames. That
+    property is what makes an ablation over cadences meaningful at all: the only thing a
+    stride changes is which frames were measured, never what a measured frame says.
+    """
+    url, input_size = (WHOLEBODY_MODELS if wholebody else POSE_MODELS)[mode]
     model = _rtmpose(url, input_size, pose_device())
 
     fp, owned = provider_for(video_path, provider)
@@ -265,46 +404,38 @@ def estimate(video_path, boxes, mode: str = "performance", progress=None,
     kind = "rtmw-wholebody133" if wholebody else "rtmpose-halpe26"
     series = RawPoseSeries(model=f"{kind}-{mode}-{input_size[0]}x{input_size[1]}",
                            width=w, height=h, fps=fps)
-    slot = {name: i for i, name in enumerate(TRACKED_NAMES)}
 
-    def conf_of(raw):
-        """Model score -> [0,1]. See WHOLEBODY_CONF_LO/HI."""
-        if not wholebody:
-            return float(min(max(raw, 0.0), 1.0))
-        span = WHOLEBODY_CONF_HI - WHOLEBODY_CONF_LO
-        return float(min(max((raw - WHOLEBODY_CONF_LO) / span, 0.0), 1.0))
+    wanted = None if frames is None else {int(x) for x in frames}
+    series.observed = wanted
 
     f = 0
     try:
         for _f, img in fp.stream_bgr(limit=total):
-            kp = [[0.0, 0.0, 0.0] for _ in range(N_TRACKED)]
+            if wanted is not None and f not in wanted:
+                series.frames.append({"f": f, **_empty_frame()})
+                series.world.append(None)
+                series.detected.append(False)
+                f += 1
+                if progress and (f % 30 == 0 or f == total):
+                    progress(f, total)
+                continue
             try:
                 kps, scores = model(img, bboxes=[boxes[f]])
             except Exception:
                 kps, scores = [], []
 
-            grip, hands = None, {}
             if len(kps):
-                pts, sc = np.asarray(kps[0], float), np.asarray(scores[0], float)
-                for hi, name in mapping.items():
-                    if hi < len(pts):
-                        kp[slot[name]] = [float(pts[hi][0]) / w, float(pts[hi][1]) / h,
-                                          conf_of(sc[hi])]
-                if wholebody:
-                    for hi, name in WHOLEBODY_TO_MEASURED.items():
-                        if hi < len(pts):
-                            kp[slot[name]] = [float(pts[hi][0]) / w, float(pts[hi][1]) / h,
-                                              conf_of(sc[hi])]
-                    grip, hands = _hand_grip(pts, sc, w, h, conf_of)
+                got = _frame_from(kps[0], scores[0], w, h, wholebody)
                 series.detected.append(True)
             else:
+                got = _empty_frame()
                 series.detected.append(False)
 
             # Per-hand knuckle centroids are kept separately, not just their average: the two
             # hands sit adjacent along the grip, so the vector between them points along the
             # shaft. That is a high-confidence, per-frame direction prior for club tracking —
             # measured from the body rather than inferred from a motion mask.
-            series.frames.append({"f": f, "kp": kp, "grip": grip, "hands": hands})
+            series.frames.append({"f": f, **got})
             series.world.append(None)
             f += 1
             if progress and (f % 30 == 0 or f == total):

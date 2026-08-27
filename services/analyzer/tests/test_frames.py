@@ -212,3 +212,37 @@ def test_provider_for_reuses_and_reports_ownership(clip):
 def test_missing_file_is_reported_at_construction(tmp_path):
     with pytest.raises(RuntimeError):
         fm.FrameProvider(tmp_path / "nope.mp4")
+
+
+def test_bgr_at_returns_the_frame_it_was_asked_for(clip):
+    """Seeking must land on the exact index, or the top-up measures the wrong frame.
+
+    This is the load-bearing assumption of the forced top-up (`pose_rtm.estimate_at`): it
+    reaches a couple of dozen scattered frames by seeking rather than by a fourth sequential
+    pass, and a seek that lands one frame off would write a measurement under the wrong frame id
+    — silently, and exactly at the event frames a score is read from. Checked by nearest-
+    neighbour rather than by equality alone: "close to frame f" is not the claim, "closer to f
+    than to f±3" is.
+    """
+    fp = fm.FrameProvider(clip)
+    grays = fp.grays
+    want = [0, 1, 5, 11, 12, len(grays) - 1]
+    seen = 0
+    for f, img in fp.bgr_at(want):
+        got = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY).astype(int)
+        scores = {k: float(np.abs(got - grays[k].astype(int)).mean())
+                  for k in range(max(0, f - 3), min(len(grays), f + 4))}
+        assert min(scores, key=scores.get) == f, f"seek to {f} landed on another frame: {scores}"
+        seen += 1
+    assert seen == len(want)
+
+
+def test_bgr_at_is_counted_as_seeks_not_as_a_decode_pass(clip):
+    """The pass count means "full sequential reads of the file". Charging a handful of seeks to
+    it would make the number stop meaning that, which is the whole reason it is reported."""
+    fp = fm.FrameProvider(clip)
+    fp.grays                                    # one real pass
+    before = fp.decode_passes
+    list(fp.bgr_at([2, 7, 9]))
+    assert fp.decode_passes == before
+    assert fp.telemetry()["seek_reads"] == 3

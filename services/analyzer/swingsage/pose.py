@@ -41,6 +41,11 @@ class RawPoseSeries:
     # Stage 2b: {frame: [ring, ...]} of the golfer's outline, normalized, only when
     # `estimate(silhouette=True)` asked for it. Empty otherwise — see swingsage/silhouette.py.
     silhouette: dict = field(default_factory=dict)
+    #: Frames inference was actually RUN on, when a frame plan restricted it; None means every
+    #: frame. Carried on the series rather than passed around because three later consumers
+    #: (the retry pass, the box builder, the propagator) all need the same answer and deriving
+    #: it from `detected` would confuse "not looked at" with "looked at and found nothing".
+    observed: set | None = None
 
     @property
     def coverage(self) -> float:
@@ -107,13 +112,20 @@ def _landmarks_to_kp(landmarks):
 
 
 def estimate(video_path: str | Path, progress=None, silhouette: bool = False,
-             provider=None) -> RawPoseSeries:
+             provider=None, frames=None) -> RawPoseSeries:
     """Run pose frame-sequentially over a normalized CFR video.
 
     `silhouette` additionally asks the landmarker for its person segmentation mask and reduces
     each one to normalized contours (Stage 2b). It rides along on this pass rather than being
     a stage of its own precisely because this pass always happens — MediaPipe is the fallback
     estimator and RTMPose's localiser either way.
+
+    `frames` restricts INFERENCE to a frame set from `swingsage/planner.py` (None = every
+    frame, the `v0-dense` policy). The decode is not restricted and cannot be: this is the pass
+    that fills the shared gray store, VIDEO mode's tracker is only monotonic if it sees the
+    clip in order, and seeking backwards is what the Tasks API forbids outright. What the plan
+    buys here is the landmarker call, which is the whole cost — skipped frames still take their
+    slot in `series.frames`, empty, so every index downstream keeps meaning the same thing.
     """
     fp, owned = provider_for(video_path, provider)
     fps, total, w, h = fp.fps, fp.frame_count, fp.width, fp.height
@@ -121,11 +133,22 @@ def estimate(video_path: str | Path, progress=None, silhouette: bool = False,
     series = RawPoseSeries(model="mediapipe-tasks-pose-heavy-1.0.0",
                            width=w, height=h, fps=fps)
 
+    wanted = None if frames is None else {int(x) for x in frames}
+    series.observed = wanted
+
     landmarker = vision.PoseLandmarker.create_from_options(
         _make_options(vision.RunningMode.VIDEO, segmentation=silhouette))
     try:
         f = 0
         for _f, frame_bgr in fp.stream_bgr():
+            if wanted is not None and f not in wanted:
+                series.frames.append({"f": f, "kp": _empty_kp()})
+                series.world.append(None)
+                series.detected.append(False)
+                f += 1
+                if progress and (f % 30 == 0 or f == total):
+                    progress(f, total)
+                continue
             rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
             image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
 
@@ -166,23 +189,34 @@ def estimate(video_path: str | Path, progress=None, silhouette: bool = False,
     return series
 
 
-def retry_gaps(video_path: str | Path, series: RawPoseSeries, min_run: int = 3) -> int:
+def retry_gaps(video_path: str | Path, series: RawPoseSeries, min_run: int = 3,
+               only=None) -> int:
     """The pose spec — re-run undetected spans with a per-frame detector (IMAGE mode).
 
     VIDEO mode leans on its internal tracker; once it loses the golfer it can stay lost.
     IMAGE mode re-detects from scratch on every frame, which recovers those spans at the
     cost of speed. Only runs on gaps of >= min_run consecutive misses. Returns frames fixed.
     """
-    gaps, start = [], None
-    for i, det in enumerate(series.detected):
-        if not det and start is None:
-            start = i
-        elif det and start is not None:
-            if i - start >= min_run:
-                gaps.append((start, i))
-            start = None
-    if start is not None and len(series.detected) - start >= min_run:
-        gaps.append((start, len(series.detected)))
+    # Runs are counted over the frames INFERENCE ACTUALLY RAN ON, not over clip indices. A
+    # frame the plan never selected is not a gap — nobody looked, so there is nothing for a
+    # re-detection to recover — and counting it as one would send the retry pass over exactly
+    # the frames the planner just decided to skip. Counting clip indices instead would be the
+    # opposite error and quieter: at a stride of 8, three consecutive MISSES are 17 indices
+    # apart, so every real dropout would look like three separate one-frame gaps and the retry
+    # would silently never fire.
+    looked = sorted(series.observed) if only is None and series.observed is not None else (
+        sorted(int(x) for x in only) if only is not None else list(range(len(series.detected))))
+
+    gaps, run = [], []
+    for i in looked:
+        if not series.detected[i]:
+            run.append(i)
+            continue
+        if len(run) >= min_run:
+            gaps.append(run)
+        run = []
+    if len(run) >= min_run:
+        gaps.append(run)
 
     if not gaps:
         return 0
@@ -192,8 +226,8 @@ def retry_gaps(video_path: str | Path, series: RawPoseSeries, min_run: int = 3) 
         _make_options(vision.RunningMode.IMAGE))
     fixed = 0
     try:
-        for a, b in gaps:
-            for f in range(a, b):
+        for gap in gaps:
+            for f in gap:
                 cap.set(cv2.CAP_PROP_POS_FRAMES, f)
                 ok, frame_bgr = cap.read()
                 if not ok:

@@ -25,6 +25,7 @@
     "scoring": "coach",
     "silhouette": "silhouette",
     "stage3": "pose-post",
+    "topup": "re-checking key frames",
     "upload": "upload",
     "variants": "variants"
   },
@@ -40,6 +41,7 @@
     "pose",
     "stage3",
     "events",
+    "topup",
     "detector",
     "club",
     "variants",
@@ -72,6 +74,7 @@
     "scoring": 97,
     "silhouette": 95,
     "stage3": 72,
+    "topup": 78,
     "upload": 99,
     "variants": 89
   }

@@ -94,7 +94,7 @@ const PYTHON =
  * so the same stage produced two different `jobs.stage` values depending on which runner ran
  * it. Grouping job rows by stage was therefore wrong in a way nothing surfaced.
  *
- * The scraper still cannot see six of the worker's stages (detector, variants, checkpoints,
+ * The scraper still cannot see five of the worker's stages (detector, variants, checkpoints,
  * silhouette, contract, and the job-level download/guard/upload) — it only knows what burnin
  * prints. That is a limitation of stdout scraping, not a second vocabulary; the queue path
  * reports all of them. The scraper's removal is step 14's.
@@ -106,6 +106,7 @@ const STAGES: [RegExp, string, number][] = ([
   [/rtmpose\s+\d+ frames/, "pose"],
   [/^stage3 /, "stage3"],
   [/^events /, "events"],
+  [/^top-up /, "topup"],
   [/^ *club /, "club"],
   [/^ *face /, "face"],
   [/^metrics /, "metrics"],

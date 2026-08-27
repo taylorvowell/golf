@@ -264,6 +264,50 @@ never fill it or every downstream consumer silently shortens. Sharing one MOG2 r
 thirteen club solves is parity-preserving rather than an approximation because MOG2 is
 deterministic on the same planes and parameters — verified byte-identical, not assumed.
 
+### Inference cadence is a named policy, and the frame sets it produced are in the artifact
+
+**Decision:** no stage decides for itself how often to run. `swingsage.planner.plan()` is a pure
+function from `(frame count, fps, coarse swing window, forced frames, club window)` and a named
+policy to explicit per-subsystem frame sets, and `analysis.json.frame_policy` carries the policy
+version and those sets, span-encoded (`[start, stop, step]`, stop exclusive). Two policies exist:
+`v0-dense` — every frame, the behaviour the pipeline has always had — and `adaptive-v1@<hz>hz`,
+which measures the active swing at `<hz>` and the quiet remainder at 30 Hz. The legacy shape is
+not a branch in the pipeline; it is a plan whose direct set happens to be every frame, which is
+what keeps one pipeline instead of two. `AnalysisRequest.frame_policy` pins it per job,
+`SWINGSAGE_FRAME_POLICY` pins it per process, and either **is** the rollback — no deploy.
+**Scope:** `services/analyzer/swingsage/planner.py`; consumed by `pose.estimate(frames=)`,
+`pose_rtm.estimate(frames=)` and `postprocess(propagated=)`. Not consumed by the club stage yet.
+**Gotchas:** the planner is deterministic and must stay so — same inputs and version, same sets,
+which is what makes a stored `frame_policy` a re-runnable description rather than a log line;
+nothing in it may read a clock, a seed, or the environment beyond the policy name. A **MediaPipe-
+only** run is pinned dense whatever the policy says: MediaPipe is the localiser, runs in VIDEO
+mode with a tracker that must see the clip in order, and is the pass that fills the shared gray
+store, so planning it sparsely saves the cheap half and costs the tracker its continuity. On 60 fps
+footage `adaptive-v1@60hz` is stride 1 inside the swing — the savings are a **240 fps** property,
+and a sweep run on 60 fps clips will show almost nothing.
+
+### A published measurement is never read off a frame nobody looked at
+
+**Decision:** every frame the pipeline reads a value AT — the eight events, the ten checkpoints —
+carries a direct inference. `plan()` enforces it by construction (forced frames are unioned into
+the direct set after every stride decision), and because the plan's forced list comes from the
+COARSE pass and the real events are only known later, `pipeline.run` then runs a **forced top-up**:
+any published event frame that came out propagated is measured by seeking to it, Stage 3 is re-run
+over the merged series, and the events are re-detected. Pose keypoints placed between direct
+observations carry `st == 4` (PROPAGATED) — distinct from `st == 3` (INTERP), which means the model
+looked and found nothing — with confidence interpolated from the bracketing observations and
+decayed by distance, so a propagated point can only ever score lower than a measured one.
+**Scope:** `planner.plan`, `pipeline.run`'s `topup` stage, `postprocess.PROPAGATED`.
+**Gotchas:** the top-up **iterates**, because measuring more of the approach moves the Address
+detector's motion onset; it is capped at two rounds and then **settles** — it measures the
+remaining frames and does NOT re-detect, so the published events were detected one round before the
+published pose. That is deliberate: re-detecting again restarts the chase, and an event frame with
+no observation under it is worse. A residual is a warning and is visible in the artifact, since
+`frame_policy.sets` publishes both the forced list and the direct list — a violating artifact says
+so about itself. Propagation between planned observations is **linear**, not the cubic used for a
+detection gap: a spline needs four support points per side, which a gap starting at frame 1 does
+not have.
+
 ### Frame-plane residency is budgeted, and refused before the GPU
 
 **Decision:** the memory the CV stages will hold is arithmetic, not a surprise:

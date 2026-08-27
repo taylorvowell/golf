@@ -187,6 +187,26 @@ A `mismatch` means the file on disk is not the file the manifest describes. If t
 genuinely retrained, update the hash in `models.py` and re-publish in the same commit — never
 loosen the check.
 
+**Getting the club weights back onto THIS machine** when `models/` or `runs/` has been emptied
+(both are gitignored; see `ENVIRONMENT.md`). `fetchmodels` cannot do it — the asset's URL lives
+in the Modal secret and secrets are write-only — so pull the object straight out of Supabase
+Storage. The key is content-addressed on the sha256 in `service/models.py`, so the bytes are the
+manifest's bytes by construction and `--check` proves it afterwards:
+
+```bash
+cd apps/web && set -a && . ./.env && set +a          # SUPABASE_SECRET_KEY, never printed
+mkdir -p ../../services/analyzer/runs/clubhead/weights
+curl -sS -o ../../services/analyzer/runs/clubhead/weights/best.pt \
+  -H "apikey: $SUPABASE_SECRET_KEY" -H "Authorization: Bearer $SUPABASE_SECRET_KEY" \
+  "$NEXT_PUBLIC_SUPABASE_URL/storage/v1/object/swing-models/clubhead_best/\
+eb2552d85fc1ffac2cf4fc714f24fdd8436cb7c8d7cf17af92e308097a9a0b5c.pt"
+cd ../../services/analyzer && .venv/Scripts/python.exe -m service.fetchmodels --check
+```
+
+**Both** headers are required. With only `Authorization`, Supabase Storage answers
+`404 Bucket not found` — which reads as "the object is gone" and is really "the request was not
+authenticated".
+
 **Publishing retrained club weights** (the only asset with no public source):
 
 ```bash
@@ -1245,7 +1265,15 @@ cd apps/mobile
 node scripts/make-brand.mjs        # rewrites src/design/system/brandPaths.ts
 node scripts/make-icons.mjs        # rewrites the five PNGs in assets/
 node scripts/fit-swing-plane.mjs   # prints SWING_PLANE + a PNG of the fit; paste the numbers
+node scripts/make-brand-svgs.mjs   # rewrites the standalone .svg exports in assets/brand/
 ```
+
+`make-brand-svgs.mjs` runs LAST — it reads `brandPaths.ts`, so it must follow `make-brand.mjs`. It
+emits the hand-off vectors (app icon, lockup/logomark/wordmark on both grounds, the spinner and the
+full-screen loader) by re-expressing what `BrandLogo.tsx`, `make-icons.mjs`, `SwingLoader.tsx` and
+`CoachLoader.tsx` already draw, so an export is never a second drawing of the same mark. The two
+loaders animate with SMIL and carry their t=0 frame as static transforms, so a renderer that ignores
+SMIL still shows a real frame rather than a collapsed one.
 
 `fit-swing-plane.mjs` is the odd one out: it PRINTS rather than writes, and its numbers are pasted
 into `src/design/system/orbitGeometry.ts` by hand. It measures the ellipse the swoosh actually

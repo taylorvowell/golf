@@ -51,8 +51,15 @@ export const CURRENT_API_VERSION: ApiVersion = "v1";
  *      not move any event: audio carries the recording pipeline's latency and video wins on
  *      precision. What it buys is `agrees`, which is the first thing in this contract able to
  *      say that the video-side Impact is wrong, and it caught one that was 40 frames late.
+ *  11  + frame_policy — which frames each subsystem was actually inferred on, under a named
+ *      cadence policy, plus st === 4 (PROPAGATED) on pose keypoints placed between direct
+ *      observations. A client that knows nothing about it renders as before: st 4 dims like
+ *      st 3 does, and the frame's `interp` flag is already true. What it buys is being able to
+ *      say WHY a point is soft — nobody looked at that frame, as opposed to the model looked
+ *      and found nothing — and, on an artifact from an adaptive run, exactly which frames a
+ *      measurement is allowed to be read at.
  */
-export const CURRENT_ARTIFACT_SCHEMA = 10;
+export const CURRENT_ARTIFACT_SCHEMA = 11;
 
 /**
  * The oldest artifact a client must still render.

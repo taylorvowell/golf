@@ -202,6 +202,9 @@ python scripts/burnin.py <video>          analyse a clip -> out/<stem>/
       --club-type driver|irons            for club-aware scoring bands
       --scoring-config v2                 which scoring_config/<version>.json to score against
       --no-stage3 / --no-club / --no-scoring / --no-silhouette
+      --frame-policy v0-dense|adaptive-v1@<hz>hz   which frames get inferred on (default
+                                          v0-dense = every frame; SWINGSAGE_FRAME_POLICY
+                                          overrides, which IS the rollback)
 
 python scripts/rescore.py                 re-run ONLY Stage 8 over every out/<stem>/ — Stage 8
                                           is a pure function of analysis.json + the config, so
@@ -226,6 +229,12 @@ python -m pytest tests --update-golden    rewrite snapshots, then FAIL the run o
 python scripts/make_test_data.py --all    re-freeze test input from out/<stem>/analysis.json
 python -m groundtruth.goldenset report|diff|accept   golden-set CI: evaluate, gate, promote
 python scripts/checkattribution.py <video>  does the sum of named stages account for the job (>=95%)
+python scripts/parity.py --base <worktree> --out <dir> [--variants on|off] [--ignore k1,k2]
+                                          every fixture run twice — this tree vs a pinned
+                                          commit — and the two analysis.json diffed
+python scripts/ablate_cadence.py --clips golden|high-speed|<stems> --policies a,b,c
+                                          E2.1: what a coarser inference cadence costs, as
+                                          body error / event drift / score drift / seconds
 python scripts/build_stage_mirror.py       regenerate packages/schema/stages.json from stages.py
 python -m groundtruth.evaluate_events out/<stem> ...  detected events vs hand labels
 python scripts/labelstrip.py <stem> <frame> --span 6 --step 1   frame-id contact sheet for labeling

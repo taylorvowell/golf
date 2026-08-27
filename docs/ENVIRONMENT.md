@@ -68,6 +68,28 @@ Taylor has two identities on this machine, and three CLIs disagree about which i
 | `supabase` | **summittape** — `supabase projects list` shows `summittape-staging` (org `dtkcusaoawffmcalbnwd`) | **No.** A `supabase db push` from this repo would target the wrong account. Use the Supabase **MCP** instead, which is correctly on taylorvowell's org. |
 | `eas` / `modal` | `taylorvowell@gmail.com` | Yes |
 
+### The analyzer's model assets can vanish, and nothing notices until a run fails
+
+`services/analyzer/models/` and `services/analyzer/runs/` are **gitignored**, so anything that
+cleans untracked files (a `git clean -xdf`, a worktree tidy-up) empties them and leaves the repo
+looking healthy. Found empty on 2026-08-27; `tests/test_worker.py` was the only thing that
+caught it, and only because one test asserts the club weights are on disk.
+
+Recovery, in this order:
+
+```bash
+cd services/analyzer
+.venv/Scripts/python.exe -m service.fetchmodels --check     # names what is missing
+.venv/Scripts/python.exe -m service.fetchmodels             # fetches the PUBLIC ones
+```
+
+That restores `pose_landmarker_heavy.task` and the rtmlib onnx files. It does **not** restore
+`runs/clubhead/weights/best.pt` — the club detector is the one asset with no public source, and
+`fetchmodels` wants `SWINGSAGE_CLUB_WEIGHTS_URL`, which lives in the Modal secret and is not
+readable back. On this machine, pull it from Supabase Storage directly (see `RUNBOOK.md` §models);
+the key is content-addressed on the sha256 committed in `service/models.py`, so what comes back is
+by construction the file the manifest describes.
+
 ### `gh` CLI cannot authenticate — and a stale env var shadows the fix
 
 Found 2026-08-22. **Both** credential sources are invalid, and they fail independently:

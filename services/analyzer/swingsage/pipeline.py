@@ -29,7 +29,7 @@ from typing import Callable, Optional
 
 from . import (audio_impact, checkpoints, club, club_detect, clubpath, contract, events,
                frames as frames_mod,
-               face, metrics, pose, pose_rtm, postprocess, render, scoring, silhouette,
+               face, metrics, planner, pose, pose_rtm, postprocess, render, scoring, silhouette,
                source_timing, stages, video)
 from .skeleton import KEYPOINT_NAMES, strip_derived
 
@@ -71,7 +71,21 @@ from .skeleton import KEYPOINT_NAMES, strip_derived
 #      are the same length. The window itself is now pinned to address-1s .. finish+1s, where
 #      it used to run on to a second past the golfer settling — faithful to one swing, and
 #      inconsistent across the several a comparison puts side by side.
-SCHEMA_VERSION = 10
+#  10 + frame_policy: which frames each subsystem was actually inferred on, as a named
+#     versioned policy and the explicit frame sets it produced (swingsage/planner.py). Absent
+#     means the artifact predates the planner and is implicitly dense. Present-and-"v0-dense"
+#     means the planner ran and chose dense, which is the same pixels and a different fact.
+#     Pose frames gain st == 4 (PROPAGATED): placed by propagation between direct observations
+#     because the plan never selected that frame, as opposed to st == 3 (INTERP), which is the
+#     model having looked and found nothing.
+SCHEMA_VERSION = 11
+
+#: How many times the forced top-up may re-measure and re-detect before giving up and warning.
+#: Two is enough on every clip measured; the cap exists because "re-measure until the events
+#: stop moving" is a loop whose fixed point nobody has proved, and an analysis must terminate.
+#: Whatever is left after the cap is handled by the settle round, which measures without
+#: re-detecting.
+TOPUP_ROUNDS = 2
 
 # What each version added, so the player can say what re-analysing would actually get you
 # rather than just reporting a number mismatch.
@@ -84,6 +98,7 @@ SCHEMA_FEATURES = {
     7: "a waist joint on the torso, between the sternum and the hips",
     8: "the setup butt line, the DTL reference the seat should stay against",
     9: "a fixed one-second approach and finish, freeze-padded when the clip is too short",
+    11: "the frame plan — which frames each subsystem was actually measured on",
 }
 
 
@@ -144,6 +159,11 @@ class AnalysisRequest:
     # otherwise analyzes at its slowed length (the 2,445-frame incident class, 2026-08-26).
     capture_fps: float = 0.0     # what the sensor did (240 for a Samsung slow-mo)
     source_fps: float = 0.0      # the container's presentation rate, for the guard's cross-check
+    # Which cadence policy plans this run's frame sets (swingsage/planner.py). None resolves
+    # `SWINGSAGE_FRAME_POLICY`, then the module default — so a rollback to the dense legacy
+    # shape is an environment variable, and a per-job pin is a spec field, and neither is a
+    # deploy. The chosen version is recorded in `analysis.json.frame_policy`.
+    frame_policy: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -186,6 +206,12 @@ class PipelineResult:
     #: Peak MB of decoded planes held by the shared provider — the quantity the memory budget
     #: is asserted against.
     mem_high_water_mb: float = 0.0
+    #: Which cadence policy planned this run, and how many frames it actually inferred on.
+    #: Carried per job because the whole cost claim of the planner is "fewer frames through the
+    #: expensive model", and a claim like that belongs in the same telemetry row as the seconds
+    #: it is supposed to have bought.
+    frame_policy: str = ""
+    pose_direct_frames: int = 0
 
 
 OnEvent = Callable[[PipelineEvent], None]
@@ -249,6 +275,78 @@ def _audio_impact_doc(heard, impact_frame: int, fps: float) -> dict | None:
         "agrees": abs(delta) <= AUDIO_AGREE_TOLERANCE_S * fps,
         "delta_frames": delta,
     }
+
+
+def _adaptive_plan(mp_series, req, fps: float, pol, warn) -> "planner.FramePlan":
+    """Turn the coarse localiser pass into a frame plan.
+
+    The coarse pass is MediaPipe at the policy's quiet cadence over the whole clip. That is
+    enough to answer the only question the planner actually has — where is the swing, and where
+    are its events roughly — and it is deliberately NOT enough to answer any question the
+    artifact publishes. Everything decided here is provisional and generously padded, because
+    the cost of guessing an event a few frames early is a handful of extra direct observations
+    and the cost of guessing it late is a scoring band read off a propagated pose.
+
+    Runs the real Stage 3 and the real `events.detect` rather than a cut-down version of
+    either: they are pure functions of a keypoint series, they are already the code whose
+    behaviour is understood, and a second implementation of "roughly where is the top" is a
+    second thing to be wrong.
+    """
+    n = len(mp_series.frames)
+    coarse = pose.RawPoseSeries(
+        model=mp_series.model, frames=copy0.deepcopy(mp_series.frames),
+        detected=list(mp_series.detected), width=mp_series.width, height=mp_series.height,
+        fps=mp_series.fps, observed=mp_series.observed)
+    unlooked = tuple(f for f in range(n) if mp_series.observed is not None
+                     and f not in mp_series.observed)
+    try:
+        coarse, _rep = postprocess.postprocess(coarse, propagated=unlooked)
+        pose.finalize(coarse)
+        ev_c, _sg = events.detect(coarse.frames, req.handedness, fps)
+    except Exception as e:
+        # A coarse detection that fails is not a failed analysis — it is a plan with no swing
+        # window, which the planner answers by refining the whole clip. Costly and correct.
+        warn("pose", f"coarse event detection failed ({e}); planning the whole clip as active")
+        return planner.plan(planner.PlanInputs(
+            n_frames=n, fps=fps, silhouette=req.silhouette), pol)
+
+    stride_in = pol.stride_in(fps)
+    # How far a coarse event may move once the refined series re-detects it. One coarse stride
+    # is the honest allowance — the coarse pass sampled at `stride_out`, so its idea of "the
+    # frame the wrists peaked on" cannot be sharper than that — and it is deliberately not more
+    # than that, because insuring against a LARGE coarse error by forcing dozens of frames per
+    # event is how an adaptive plan quietly becomes a dense one. The large error is what the
+    # forced top-up exists for.
+    slack = max(2, pol.stride_out(fps))
+
+    ev_frames = {k: int(v["frame"]) for k, v in ev_c["events"].items()}
+    forced: set[int] = set()
+    refine: list[tuple[int, int]] = []
+    for f in ev_frames.values():
+        forced.update(range(f - slack, f + slack + 1))
+        refine.append((f - slack, f + slack))
+
+    top = ev_frames.get("top", 0)
+    impact = ev_frames.get("impact", n - 1)
+    # The club solver works natively from the top of the backswing to just past impact, and
+    # measures the shaft against the hands frame by frame in there. A propagated grip inside
+    # that span would be a measurement resting on an inference, so the span is direct.
+    club_window = (max(0, top - slack), min(n - 1, impact + 4 + slack))
+    ball_windows = (
+        (max(0, ev_frames.get("address", 0) - slack), ev_frames.get("address", 0) + slack),
+        (max(0, impact - 2 * slack), min(n - 1, impact + 2 * slack)),
+    )
+
+    return planner.plan(planner.PlanInputs(
+        n_frames=n, fps=fps,
+        swing_window=tuple(ev_c["swing_window"]),
+        forced=tuple(sorted(forced)),
+        club_window=club_window,
+        event_refine_windows=tuple(refine),
+        ball_windows=ball_windows,
+        silhouette=req.silhouette,
+        silhouette_frames=tuple(sorted(mp_series.observed))
+        if mp_series.observed is not None else None), pol)
 
 
 def _alive(pid: int) -> bool:
@@ -447,16 +545,51 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
         prog = _Prog()
 
         def snapshot(s):
-            """Quality of a series without disturbing it (finalize mutates)."""
+            """Quality of a series without disturbing it (finalize mutates).
+
+            Restricted to the frames inference actually RAN on when a frame plan restricted it.
+            Otherwise `quality_mediapipe` on an adaptive run reads ~12% coverage — not because
+            the localiser failed but because it was asked about an eighth of the clip, and a
+            coverage number that means "how much of the clip did we sample" where every reader
+            expects "how often did the model find the golfer" is the kind of healthy-looking
+            wrong number this project keeps writing debug scripts to catch.
+            """
+            frames = copy0.deepcopy(s.frames)
+            detected = list(s.detected)
+            if s.observed is not None:
+                keep = sorted(s.observed)
+                frames = [frames[i] for i in keep if i < len(frames)]
+                detected = [detected[i] for i in keep if i < len(detected)]
             return pose.quality(pose.finalize(pose.RawPoseSeries(
-                model=s.model, frames=copy0.deepcopy(s.frames), detected=list(s.detected))))
+                model=s.model, frames=frames, detected=detected)))
+
+        # --- the frame policy -----------------------------------------------------------
+        # Cadence is a decision, taken here, once, and recorded — not an emergent property of
+        # every loop running to the end. `v0-dense` is the legacy shape expressed as a policy,
+        # so what follows is one pipeline consuming a plan rather than a dense branch and an
+        # adaptive one.
+        #
+        # MediaPipe-only runs are pinned dense whatever the policy says. What the planner buys
+        # is inference the top-down model does not have to do; MediaPipe is the localiser, runs
+        # in VIDEO mode with an internal tracker that must see the clip in order, and is the
+        # pass that fills the shared gray store — planning it sparsely saves the cheaper half
+        # and costs the tracker its continuity.
+        pol = planner.policy(req.frame_policy)
+        if req.pose_model != "rtmpose" and not pol.is_dense:
+            warn("pose", f"pose_model={req.pose_model} does not consume a frame plan; "
+                         f"policy {pol.version} ignored, running dense")
+            pol = planner.policy(planner.DENSE)
+        coarse_set = planner.coarse_frames(fp.frame_count, norm.fps, pol)
 
         # MediaPipe always runs. It is the fallback estimator, and when RTMPose is selected it
         # is also the person localiser that supplies RTMPose's per-frame box (see pose_rtm.py).
+        # Under an adaptive policy this pass IS the S2 coarse pass: same decode, same model,
+        # inference on the coarse frame set only.
         stage_begin("pose_localiser")
         t = time.time()
         mp_series = pose.estimate(anal.path, progress=prog,
-                                  silhouette=req.silhouette, provider=fp)
+                                  silhouette=req.silhouette, provider=fp,
+                                  frames=None if pol.is_dense else coarse_set)
         print(f"\r  mediapipe          {len(mp_series.frames)} frames in {time.time() - t:.1f}s"
               + (f" · silhouette on {len(mp_series.silhouette)}/{len(mp_series.frames)}"
                  if mp_series.silhouette else ""))
@@ -465,7 +598,26 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
             if fixed:
                 print(f"  retry recovered {fixed} frames via IMAGE-mode re-detection")
         quality_mp = snapshot(mp_series)
-        stage_end("pose_localiser")
+        stage_end("pose_localiser",
+                  frames=len(mp_series.observed) if mp_series.observed is not None
+                  else len(mp_series.frames))
+
+        # --- the plan -------------------------------------------------------------------
+        # Built FROM the coarse pass, which is why the coarse pass exists: the planner has to
+        # know where the swing is before it can decide where to look closely, and the only
+        # thing that knows that is a pass over the whole clip. On the dense policy there is
+        # nothing to decide, so no coarse detection runs and the plan is every frame.
+        if pol.is_dense:
+            plan = planner.plan(planner.PlanInputs(
+                n_frames=len(mp_series.frames), fps=norm.fps,
+                silhouette=req.silhouette), pol)
+        else:
+            plan = _adaptive_plan(mp_series, req, norm.fps, pol, warn)
+        print(f"plan       {plan.version}  {len(plan.pose_direct)}/{plan.n_frames} frames direct "
+              f"({plan.as_doc()['direct_pct']:.0f}%)  "
+              f"stride {plan.stride_in} active / {plan.stride_out} quiet")
+        for n_ in plan.notes:
+            warn("pose", f"frame plan: {n_}")
 
         if req.pose_model == "rtmpose":
             stage_begin("pose")
@@ -473,46 +625,61 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
             boxes = pose_rtm.bboxes_from_series(mp_series)
             t = time.time()
             series = pose_rtm.estimate(anal.path, boxes, mode=req.rtm_mode, progress=prog,
-                                       wholebody=req.wholebody, provider=fp)
+                                       wholebody=req.wholebody, provider=fp,
+                                       frames=None if plan.dense else plan.pose_direct)
             dt = max(time.time() - t, 1e-6)
             print(f"\r  rtmpose            {len(series.frames)} frames in {dt:.1f}s "
                   f"({len(series.frames) / dt:.1f} fps)")
             n = min(len(mp_series.frames), len(series.frames))
             series.frames = series.frames[:n]
             series.detected = series.detected[:n]
-            stage_end("pose")
+            stage_end("pose", frames=len(plan.pose_direct))
         else:
             series = mp_series
 
         # --- Stage 3: post-processing (the pose spec) ---------------------------------------
-        # Raw quality of the *chosen* model, so the table below isolates Stage 3's effect.
-        before = snapshot(series)
+        # The RAW series is kept when a plan could need re-running (see the forced top-up
+        # below). Stage 3 rewrites its input in place, so "run it again with three more frames
+        # measured" needs the pre-Stage-3 keypoints to still exist. Skipped entirely on the
+        # dense path, where nothing can be missing and the copy would be pure cost.
+        raw_frames = None if plan.dense else copy0.deepcopy(series.frames)
+        raw_detected = None if plan.dense else list(series.detected)
 
-        rep = None
-        if req.stage3:
-            stage_begin("stage3")
+        def _stage3(target):
+            """Stage 3 over one series. A function because the top-up re-runs it verbatim, and
+            two copies of this sequence would be two places for the order to drift."""
             # A rough swing window from the raw pose gates the grip prior; the definitive
             # events are detected afterwards on the cleaned series.
-            pose.finalize(pose.RawPoseSeries(model=series.model, frames=series.frames,
-                                             detected=series.detected))
+            pose.finalize(pose.RawPoseSeries(model=target.model, frames=target.frames,
+                                             detected=target.detected))
             try:
-                _pre, pre_sg = events.detect(series.frames, req.handedness, norm.fps)
+                _pre, _pre_sg = events.detect(target.frames, req.handedness, norm.fps)
                 window = tuple(_pre["swing_window"])
             except Exception:
                 window = None
             # Undo the provisional derived joints. They live in two non-adjacent blocks, so this
             # is skeleton's job, not a slice here (see strip_derived). `st` is left alone —
             # postprocess rewrites it wholesale from its own status matrix.
-            for fr in series.frames:
+            for fr in target.frames:
                 strip_derived(fr["kp"])
+            return postprocess.postprocess(
+                target, window=window,
+                trust_hands=(req.pose_model == "rtmpose" and req.wholebody),
+                propagated=None if plan.dense else plan.propagated)
+
+        # Raw quality of the *chosen* model, so the table below isolates Stage 3's effect.
+        before = snapshot(series)
+
+        rep = None
+        if req.stage3:
+            stage_begin("stage3")
             t = time.time()
-            series, rep = postprocess.postprocess(
-                series, window=window,
-                trust_hands=(req.pose_model == "rtmpose" and req.wholebody))
+            series, rep = _stage3(series)
             print(f"stage3     side-swaps {rep.swaps}, bone rejects {rep.bone_rejects}, "
                   f"grip rejects {rep.grip_rejects}, outliers {rep.outlier_rejects}, "
-                  f"promoted {rep.promoted}, interpolated {rep.interpolated} "
-                  f"({time.time() - t:.1f}s)")
+                  f"promoted {rep.promoted}, interpolated {rep.interpolated}"
+                  + (f", propagated {rep.propagated}" if rep.propagated else "")
+                  + f" ({time.time() - t:.1f}s)")
             for n in rep.notes:
                 print(f"           ! {n}")
                 warn("stage3", n)
@@ -525,6 +692,106 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
         stage_begin("events")
         t = time.time()
         ev, sg = events.detect(series.frames, req.handedness, norm.fps)
+
+        # --- the forced top-up ------------------------------------------------------------
+        # The plan's forced frames came from the COARSE pass, so they are where the events were
+        # THOUGHT to be. These are where they are. Any event frame that came out propagated is
+        # measured now and Stage 3 re-run over the merged series — a published measurement is
+        # never read off a pose nobody looked at, and a coarse guess being wrong costs a second
+        # of inference rather than the guarantee.
+        #
+        # It iterates, because re-measuring moves the events: a sharper Address changes which
+        # frame the motion onset lands on, which can be a frame nobody has looked at either.
+        # Each round re-measures a NEIGHBOURHOOD (one refine stride either side) rather than the
+        # single frame, so the events have somewhere already-measured to move to, and in
+        # practice that is what makes it converge in one or two. The cap is hard and the
+        # residual is a warning: a loop with no proven fixed point does not get to run
+        # unbounded inside an analysis.
+        if raw_frames is not None and req.stage3:
+            stage_end("events")
+            stage_begin("topup")
+            _topup_frames = 0
+            for _round in range(TOPUP_ROUNDS):
+                want = sorted({int(v["frame"]) for v in ev["events"].values()})
+                missing = [f for f in want if not plan.is_direct(f)]
+                if not missing:
+                    break
+                reach = max(1, plan.stride_in)
+                extra = sorted({g for f in missing
+                                for g in range(f - reach, f + reach + 1)
+                                if 0 <= g < plan.n_frames and not plan.is_direct(g)})
+                got = pose_rtm.estimate_at(anal.path, boxes, extra, mode=req.rtm_mode,
+                                           wholebody=req.wholebody, provider=fp)
+                if not got:
+                    break
+                _topup_frames += len(got)
+                for f, fr in got.items():
+                    raw_frames[f]["kp"] = fr["kp"]
+                    raw_frames[f]["grip"] = fr["grip"]
+                    raw_frames[f]["hands"] = fr["hands"]
+                    raw_detected[f] = True
+                plan = plan.with_direct(got.keys(), forced=want)
+                series = pose.RawPoseSeries(
+                    model=series.model, frames=copy0.deepcopy(raw_frames),
+                    detected=list(raw_detected), width=series.width,
+                    height=series.height, fps=series.fps,
+                    observed=set(plan.pose_direct))
+                before = snapshot(series)
+                series, rep = _stage3(series)
+                pose.finalize(series)
+                q = pose.quality(series)
+                ev, sg = events.detect(series.frames, req.handedness, norm.fps)
+                print(f"top-up     round {_round + 1}: {len(got)} frames re-measured "
+                      f"for {len(missing)} event frame(s) with no direct observation")
+            # THE SETTLE ROUND. If an event is still landing on an unmeasured frame after the
+            # cap, the detector is chasing rather than the plan being short: on this footage
+            # Address fires at motion onset, and measuring the approach more finely moves the
+            # onset earlier, which is a known defect of the Address detector and not something
+            # a cadence policy can fix. So the remaining frames are measured and the events are
+            # NOT re-detected — the loop's purpose is that every PUBLISHED event frame has an
+            # observation under it, and re-detecting again would only restart the chase.
+            #
+            # The cost of that choice, stated: the published events were detected on a series
+            # one round older than the published pose, differing only in the handful of frames
+            # this round just measured. The alternative — publishing an event frame whose pose
+            # nobody looked at — is worse, and the instability itself is recorded as a note.
+            still = [f for f in sorted({int(v["frame"]) for v in ev["events"].values()})
+                     if not plan.is_direct(f)]
+            if still:
+                extra = sorted({g for f in still for g in (f - 1, f, f + 1)
+                                if 0 <= g < plan.n_frames and not plan.is_direct(g)})
+                got = pose_rtm.estimate_at(anal.path, boxes, extra, mode=req.rtm_mode,
+                                           wholebody=req.wholebody, provider=fp)
+                _topup_frames += len(got)
+                for f, fr in got.items():
+                    raw_frames[f]["kp"] = fr["kp"]
+                    raw_frames[f]["grip"] = fr["grip"]
+                    raw_frames[f]["hands"] = fr["hands"]
+                    raw_detected[f] = True
+                # Only the frames actually MEASURED become direct. Adding `still` wholesale
+                # would let a failed seek satisfy the guarantee on paper — the artifact would
+                # claim an observation nobody made, which is the one outcome worse than a
+                # propagated event frame.
+                plan = plan.with_direct(got.keys(), forced=still)
+                series = pose.RawPoseSeries(
+                    model=series.model, frames=copy0.deepcopy(raw_frames),
+                    detected=list(raw_detected), width=series.width,
+                    height=series.height, fps=series.fps,
+                    observed=set(plan.pose_direct))
+                before = snapshot(series)
+                series, rep = _stage3(series)
+                pose.finalize(series)
+                q = pose.quality(series)
+                msg = (f"event frame(s) {still} kept moving under re-measurement (the Address "
+                       f"detector chases motion onset); measured and settled without "
+                       f"re-detecting")
+                print(f"top-up     settle: {len(got)} frames measured at {still}")
+                warn("events", msg)
+            assert all(plan.is_direct(int(v["frame"])) for v in ev["events"].values()), \
+                "forced-frame guarantee broken: a published event frame has no direct observation"
+            stage_end("topup", frames=_topup_frames)
+            stage_begin("events")
+
         print(f"events     " + "  ".join(
             f"{k.split('_')[0][:3].upper()}{'' if k.count('_') < 1 else k.split('_')[-1][:1].upper()}"
             f"={v['frame']}" for k, v in ev["events"].items()))
@@ -1034,6 +1301,12 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
                                if source_map_reason is None else None),
                 "source_map_reason": source_map_reason,
             },
+            # WHICH FRAMES were actually measured, and under what named rule. An artifact
+            # without this block predates the planner and is implicitly dense; one that says
+            # "v0-dense" is the planner having chosen dense, which is the same pixels and a
+            # different fact. Sets are span-encoded ([start, stop, step], stop exclusive) —
+            # a 1,200-frame direct set is one triple, not 1,200 integers.
+            "frame_policy": plan.as_doc(),
             "pose": {
                 "model": series.model,
                 "keypoint_names": KEYPOINT_NAMES,
@@ -1050,6 +1323,8 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
                      "kp": [[round(x, 5), round(y, 5), int(c * 10000) / 10000]
                             for x, y, c in fr["kp"]],
                      # st: 0 missing, 1 provisional/unverified, 2 confirmed, 3 interpolated
+                     # (the model looked and found nothing), 4 propagated (the frame plan
+                     # never selected this frame, so nobody looked — see frame_policy)
                      "st": fr.get("st"),
                      "interp": bool(fr.get("interp", False))}
                     for fr in series.frames
@@ -1285,4 +1560,6 @@ def run(req: AnalysisRequest, on_event: OnEvent = None) -> PipelineResult:  # no
                               schema_version=SCHEMA_VERSION, elapsed_s=elapsed,
                               warnings=tuple(warnings),
                               decode_passes=ftel["decode_passes"],
-                              mem_high_water_mb=ftel["mem_high_water_mb"])
+                              mem_high_water_mb=ftel["mem_high_water_mb"],
+                              frame_policy=plan.version,
+                              pose_direct_frames=len(plan.pose_direct))

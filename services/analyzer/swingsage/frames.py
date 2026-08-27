@@ -133,6 +133,9 @@ class FrameProvider:
         #: Full sequential reads of the file. The number this step exists to drive down, so it
         #: is counted rather than asserted — including the reads a consumer takes for itself.
         self.decode_passes = 0
+        #: Individual frames pulled by seeking (`bgr_at`). Not a pass, and reported apart from
+        #: one so the pass count keeps meaning "full sequential reads of the file".
+        self.seek_reads = 0
         self._grays: Optional[np.ndarray] = None
         self._masks: dict[int, PackedMasks] = {}
         self._sobel: "OrderedDict[int, tuple[np.ndarray, np.ndarray]]" = OrderedDict()
@@ -202,6 +205,33 @@ class FrameProvider:
                 batch = []
         if batch:
             yield start, batch
+
+    def bgr_at(self, frames) -> "Iterator[tuple[int, np.ndarray]]":
+        """Yield `(frame_index, bgr)` for a SPARSE set, by seeking rather than streaming.
+
+        Deliberately not a fourth sequential pass. The forced top-up re-measures a couple of
+        dozen frames scattered across the clip, and reading the whole file again to reach them
+        would undo the decode budget step 06 established for the sake of work that is under 3%
+        of it. Seeking is the wrong tool for a hundred frames and the right one for twenty.
+
+        Counted as `seek_reads`, not as a decode pass, because it is not one — conflating the
+        two would make the pass count stop meaning what it was introduced to mean.
+        """
+        want = sorted({int(f) for f in frames})
+        if not want:
+            return
+        cap = cv2.VideoCapture(self.path)
+        if not cap.isOpened():
+            raise RuntimeError(f"could not open {self.path}")
+        self.seek_reads += len(want)
+        try:
+            for f in want:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, f)
+                ok, img = cap.read()
+                if ok:
+                    yield f, img
+        finally:
+            cap.release()
 
     # ------------------------------------------------------------------- cached gray planes
 
@@ -311,6 +341,7 @@ class FrameProvider:
         """The step-05 span fields this provider knows: how many decodes, and how much RAM."""
         return {
             "decode_passes": self.decode_passes,
+            "seek_reads": self.seek_reads,
             "mem_high_water_mb": self.mem_high_water_mb,
             "frames": int(len(self._grays)) if self._grays is not None else self.frame_count,
             "width": self.width,

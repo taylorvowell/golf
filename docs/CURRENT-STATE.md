@@ -62,7 +62,9 @@ Stages, in execution order, all in `services/analyzer/swingsage/`:
 |---|---|---|
 | 0 normalize | `video.py` | ffmpeg VFR→CFR 60 fps, rotation fix; writes `normalized.mp4` (1080, player source) + `analysis.mp4` (720 short side — what CV consumes) |
 | 0b source timing | `source_timing.py` | Per-packet PTS read off the *original* upload (demux only), mapping each true camera observation to the normalized frames that display it. Sidecar `source_timing.json`; deliberately outside the `analysis.json` contract |
-| 2 pose | `pose.py` + `pose_rtm.py` | MediaPipe PoseLandmarker as person localiser → RTMW wholebody 133-keypoint model for the real pose; hands from real knuckles |
+| 2 pose | `pose.py` + `pose_rtm.py` | MediaPipe PoseLandmarker as person localiser → RTMW wholebody 133-keypoint model for the real pose; hands from real knuckles. Both take a frame set from the planner |
+| 2a plan | `planner.py` | Cadence as a named, versioned policy → explicit frame sets per subsystem, recorded in `analysis.json.frame_policy`. `v0-dense` is every frame (the default); `adaptive-v1@<hz>hz` measures the active swing at `<hz>` and the quiet remainder at 30 Hz, off a coarse localiser pass. Pure and deterministic — same inputs and version, same sets |
+| 5c top-up | `pipeline.py` | Re-measures any published event frame the plan left propagated, re-runs Stage 3 and re-detects; capped at two rounds, then settles without re-detecting. What makes the forced-frame guarantee true rather than intended |
 | 2b silhouette | `silhouette.py` | Golfer outline masks off the MediaPipe pass, plus the address "butt line" posture line; assembled last because it needs the address hold. Separate `silhouette.json` (0.3–1.1 MB), fetched by the player only when its overlay is on |
 | 2c isolation | `isolation.py` | Body silhouette ∪ the moving components attached to it, so the "isolate the golfer" overlay doesn't dim the club out with the background. Sidecar `isolation.json`, same frame shape as `silhouette.json` |
 | 3 post-process | `postprocess.py` | Confidence gating, anatomical priors, smoothing, interpolation (marked `interp: true`) |
@@ -134,7 +136,16 @@ enforced by the invariant test suite, not just by convention:
   the same `MIN_CONF` gate, so a value rounding *up* onto the threshold would make the client
   include a point the analyzer dropped, and the two would then describe different geometry.
   This applies to any threshold a client reads back.
-- `interp: true` marks smoothed/interpolated values; the UI renders these dashed at 60%.
+- `interp: true` marks smoothed/interpolated values; the UI renders these dashed at 60%. `st`
+  carries the provenance behind that flag per keypoint: 0 missing, 1 provisional, 2 confirmed,
+  3 **interpolated** (the model looked and found nothing), 4 **propagated** (the frame plan
+  never selected that frame, so nobody looked). Both are soft, and only one of them is evidence
+  the pose is hard on this clip.
+- **`frame_policy` says which frames were actually measured** — the named cadence policy and its
+  per-subsystem frame sets, span-encoded as `[start, stop, step]` with stop exclusive. Absent on
+  artifacts written before the planner (implicitly dense). Every frame in `pose_forced_frames`
+  is in `pose_direct_frames`: no published measurement is read off a pose nobody looked at, and
+  because both lists are published, an artifact that broke that rule says so about itself.
 - **Keypoints are anatomical (`left_wrist`); metrics are lead/trail (`lead_knee_flex`)**, with
   lead = the side nearest the **target**, resolved by handedness — never "the side facing the
   camera", which inverts for a left-handed golfer. `metrics.sides` carries the mapping;

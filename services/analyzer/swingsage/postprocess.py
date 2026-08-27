@@ -26,6 +26,13 @@ from scipy.signal import savgol_filter
 from .skeleton import TRACKED_NAMES, UNRELIABLE
 
 MISSING, PROVISIONAL, OK, INTERP = 0, 1, 2, 3
+# 4 — the frame carried no direct inference at all because the frame PLAN did not select it
+# (swingsage/planner.py). Distinct from INTERP on purpose: INTERP means the model looked and
+# came back with nothing, PROPAGATED means nobody looked. A client dims both, but only one of
+# them is evidence that the pose is hard on this clip, and only one of them is recoverable by
+# re-analysing at a denser policy. Appended rather than inserted so 0-3 keep their meaning in
+# every stored artifact.
+PROPAGATED = 4
 # Stage 3 runs over the native block *and* the measured extras. Derived joints are
 # deliberately absent — the pose spec recomputes those from smoothed parents afterwards.
 N = len(TRACKED_NAMES)
@@ -64,6 +71,17 @@ class PostConfig:
     bone_tol: float = 0.30        # allowed overshoot above a bone's p95 observed length
     swap_max_run: int = 5
     max_gap: int = 8              # the pose spec — ~130ms at 60fps
+    #: How far a PLANNED gap may be bridged. Separate from `max_gap` because the two answer
+    #: different questions: `max_gap` is "how long may the model have been blind before we stop
+    #: guessing", and this is "how far apart did we CHOOSE to look". A planner that samples at
+    #: 30 Hz on a 240 fps clip leaves 8-frame gaps by design, and refusing to fill them would
+    #: turn a deliberate cadence into a hole in the artifact.
+    propagate_max_gap: int = 64
+    #: Per-frame confidence decay away from the nearest direct observation. 0.94 costs a
+    #: propagated point ~18% of its confidence three frames out, which is where a 240 fps clip
+    #: sampled at 60 Hz puts its worst case.
+    propagate_decay: float = 0.94
+    propagate_floor: float = 0.20
     grip_max_sep: float = 0.20    # wrist separation ceiling, fraction of golfer height
     min_cutoff: float = 1.0
     beta: float = 0.3
@@ -82,6 +100,7 @@ class PostReport:
     outlier_rejects: int = 0
     swaps: int = 0
     interpolated: int = 0
+    propagated: int = 0
     still_missing: int = 0
     notes: list = field(default_factory=list)
 
@@ -273,8 +292,16 @@ def reject_outliers(xy, status, bh, rep):
                 rep.outlier_rejects += 1
 
 
-def interpolate_gaps(xy, status, cfg, rep):
-    """The pose spec — cubic-spline fill for gaps <= max_gap; longer gaps stay honestly missing."""
+def interpolate_gaps(xy, status, cfg, rep, planned=None):
+    """The pose spec — cubic-spline fill for gaps <= max_gap; longer gaps stay honestly missing.
+
+    `planned` is the boolean per-frame mask of frames the FRAME PLAN never asked anyone to look
+    at. A gap made entirely of those is a cadence decision, not a detection failure, so it is
+    bridged under `propagate_max_gap` instead of `max_gap` and labelled PROPAGATED. A gap that
+    mixes the two is treated as a detection failure — the stricter of the two rules wins,
+    because a model that failed inside a planned gap is exactly the case where guessing further
+    is least justified.
+    """
     n = xy.shape[0]
     for j in range(N):
         valid = status[:, j] >= PROVISIONAL
@@ -291,7 +318,22 @@ def interpolate_gaps(xy, status, cfg, rep):
                 g += 1
             before = idx[idx < f]
             after = idx[idx >= g]
-            if (g - f) <= cfg.max_gap and len(before) >= 2 and len(after) >= 2:
+            unlooked = planned is not None and bool(planned[f:g].all())
+            if unlooked:
+                # LINEAR between the bracketing observations, not the cubic used for a
+                # detection gap. Two reasons, and neither is laziness. A planned gap is
+                # regular and short by construction, where the difference between a line and a
+                # spline is below the noise floor of the measurement either side of it; and a
+                # spline needs four support points per side, which a gap starting at frame 1
+                # does not have — that limitation is invisible for a rare dropout and would
+                # leave the opening frames of EVERY adaptive run empty. E2.2 compares
+                # alternatives against labels later; a line is the honest first answer.
+                if (g - f) <= cfg.propagate_max_gap and len(before) and len(after):
+                    for ax in (0, 1):
+                        xy[f:g, j, ax] = np.interp(np.arange(f, g), idx, xy[idx, j, ax])
+                    status[f:g, j] = PROPAGATED
+                    rep.propagated += g - f
+            elif (g - f) <= cfg.max_gap and len(before) >= 2 and len(after) >= 2:
                 # Fit locally: a global spline through the whole clip would ring.
                 sup = np.concatenate([before[-4:], after[:4]])
                 for ax in (0, 1):
@@ -300,6 +342,36 @@ def interpolate_gaps(xy, status, cfg, rep):
                 status[f:g, j] = INTERP
                 rep.interpolated += g - f
             f = g
+
+
+def propagate_conf(conf, status, cfg):
+    """Confidence for points nobody looked at — the bracketing observations, decayed by distance.
+
+    Not a constant, and not the neighbour's value copied over. A propagated point two frames
+    from a 0.9 observation is a far better bet than one two frames from a 0.4 one, and a point
+    in the middle of a long planned gap is a worse bet than one adjacent to its anchor. Both
+    facts are already in hand, so the number carries them: linear interpolation of the two
+    bracketing confidences, multiplied by `decay ** distance-to-the-nearest-anchor`.
+
+    The result is only ever LOWER than what a direct observation would have scored, which is the
+    direction that matters: every consumer re-applies the same MIN_CONF gate, so a propagated
+    point may drop out of a client's rendering, and must never be admitted to one on the
+    strength of a guess.
+    """
+    n = conf.shape[0]
+    out = np.zeros_like(conf)
+    for j in range(N):
+        prop = np.flatnonzero(status[:, j] == PROPAGATED)
+        if not len(prop):
+            continue
+        anchors = np.flatnonzero((status[:, j] == OK) | (status[:, j] == PROVISIONAL))
+        if not len(anchors):
+            out[prop, j] = cfg.propagate_floor
+            continue
+        base = np.interp(prop, anchors, conf[anchors, j])
+        dist = np.min(np.abs(prop[:, None] - anchors[None, :]), axis=1)
+        out[prop, j] = np.maximum(base * (cfg.propagate_decay ** dist), cfg.propagate_floor)
+    return out
 
 
 def one_euro(x, fps, min_cutoff, beta):
@@ -353,10 +425,24 @@ def smooth(xy, status, fps, cfg):
 
 # ---------------------------------------------------------------- entry point
 
-def postprocess(series, cfg: PostConfig | None = None, window=None, trust_hands=False):
+def postprocess(series, cfg: PostConfig | None = None, window=None, trust_hands=False,
+                propagated=None):
+    """`propagated` — frame indices the frame plan never selected for direct inference.
+
+    Empty (or None) is the dense case and every line below behaves exactly as it did before the
+    planner existed, which is what makes `v0-dense` parity a property of the code rather than a
+    thing to re-measure.
+    """
     cfg = cfg or PostConfig()
     rep = PostReport()
     xy, conf = _arrays(series)
+    n_f = xy.shape[0]
+    planned = None
+    if propagated is not None:
+        idx = np.fromiter((f for f in propagated if 0 <= f < n_f), int)
+        if len(idx):
+            planned = np.zeros(n_f, bool)
+            planned[idx] = True
 
     status = gate(conf, cfg, trust_hands)
     rep.provisional = int((status == PROVISIONAL).sum())
@@ -372,7 +458,8 @@ def postprocess(series, cfg: PostConfig | None = None, window=None, trust_hands=
     grip_prior(xy, conf, status, bh, cfg, rep, window)
     reject_outliers(xy, status, bh, rep)
     promote_consistent(xy, conf, status, bh, rep)   # after rejection: never promote a reject
-    interpolate_gaps(xy, status, cfg, rep)
+    interpolate_gaps(xy, status, cfg, rep, planned)
+    pconf = propagate_conf(conf, status, cfg) if planned is not None else None
     smooth(xy, status, series.fps or 60.0, cfg)
 
     rep.still_missing = int((status == MISSING).sum())
@@ -387,10 +474,16 @@ def postprocess(series, cfg: PostConfig | None = None, window=None, trust_hands=
                 kp.append([0.0, 0.0, 0.0])
             elif st == INTERP:
                 kp.append([float(xy[f, j, 0]), float(xy[f, j, 1]), 0.45])
+            elif st == PROPAGATED:
+                kp.append([float(xy[f, j, 0]), float(xy[f, j, 1]),
+                           float(pconf[f, j]) if pconf is not None else 0.45])
             else:
                 kp.append([float(xy[f, j, 0]), float(xy[f, j, 1]), float(conf[f, j])])
         fr["kp"] = kp
         fr["st"] = [int(s) for s in status[f]]
-        fr["interp"] = bool((status[f] == INTERP).any())
+        # `interp` has always meant "this frame's pose was not detected on this frame", which
+        # is equally true of a propagated one — the client dims both. `st` is where the two are
+        # told apart; this flag stays the cheap per-frame answer it has always been.
+        fr["interp"] = bool(((status[f] == INTERP) | (status[f] == PROPAGATED)).any())
 
     return series, rep

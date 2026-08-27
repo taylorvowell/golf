@@ -143,6 +143,10 @@ def build_parser() -> argparse.ArgumentParser:
                     help="RTMW 133-kpt model; gives real knuckles so grip_center is the "
                          "hands rather than the wrist bone")
     ap.add_argument("--no-wholebody", dest="wholebody", action="store_false")
+    ap.add_argument("--frame-policy", default=None, metavar="POLICY",
+                    help="cadence policy for the frame planner: 'v0-dense' (every frame, the "
+                         "legacy shape) or 'adaptive-v1@<hz>hz'. Default comes from "
+                         "SWINGSAGE_FRAME_POLICY, then swingsage.planner.DEFAULT_POLICY")
     return ap
 
 
@@ -183,6 +187,7 @@ def request_from_args(args: argparse.Namespace) -> AnalysisRequest:
         club_model_traj_gate=args.club_model_traj_gate,
         club_variants=args.club_variants,
         wholebody=args.wholebody,
+        frame_policy=args.frame_policy,
     )
 
 

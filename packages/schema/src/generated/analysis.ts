@@ -2,6 +2,16 @@
  * Run: pnpm --filter @swingsage/schema generate */
 
 /**
+ * [start, stop, step] with stop EXCLUSIVE. Decode with range(start, stop, step).
+ *
+ * @minItems 3
+ * @maxItems 3
+ *
+ * This interface was referenced by `Analysis`'s JSON-Schema
+ * via the `definition` "frameSpan".
+ */
+export type FrameSpan = [number, number, number];
+/**
  * [x, y, confidence] — position normalized 0–1, confidence TRUNCATED to the artifact's precision so re-applying MIN_CONF on the client keeps the analyzer's own answer.
  *
  * @minItems 3
@@ -67,6 +77,7 @@ export interface Analysis {
    */
   schema_version: number;
   video: VideoInfo;
+  frame_policy?: FramePolicy;
   pose: Pose;
   events: Events;
   /**
@@ -205,6 +216,43 @@ export interface VideoSource {
 export interface Resolution {
   width: number;
   height: number;
+}
+/**
+ * Which frames each subsystem was actually inferred on, and under which named cadence policy. ABSENT means the artifact predates the planner and every frame was measured; PRESENT and "v0-dense" means the planner ran and chose dense — the same pixels, a different fact. Frame sets are span-encoded because a dense set is one triple rather than a thousand integers. Pose frames not in pose_direct_frames carry st == 4 (propagated): placed between direct observations, with confidence decayed by distance from the nearest one. Every frame in pose_forced_frames is guaranteed to be in pose_direct_frames — no published measurement is read off a propagated pose.
+ *
+ * This interface was referenced by `Analysis`'s JSON-Schema
+ * via the `definition` "framePolicy".
+ */
+export interface FramePolicy {
+  /**
+   * "v0-dense" or "adaptive-v1@<hz>hz". Re-running this policy on this clip reproduces these sets exactly.
+   */
+  version: string;
+  n_frames: number;
+  fps?: number;
+  /**
+   * Frames between direct observations inside the active swing.
+   */
+  stride_in?: number;
+  /**
+   * Frames between direct observations over the quiet rest of the clip.
+   */
+  stride_out?: number;
+  direct_count?: number;
+  direct_pct?: number;
+  sets: {
+    pose_direct_frames?: FrameSpan[];
+    pose_forced_frames?: FrameSpan[];
+    /**
+     * @minItems 2
+     * @maxItems 2
+     */
+    club_native_window?: [number, number] | null;
+    ball_windows?: [number, number][];
+    event_refine_windows?: [number, number][];
+    silhouette_frames?: FrameSpan[];
+  };
+  notes?: string[];
 }
 /**
  * This interface was referenced by `Analysis`'s JSON-Schema

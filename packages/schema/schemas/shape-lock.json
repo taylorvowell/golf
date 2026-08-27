@@ -533,6 +533,86 @@
   "analysis#/definitions/faceFrame/properties/to_shaft_deg": {
     "type": "null|number"
   },
+  "analysis#/definitions/framePolicy": {
+    "type": "object",
+    "required": [
+      "n_frames",
+      "sets",
+      "version"
+    ]
+  },
+  "analysis#/definitions/framePolicy/properties/direct_count": {
+    "type": "integer"
+  },
+  "analysis#/definitions/framePolicy/properties/direct_pct": {
+    "type": "number"
+  },
+  "analysis#/definitions/framePolicy/properties/fps": {
+    "type": "number"
+  },
+  "analysis#/definitions/framePolicy/properties/n_frames": {
+    "type": "integer"
+  },
+  "analysis#/definitions/framePolicy/properties/notes": {
+    "type": "array"
+  },
+  "analysis#/definitions/framePolicy/properties/notes/items": {
+    "type": "string"
+  },
+  "analysis#/definitions/framePolicy/properties/sets": {
+    "type": "object"
+  },
+  "analysis#/definitions/framePolicy/properties/sets/properties/ball_windows": {
+    "type": "array"
+  },
+  "analysis#/definitions/framePolicy/properties/sets/properties/ball_windows/items": {
+    "type": "array"
+  },
+  "analysis#/definitions/framePolicy/properties/sets/properties/ball_windows/items/items": {
+    "type": "integer"
+  },
+  "analysis#/definitions/framePolicy/properties/sets/properties/club_native_window": {
+    "type": "array|null"
+  },
+  "analysis#/definitions/framePolicy/properties/sets/properties/club_native_window/items": {
+    "type": "integer"
+  },
+  "analysis#/definitions/framePolicy/properties/sets/properties/event_refine_windows": {
+    "type": "array"
+  },
+  "analysis#/definitions/framePolicy/properties/sets/properties/event_refine_windows/items": {
+    "type": "array"
+  },
+  "analysis#/definitions/framePolicy/properties/sets/properties/event_refine_windows/items/items": {
+    "type": "integer"
+  },
+  "analysis#/definitions/framePolicy/properties/sets/properties/pose_direct_frames": {
+    "type": "array"
+  },
+  "analysis#/definitions/framePolicy/properties/sets/properties/pose_direct_frames/items": {
+    "ref": "#/definitions/frameSpan"
+  },
+  "analysis#/definitions/framePolicy/properties/sets/properties/pose_forced_frames": {
+    "type": "array"
+  },
+  "analysis#/definitions/framePolicy/properties/sets/properties/pose_forced_frames/items": {
+    "ref": "#/definitions/frameSpan"
+  },
+  "analysis#/definitions/framePolicy/properties/sets/properties/silhouette_frames": {
+    "type": "array"
+  },
+  "analysis#/definitions/framePolicy/properties/sets/properties/silhouette_frames/items": {
+    "ref": "#/definitions/frameSpan"
+  },
+  "analysis#/definitions/framePolicy/properties/stride_in": {
+    "type": "integer"
+  },
+  "analysis#/definitions/framePolicy/properties/stride_out": {
+    "type": "integer"
+  },
+  "analysis#/definitions/framePolicy/properties/version": {
+    "type": "string"
+  },
   "analysis#/definitions/frameRange": {
     "type": "array"
   },
@@ -540,6 +620,12 @@
     "type": "integer"
   },
   "analysis#/definitions/frameRange/items/1": {
+    "type": "integer"
+  },
+  "analysis#/definitions/frameSpan": {
+    "type": "array"
+  },
+  "analysis#/definitions/frameSpan/items": {
     "type": "integer"
   },
   "analysis#/definitions/jointQuality": {
@@ -1207,6 +1293,9 @@
   },
   "analysis#/properties/face/anyOf/1": {
     "type": "null"
+  },
+  "analysis#/properties/frame_policy": {
+    "ref": "#/definitions/framePolicy"
   },
   "analysis#/properties/metrics/anyOf/0": {
     "ref": "#/definitions/metrics"

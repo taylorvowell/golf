@@ -494,6 +494,11 @@ class _EventForwarder:
                 facts.update({
                     "decodePasses": getattr(result, "decode_passes", None) or None,
                     "memHighWaterMb": getattr(result, "mem_high_water_mb", None) or None,
+                    # Which cadence this job ran at, and how many frames it paid the pose model
+                    # for. Without the policy on the row, a fleet running two of them produces
+                    # one p95 that means nothing.
+                    "framePolicy": getattr(result, "frame_policy", None) or None,
+                    "poseDirectFrames": getattr(result, "pose_direct_frames", None) or None,
                 })
             if info is not None:
                 facts.update({
