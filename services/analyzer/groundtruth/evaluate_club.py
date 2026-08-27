@@ -102,7 +102,10 @@ def evaluate_clip(label_doc: dict, club: dict, video: dict,
         pred = pred_by_frame.get(f)
         gt = None if (row["blur"] == "unusable" or row.get("head_hidden")) \
             else _gt_head_center(row["points"])
-        direct = bool(pred) and not pred.get("interp") and not pred.get("from_ball")
+        # A frame with no head at all is an abstention, whatever its flags say - several
+        # variants publish rows with head=None where they had nothing.
+        direct = (bool(pred) and pred.get("head") is not None
+                  and not pred.get("interp") and not pred.get("from_ball"))
         per_frame_direct[f] = direct
 
         if gt is None:

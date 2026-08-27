@@ -405,12 +405,18 @@ Measured pipeline quality on the two original fixtures:
   motion onset or mid-waggle, not the settle; top 30% within ±2 (3 catastrophic); finish 0%
   within ±2 (4 catastrophic). Two clips' address is left-censored (clip starts settled);
   `pro_3` is a speed-ramped social edit whose top/finish labels are judgment calls.
-- **No club-head position labels exist yet** — `groundtruth/evaluate_club.py` (PCK, position
-  error, P/R, gaps, jumps, calibration; can rank all 35 stored club variants) is built and
-  unit-tested but has nothing to run on until the club labeling HANDOFF row lands. Every club
-  change so far was tuned on proxies (smoothness, off-plane deviation), and smoothness has
-  actively preferred wrong answers at least once; club changes tuned on smoothness remain
-  unfalsifiable.
+- **Club-head position is now measured on one clip, and the measurement is damning.** Taylor
+  hand-labeled 85 frames of `6iron2` (2026-08-26, marker editor: 53 placed, 10 blurry
+  streak-midpoints, 22 hidden) and `groundtruth/evaluate_club.py --variants` ranked the main
+  solve plus all 35 variants against them: the dense solutions (main/model/evidence/classical
+  — the only ones with real coverage) sit at **median 250–315 px error (1080-wide frame) with
+  PCK@10px of 2–4%**, visually confirmed parked on hands/shoulder through backswing, downswing
+  and follow-through, correct only near impact and in the static hold; low-median variants get
+  there only by abstaining on 75–95% of frames; the dense solvers claim a confident head on
+  all 22 human-invisible frames. One clip, backswing-through-hold skew. Every prior club
+  change was tuned on proxies (smoothness, off-plane deviation) — this is what those proxies
+  concealed. Streak-estimate labels score in their own pool so they never pollute the sharp
+  numbers.
 - **Coverage percentages have overstated club quality three separate times.** Always run
   `scripts/checkclub.py` and look at the club drawn over the real frame before believing them.
 - **Top of backswing is a hand landmark, not a club one.** The club keeps working at the top

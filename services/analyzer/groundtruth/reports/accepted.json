@@ -205,7 +205,58 @@
       "tier": "golden"
     },
     "6iron2": {
-      "club": "no_labels",
+      "club": {
+        "blurred": {
+          "max_px": 405.01,
+          "median_px": 305.13,
+          "n": 10,
+          "p95_px": 405.01
+        },
+        "catastrophic_jump_rate": null,
+        "catastrophic_jumps": 0,
+        "clip": "6iron2",
+        "confidence_calibration": {
+          "0-0.4": {
+            "n": 0,
+            "within_10": 0,
+            "within_10_rate": null
+          },
+          "0.4-0.7": {
+            "n": 4,
+            "within_10": 0,
+            "within_10_rate": 0.0
+          },
+          "0.7-1": {
+            "n": 46,
+            "within_10": 1,
+            "within_10_rate": 0.0217
+          }
+        },
+        "error_over_club_len_median": null,
+        "false_positive_rate": 1.0,
+        "fps": 60.0,
+        "gap_count": 3,
+        "gap_frames_max": 1,
+        "gap_frames_median": 1,
+        "head_center_max_px": 451.93,
+        "head_center_median_px": 306.89,
+        "head_center_p95_px": 435.57,
+        "hosel_median_px": null,
+        "impact_window_max_px": 399.17,
+        "impact_window_median_px": 198.88,
+        "labeled_frames": 85,
+        "pck_px": {
+          "10": 0.02,
+          "2": 0.0,
+          "5": 0.02
+        },
+        "scored_frames": 50,
+        "shaft_angle_mae_deg": null,
+        "shaft_angle_p95_deg": null,
+        "stale_labels": false,
+        "visible_precision": 0.7317,
+        "visible_recall": 0.9524
+      },
       "events": {
         "address": {
           "catastrophic": true,
@@ -253,6 +304,7 @@
         }
       },
       "labels": {
+        "club": "aa1d33c2bb385bde76d0c3b2e35339c50f25acb5691c22f6533a09d2749a319c",
         "events": "4497bdbf890adfb10163e2f79a74aa86b179971df58cabf5aa7ff8d8196cfa04"
       },
       "propagated_as_direct": 0,
